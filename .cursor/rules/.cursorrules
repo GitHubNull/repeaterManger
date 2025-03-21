@@ -1,0 +1,28 @@
+{
+  "projectRules": {
+    "codeStyle": {
+      "java": {
+        "indentSize": 4,
+        "importOrder": ["java", "javax", "org", "com", "burp"],
+        "namingConvention": {
+          "class": "PascalCase",
+          "method": "camelCase",
+          "variable": "camelCase"
+        }
+      }
+    },
+    "ignorePatterns": [
+      "**/target/**",
+      "**/.idea/**",
+      "*.iml",
+      "*.log"
+    ],
+    "autoFix": {
+      "organizeImports": true,
+      "formatOnSave": true
+    },
+    "security": {
+      "sensitiveKeywords": ["api_key", "password"]
+    }
+  }
+}
