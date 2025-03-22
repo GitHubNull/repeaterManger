@@ -1,0 +1,144 @@
+name: 发布增强重放插件
+
+on:
+  push:
+    tags:
+      - 'v*' # 触发标签格式为 v开头，例如 v1.0.0, v1.2.3-beta 等
+
+jobs:
+  build-and-release:
+    name: 构建并发布插件
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # 获取完整历史以便提取提交信息
+      
+      - name: 设置 JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: 检查标签格式
+        id: check-tag
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "版本标签有效: $TAG"
+            VERSION=${TAG#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "错误: 标签 '$TAG' 不符合版本格式要求 (v主版本.次版本.修订版本)"
+            exit 1
+          fi
+      
+      - name: 使用 Maven 构建
+        id: build
+        run: |
+          echo "开始构建项目..."
+          mvn clean package -B
+          
+          # 检查构建结果
+          if [ $? -ne 0 ]; then
+            echo "Maven 构建失败"
+            exit 1
+          fi
+          
+          # 找到生成的 jar 文件
+          JAR_PATH=$(find target/releases/ -name "enhanced-repeater-*.jar" | head -n 1)
+          if [ -z "$JAR_PATH" ]; then
+            echo "找不到构建后的 jar 文件"
+            exit 1
+          fi
+          
+          # 输出 jar 路径供后续步骤使用
+          echo "jar_path=$JAR_PATH" >> $GITHUB_OUTPUT
+          echo "构建成功: $JAR_PATH"
+          
+          # 创建一个不带时间戳的文件副本，使文件名更规范
+          RELEASE_JAR="target/releases/enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar"
+          cp "$JAR_PATH" "$RELEASE_JAR"
+          echo "release_jar=$RELEASE_JAR" >> $GITHUB_OUTPUT
+      
+      - name: 提取提交信息作为发布说明
+        id: release-notes
+        run: |
+          # 尝试获取最近的两个标签
+          CURRENT_TAG="${{ steps.check-tag.outputs.tag }}"
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $CURRENT_TAG^ 2>/dev/null || echo "")
+          
+          # 如果有前一个标签，则获取之间的提交信息
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "获取 $PREVIOUS_TAG 至 $CURRENT_TAG 之间的提交信息"
+            # 提取提交信息，排除合并提交，并格式化
+            CHANGELOG=$(git log $PREVIOUS_TAG..$CURRENT_TAG --pretty=format:"* %s (%h)" --no-merges)
+          else
+            echo "没有找到前一个标签，获取当前标签之前的所有提交"
+            # 如果没有前一个标签，则获取所有提交
+            CHANGELOG=$(git log $CURRENT_TAG --pretty=format:"* %s (%h)" --no-merges | head -n 50)
+          fi
+          
+          # 检查是否有变更记录
+          if [ -z "$CHANGELOG" ]; then
+            echo "未找到有效的提交信息，使用默认发布说明"
+            CHANGELOG="Enhanced Repeater Manager 版本 ${{ steps.check-tag.outputs.version }}"
+          fi
+          
+          # 添加标题和说明
+          RELEASE_NOTES="# Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}
+
+## 变更记录
+
+$CHANGELOG
+
+## 安装方法
+
+1. 下载 jar 文件
+2. 在 Burp Suite 中转到 Extender > Extensions
+3. 点击 Add 按钮
+4. 选择下载的 jar 文件
+5. 点击 Next 完成安装
+
+## 文件说明
+
+- \`enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar\` - 主版本，可直接安装使用
+"
+          
+          # 将发布说明写入文件
+          echo "$RELEASE_NOTES" > release_notes.md
+          echo "发布说明已保存到 release_notes.md"
+      
+      - name: 创建 GitHub Release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.check-tag.outputs.tag }}
+          name: Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.check-tag.outputs.tag, '-') }}
+          files: |
+            ${{ steps.build.outputs.release_jar }}
+            ${{ steps.build.outputs.jar_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 处理发布结果
+        run: |
+          if [ "${{ steps.create-release.outputs.url }}" != "" ]; then
+            echo "✅ 发布成功: ${{ steps.create-release.outputs.url }}"
+          else
+            echo "❌ 发布失败"
+            exit 1
+          fi
+      
+      - name: 清理构建文件
+        if: always()
+        run: |
+          echo "清理临时文件..."
+          rm -f release_notes.md || true 
