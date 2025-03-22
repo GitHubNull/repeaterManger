@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*' # 触发标签格式为 v开头，例如 v1.0.0, v1.2.3-beta 等
+  workflow_dispatch: # 允许手动触发
+
+# 明确定义权限
+permissions:
+  contents: write # 为了创建release，需要写入权限
+  packages: write # 如果需要上传包
 
 jobs:
   build-and-release:
@@ -27,6 +33,12 @@ jobs:
         id: check-tag
         run: |
           TAG=${GITHUB_REF#refs/tags/}
+          if [[ "$TAG" == "" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # 手动触发时，如果没有标签，使用日期作为标签
+            TAG="v$(date +'%Y.%m.%d')-manual"
+            echo "使用自动生成的标签: $TAG"
+          fi
+          
           if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
             echo "tag=$TAG" >> $GITHUB_OUTPUT
             echo "版本标签有效: $TAG"
@@ -109,26 +121,42 @@ jobs:
           echo "- \`enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar\` - 主版本，可直接安装使用" >> release_notes.md
           
           echo "发布说明已保存到 release_notes.md"
+          cat release_notes.md
       
-      - name: 创建 GitHub Release
-        id: create-release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.check-tag.outputs.tag }}
-          name: Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ contains(steps.check-tag.outputs.tag, '-') }}
-          files: |
-            ${{ steps.build.outputs.release_jar }}
-            ${{ steps.build.outputs.jar_path }}
+      # 使用GitHub CLI创建发布，通常权限更可靠
+      - name: 安装 GitHub CLI
+        run: |
+          type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+      
+      - name: 创建 GitHub Release (使用 GitHub CLI)
+        id: create-release-cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: 处理发布结果
         run: |
-          if [ "${{ steps.create-release.outputs.url }}" != "" ]; then
-            echo "✅ 发布成功: ${{ steps.create-release.outputs.url }}"
+          # 检查是否为预发布版本
+          if [[ ${{ steps.check-tag.outputs.tag }} == *"-"* ]]; then
+            PRERELEASE="--prerelease"
+          else
+            PRERELEASE=""
+          fi
+          
+          # 使用GitHub CLI创建发布
+          echo "正在创建GitHub Release..."
+          RELEASE_URL=$(gh release create ${{ steps.check-tag.outputs.tag }} \
+            --title "Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}" \
+            --notes-file release_notes.md \
+            $PRERELEASE \
+            "${{ steps.build.outputs.release_jar }}" \
+            "${{ steps.build.outputs.jar_path }}")
+          
+          if [ $? -eq 0 ]; then
+            echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+            echo "✅ 发布成功: $RELEASE_URL"
           else
             echo "❌ 发布失败"
             exit 1
@@ -139,3 +167,30 @@ jobs:
         run: |
           echo "清理临时文件..."
           rm -f release_notes.md || true 
+
+# 备用方案：如果需要使用PAT令牌
+# 如果上面的方法仍然失败，请取消下面的注释，并在仓库设置中添加名为CUSTOM_GITHUB_TOKEN的PAT令牌
+# 这个PAT令牌需要有repo权限
+
+#  create-release-with-pat:
+#    name: 使用PAT令牌创建发布
+#    needs: build-and-release
+#    runs-on: ubuntu-latest
+#    if: ${{ failure() && needs.build-and-release.result == 'failure' }}
+#    steps:
+#      - name: 检出代码
+#        uses: actions/checkout@v3
+#      
+#      - name: 创建 GitHub Release (使用PAT)
+#        uses: softprops/action-gh-release@v1
+#        with:
+#          tag_name: ${{ needs.build-and-release.outputs.tag }}
+#          name: Enhanced Repeater Manager ${{ needs.build-and-release.outputs.version }}
+#          body_path: release_notes.md
+#          draft: false
+#          prerelease: ${{ contains(needs.build-and-release.outputs.tag, '-') }}
+#          files: |
+#            ${{ needs.build-and-release.outputs.release_jar }}
+#            ${{ needs.build-and-release.outputs.jar_path }}
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.CUSTOM_GITHUB_TOKEN }} 
