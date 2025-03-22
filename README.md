@@ -1,91 +1,161 @@
-# BurpSuite Enhanced Repeater Plugin 
-[![GitHub License](https://img.shields.io/github/license/githubnull/BurpSuite-Enhanced-Repeater)](https://github.com/githubnull/BurpSuite-Enhanced-Repeater/blob/main/LICENSE)
+# 增强型Repeater - Burp Suite扩展
 
-> 基于 Burp Extender API 开发的增强型中继器插件，提供比原生模块更强大的功能 
+## 功能介绍
 
-## ✨ 功能特性
-### 核心功能模块
-1. **智能重放引擎**  
-   - 可配置请求超时时间（0-60秒）
-   - 毫秒级响应耗时统计（精度±1ms）
-   - 自动历史记录存储（保留最近1000条）
+增强型Repeater是一个Burp Suite扩展，提供比原生Repeater更强大的HTTP请求重放功能。它提供了以下功能：
 
-2. **高级搜索系统**
-   ```text
-   └─ 请求报文
-      ├─ 方法过滤 (GET/POST/PUT...)
-      ├─ 路径匹配 (支持正则表达式)
-      └─ 内容检索 (Header/Body 关键字)
-   └─ 响应报文
-      ├─ 状态码范围过滤
-      └─ 内容模式匹配 [31](@ref)[60](@ref)
-   ```
+### 主要特点
 
-3. **异常处理机制**
-    - 网络超时自动重试（最大3次）
-    - 无效响应自动标记（HTTP 500+）
-    - 错误日志分级记录（INFO/WARN/ERROR）
+1. **完整的请求管理**
+   - 左侧面板显示所有请求列表，支持搜索和过滤
+   - 可以保存多个请求并快速切换
+   - 右键菜单支持复制、删除和清空操作
 
-### 扩展功能
-| 模块         | 功能描述                            |
-|--------------|-----------------------------------|
-| 数据持久化   | SQLite 本地存储历史记录            |
-| 主题切换     | 深色/浅色模式支持                  |
-| 导入导出     | HAR/JSON 格式转换                  |
+2. **增强的编辑功能**
+   - 使用Burp原生编辑器提供语法高亮和格式化
+   - 支持左右布局、上下布局和单面板布局
+   - 请求超时控制和错误处理
 
-## 🛠️ 安装指南
-### 环境要求
-- JDK 1.8+
-- Burp Suite Pro 2023.6+
-- Maven 3.8+
+3. **详细的历史记录**
+   - 记录每个请求的所有重放历史
+   - 显示状态码、响应大小和响应时间
+   - 支持搜索和高级过滤功能
 
-### 构建步骤
+4. **用户友好的界面**
+   - 直观的三区域布局：请求列表、编辑区域和历史记录
+   - 彩色状态码和请求方法显示
+   - 右键菜单提供常用操作
+
+## 界面布局
+
+1. **左侧区域**: 请求列表面板
+   - 显示所有保存的请求
+   - 搜索和过滤功能
+   - 右键菜单提供管理操作
+
+2. **右上区域**: 请求和响应编辑/查看面板
+   - 支持多种布局模式
+   - 发送请求和设置超时
+   - 保存响应内容
+
+3. **右下区域**: 当前请求的历史记录
+   - 记录请求的所有重放历史
+   - 显示详细的响应信息
+   - 双击可重新加载历史记录
+
+## 使用方法
+
+1. **加载扩展**
+   - 在Burp Suite中，转到"扩展"标签
+   - 点击"添加"按钮，选择此扩展的jar文件
+   - 成功加载后，将出现"增强型Repeater"标签
+
+2. **添加请求**
+   - 在Burp的其他工具中右键点击请求，选择"发送到增强型Repeater"
+   - 或者在增强型Repeater中点击"新建请求"按钮创建
+
+3. **编辑和发送请求**
+   - 在编辑区修改请求内容
+   - 设置超时时间（如需要）
+   - 点击"发送请求"按钮或按Ctrl+Enter发送
+
+4. **查看历史记录**
+   - 右下区域自动记录当前请求的所有历史重放
+   - 双击历史记录可以重新加载到编辑区
+
+## 高级功能
+
+1. **布局切换**
+   - 使用右上角的下拉菜单切换编辑区布局
+   - 可选择左右布局、上下布局、仅显示请求或仅显示响应
+
+2. **高级搜索**
+   - 可按URL、方法、状态码或日期等条件过滤
+   - 支持正则表达式搜索
+
+3. **请求管理**
+   - 整理和分类您的常用请求
+   - 快速复制和修改现有请求
+
+## 开发说明
+
+本扩展使用Java开发，需要Burp Suite Professional或Community版本运行。
+
+编译命令：
+```
+javac -cp "burpsuite_pro.jar" burp/*.java
+jar cf enhanced-repeater.jar burp/
+```
+
+## 项目结构
+
+```
+src/main/java/burp/
+├── BurpExtender.java (插件入口类)
+├── EnhancedRepeaterUI.java (主界面类)
+├── http/
+│   ├── RequestManager.java (请求管理和发送)
+│   └── RequestResponseRecord.java (请求响应记录)
+├── ui/
+│   ├── RequestPanel.java (请求编辑面板)
+│   ├── ResponsePanel.java (响应显示面板)
+│   ├── HistoryPanel.java (历史记录面板)
+│   └── HttpEditorPanel.java (高级编辑器面板)
+└── utils/
+    └── TextLineNumber.java (文本行号组件)
+```
+
+## 使用方法
+
+1. 在Burp Suite中导航到"扩展"选项卡
+2. 点击"添加"按钮
+3. 选择本项目编译后的jar文件
+4. 新的"增强型Repeater"选项卡将出现在Burp Suite界面中
+
+### 从其他工具发送请求
+
+1. 在Proxy、Target等工具中右键单击请求
+2. 选择"发送到增强型Repeater"
+3. 请求将自动加载到增强型Repeater界面
+
+### 保存历史记录
+
+所有通过增强型Repeater发送的请求都会自动保存在历史记录面板中，您可以：
+
+- 使用搜索框快速查找历史记录
+- 双击历史记录项加载请求和响应
+- 使用"清空历史"按钮清除所有历史记录
+
+## 开发
+
+### 依赖项
+
+- Java 8+
+- Burp Extender API
+- RSyntaxTextArea (用于语法高亮)
+
+### 构建
+
+使用Maven构建项目：
+
 ```bash
 mvn clean package
 ```
-生成的 `target/enhanced-repeater-1.0.jar` 通过 Burp 的 Extender 模块加载
 
-## 🎨 界面设计原则
-1. **布局方案**
-   ```text
-   +-----------------------+
-   | 控制栏 [超时设置|主题切换] |
-   +-----------+-----------+
-   | 请求面板  | 响应面板   |
-   +-----------+-----------+
-   | 历史记录管理            |
-   +-----------------------+
-   ```
+构建后的jar文件位于`target`目录中。
 
-2. **交互细节**
-    - 彩色状态码标识（绿色2xx/红色5xx）
-    - 请求耗时动态进度条
-    - 智能语法高亮（JSON/XML/HTML）
+## 未来计划
 
-## ⚠️ 异常处理
-```java
-// 使用 Burp 原生日志接口
-callbacks.printError("Timeout occurred: " + e.getMessage());
-callbacks.getStderr().write(("Stacktrace: " + Arrays.toString(e.getStackTrace())).getBytes());
+- 添加多标签页支持，允许同时处理多个请求
+- 添加更多内容格式化选项（JSON、XML、HTML等）
+- 支持保存常用请求模板
+- 增加请求比较功能
+- 集成更多Burp原生编辑器功能
 
-// 自定义错误代码映射
-public enum ErrorCode {
-  NETWORK_TIMEOUT(1001),
-  INVALID_RESPONSE(2001),
-  STORAGE_FAILURE(3001);
-}
-```
+## 贡献
 
-## 📄 开源协议
-Apache License 2.0 © [githubnull](https://github.com/githubnull)
+欢迎提交Issues和Pull Requests来改进项目！
 
+## 许可证
 
-
-### 关键实现要点说明：
-1. **日志系统**：同时使用 `printOutput()` 和 `getStderr()` 实现分级日志 [51](@ref)
-2. **性能优化**：采用线程池管理请求队列，避免界面卡顿
-3. **数据安全**：SQLite 数据库加密存储敏感历史记录
-4. **兼容性**：通过 `@SuppressWarnings("deprecation")` 处理旧版API兼容
-5. **可扩展性**：插件架构支持通过 SPI 机制加载扩展模块
-
-建议结合 Burp 的 `IExtensionHelpers` 和 `IHttpService` 接口实现核心网络功能 [60](@ref)[74](@ref)，使用 `JTabbedPane` 构建多标签界面 [2](@ref)，并通过 `SwingWorker` 实现异步操作防止界面冻结。
+本项目采用MIT许可证。
