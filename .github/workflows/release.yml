@@ -89,28 +89,25 @@ jobs:
             CHANGELOG="Enhanced Repeater Manager 版本 ${{ steps.check-tag.outputs.version }}"
           fi
           
-          # 添加标题和说明
-          RELEASE_NOTES="# Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}
-
-## 变更记录
-
-$CHANGELOG
-
-## 安装方法
-
-1. 下载 jar 文件
-2. 在 Burp Suite 中转到 Extender > Extensions
-3. 点击 Add 按钮
-4. 选择下载的 jar 文件
-5. 点击 Next 完成安装
-
-## 文件说明
-
-- \`enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar\` - 主版本，可直接安装使用
-"
+          # 将标题和说明写入文件
+          echo "# Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "## 变更记录" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "$CHANGELOG" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "## 安装方法" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "1. 下载 jar 文件" >> release_notes.md
+          echo "2. 在 Burp Suite 中转到 Extender > Extensions" >> release_notes.md
+          echo "3. 点击 Add 按钮" >> release_notes.md
+          echo "4. 选择下载的 jar 文件" >> release_notes.md
+          echo "5. 点击 Next 完成安装" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "## 文件说明" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "- \`enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar\` - 主版本，可直接安装使用" >> release_notes.md
           
-          # 将发布说明写入文件
-          echo "$RELEASE_NOTES" > release_notes.md
           echo "发布说明已保存到 release_notes.md"
       
       - name: 创建 GitHub Release
