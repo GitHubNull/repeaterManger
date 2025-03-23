@@ -993,4 +993,17 @@ public class HistoryPanel extends JPanel {
     public int getHistoryCount() {
         return historyTableModel.getRowCount();
     }
+
+    /**
+     * 清除所有历史记录
+     */
+    public void clearAllHistory() {
+        // 清空表格数据
+        historyTableModel.setRowCount(0);
+        
+        // 清空数据映射
+        historyRecords.clear();
+        
+        BurpExtender.printOutput("[*] 已清除所有历史记录数据");
+    }
 } 

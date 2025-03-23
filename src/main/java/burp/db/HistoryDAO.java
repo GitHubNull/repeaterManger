@@ -32,8 +32,18 @@ public class HistoryDAO {
                    "response_length, response_time, comment, request_data, response_data) " +
                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        
+        try {
+            conn = dbManager.getConnection();
+            
+            // 关闭自动提交，启用事务控制
+            boolean originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            
+            pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             
             pstmt.setInt(1, record.getRequestId());
             pstmt.setString(2, record.getMethod());
@@ -50,19 +60,58 @@ public class HistoryDAO {
             
             int affectedRows = pstmt.executeUpdate();
             
+            int generatedId = -1;
             if (affectedRows > 0) {
-                try (ResultSet rs = pstmt.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        return rs.getInt(1);
-                    }
+                rs = pstmt.getGeneratedKeys();
+                if (rs.next()) {
+                    generatedId = rs.getInt(1);
                 }
             }
             
+            // 手动提交事务
+            conn.commit();
+            
+            // 恢复原始的自动提交设置
+            conn.setAutoCommit(originalAutoCommit);
+            
+            BurpExtender.printOutput("[+] 已保存历史记录到数据库，ID: " + generatedId + 
+                ", 请求ID: " + record.getRequestId() + 
+                ", 请求大小: " + (record.getRequestData() != null ? record.getRequestData().length : 0) + " 字节" +
+                ", 响应大小: " + (record.getResponseData() != null ? record.getResponseData().length : 0) + " 字节");
+            
+            // 执行PRAGMA wal_checkpoint确保数据已写入磁盘
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("PRAGMA wal_checkpoint(FULL)");
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 执行WAL检查点失败: " + e.getMessage());
+                // 继续执行而不是抛出异常
+            }
+            
+            return generatedId;
+            
         } catch (SQLException e) {
             BurpExtender.printError("[!] 保存历史记录失败: " + e.getMessage());
+            
+            // 如果发生错误，尝试回滚事务
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    BurpExtender.printError("[!] 回滚事务失败: " + ex.getMessage());
+                }
+            }
+            
+            return -1;
+        } finally {
+            // 关闭资源
+            try {
+                if (rs != null) rs.close();
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 关闭数据库资源失败: " + e.getMessage());
+            }
         }
-        
-        return -1;
     }
     
     /**

@@ -605,4 +605,35 @@ public class EnhancedRepeaterUI implements ITab {
             }
         }
     }
+    
+    /**
+     * 刷新所有数据
+     * 在数据库导入后调用，用于重新加载UI中显示的数据
+     */
+    public void refreshAllData() {
+        BurpExtender.printOutput("[*] 开始刷新界面数据...");
+        
+        // 清空当前数据
+        requestListPanel.clearAllRequests();
+        historyPanel.clearAllHistory();
+        
+        // 重置当前选中的请求ID
+        currentRequestId = -1;
+        
+        // 清空请求历史记录映射
+        requestHistoryMap.clear();
+        
+        try {
+            // 创建一个MainUI实例，通过它调用loadPersistedData方法加载数据
+            burp.ui.MainUI mainUI = new burp.ui.MainUI(requestListPanel, requestPanel, responsePanel, historyPanel);
+            
+            // 调用加载数据方法
+            mainUI.loadPersistedData();
+            
+            BurpExtender.printOutput("[+] 数据刷新请求已提交，请等待数据加载完成");
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 刷新数据时出错: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 }

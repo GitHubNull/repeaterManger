@@ -138,35 +138,227 @@ public class DataImporter {
         // 获取当前运行的数据库路径
         String currentDbPath = dbManager.getConfig().getDatabasePath();
         File targetFile = new File(currentDbPath);
-        
-        // 关闭当前数据库连接
-        dbManager.close();
-        
-        // 备份当前数据库
         File backupFile = new File(currentDbPath + ".bak");
-        if (targetFile.exists()) {
-            Files.copy(targetFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            BurpExtender.printOutput("[+] 已备份当前数据库到: " + backupFile.getAbsolutePath());
+        
+        BurpExtender.printOutput("[*] 开始释放数据库资源，准备导入...");
+        
+        try {
+            // 确保自动保存服务停止
+            try {
+                // 尝试停止自动保存服务
+                java.lang.reflect.Field extenderField = BurpExtender.class.getDeclaredField("mainUI");
+                extenderField.setAccessible(true);
+                Object mainUI = extenderField.get(null); // static字段
+                
+                if (mainUI != null && mainUI.getClass().getName().equals("burp.ui.MainUI")) {
+                    // 调用自动保存服务停止方法
+                    java.lang.reflect.Method onUnloadMethod = mainUI.getClass().getMethod("onUnload");
+                    onUnloadMethod.invoke(mainUI);
+                    BurpExtender.printOutput("[+] 已停止自动保存服务");
+                }
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 停止自动保存服务失败: " + e.getMessage());
+            }
+            
+            // 关闭当前数据库连接
+            dbManager.close();
+            BurpExtender.printOutput("[+] 数据库连接池已关闭");
+            
+            // 等待一段时间确保所有连接都释放
+            for (int i = 0; i < 3; i++) {
+                System.gc(); // 请求垃圾回收，帮助释放资源
+                try {
+                    Thread.sleep(1000); // 等待1秒
+                    BurpExtender.printOutput("[*] 等待数据库资源释放...");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            
+            // 检查文件是否可访问
+            boolean fileAccessible = true;
+            if (targetFile.exists()) {
+                try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(targetFile, "rw")) {
+                    // 尝试写入以确认文件已解锁
+                    raf.getFD().sync();
+                    BurpExtender.printOutput("[+] 确认数据库文件已解锁，可以访问");
+                } catch (Exception e) {
+                    fileAccessible = false;
+                    BurpExtender.printError("[!] 数据库文件仍然被锁定: " + e.getMessage());
+                }
+            }
+            
+            if (!fileAccessible) {
+                BurpExtender.printOutput("[*] 尝试强制释放数据库资源...");
+                // 再次尝试垃圾回收和等待
+                System.gc();
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        
+            // 备份当前数据库
+            if (targetFile.exists()) {
+                // 先确认备份目录存在
+                File backupDir = backupFile.getParentFile();
+                if (!backupDir.exists()) {
+                    backupDir.mkdirs();
+                }
+                
+                try {
+                    Files.copy(targetFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    BurpExtender.printOutput("[+] 已备份当前数据库到: " + backupFile.getAbsolutePath());
+                } catch (Exception e) {
+                    throw new IOException("备份数据库失败: " + e.getMessage(), e);
+                }
+            }
+            
+            // 确保目标目录存在
+            File targetDir = targetFile.getParentFile();
+            if (!targetDir.exists()) {
+                targetDir.mkdirs();
+                BurpExtender.printOutput("[+] 已创建目标目录: " + targetDir.getAbsolutePath());
+            }
+            
+            // 复制导入的数据库文件到当前位置
+            try {
+                // 使用Java NIO进行文件复制
+                Files.copy(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                BurpExtender.printOutput("[+] 已复制数据库文件到: " + targetFile.getAbsolutePath());
+            } catch (Exception e) {
+                // 如果复制失败，尝试使用FileChannel
+                BurpExtender.printError("[!] 标准复制失败，尝试备用方法: " + e.getMessage());
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(sourceFile);
+                     java.io.FileOutputStream fos = new java.io.FileOutputStream(targetFile);
+                     java.nio.channels.FileChannel sourceChannel = fis.getChannel();
+                     java.nio.channels.FileChannel destChannel = fos.getChannel()) {
+                    destChannel.transferFrom(sourceChannel, 0, sourceChannel.size());
+                    BurpExtender.printOutput("[+] 使用备用方法成功复制数据库文件");
+                } catch (Exception ex) {
+                    throw new IOException("复制数据库文件失败: " + ex.getMessage(), ex);
+                }
+            }
+            
+            // 验证文件是否已成功复制
+            if (!targetFile.exists() || targetFile.length() == 0) {
+                throw new IOException("复制后的目标文件不存在或为空");
+            }
+            
+            // 等待文件系统操作完成
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
+            BurpExtender.printOutput("[*] 开始重新初始化数据库连接...");
+            
+            // 重新初始化数据库连接
+            boolean success = false;
+            for (int i = 0; i < 3; i++) { // 尝试多次初始化
+                try {
+                    success = dbManager.initialize();
+                    if (success) {
+                        BurpExtender.printOutput("[+] 数据库连接重新初始化成功");
+                        break;
+                    }
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 初始化尝试 " + (i+1) + " 失败: " + e.getMessage());
+                }
+                // 短暂等待后重试
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            
+            if (!success) {
+                // 如果初始化失败，恢复备份
+                if (backupFile.exists()) {
+                    BurpExtender.printError("[!] 数据库初始化失败，正在恢复备份...");
+                    Files.copy(backupFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    dbManager.initialize();
+                    throw new SQLException("导入数据库后初始化失败，已恢复备份");
+                } else {
+                    throw new SQLException("导入数据库后初始化失败，且无备份可恢复");
+                }
+            }
+            
+            BurpExtender.printOutput("[+] 数据导入成功: " + sourceFile.getAbsolutePath());
+            
+            // 导入成功后，刷新界面数据
+            try {
+                // 查找并获取主UI实例
+                refreshUIAfterImport();
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 刷新UI失败，可能需要重启插件: " + e.getMessage());
+                e.printStackTrace();
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 导入过程中发生错误: " + e.getMessage());
+            if (e instanceof IOException || e instanceof SQLException) {
+                throw e; // 重新抛出原始异常
+            } else {
+                throw new IOException("导入过程中发生未知错误: " + e.getMessage(), e);
+            }
+        }
+    }
+    
+    /**
+     * 在导入后刷新UI界面
+     */
+    private void refreshUIAfterImport() {
+        BurpExtender.printOutput("[*] 正在刷新界面数据...");
+        
+        try {
+            // 尝试直接访问BurpExtender中的repeaterUI实例
+            java.lang.reflect.Field repeaterUIField = BurpExtender.class.getDeclaredField("repeaterUI");
+            repeaterUIField.setAccessible(true);
+            
+            Object repeaterUIObj = repeaterUIField.get(null); // static字段，传入null
+            if (repeaterUIObj != null && repeaterUIObj instanceof burp.EnhancedRepeaterUI) {
+                burp.EnhancedRepeaterUI repeaterUI = (burp.EnhancedRepeaterUI) repeaterUIObj;
+                
+                // 刷新数据
+                repeaterUI.refreshAllData();
+                BurpExtender.printOutput("[+] 界面数据刷新成功");
+            } else {
+                BurpExtender.printOutput("[!] 无法获取EnhancedRepeaterUI实例，请手动切换到其他标签再切回");
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 刷新界面数据时出错: " + e.getMessage());
+            e.printStackTrace();
+            
+            // 提示用户手动刷新
+            BurpExtender.printOutput("[*] 请尝试切换到其他Burp标签页，然后再切回插件标签页以刷新数据");
+        }
+    }
+    
+    /**
+     * 递归查找EnhancedRepeaterUI实例
+     * 由于类型兼容性问题这个方法不太可靠，仅作备用
+     */
+    @SuppressWarnings("unused")
+    private Object findEnhancedRepeaterUI(java.awt.Component component) {
+        // 通过类名检查，避免直接类型比较导致的兼容性问题
+        if (component.getClass().getName().equals("burp.EnhancedRepeaterUI")) {
+            return component;
         }
         
-        // 复制导入的数据库文件到当前位置
-        Files.copy(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        
-        // 重新初始化数据库连接
-        boolean success = dbManager.initialize();
-        
-        if (!success) {
-            // 如果初始化失败，恢复备份
-            if (backupFile.exists()) {
-                Files.copy(backupFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                dbManager.initialize();
-                throw new SQLException("导入数据库后初始化失败，已恢复备份");
-            } else {
-                throw new SQLException("导入数据库后初始化失败，且无备份可恢复");
+        if (component instanceof java.awt.Container) {
+            java.awt.Container container = (java.awt.Container) component;
+            for (java.awt.Component child : container.getComponents()) {
+                Object ui = findEnhancedRepeaterUI(child);
+                if (ui != null) {
+                    return ui;
+                }
             }
         }
         
-        BurpExtender.printOutput("[+] 数据导入成功: " + sourceFile.getAbsolutePath());
+        return null;
     }
     
     /**

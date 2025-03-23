@@ -257,8 +257,150 @@ public class RequestPanel extends JPanel {
      * 设置请求文本
      */
     public void setRequestText(byte[] request) {
-        if (request != null) {
-            setRequestText(new String(request));
+        if (request == null) {
+            return;
+        }
+        
+        // 尝试不同的解码方式来处理请求数据
+        String requestText = null;
+        
+        try {
+            // 首先尝试直接将字节转换为字符串（UTF-8编码）
+            requestText = new String(request, java.nio.charset.StandardCharsets.UTF_8);
+            
+            // 检查是否为有效的HTTP请求
+            if (!isValidHttpRequest(requestText)) {
+                // 如果不是有效的HTTP请求，尝试ISO-8859-1编码
+                requestText = new String(request, java.nio.charset.StandardCharsets.ISO_8859_1);
+                
+                // 再次检查
+                if (!isValidHttpRequest(requestText)) {
+                    // 尝试检测编码并修复
+                    requestText = repairBinaryData(request);
+                }
+            }
+        } catch (Exception e) {
+            // 解码失败，尝试最基本的方法
+            BurpExtender.printError("[!] 解码请求数据时出错: " + e.getMessage());
+            requestText = repairBinaryData(request);
+        }
+        
+        // 设置文本到UI
+        setRequestText(requestText);
+        BurpExtender.printOutput("[*] 已加载请求数据，大小: " + request.length + " 字节");
+    }
+    
+    /**
+     * 检查文本是否为有效的HTTP请求
+     */
+    private boolean isValidHttpRequest(String text) {
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+        
+        // 简单检查是否包含HTTP方法和HTTP版本
+        String[] firstLines = text.split("\r\n|\n", 2);
+        if (firstLines.length == 0) {
+            return false;
+        }
+        
+        String firstLine = firstLines[0].trim();
+        return firstLine.matches("(?i)(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE)\\s+.+\\s+HTTP/.+") ||
+               firstLine.matches("HTTP/.+\\s+\\d+\\s+.*");
+    }
+    
+    /**
+     * 尝试修复损坏的二进制数据
+     */
+    private String repairBinaryData(byte[] data) {
+        if (data == null || data.length == 0) {
+            return "";
+        }
+        
+        // 记录原始数据用于调试
+        BurpExtender.printOutput("[*] 尝试修复请求数据，大小: " + data.length + " 字节");
+        
+        StringBuilder sb = new StringBuilder();
+        
+        // 尝试识别HTTP头部和正文的分隔符
+        int bodyStart = -1;
+        for (int i = 0; i < data.length - 3; i++) {
+            // 查找\r\n\r\n序列，这通常用于分隔HTTP头部和正文
+            if (data[i] == '\r' && data[i+1] == '\n' && data[i+2] == '\r' && data[i+3] == '\n') {
+                bodyStart = i + 4;
+                break;
+            }
+        }
+        
+        // 如果找到了分隔符
+        if (bodyStart > 0) {
+            // 分别处理头部和正文
+            String headers = new String(Arrays.copyOfRange(data, 0, bodyStart), 
+                                      java.nio.charset.StandardCharsets.ISO_8859_1);
+            sb.append(headers);
+            
+            // 检查是否为多部分表单数据
+            if (headers.toLowerCase().contains("content-type: multipart/form-data")) {
+                // 对于多部分表单数据，使用ISO-8859-1编码处理整个请求
+                return new String(data, java.nio.charset.StandardCharsets.ISO_8859_1);
+            }
+            
+            // 对于正文部分，尝试智能选择编码
+            if (bodyStart < data.length) {
+                byte[] body = Arrays.copyOfRange(data, bodyStart, data.length);
+                
+                // 尝试检测正文是否包含二进制数据
+                boolean isBinary = false;
+                for (byte b : body) {
+                    if (b == 0 || (b < 32 && b != '\r' && b != '\n' && b != '\t')) {
+                        isBinary = true;
+                        break;
+                    }
+                }
+                
+                if (isBinary) {
+                    // 对于二进制数据，使用Base64编码显示
+                    sb.append("[二进制数据，长度: ").append(body.length).append(" 字节]\n");
+                    sb.append(java.util.Base64.getEncoder().encodeToString(body));
+                } else {
+                    // 对于文本数据，尝试使用UTF-8解码
+                    try {
+                        sb.append(new String(body, java.nio.charset.StandardCharsets.UTF_8));
+                    } catch (Exception e) {
+                        // 如果UTF-8解码失败，回退到ISO-8859-1
+                        sb.append(new String(body, java.nio.charset.StandardCharsets.ISO_8859_1));
+                    }
+                }
+            }
+            
+            return sb.toString();
+        } else {
+            // 如果找不到分隔符，尝试检测数据是否为纯二进制
+            boolean isBinary = false;
+            for (byte b : data) {
+                if (b == 0 || (b < 32 && b != '\r' && b != '\n' && b != '\t')) {
+                    isBinary = true;
+                    break;
+                }
+            }
+            
+            if (isBinary) {
+                // 对于二进制数据，以可读形式展示
+                sb.append("HTTP/1.1 自动生成的请求头\r\n");
+                sb.append("Content-Type: application/octet-stream\r\n");
+                sb.append("Content-Length: ").append(data.length).append("\r\n\r\n");
+                sb.append("[二进制数据，长度: ").append(data.length).append(" 字节]\n");
+                sb.append(java.util.Base64.getEncoder().encodeToString(data));
+            } else {
+                // 对于可能的文本数据，尝试UTF-8和ISO-8859-1
+                try {
+                    return new String(data, java.nio.charset.StandardCharsets.UTF_8);
+                } catch (Exception e) {
+                    return new String(data, java.nio.charset.StandardCharsets.ISO_8859_1);
+                }
+            }
+            
+            return sb.toString();
         }
     }
     

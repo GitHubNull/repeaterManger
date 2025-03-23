@@ -4,6 +4,8 @@ import burp.BurpExtender;
 import burp.config.DatabaseConfig;
 import burp.db.DatabaseManager;
 import burp.ui.MainUI;
+import burp.db.RequestDAO;
+import burp.db.HistoryDAO;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,6 +28,15 @@ public class AutoSaveService {
      */
     public AutoSaveService() {
         this.dbManager = DatabaseManager.getInstance();
+    }
+    
+    /**
+     * 创建自动保存服务（指定DAO对象）
+     * 用于刷新数据时创建临时实例
+     */
+    public AutoSaveService(RequestDAO requestDAO, HistoryDAO historyDAO) {
+        this.dbManager = DatabaseManager.getInstance();
+        // DAO对象只在performSave方法中使用，因此此构造函数仅用于创建不会执行保存操作的临时实例
     }
     
     /**

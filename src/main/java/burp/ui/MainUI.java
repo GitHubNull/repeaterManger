@@ -22,14 +22,14 @@ public class MainUI extends JPanel {
     
     // 保留以供将来使用，例如在需要直接访问Burp API时
     @SuppressWarnings("unused")
-    private final IBurpExtenderCallbacks callbacks;
+    private IBurpExtenderCallbacks callbacks;
     @SuppressWarnings("unused")
-    private final IExtensionHelpers helpers;
+    private IExtensionHelpers helpers;
     private final RequestListPanel requestListPanel;
     private final RequestPanel requestPanel;
     private final ResponsePanel responsePanel;
     private final HistoryPanel historyPanel;
-    private final ConfigPanel configPanel;
+    private ConfigPanel configPanel;
     private final DatabaseManager dbManager;
     private final RequestDAO requestDAO;
     private final HistoryDAO historyDAO;
@@ -108,6 +108,66 @@ public class MainUI extends JPanel {
     }
     
     /**
+     * 使用现有组件创建主UI
+     * 用于刷新数据时重用现有UI组件
+     */
+    public MainUI(RequestListPanel requestListPanel, RequestPanel requestPanel, 
+                  ResponsePanel responsePanel, HistoryPanel historyPanel) {
+        this.requestListPanel = requestListPanel;
+        this.requestPanel = requestPanel;
+        this.responsePanel = responsePanel;
+        this.historyPanel = historyPanel;
+        
+        // 将没有初始化的final字段设为null
+        this.callbacks = null;
+        this.helpers = null;
+        this.configPanel = null;
+        
+        // 初始化数据库和DAO
+        this.dbManager = DatabaseManager.getInstance();
+        this.requestDAO = new RequestDAO();
+        this.historyDAO = new HistoryDAO();
+        
+        // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
+        this.autoSaveService = new AutoSaveService(requestDAO, historyDAO);
+    }
+    
+    /**
+     * 使用Burp面板组件创建主UI
+     * 用于从EnhancedRepeaterUI中调用，处理不同类型的请求和响应面板
+     * 
+     * @param requestListPanel 请求列表面板
+     * @param burpRequestPanel Burp请求面板
+     * @param burpResponsePanel Burp响应面板
+     * @param historyPanel 历史记录面板
+     */
+    public MainUI(RequestListPanel requestListPanel, burp.ui.BurpRequestPanel burpRequestPanel, 
+                  burp.ui.BurpResponsePanel burpResponsePanel, HistoryPanel historyPanel) {
+        this.requestListPanel = requestListPanel;
+        
+        // 由于类型不匹配，但这里只是用于数据刷新，我们可以使用null值
+        // 实际操作中使用的是传入的burpRequestPanel和burpResponsePanel
+        this.requestPanel = null;
+        this.responsePanel = null;
+        this.historyPanel = historyPanel;
+        
+        // 将没有初始化的字段设为null
+        this.callbacks = null;
+        this.helpers = null;
+        this.configPanel = null;
+        
+        // 初始化数据库和DAO
+        this.dbManager = DatabaseManager.getInstance();
+        this.requestDAO = new RequestDAO();
+        this.historyDAO = new HistoryDAO();
+        
+        // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
+        this.autoSaveService = new AutoSaveService(requestDAO, historyDAO);
+        
+        BurpExtender.printOutput("[*] 使用增强型Repeater面板创建临时MainUI实例，用于数据刷新");
+    }
+    
+    /**
      * 设置回调函数
      */
     private void setupCallbacks() {
@@ -157,7 +217,7 @@ public class MainUI extends JPanel {
     /**
      * 加载持久化数据
      */
-    private void loadPersistedData() {
+    public void loadPersistedData() {
         new Thread(() -> {
             try {
                 // 加载请求数据

@@ -37,6 +37,27 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory {
             // 初始化带有正确编码的输出流
             initializeOutputStreams(callbacks);
             
+            // 测试数据库连接和持久化
+            stdout.println("[*] 正在测试数据库连接和持久化...");
+            burp.db.DatabaseManager dbManager = burp.db.DatabaseManager.getInstance();
+            
+            // 确保数据库初始化
+            if (dbManager.initialize()) {
+                stdout.println("[+] 数据库初始化成功");
+                
+                // 测试写入示例数据
+                if (dbManager.testDatabaseWithSampleData()) {
+                    stdout.println("[+] 数据库测试成功：已写入并验证测试数据");
+                } else {
+                    stdout.println("[!] 数据库测试失败：无法写入或验证测试数据");
+                }
+                
+                // 检查数据库状态
+                dbManager.checkDatabaseStatus();
+            } else {
+                stdout.println("[!] 数据库初始化失败");
+            }
+            
             // 创建UI和功能组件
             repeaterUI = new EnhancedRepeaterUI();
             

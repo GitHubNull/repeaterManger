@@ -906,27 +906,23 @@ public class RequestListPanel extends JPanel {
     }
     
     /**
-     * 清空所有请求
+     * 清除所有请求数据
      */
-    private void clearAllRequests() {
-        int confirm = JOptionPane.showConfirmDialog(
-            this, "确定要清空所有请求吗？", 
-            "确认", JOptionPane.YES_NO_OPTION);
-        
-        if (confirm == JOptionPane.YES_OPTION) {
-            // 清空数据映射
-            requestDataMap.clear();
-            
-            // 清空表格模型
-            while (requestTableModel.getRowCount() > 0) {
-                requestTableModel.removeRow(0);
-            }
-            
-            // 重置ID计数器
-            nextRequestId = 1;
-            
-            BurpExtender.printOutput("[+] 已清空所有请求");
+    public void clearAllRequests() {
+        // 清空表格数据
+        while (requestTableModel.getRowCount() > 0) {
+            requestTableModel.removeRow(0);
         }
+        
+        // 清空数据映射
+        requestDataMap.clear();
+        requestComments.clear();
+        requestColors.clear();
+        
+        // 重置请求ID计数器
+        nextRequestId = 1;
+        
+        BurpExtender.printOutput("[*] 已清除所有请求数据");
     }
     
     /**

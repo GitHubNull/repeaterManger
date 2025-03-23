@@ -4,11 +4,10 @@ import burp.config.DatabaseConfig;
 import burp.db.DatabaseManager;
 import burp.io.DataExporter;
 import burp.io.DataImporter;
+import burp.BurpExtender;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.File;
 
 /**
@@ -53,12 +52,7 @@ public class ConfigPanel extends JPanel {
         c.gridy = 0;
         c.weightx = 0;
         JButton browseButton = new JButton("浏览...");
-        browseButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                browseForDbFile();
-            }
-        });
+        browseButton.addActionListener(e -> browseForDbFile());
         configPanel.add(browseButton, c);
         
         // 自动保存配置
@@ -107,63 +101,59 @@ public class ConfigPanel extends JPanel {
         c.gridwidth = 2;
         c.anchor = GridBagConstraints.EAST;
         JButton saveConfigButton = new JButton("保存配置");
-        saveConfigButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                saveConfig();
-            }
-        });
+        saveConfigButton.addActionListener(e -> saveConfig());
         configPanel.add(saveConfigButton, c);
         
-        // 导入导出面板
-        JPanel ioPanel = new JPanel(new GridLayout(1, 4, 10, 0));
+        // 导入导出面板 - 使用紧凑的设计，每行一个FlowLayout
+        JPanel ioPanel = new JPanel(new BorderLayout());
         ioPanel.setBorder(BorderFactory.createTitledBorder("数据导入导出"));
         
-        JButton exportDbButton = new JButton("导出数据库");
-        exportDbButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                exportDatabase();
-            }
-        });
-        ioPanel.add(exportDbButton);
+        // 使用垂直布局的面板容纳两行
+        JPanel rowsPanel = new JPanel();
+        rowsPanel.setLayout(new BoxLayout(rowsPanel, BoxLayout.Y_AXIS));
         
-        JButton importDbButton = new JButton("导入数据库");
-        importDbButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                importDatabase();
-            }
-        });
-        ioPanel.add(importDbButton);
+        // 第一行 - SQLite格式
+        JPanel sqliteRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        sqliteRow.add(new JLabel("SQLite格式:"));
+        JButton exportDbButton = new JButton("导出");
+        exportDbButton.addActionListener(e -> exportDatabase());
+        sqliteRow.add(exportDbButton);
         
-        JButton exportJsonButton = new JButton("导出为JSON");
-        exportJsonButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                exportToJson();
-            }
-        });
-        ioPanel.add(exportJsonButton);
+        JButton importDbButton = new JButton("导入");
+        importDbButton.addActionListener(e -> importDatabase());
+        sqliteRow.add(importDbButton);
         
-        JButton importJsonButton = new JButton("从JSON导入");
-        importJsonButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                importFromJson();
-            }
-        });
-        ioPanel.add(importJsonButton);
+        rowsPanel.add(sqliteRow);
         
-        // 添加到主面板
-        add(configPanel, BorderLayout.NORTH);
-        add(ioPanel, BorderLayout.CENTER);
+        // 第二行 - JSON格式
+        JPanel jsonRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        jsonRow.add(new JLabel("JSON格式:"));
+        JButton exportJsonButton = new JButton("导出");
+        exportJsonButton.addActionListener(e -> exportToJson());
+        jsonRow.add(exportJsonButton);
         
-        // 添加信息面板
+        JButton importJsonButton = new JButton("导入");
+        importJsonButton.addActionListener(e -> importFromJson());
+        jsonRow.add(importJsonButton);
+        
+        rowsPanel.add(jsonRow);
+        
+        // 添加行面板到IO面板
+        ioPanel.add(rowsPanel, BorderLayout.CENTER);
+        
+        // 创建顶部面板容纳配置和导入导出
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(configPanel, BorderLayout.NORTH);
+        topPanel.add(ioPanel, BorderLayout.CENTER);
+        
+        // 添加顶部面板到NORTH位置
+        add(topPanel, BorderLayout.NORTH);
+        
+        // 添加信息面板 - 占据大部分空间
         JPanel infoPanel = new JPanel(new BorderLayout());
         infoPanel.setBorder(BorderFactory.createTitledBorder("数据库信息"));
         
-        JTextArea infoArea = new JTextArea(5, 40);
+        JTextArea infoArea = new JTextArea(10, 40); // 增加了行数，让它占据更多空间
         infoArea.setEditable(false);
         infoArea.setText("SQLite数据库文件: " + dbManager.getConfig().getDatabasePath() + "\n" +
                        "自动保存: " + (dbManager.getConfig().isAutoSaveEnabled() ? "启用" : "禁用") + "\n" +
@@ -172,7 +162,8 @@ public class ConfigPanel extends JPanel {
         
         infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
         
-        add(infoPanel, BorderLayout.SOUTH);
+        // 将信息面板添加到CENTER，使其占据剩余所有空间
+        add(infoPanel, BorderLayout.CENTER);
     }
     
     /**
@@ -251,31 +242,141 @@ public class ConfigPanel extends JPanel {
      * 导出数据库
      */
     private void exportDatabase() {
-        DataExporter exporter = new DataExporter();
-        exporter.exportToSQLite(this);
+        try {
+            BurpExtender.printOutput("[*] 正在启动SQLite数据库导出...");
+            
+            // 显示操作提示
+            JOptionPane.showMessageDialog(
+                this,
+                "即将打开导出对话框，请选择SQLite数据库文件保存位置。",
+                "数据库导出",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+            DataExporter exporter = new DataExporter();
+            boolean started = exporter.exportToSQLite(this);
+            
+            if (!started) {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "启动导出操作失败，请查看输出面板获取详细信息。",
+                    "导出错误",
+                    JOptionPane.ERROR_MESSAGE
+                );
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(
+                this,
+                "导出操作发生错误: " + e.getMessage(),
+                "导出错误",
+                JOptionPane.ERROR_MESSAGE
+            );
+            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**
      * 导入数据库
      */
     private void importDatabase() {
-        DataImporter importer = new DataImporter();
-        importer.importFromSQLite(this);
+        try {
+            BurpExtender.printOutput("[*] 正在启动SQLite数据库导入...");
+            
+            // 显示操作提示
+            JOptionPane.showMessageDialog(
+                this,
+                "即将打开导入对话框，请选择要导入的SQLite数据库文件。",
+                "数据库导入",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+            DataImporter importer = new DataImporter();
+            boolean started = importer.importFromSQLite(this);
+            
+            if (!started) {
+                BurpExtender.printOutput("[!] 导入操作已取消或发生错误");
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(
+                this,
+                "导入操作发生错误: " + e.getMessage(),
+                "导入错误",
+                JOptionPane.ERROR_MESSAGE
+            );
+            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**
      * 导出为JSON
      */
     private void exportToJson() {
-        DataExporter exporter = new DataExporter();
-        exporter.exportToJson(this);
+        try {
+            BurpExtender.printOutput("[*] 正在启动JSON数据导出...");
+            
+            // 显示操作提示
+            JOptionPane.showMessageDialog(
+                this,
+                "即将打开导出对话框，请选择JSON文件保存位置。",
+                "JSON导出",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+            DataExporter exporter = new DataExporter();
+            boolean started = exporter.exportToJson(this);
+            
+            if (!started) {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "启动导出操作失败，请查看输出面板获取详细信息。",
+                    "导出错误",
+                    JOptionPane.ERROR_MESSAGE
+                );
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(
+                this,
+                "导出操作发生错误: " + e.getMessage(),
+                "导出错误",
+                JOptionPane.ERROR_MESSAGE
+            );
+            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     /**
      * 从JSON导入
      */
     private void importFromJson() {
-        DataImporter importer = new DataImporter();
-        importer.importFromJson(this);
+        try {
+            BurpExtender.printOutput("[*] 正在启动JSON数据导入...");
+            
+            // 显示操作提示
+            JOptionPane.showMessageDialog(
+                this,
+                "即将打开导入对话框，请选择要导入的JSON文件。",
+                "JSON导入",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+            DataImporter importer = new DataImporter();
+            boolean started = importer.importFromJson(this);
+            
+            if (!started) {
+                BurpExtender.printOutput("[!] 导入操作已取消或发生错误");
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(
+                this,
+                "导入操作发生错误: " + e.getMessage(),
+                "导入错误",
+                JOptionPane.ERROR_MESSAGE
+            );
+            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 } 

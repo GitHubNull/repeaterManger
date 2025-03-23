@@ -38,8 +38,18 @@ public class RequestDAO {
         String sql = "INSERT INTO requests (protocol, domain, path, query, method, request_data) " +
                    "VALUES (?, ?, ?, ?, ?, ?)";
         
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        
+        try {
+            conn = dbManager.getConnection();
+            
+            // 关闭自动提交
+            boolean originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            
+            pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             
             pstmt.setString(1, protocol);
             pstmt.setString(2, domain);
@@ -50,19 +60,56 @@ public class RequestDAO {
             
             int affectedRows = pstmt.executeUpdate();
             
+            int generatedId = -1;
             if (affectedRows > 0) {
-                try (ResultSet rs = pstmt.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        return rs.getInt(1);
-                    }
+                rs = pstmt.getGeneratedKeys();
+                if (rs.next()) {
+                    generatedId = rs.getInt(1);
                 }
             }
             
+            // 手动提交事务
+            conn.commit();
+            
+            // 恢复原始的自动提交设置
+            conn.setAutoCommit(originalAutoCommit);
+            
+            BurpExtender.printOutput("[+] 已保存请求到数据库，ID: " + generatedId + 
+                ", 大小: " + (requestData != null ? requestData.length : 0) + " 字节");
+            
+            // 执行PRAGMA wal_checkpoint确保数据已写入磁盘
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("PRAGMA wal_checkpoint(FULL)");
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 执行WAL检查点失败: " + e.getMessage());
+                // 继续执行而不是抛出异常
+            }
+            
+            return generatedId;
+            
         } catch (SQLException e) {
             BurpExtender.printError("[!] 保存请求失败: " + e.getMessage());
+            
+            // 如果发生错误，尝试回滚事务
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    BurpExtender.printError("[!] 回滚事务失败: " + ex.getMessage());
+                }
+            }
+            
+            return -1;
+        } finally {
+            // 关闭资源
+            try {
+                if (rs != null) rs.close();
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 关闭数据库资源失败: " + e.getMessage());
+            }
         }
-        
-        return -1;
     }
     
     /**
@@ -126,30 +173,53 @@ public class RequestDAO {
              ResultSet rs = pstmt.executeQuery()) {
             
             while (rs.next()) {
-                Map<String, Object> request = new HashMap<>();
-                request.put("id", rs.getInt("id"));
-                request.put("protocol", rs.getString("protocol"));
-                request.put("domain", rs.getString("domain"));
-                request.put("path", rs.getString("path"));
-                request.put("query", rs.getString("query"));
-                request.put("method", rs.getString("method"));
-                request.put("add_time", rs.getString("add_time"));
-                request.put("comment", rs.getString("comment"));
-                
-                // 处理颜色
-                String colorStr = rs.getString("color");
-                if (colorStr != null && !colorStr.isEmpty()) {
-                    try {
-                        request.put("color", Color.decode(colorStr));
-                    } catch (NumberFormatException e) {
+                try {
+                    Map<String, Object> request = new HashMap<>();
+                    int id = rs.getInt("id");
+                    request.put("id", id);
+                    request.put("protocol", getStringWithDefault(rs, "protocol", "http"));
+                    request.put("domain", getStringWithDefault(rs, "domain", "example.com"));
+                    request.put("path", getStringWithDefault(rs, "path", "/"));
+                    request.put("query", getStringWithDefault(rs, "query", ""));
+                    request.put("method", getStringWithDefault(rs, "method", "GET"));
+                    request.put("add_time", getStringWithDefault(rs, "add_time", ""));
+                    request.put("comment", getStringWithDefault(rs, "comment", ""));
+                    
+                    // 处理颜色
+                    String colorStr = rs.getString("color");
+                    if (colorStr != null && !colorStr.isEmpty()) {
+                        try {
+                            request.put("color", Color.decode(colorStr));
+                        } catch (NumberFormatException e) {
+                            request.put("color", null);
+                        }
+                    } else {
                         request.put("color", null);
                     }
-                } else {
-                    request.put("color", null);
+                    
+                    // 处理请求数据
+                    byte[] requestData = rs.getBytes("request_data");
+                    if (requestData != null && requestData.length > 0) {
+                        request.put("request_data", requestData);
+                        BurpExtender.printOutput("[*] 加载请求ID: " + id + ", 数据大小: " + requestData.length + " 字节");
+                    } else {
+                        // 如果请求数据为空，创建一个简单的请求
+                        String basicRequest = createBasicRequest(
+                            (String)request.get("method"), 
+                            (String)request.get("protocol"), 
+                            (String)request.get("domain"),
+                            (String)request.get("path"),
+                            (String)request.get("query")
+                        );
+                        request.put("request_data", basicRequest.getBytes());
+                        BurpExtender.printError("[!] 请求ID: " + id + " 没有有效数据，已创建基本请求");
+                    }
+                    
+                    requests.add(request);
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 处理请求记录时出错: " + e.getMessage());
+                    // 继续处理下一条记录，不让一条错误记录影响整个列表
                 }
-                
-                request.put("request_data", rs.getBytes("request_data"));
-                requests.add(request);
             }
             
         } catch (SQLException e) {
@@ -173,30 +243,51 @@ public class RequestDAO {
             
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    Map<String, Object> request = new HashMap<>();
-                    request.put("id", rs.getInt("id"));
-                    request.put("protocol", rs.getString("protocol"));
-                    request.put("domain", rs.getString("domain"));
-                    request.put("path", rs.getString("path"));
-                    request.put("query", rs.getString("query"));
-                    request.put("method", rs.getString("method"));
-                    request.put("add_time", rs.getString("add_time"));
-                    request.put("comment", rs.getString("comment"));
-                    
-                    // 处理颜色
-                    String colorStr = rs.getString("color");
-                    if (colorStr != null && !colorStr.isEmpty()) {
-                        try {
-                            request.put("color", Color.decode(colorStr));
-                        } catch (NumberFormatException e) {
+                    try {
+                        Map<String, Object> request = new HashMap<>();
+                        request.put("id", rs.getInt("id"));
+                        request.put("protocol", getStringWithDefault(rs, "protocol", "http"));
+                        request.put("domain", getStringWithDefault(rs, "domain", "example.com"));
+                        request.put("path", getStringWithDefault(rs, "path", "/"));
+                        request.put("query", getStringWithDefault(rs, "query", ""));
+                        request.put("method", getStringWithDefault(rs, "method", "GET"));
+                        request.put("add_time", getStringWithDefault(rs, "add_time", ""));
+                        request.put("comment", getStringWithDefault(rs, "comment", ""));
+                        
+                        // 处理颜色
+                        String colorStr = rs.getString("color");
+                        if (colorStr != null && !colorStr.isEmpty()) {
+                            try {
+                                request.put("color", Color.decode(colorStr));
+                            } catch (NumberFormatException e) {
+                                request.put("color", null);
+                            }
+                        } else {
                             request.put("color", null);
                         }
-                    } else {
-                        request.put("color", null);
+                        
+                        // 处理请求数据
+                        byte[] requestData = rs.getBytes("request_data");
+                        if (requestData != null && requestData.length > 0) {
+                            request.put("request_data", requestData);
+                            BurpExtender.printOutput("[*] 加载请求ID: " + requestId + ", 数据大小: " + requestData.length + " 字节");
+                        } else {
+                            // 如果请求数据为空，创建一个简单的请求
+                            String basicRequest = createBasicRequest(
+                                (String)request.get("method"), 
+                                (String)request.get("protocol"), 
+                                (String)request.get("domain"),
+                                (String)request.get("path"),
+                                (String)request.get("query")
+                            );
+                            request.put("request_data", basicRequest.getBytes());
+                            BurpExtender.printError("[!] 请求ID: " + requestId + " 没有有效数据，已创建基本请求");
+                        }
+                        
+                        return request;
+                    } catch (Exception e) {
+                        BurpExtender.printError("[!] 处理请求ID: " + requestId + " 时出错: " + e.getMessage());
                     }
-                    
-                    request.put("request_data", rs.getBytes("request_data"));
-                    return request;
                 }
             }
             
@@ -205,6 +296,38 @@ public class RequestDAO {
         }
         
         return null;
+    }
+    
+    /**
+     * 安全地从ResultSet获取字符串，如果为null则返回默认值
+     */
+    private String getStringWithDefault(ResultSet rs, String columnName, String defaultValue) throws SQLException {
+        String value = rs.getString(columnName);
+        return (value != null) ? value : defaultValue;
+    }
+    
+    /**
+     * 创建基本的HTTP请求
+     */
+    private String createBasicRequest(String method, String protocol, String domain, String path, String query) {
+        StringBuilder sb = new StringBuilder();
+        
+        // 构建请求行
+        sb.append(method).append(" ");
+        sb.append(path);
+        if (query != null && !query.isEmpty()) {
+            sb.append("?").append(query);
+        }
+        sb.append(" HTTP/1.1\r\n");
+        
+        // 添加头部
+        sb.append("Host: ").append(domain).append("\r\n");
+        sb.append("User-Agent: Mozilla/5.0\r\n");
+        sb.append("Accept: */*\r\n");
+        sb.append("Connection: close\r\n");
+        sb.append("\r\n");
+        
+        return sb.toString();
     }
     
     /**
