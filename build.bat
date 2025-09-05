@@ -1,4 +1,5 @@
 @echo off
+chcp 65001
 echo 开始构建增强型Repeater插件...
 
 :: 检查Maven是否安装
@@ -11,15 +12,21 @@ if %ERRORLEVEL% neq 0 (
 
 :: 清理和构建项目
 echo 正在执行Maven构建...
-call mvn clean package
+mvn clean package
 
 if %ERRORLEVEL% neq 0 (
     echo 构建失败，请检查错误信息
     exit /b 1
 )
 
+:: 检查目标文件是否存在
+if not exist "target\enhanced-repeater-1.0-SNAPSHOT.jar" (
+    echo 构建失败：未找到目标JAR文件
+    exit /b 1
+)
+
 echo 构建成功！
-echo 插件文件位于: %CD%\target\repeaterManger-1.0-SNAPSHOT-jar-with-dependencies.jar
+echo 插件文件位于: %CD%\target\enhanced-repeater-1.0-SNAPSHOT.jar
 
 :: 显示安装指南
 echo.

@@ -1,17 +1,17 @@
 package burp;
 
+import oxff.top.EnhancedRepeaterUI;
+import oxff.top.controller.PopMenu;
+
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
-import javax.swing.JMenuItem;
 import javax.swing.SwingUtilities;
 
 /**
  * Burp扩展入口点 - 负责注册插件并初始化所需组件
  */
-public class BurpExtender implements IBurpExtender, IContextMenuFactory {
+public class BurpExtender implements IBurpExtender {
     
     // 公共变量，供插件其他部分使用
     public static IBurpExtenderCallbacks callbacks;
@@ -39,18 +39,15 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory {
             
             // 测试数据库连接和持久化
             stdout.println("[*] 正在测试数据库连接和持久化...");
-            burp.db.DatabaseManager dbManager = burp.db.DatabaseManager.getInstance();
+            oxff.top.db.DatabaseManager dbManager = oxff.top.db.DatabaseManager.getInstance();
             
             // 确保数据库初始化
             if (dbManager.initialize()) {
                 stdout.println("[+] 数据库初始化成功");
                 
                 // 测试写入示例数据
-                if (dbManager.testDatabaseWithSampleData()) {
-                    stdout.println("[+] 数据库测试成功：已写入并验证测试数据");
-                } else {
-                    stdout.println("[!] 数据库测试失败：无法写入或验证测试数据");
-                }
+                dbManager.testDatabaseWithSampleData();
+                stdout.println("[+] 数据库测试完成");
                 
                 // 检查数据库状态
                 dbManager.checkDatabaseStatus();
@@ -65,7 +62,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory {
             callbacks.addSuiteTab(repeaterUI);
             
             // 注册上下文菜单工厂
-            callbacks.registerContextMenuFactory(this);
+            callbacks.registerContextMenuFactory(new PopMenu());
             
             // 使用编码后的输出流打印信息
             stdout.println("[+] 增强型Repeater 插件加载成功");
@@ -130,39 +127,20 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory {
             callbacks.printError(message);
         }
     }
-    
-    @Override
-    public List<JMenuItem> createMenuItems(IContextMenuInvocation invocation) {
-        List<JMenuItem> menuItems = new ArrayList<>();
-        
-        // 检查是否有请求被选中
-        IHttpRequestResponse[] selectedMessages = invocation.getSelectedMessages();
-        if (selectedMessages != null && selectedMessages.length > 0) {
-            final IHttpRequestResponse requestResponse = selectedMessages[0];
-            
-            if (requestResponse != null && requestResponse.getRequest() != null) {
-                // 创建菜单项
-                JMenuItem sendToEnhancedRepeater = new JMenuItem("发送到增强型Repeater");
-                sendToEnhancedRepeater.addActionListener(e -> {
-                    // 调用EnhancedRepeaterUI的方法处理所选请求
-                    if (repeaterUI != null) {
-                        repeaterUI.setRequest(requestResponse);
-                        
-                        // 在UI线程中执行，提示用户请求已发送
-                        SwingUtilities.invokeLater(() -> {
-                            // 使用自定义的日志输出方法
-                            printOutput("[+] 已将请求发送到增强型Repeater，请切换到相应标签页查看");
-                            
-                            // 注意: Burp API不提供直接切换标签页的方法
-                            // 需要用户手动切换到"增强型Repeater"标签页
-                        });
-                    }
-                });
-                
-                menuItems.add(sendToEnhancedRepeater);
-            }
+
+    public static void setRepeaterUIRequest(IHttpRequestResponse requestResponse) {
+        if (repeaterUI != null) {
+
+
+            SwingUtilities.invokeLater(() -> {
+                repeaterUI.setRequest(requestResponse);
+                // 使用自定义的日志输出方法
+                printOutput("[+] 已将请求发送到增强型Repeater，请切换到相应标签页查看");
+
+                // 注意: Burp API不提供直接切换标签页的方法
+                // 需要用户手动切换到"增强型Repeater"标签页
+
+            });
         }
-        
-        return menuItems;
     }
 }
