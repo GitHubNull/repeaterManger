@@ -750,17 +750,22 @@ public class RequestPanel extends JPanel {
      * 发送请求并处理响应
      */
     private void sendRequest() {
+        byte[] request = null;
+        IRequestInfo requestInfo = null;
+        String url = null;
+        IHttpRequestResponse response = null;
+        
         try {
             // 获取请求数据
-            byte[] request = getRequest();
+            request = getRequest();
             if (request == null || request.length == 0) {
                 BurpExtender.printError("[!] 请求数据为空");
                 return;
             }
             
             // 解析请求信息
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(request);
-            String url = requestInfo.getUrl().toString();
+            requestInfo = BurpExtender.helpers.analyzeRequest(request);
+            url = requestInfo.getUrl().toString();
             
             BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (超时时间: " + getTimeout() + "秒)");
             
@@ -772,7 +777,7 @@ public class RequestPanel extends JPanel {
             
             // 发送请求
             IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, useHttps);
-            IHttpRequestResponse response = BurpExtender.callbacks.makeHttpRequest(httpService, request);
+            response = BurpExtender.callbacks.makeHttpRequest(httpService, request);
             
             if (response != null && response.getResponse() != null) {
                 try {
@@ -832,6 +837,84 @@ public class RequestPanel extends JPanel {
                     JOptionPane.ERROR_MESSAGE
                 );
             });
+        } finally {
+            // 确保无论请求成功与否都保存历史记录
+            saveHistoryRecord(request, requestInfo, response, url);
+        }
+    }
+    
+    /**
+     * 保存历史记录
+     */
+    private void saveHistoryRecord(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url) {
+        try {
+            // 确保必要的参数不为空
+            if (request == null || requestInfo == null) {
+                BurpExtender.printError("[!] 无法保存历史记录：请求数据为空");
+                return;
+            }
+            
+            // 解析URL组件
+            URL parsedUrl = requestInfo.getUrl();
+            String protocol = parsedUrl.getProtocol();
+            String domain = parsedUrl.getHost();
+            String path = parsedUrl.getPath();
+            String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+            String method = requestInfo.getMethod();
+            
+            // 生成请求ID（使用时间戳和随机数）
+            int requestId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+            
+            // 创建请求记录对象
+            oxff.top.http.RequestResponseRecord record = new oxff.top.http.RequestResponseRecord();
+            record.setRequestId(requestId);
+            record.setMethod(method);
+            record.setProtocol(protocol);
+            record.setDomain(domain);
+            record.setPath(path);
+            record.setQueryParameters(query);
+            record.setRequestData(request);
+            record.setTimestamp(new java.util.Date());
+            
+            // 设置响应相关数据
+            if (response != null && response.getResponse() != null) {
+                byte[] responseData = response.getResponse();
+                record.setResponseData(responseData);
+                
+                // 解析响应信息
+                try {
+                    burp.IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(responseData);
+                    record.setStatusCode(responseInfo.getStatusCode());
+                    record.setResponseLength(responseData.length);
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 解析响应信息失败: " + e.getMessage());
+                    record.setStatusCode(0);
+                    record.setResponseLength(0);
+                }
+            } else {
+                // 请求失败的情况
+                record.setResponseData(new byte[0]);
+                record.setStatusCode(0);
+                record.setResponseLength(0);
+                record.setComment("请求失败");
+            }
+            
+            // 保存到数据库
+            HistoryDAO historyDAO = new HistoryDAO();
+            int historyId = historyDAO.saveHistory(record);
+            
+            if (historyId > 0) {
+                BurpExtender.printOutput("[+] 历史记录已保存到数据库，历史ID: " + historyId);
+                
+                // 更新历史记录面板
+                if (mainUI != null && mainUI.getHistoryPanel() != null) {
+                    mainUI.getHistoryPanel().addHistoryRecord(record);
+                }
+            } else {
+                BurpExtender.printError("[!] 保存历史记录到数据库失败");
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 保存历史记录时出错: " + e.getMessage());
         }
     }
 } 

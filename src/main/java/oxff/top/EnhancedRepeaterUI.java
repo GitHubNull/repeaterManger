@@ -196,7 +196,8 @@ public class EnhancedRepeaterUI implements ITab {
         responsePanel.clear();
         
         // 创建新请求项并添加到列表
-        requestListPanel.addRequest(nextRequestId, "http", "example.com", "/", "", "GET", null);
+        String newRequestTemplate = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        requestListPanel.addRequest(nextRequestId, "http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
         currentRequestId = nextRequestId;
         nextRequestId++;
         
@@ -212,6 +213,8 @@ public class EnhancedRepeaterUI implements ITab {
      * 请求列表选中回调
      */
     private void onRequestSelected(int requestId, byte[] requestData) {
+        BurpExtender.printOutput("[*] 请求选中回调触发，请求ID: " + requestId);
+        
         currentRequestId = requestId;
         
         // 清空编辑区域
@@ -221,17 +224,44 @@ public class EnhancedRepeaterUI implements ITab {
         // 设置请求内容
         if (requestData != null && requestData.length > 0) {
             requestPanel.setRequest(requestData);
+            BurpExtender.printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
             
             // 获取请求信息，更新历史面板标题
             IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestData);
             String url = extractUrlFromRequest(requestData, requestInfo);
             historyPanel.setBorderTitle("请求历史记录 - " + url);
             
+            // 尝试加载该请求的最新响应数据
+            loadLatestResponseForRequest(requestId);
+            
             // 加载相关的历史记录
             loadHistoryForRequest(requestId);
         } else {
+            BurpExtender.printOutput("[!] 请求数据为空，ID: " + requestId);
             historyPanel.setBorderTitle("请求历史记录");
             historyPanel.clearHistory();
+        }
+    }
+    
+    /**
+     * 加载指定请求ID的最新响应数据
+     */
+    private void loadLatestResponseForRequest(int requestId) {
+        try {
+            HistoryDAO historyDAO = new HistoryDAO();
+            List<RequestResponseRecord> latestHistory = historyDAO.getLatestHistoryByRequestId(requestId, 1);
+            
+            if (latestHistory != null && !latestHistory.isEmpty()) {
+                RequestResponseRecord latestRecord = latestHistory.get(0);
+                byte[] responseData = latestRecord.getResponseData();
+                
+                if (responseData != null && responseData.length > 0) {
+                    responsePanel.setResponse(responseData);
+                    BurpExtender.printOutput("[+] 已加载请求ID " + requestId + " 的最新响应数据");
+                }
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 加载最新响应数据失败: " + e.getMessage());
         }
     }
     
@@ -242,13 +272,42 @@ public class EnhancedRepeaterUI implements ITab {
         // 清空历史记录面板
         historyPanel.clearHistory();
         
-        // 获取该请求ID的历史记录
+        BurpExtender.printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
+        
+        // 优先从数据库加载历史记录
+        try {
+            HistoryDAO historyDAO = new HistoryDAO();
+            List<RequestResponseRecord> dbHistoryList = historyDAO.getHistoryByRequestId(requestId);
+            
+            if (dbHistoryList != null && !dbHistoryList.isEmpty()) {
+                BurpExtender.printOutput(
+                    String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条", 
+                        requestId, dbHistoryList.size()));
+                
+                // 将数据库中的历史记录添加到面板（按时间倒序）
+                for (RequestResponseRecord record : dbHistoryList) {
+                    historyPanel.addHistoryRecord(record);
+                }
+                
+                // 同时更新内存中的历史记录映射
+                requestHistoryMap.put(requestId, new ArrayList<>(dbHistoryList));
+                
+                BurpExtender.printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
+                return; // 成功从数据库加载，直接返回
+            } else {
+                BurpExtender.printOutput(String.format("[*] 数据库中未找到请求ID %d 的历史记录", requestId));
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 从数据库加载历史记录失败: " + e.getMessage());
+        }
+        
+        // 如果数据库中没有或加载失败，尝试从内存映射中获取
         List<RequestResponseRecord> historyList = requestHistoryMap.get(requestId);
         
         // 如果存在历史记录，则添加到历史面板中
         if (historyList != null && !historyList.isEmpty()) {
             BurpExtender.printOutput(
-                String.format("[*] 加载请求ID %d 的历史记录，共 %d 条", 
+                String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条", 
                     requestId, historyList.size()));
             
             // 将历史记录添加到面板
@@ -259,6 +318,9 @@ public class EnhancedRepeaterUI implements ITab {
             BurpExtender.printOutput(
                 String.format("[*] 请求ID %d 没有历史记录", requestId));
         }
+        
+        // 确保历史面板显示正确的标题
+        historyPanel.setBorderTitle("请求历史记录 - ID: " + requestId);
     }
     
     /**
@@ -291,7 +353,7 @@ public class EnhancedRepeaterUI implements ITab {
             });
             
             // 在后台线程中执行请求，避免UI冻结
-            requestManager.makeHttpRequestAsync(requestBytes, timeout, new RequestManager.RequestCallback() {
+            requestManager.makeHttpRequestAsync(requestBytes, timeout, currentRequestId, new RequestManager.RequestCallback() {
                 @Override
                 public void onSuccess(byte[] response) {
                     // 在EDT中更新UI
@@ -473,11 +535,24 @@ public class EnhancedRepeaterUI implements ITab {
                 
                 // 保存到数据库
                 HistoryDAO historyDAO = new HistoryDAO();
+                
+                // 验证当前请求ID是否有效，如果无效则使用-1
+                int validRequestId = currentRequestId;
+                if (currentRequestId > 0) {
+                    // 简单的验证，确保requestId是合理的正数
+                    BurpExtender.printOutput("[*] 正在保存历史记录，请求ID: " + currentRequestId);
+                } else {
+                    BurpExtender.printOutput("[*] 正在保存历史记录，请求ID无效，将使用NULL");
+                    validRequestId = -1;
+                }
+                
+                // 设置有效的请求ID
+                record.setRequestId(validRequestId);
                 int historyId = historyDAO.saveHistory(record);
                 
                 if (historyId > 0) {
                     // 添加到当前请求的历史记录
-                    addHistoryRecord(currentRequestId, record);
+                    addHistoryRecord(validRequestId, record);
                     
                     // 更新历史面板显示
                     historyPanel.addHistoryRecord(record);

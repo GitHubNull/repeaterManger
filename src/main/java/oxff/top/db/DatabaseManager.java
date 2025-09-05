@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class DatabaseManager {
     private static DatabaseManager instance;
     private final DatabaseConfig dbConfig;
-    private Connection connection;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
+    private final Object connectionLock = new Object();
     
     // 私有构造函数，防止直接实例化
     private DatabaseManager() {
@@ -43,19 +43,13 @@ public class DatabaseManager {
     }
     
     /**
-     * 关闭数据库连接
+     * 关闭数据库连接管理器
      */
     public void closeConnections() {
-        if (connection != null) {
-            try {
-                BurpExtender.printOutput("[*] 正在关闭数据库连接...");
-                connection.close();
-                connection = null;
-                initialized.set(false);
-                BurpExtender.printOutput("[+] 数据库连接已关闭");
-            } catch (SQLException e) {
-                BurpExtender.printError("[!] 关闭数据库连接失败: " + e.getMessage());
-            }
+        synchronized (connectionLock) {
+            BurpExtender.printOutput("[*] 正在关闭数据库连接管理器...");
+            initialized.set(false);
+            BurpExtender.printOutput("[+] 数据库连接管理器已关闭");
         }
     }
     
@@ -96,24 +90,25 @@ public class DatabaseManager {
             String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
             BurpExtender.printOutput("[*] JDBC URL: " + jdbcUrl);
             
-            // 创建连接
-            connection = DriverManager.getConnection(jdbcUrl);
-            BurpExtender.printOutput("[+] 数据库连接成功");
-            
-            // 设置SQLite配置
-            try (Statement stmt = connection.createStatement()) {
+            // 创建临时连接用于初始化
+            try (Connection tempConnection = DriverManager.getConnection(jdbcUrl);
+                 Statement stmt = tempConnection.createStatement()) {
+                
+                BurpExtender.printOutput("[+] 数据库连接成功");
+                
+                // 设置SQLite配置
                 stmt.execute("PRAGMA journal_mode=DELETE");
                 stmt.execute("PRAGMA synchronous=NORMAL");
                 stmt.execute("PRAGMA foreign_keys=ON");
-            }
-            
-            // 初始化数据库表
-            if (!dbFile.exists()) {
-                BurpExtender.printOutput("[*] 数据库文件不存在，创建新数据库");
-                initializeTablesWithConnection(connection);
-            } else {
-                // 检查表结构
-                checkAndUpdateTables(connection);
+                
+                // 初始化数据库表
+                if (!dbFile.exists()) {
+                    BurpExtender.printOutput("[*] 数据库文件不存在，创建新数据库");
+                    initializeTablesWithConnection(tempConnection);
+                } else {
+                    // 检查表结构
+                    checkAndUpdateTables(tempConnection);
+                }
             }
             
             initialized.set(true);
@@ -122,14 +117,6 @@ public class DatabaseManager {
         } catch (Exception e) {
             BurpExtender.printError("[!] 数据库初始化失败: " + e.getMessage());
             e.printStackTrace();
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException ex) {
-                    BurpExtender.printError("[!] 关闭数据库连接失败: " + ex.getMessage());
-                }
-                connection = null;
-            }
             initialized.set(false);
             return false;
         }
@@ -152,6 +139,8 @@ public class DatabaseManager {
             // 检查history表是否存在
             try {
                 stmt.executeQuery("SELECT 1 FROM history LIMIT 1");
+                // 表存在，检查是否需要更新外键约束
+                updateHistoryTableForeignKey(conn);
             } catch (SQLException e) {
                 // 表不存在，创建表
                 initializeTablesWithConnection(conn);
@@ -160,21 +149,92 @@ public class DatabaseManager {
     }
     
     /**
-     * 获取数据库连接
+     * 更新历史表的外键约束（从CASCADE改为SET NULL）
+     */
+    private void updateHistoryTableForeignKey(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            // 检查当前的外键约束定义
+            try (ResultSet rs = stmt.executeQuery("SELECT sql FROM sqlite_master WHERE type='table' AND name='history'")) {
+                if (rs.next()) {
+                    String tableSql = rs.getString("sql");
+                    if (tableSql != null && tableSql.contains("ON DELETE CASCADE")) {
+                        BurpExtender.printOutput("[*] 检测到旧的外键约束定义，正在更新...");
+                        
+                        // 由于SQLite不支持直接修改外键约束，我们需要重新创建表
+                        // 1. 创建临时表
+                        stmt.execute(
+                            "CREATE TABLE history_temp (" +
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                            "request_id INTEGER, " +
+                            "method TEXT, " +
+                            "protocol TEXT, " +
+                            "domain TEXT, " +
+                            "path TEXT, " +
+                            "query TEXT, " +
+                            "status_code INTEGER, " +
+                            "response_length INTEGER, " +
+                            "response_time INTEGER, " +
+                            "timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                            "comment TEXT, " +
+                            "color TEXT, " +
+                            "request_data BLOB, " +
+                            "response_data BLOB, " +
+                            "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
+                            ")"
+                        );
+                        
+                        // 2. 复制数据
+                        stmt.execute("INSERT INTO history_temp SELECT * FROM history");
+                        
+                        // 3. 删除旧表
+                        stmt.execute("DROP TABLE history");
+                        
+                        // 4. 重命名临时表
+                        stmt.execute("ALTER TABLE history_temp RENAME TO history");
+                        
+                        BurpExtender.printOutput("[+] 历史表外键约束更新完成");
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * 获取数据库连接（每次创建新连接）
      */
     public Connection getConnection() throws SQLException {
         if (!initialized.get()) {
-            boolean success = initialize();
-            if (!success) {
-                throw new SQLException("数据库初始化失败");
+            synchronized (this) {
+                if (!initialized.get()) {
+                    boolean success = initialize();
+                    if (!success) {
+                        throw new SQLException("数据库初始化失败");
+                    }
+                }
             }
         }
         
-        if (connection == null || connection.isClosed()) {
-            throw new SQLException("数据库连接未初始化或已关闭");
+        synchronized (connectionLock) {
+            try {
+                // 每次创建新连接
+                String dbPath = dbConfig.getDatabasePath();
+                File dbFile = new File(dbPath);
+                String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
+                Connection newConnection = DriverManager.getConnection(jdbcUrl);
+                
+                // 设置SQLite配置
+                try (Statement stmt = newConnection.createStatement()) {
+                    stmt.execute("PRAGMA journal_mode=DELETE");
+                    stmt.execute("PRAGMA synchronous=NORMAL");
+                    stmt.execute("PRAGMA foreign_keys=ON");
+                }
+                
+                return newConnection;
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 创建数据库连接失败: " + e.getMessage());
+                throw new SQLException("创建数据库连接失败: " + e.getMessage());
+            }
         }
-        
-        return connection;
     }
     
     /**
@@ -189,6 +249,21 @@ public class DatabaseManager {
      */
     public DatabaseConfig getConfig() {
         return dbConfig;
+    }
+    
+    /**
+     * 检查数据库连接是否可用
+     */
+    public boolean isConnectionValid() {
+        if (!initialized.get()) {
+            return false;
+        }
+        
+        try (Connection conn = getConnection()) {
+            return conn != null && conn.isValid(2); // 缩短超时时间
+        } catch (Exception e) {
+            return false;
+        }
     }
     
     /**
@@ -217,7 +292,7 @@ public class DatabaseManager {
             stmt.execute(
                 "CREATE TABLE IF NOT EXISTS history (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "request_id INTEGER, " +
+                "request_id INTEGER, " +  // Allow NULL for unsaved requests
                 "method TEXT, " +
                 "protocol TEXT, " +
                 "domain TEXT, " +
@@ -231,7 +306,7 @@ public class DatabaseManager {
                 "color TEXT, " +
                 "request_data BLOB, " +
                 "response_data BLOB, " +
-                "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE" +
+                "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +  // Changed from CASCADE to SET NULL
                 ")"
             );
             
@@ -356,7 +431,11 @@ public class DatabaseManager {
                 if (rs != null) rs.close();
                 if (stmt != null) stmt.close();
                 if (conn != null) {
-                    conn.setAutoCommit(true); // 恢复自动提交
+                    try {
+                        conn.setAutoCommit(true); // 恢复自动提交
+                    } catch (SQLException e) {
+                        // 忽略自动提交设置错误
+                    }
                     conn.close();
                 }
             } catch (SQLException e) {

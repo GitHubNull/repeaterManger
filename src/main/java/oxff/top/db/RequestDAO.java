@@ -11,15 +11,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 请求数据访问对象
  */
 public class RequestDAO {
     private final DatabaseManager dbManager;
+    private final Map<Integer, Boolean> requestValidationCache;
+    private long lastCacheCleanup = 0;
+    private static final long CACHE_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
     
     public RequestDAO() {
         this.dbManager = DatabaseManager.getInstance();
+        this.requestValidationCache = new ConcurrentHashMap<>();
     }
     
     /**
@@ -165,6 +170,9 @@ public class RequestDAO {
             
             pstmt.setInt(1, requestId);
             int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                removeFromValidationCache(requestId);
+            }
             return affectedRows > 0;
             
         } catch (SQLException e) {
@@ -402,11 +410,82 @@ public class RequestDAO {
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
             pstmt.executeUpdate();
+            clearValidationCache();
             return true;
             
         } catch (SQLException e) {
             BurpExtender.printError("[!] 清空请求失败: " + e.getMessage());
             return false;
         }
+    }
+    
+    /**
+     * 验证请求ID是否存在（带缓存）
+     */
+    public boolean isValidRequestId(int requestId) {
+        if (requestId <= 0) {
+            return false;
+        }
+        
+        // 清理过期缓存
+        cleanupCacheIfNeeded();
+        
+        // 检查缓存
+        Boolean cachedResult = requestValidationCache.get(requestId);
+        if (cachedResult != null) {
+            return cachedResult;
+        }
+        
+        // 查询数据库
+        String sql = "SELECT COUNT(*) FROM requests WHERE id = ?";
+        
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, requestId);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    boolean exists = rs.getInt(1) > 0;
+                    // 缓存结果
+                    requestValidationCache.put(requestId, exists);
+                    return exists;
+                }
+            }
+            
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 验证请求ID失败: " + e.getMessage());
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 清理验证缓存
+     */
+    public void clearValidationCache() {
+        requestValidationCache.clear();
+        lastCacheCleanup = System.currentTimeMillis();
+    }
+    
+    /**
+     * 按需清理缓存
+     */
+    private void cleanupCacheIfNeeded() {
+        long now = System.currentTimeMillis();
+        if (now - lastCacheCleanup > CACHE_CLEANUP_INTERVAL) {
+            // 清理超过一半的缓存条目以避免内存泄漏
+            if (requestValidationCache.size() > 1000) {
+                requestValidationCache.clear();
+            }
+            lastCacheCleanup = now;
+        }
+    }
+    
+    /**
+     * 从缓存中移除指定的请求ID
+     */
+    public void removeFromValidationCache(int requestId) {
+        requestValidationCache.remove(requestId);
     }
 } 

@@ -275,6 +275,12 @@ public class RequestListPanel extends JPanel {
             new Date()
         });
         
+        // 保存请求数据到内存映射
+        if (requestData != null) {
+            requestDataMap.put(id, requestData);
+            BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
+        }
+        
         // 保存到数据库
         try {
             RequestDAO requestDAO = new RequestDAO();
@@ -307,6 +313,15 @@ public class RequestListPanel extends JPanel {
             record.getMethod(),
             new Date()
         });
-        requestDataMap.put(record.getId(), record.getRequestData());
+        
+        // 保存请求数据到内存映射
+        if (record.getRequestData() != null) {
+            requestDataMap.put(record.getId(), record.getRequestData());
+            BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + record.getId() + "，数据大小: " + record.getRequestData().length + " 字节");
+        }
+        
+        // 更新颜色和注释映射
+        requestColors.put(record.getId(), null);
+        requestComments.put(record.getId(), "");
     }
 } 

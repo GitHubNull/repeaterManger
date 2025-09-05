@@ -576,6 +576,9 @@ public class HistoryPanel extends JPanel {
     public void clearHistory() {
         historyRecords.clear();
         historyTableModel.setRowCount(0);
+        historyTableModel.fireTableDataChanged();
+        historyTable.revalidate();
+        historyTable.repaint();
         BurpExtender.printOutput("[*] 历史记录已清空");
     }
     

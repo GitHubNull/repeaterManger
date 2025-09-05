@@ -4,6 +4,8 @@ import burp.BurpExtender;
 import burp.IHttpRequestResponse;
 import burp.IHttpService;
 import burp.IRequestInfo;
+import burp.IResponseInfo;
+import oxff.top.service.HistoryRecordingService;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -22,6 +24,7 @@ public class RequestManager {
     
     private static final int MAX_RETRIES = 3;
     private final ExecutorService executor;
+    private final HistoryRecordingService recordingService;
     
     /**
      * 创建请求管理器
@@ -33,6 +36,9 @@ public class RequestManager {
             t.setDaemon(true);
             return t;
         });
+        
+        // 初始化历史记录服务
+        this.recordingService = HistoryRecordingService.getInstance();
     }
     
     /**
@@ -43,6 +49,18 @@ public class RequestManager {
      * @return 响应字节数组，失败返回null
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds) {
+        return makeHttpRequest(requestBytes, timeoutSeconds, -1); // 默认requestId为-1
+    }
+    
+    /**
+     * 发送HTTP请求并返回响应（带历史记录）
+     * 
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @return 响应字节数组，失败返回null
+     */
+    public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             return null;
@@ -63,6 +81,9 @@ public class RequestManager {
         BurpExtender.printOutput(
             String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
                 isSecure ? "https" : "http", host, port, timeoutSeconds));
+        
+        // 记录请求开始时间
+        long startTime = System.currentTimeMillis();
         
         // 创建Future任务
         Future<byte[]> future = executor.submit(() -> {
@@ -85,6 +106,16 @@ public class RequestManager {
                     byte[] response = requestResponse.getResponse();
                     
                     if (response != null && response.length > 0) {
+                        // 计算响应时间
+                        long responseTime = System.currentTimeMillis() - startTime;
+                        
+                        // 解析响应信息
+                        IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                        
+                        // 记录成功的历史记录
+                        recordingService.recordSuccess(requestId, requestBytes, response, 
+                                                      requestInfo, responseInfo, responseTime);
+                        
                         return response;
                     } else {
                         BurpExtender.printError("[!] 收到空响应，准备重试...");
@@ -93,6 +124,11 @@ public class RequestManager {
                     BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
                 }
             }
+            
+            // 请求失败，记录失败历史
+            long responseTime = System.currentTimeMillis() - startTime;
+            recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                         "达到最大重试次数，请求失败", responseTime);
             
             BurpExtender.printError("[!] 达到最大重试次数，请求失败");
             return null;
@@ -245,6 +281,18 @@ public class RequestManager {
      * @param callback 请求回调接口
      */
     public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, RequestCallback callback) {
+        makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, callback); // 默认requestId为-1
+    }
+    
+    /**
+     * 异步发送HTTP请求（带历史记录）
+     * 
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @param callback 请求回调接口
+     */
+    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, RequestCallback callback) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             if (callback != null) {
@@ -272,6 +320,9 @@ public class RequestManager {
                     String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
                         isSecure ? "https" : "http", host, port, timeoutSeconds));
                 
+                // 记录请求开始时间
+                long startTime = System.currentTimeMillis();
+                
                 // 重试机制
                 for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
                     try {
@@ -287,10 +338,24 @@ public class RequestManager {
                         IHttpRequestResponse requestResponse = 
                             BurpExtender.callbacks.makeHttpRequest(httpService, requestBytes);
                         
+                        // 计算请求耗时
+                        long endTime = System.currentTimeMillis();
+                        long responseTime = endTime - startTime;
+                        
                         // 获取响应数据
                         byte[] response = requestResponse.getResponse();
                         
                         if (response != null && response.length > 0) {
+                            // 解析响应信息
+                            IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                            
+                            // 记录成功的历史记录
+                            recordingService.recordSuccess(requestId, requestBytes, response, 
+                                                          requestInfo, responseInfo, responseTime);
+                            
+                            BurpExtender.printOutput(
+                                String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节", 
+                                    responseTime, response.length));
                             if (callback != null) {
                                 callback.onSuccess(response);
                             }
@@ -300,16 +365,31 @@ public class RequestManager {
                         }
                     } catch (Exception e) {
                         BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
+                        // 记录异常堆栈信息
+                        e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
                     }
                 }
                 
                 // 达到最大重试次数，请求失败
+                long responseTime = System.currentTimeMillis() - startTime;
+                recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                             "达到最大重试次数，请求失败", responseTime);
+                
                 BurpExtender.printError("[!] 达到最大重试次数，请求失败");
                 if (callback != null) {
                     callback.onFailure("达到最大重试次数，请求失败");
                 }
             } catch (Exception e) {
                 BurpExtender.printError("[!] 发送请求时发生异常: " + e.getMessage());
+                // 记录异常堆栈信息
+                e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
+                
+                // 记录异常的历史记录
+                long responseTime = System.currentTimeMillis() - System.currentTimeMillis();
+                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                             "发送请求时发生异常: " + e.getMessage(), responseTime);
+                
                 if (callback != null) {
                     callback.onFailure("发送请求时发生异常: " + e.getMessage());
                 }
@@ -321,6 +401,12 @@ public class RequestManager {
      * 关闭请求管理器，清理资源
      */
     public void shutdown() {
+        // 关闭历史记录服务
+        if (recordingService != null) {
+            recordingService.shutdown();
+        }
+        
+        // 关闭请求执行器
         executor.shutdown();
         try {
             if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {

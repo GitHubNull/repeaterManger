@@ -121,11 +121,44 @@ public class BurpExtender implements IBurpExtender {
      * @param message 错误消息
      */
     public static void printError(String message) {
+        // 过滤掉已知的无害错误信息
+        if (shouldFilterError(message)) {
+            return;
+        }
+        
         if (stderr != null) {
             stderr.println(message);
         } else if (callbacks != null) {
             callbacks.printError(message);
         }
+    }
+    
+    /**
+     * 判断是否应该过滤掉特定的错误信息
+     * 
+     * @param message 错误消息
+     * @return 是否应该过滤
+     */
+    private static boolean shouldFilterError(String message) {
+        if (message == null) {
+            return false;
+        }
+        
+        // 过滤掉IntelliJ相关的ClassNotFoundException
+        if (message.contains("ClassNotFoundException") && 
+            (message.contains("com.intellij.") || 
+             message.contains("EditorCopyPasteHelperImpl") ||
+             message.contains("CopyPasteOptionsTransferableData"))) {
+            return true;
+        }
+        
+        // 过滤掉其他已知的无害异常
+        if (message.contains("DataFlavor for: application/x-java-serialized-object") &&
+            message.contains("com.intellij.openapi.editor.impl")) {
+            return true;
+        }
+        
+        return false;
     }
 
     public static void setRepeaterUIRequest(IHttpRequestResponse requestResponse) {
