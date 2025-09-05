@@ -221,10 +221,12 @@ public class HistoryRecordingService {
                 String query = url.getQuery() != null ? url.getQuery() : "";
                 String method = requestInfo.getMethod();
                 
+                BurpExtender.printOutput("[+] 成功解析URL: " + protocol + "://" + host + path + (query.isEmpty() ? "" : "?" + query));
                 return new RequestResponseRecord(requestId, protocol, host, path, query, method);
             }
             
             // 如果Burp的URL解析不完整，使用增强的备用方法
+            BurpExtender.printOutput("[*] Burp URL解析不完整，使用备用方法");
             return createRecordFromRequestFallback(requestId, requestInfo);
             
         } catch (Exception e) {
@@ -242,6 +244,7 @@ public class HistoryRecordingService {
         List<String> headers = requestInfo.getHeaders();
         
         if (headers == null || headers.isEmpty()) {
+            BurpExtender.printOutput("[!] 无法获取请求头，使用默认值");
             return new RequestResponseRecord(requestId, "http", "unknown", "/", "", method);
         }
         
@@ -249,6 +252,7 @@ public class HistoryRecordingService {
         String[] parts = firstLine.split("\\s+");
         
         if (parts.length < 2) {
+            BurpExtender.printOutput("[!] 请求行格式错误: " + firstLine);
             return new RequestResponseRecord(requestId, "http", "unknown", "/", "", method);
         }
         
@@ -257,6 +261,8 @@ public class HistoryRecordingService {
         String host = "";
         String path = "/";
         String query = "";
+        
+        BurpExtender.printOutput("[*] 使用备用方法解析URL: " + urlPart);
         
         // 尝试解析完整URL
         if (urlPart.startsWith("http://") || urlPart.startsWith("https://")) {

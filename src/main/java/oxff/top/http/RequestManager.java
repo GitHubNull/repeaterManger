@@ -67,16 +67,19 @@ public class RequestManager {
         }
         
         // 解析请求信息
-        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+        IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
         
         // 提取主机和端口信息
-        String host = getHostFromRequest(requestInfo);
-        int port = getPortFromRequest(requestInfo);
-        boolean isSecure = isHttpsRequest(requestInfo, port);
+        String host = getHostFromRequest(tempRequestInfo);
+        int port = getPortFromRequest(tempRequestInfo);
+        boolean isSecure = isHttpsRequest(tempRequestInfo, port);
         
         // 创建HTTP服务对象
         IHttpService httpService = BurpExtender.helpers.buildHttpService(
                 host, port, isSecure);
+        
+        // 使用HTTP服务信息重新解析请求，避免HTTP service details错误
+        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(httpService, requestBytes);
         
         BurpExtender.printOutput(
             String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
@@ -304,17 +307,18 @@ public class RequestManager {
         // 在后台线程中执行请求
         executor.submit(() -> {
             try {
-                // 解析请求信息
-                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-                
                 // 提取主机和端口信息
-                String host = getHostFromRequest(requestInfo);
-                int port = getPortFromRequest(requestInfo);
-                boolean isSecure = isHttpsRequest(requestInfo, port);
+                IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                String host = getHostFromRequest(tempRequestInfo);
+                int port = getPortFromRequest(tempRequestInfo);
+                boolean isSecure = isHttpsRequest(tempRequestInfo, port);
                 
                 // 创建HTTP服务对象
                 IHttpService httpService = BurpExtender.helpers.buildHttpService(
                         host, port, isSecure);
+                
+                // 使用HTTP服务信息重新解析请求，避免HTTP service details错误
+                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(httpService, requestBytes);
                 
                 BurpExtender.printOutput(
                     String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
@@ -384,11 +388,26 @@ public class RequestManager {
                 // 记录异常堆栈信息
                 e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
                 
-                // 记录异常的历史记录
+                // 记录异常的历史记录 - 使用HTTP服务信息创建IRequestInfo
                 long responseTime = System.currentTimeMillis() - System.currentTimeMillis();
-                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-                recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                             "发送请求时发生异常: " + e.getMessage(), responseTime);
+                try {
+                    // 重新创建HTTP服务信息
+                    IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                    String host = getHostFromRequest(tempRequestInfo);
+                    int port = getPortFromRequest(tempRequestInfo);
+                    boolean isSecure = isHttpsRequest(tempRequestInfo, port);
+                    IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, isSecure);
+                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(httpService, requestBytes);
+                    
+                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
+                } catch (Exception ex) {
+                    // 如果创建HTTP服务失败，使用基本的请求分析
+                    BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
+                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
+                }
                 
                 if (callback != null) {
                     callback.onFailure("发送请求时发生异常: " + e.getMessage());
