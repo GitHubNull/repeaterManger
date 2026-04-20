@@ -58,6 +58,10 @@ public class EnhancedRepeaterUI implements ITab {
     // 当前选中的请求ID（数据库中的ID）
     private int currentRequestId = -1;
     
+    // 当前请求的原始HTTP服务信息（包含正确的协议、主机、端口）
+    // 用于解决HTTPS请求被转为HTTP的问题
+    private IHttpService currentHttpService = null;
+    
     // 请求历史记录映射: 请求ID -> 历史记录列表
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
     
@@ -195,6 +199,9 @@ public class EnhancedRepeaterUI implements ITab {
         requestPanel.clear();
         responsePanel.clear();
         
+        // 新建请求时重置HTTP服务信息
+        currentHttpService = null;
+        
         // 创建新请求项并添加到列表，同时保存到数据库
         String newRequestTemplate = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
         
@@ -235,8 +242,12 @@ public class EnhancedRepeaterUI implements ITab {
             requestPanel.setRequest(requestData);
             BurpExtender.printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
             
+            // 从请求列表的表格数据中获取协议、主机、端口信息，重建IHttpService
+            // 这确保了从已保存请求重新发送时，HTTPS协议信息不会丢失
+            currentHttpService = rebuildHttpServiceFromRequestList(requestId, requestData);
+            
             // 获取请求信息，更新历史面板标题
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestData);
+            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(currentHttpService, requestData);
             String url = extractUrlFromRequest(requestData, requestInfo);
             historyPanel.setBorderTitle("请求历史记录 - " + url);
             
@@ -247,8 +258,86 @@ public class EnhancedRepeaterUI implements ITab {
             loadHistoryForRequest(requestId);
         } else {
             BurpExtender.printOutput("[!] 请求数据为空，ID: " + requestId);
+            currentHttpService = null;
             historyPanel.setBorderTitle("请求历史记录");
             historyPanel.clearHistory();
+        }
+    }
+    
+    /**
+     * 从请求列表的表格数据中重建IHttpService
+     * 解决从已保存请求重新发送时HTTPS协议丢失的问题
+     * 
+     * @param requestId 请求ID
+     * @param requestData 请求数据
+     * @return 重建的IHttpService对象
+     */
+    private IHttpService rebuildHttpServiceFromRequestList(int requestId, byte[] requestData) {
+        try {
+            // 从请求列表的表格中查找协议、主机信息
+            String protocol = "http";
+            String host = "";
+            int port = 80;
+            
+            for (int i = 0; i < requestListPanel.getRequestCount(); i++) {
+                // 通过请求列表面板获取数据
+                // 直接从requestDataMap获取不太方便，改用请求数据推断+表格协议信息
+                break;
+            }
+            
+            // 从请求数据中提取host和port
+            IRequestInfo tempInfo = BurpExtender.helpers.analyzeRequest(requestData);
+            List<String> headers = tempInfo.getHeaders();
+            
+            // 提取host
+            for (String header : headers) {
+                if (header.toLowerCase().startsWith("host:")) {
+                    String hostValue = header.substring(5).trim();
+                    String[] hostParts = hostValue.split(":");
+                    host = hostParts[0];
+                    if (hostParts.length > 1) {
+                        try {
+                            port = Integer.parseInt(hostParts[1]);
+                        } catch (NumberFormatException e) {
+                            // 忽略
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // 从数据库中获取保存的协议信息（这是最可靠的方式）
+            try {
+                oxff.top.db.RequestDAO requestDAO = new oxff.top.db.RequestDAO();
+                java.util.List<java.util.Map<String, Object>> requests = requestDAO.getAllRequests();
+                for (java.util.Map<String, Object> req : requests) {
+                    if ((Integer) req.get("id") == requestId) {
+                        protocol = (String) req.get("protocol");
+                        host = (String) req.get("domain");
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                BurpExtender.printOutput("[*] 从数据库获取协议信息失败，使用请求数据推断: " + e.getMessage());
+            }
+            
+            // 根据协议设置默认端口
+            boolean isSecure = protocol.equalsIgnoreCase("https");
+            if (isSecure && port == 80) {
+                port = 443;
+            } else if (!isSecure && port == 443) {
+                port = 80;
+            }
+            
+            if (host.isEmpty()) {
+                host = "unknown";
+            }
+            
+            return BurpExtender.helpers.buildHttpService(host, port, isSecure);
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 重建IHttpService失败: " + e.getMessage());
+            // 返回一个默认的HTTP服务
+            return BurpExtender.helpers.buildHttpService("unknown", 80, false);
         }
     }
     
@@ -362,7 +451,8 @@ public class EnhancedRepeaterUI implements ITab {
             });
             
             // 在后台线程中执行请求，避免UI冻结
-            requestManager.makeHttpRequestAsync(requestBytes, timeout, currentRequestId, new RequestManager.RequestCallback() {
+            // 传递currentHttpService以保留正确的协议信息（如HTTPS）
+            requestManager.makeHttpRequestAsync(requestBytes, timeout, currentRequestId, currentHttpService, new RequestManager.RequestCallback() {
                 @Override
                 public void onSuccess(byte[] response) {
                     // 在EDT中更新UI
@@ -423,7 +513,13 @@ public class EnhancedRepeaterUI implements ITab {
                 responsePanel.setResponse(response);
                 
                 // 解析请求和响应信息
-                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                // 使用currentHttpService来解析请求，确保协议信息正确（如HTTPS）
+                IRequestInfo requestInfo;
+                if (currentHttpService != null) {
+                    requestInfo = BurpExtender.helpers.analyzeRequest(currentHttpService, requestBytes);
+                } else {
+                    requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                }
                 IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
                 
                 String method = requestInfo.getMethod();
@@ -567,7 +663,13 @@ public class EnhancedRepeaterUI implements ITab {
     private void handleResponseFailure(byte[] requestBytes, String errorMessage) {
         try {
             // 解析请求信息
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+            // 使用currentHttpService来解析请求，确保协议信息正确（如HTTPS）
+            IRequestInfo requestInfo;
+            if (currentHttpService != null) {
+                requestInfo = BurpExtender.helpers.analyzeRequest(currentHttpService, requestBytes);
+            } else {
+                requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+            }
             
             String method = requestInfo.getMethod();
             String url = extractUrlFromRequest(requestBytes, requestInfo);
@@ -777,6 +879,9 @@ public class EnhancedRepeaterUI implements ITab {
                 requestListPanel.addRequest(dbId, protocol, domain, path, query, method, request);
                 currentRequestId = dbId;
                 
+                // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
+                currentHttpService = requestResponse.getHttpService();
+                
                 // 设置请求内容
                 requestPanel.setRequest(request);
                 
@@ -854,11 +959,19 @@ public class EnhancedRepeaterUI implements ITab {
                 if (parts.length >= 2) {
                     String path = parts[1];
                     if (!host.isEmpty()) {
-                        // 简单地判断是否为HTTPS
+                        // 综合判断是否为HTTPS
                         boolean isHttps = false;
+                        // 1. 请求行URL包含https://（绝对URL形式）
                         if (path.startsWith("https://")) {
                             isHttps = true;
-                        } else if (host.contains(":443")) {
+                        }
+                        // 2. Host头包含443端口
+                        if (host.contains(":443")) {
+                            isHttps = true;
+                        }
+                        // 3. 如果有currentHttpService，使用其协议信息
+                        if (currentHttpService != null && 
+                            "https".equalsIgnoreCase(currentHttpService.getProtocol())) {
                             isHttps = true;
                         }
                         

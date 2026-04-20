@@ -579,16 +579,30 @@ public class RequestPanel extends JPanel {
                 }
             }
             
-            // 检查是否为HTTPS
-            for (String header : headers) {
-                if (header.toLowerCase().startsWith("referer: https://") ||
-                    (port.equals("443"))) {
+            // 检查是否为HTTPS：综合判断请求行URL、Host头端口、以及协议
+            // 1. 请求行包含https://（绝对URL形式）
+            if (firstLine.contains("https://")) {
+                isHttps = true;
+            }
+            // 2. Host头显式指定443端口
+            if (host.contains(":443") || port.equals("443")) {
+                isHttps = true;
+            }
+            // 3. 根据Burp API解析的URL协议判断
+            try {
+                java.net.URL parsedUrl = requestInfo.getUrl();
+                if ("https".equalsIgnoreCase(parsedUrl.getProtocol())) {
                     isHttps = true;
-                    if (port.equals("80")) {
-                        port = "443";
-                    }
-                    break;
                 }
+            } catch (Exception e) {
+                // URL解析失败，忽略
+            }
+            
+            if (isHttps && port.equals("80")) {
+                port = "443";
+            }
+            if (!isHttps && port.equals("443")) {
+                isHttps = true;
             }
             
             // 设置到界面

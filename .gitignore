@@ -90,3 +90,7 @@ Icon
 
 # Burp插件相关文件
 *.bappmanifest
+
+
+# Qoder相关文件
+.qoder

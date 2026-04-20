@@ -49,7 +49,7 @@ public class RequestManager {
      * @return 响应字节数组，失败返回null
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds) {
-        return makeHttpRequest(requestBytes, timeoutSeconds, -1); // 默认requestId为-1
+        return makeHttpRequest(requestBytes, timeoutSeconds, -1, null);
     }
     
     /**
@@ -61,25 +61,33 @@ public class RequestManager {
      * @return 响应字节数组，失败返回null
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId) {
+        return makeHttpRequest(requestBytes, timeoutSeconds, requestId, null);
+    }
+    
+    /**
+     * 发送HTTP请求并返回响应（带历史记录和HTTP服务信息）
+     * 
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @param httpService 原始HTTP服务信息（包含正确的协议、主机、端口），可为null
+     * @return 响应字节数组，失败返回null
+     */
+    public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId, IHttpService httpService) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             return null;
         }
         
-        // 解析请求信息
-        IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+        // 构建HTTP服务对象
+        IHttpService service = buildHttpService(requestBytes, httpService);
         
-        // 提取主机和端口信息
-        String host = getHostFromRequest(tempRequestInfo);
-        int port = getPortFromRequest(tempRequestInfo);
-        boolean isSecure = isHttpsRequest(tempRequestInfo, port);
+        // 使用HTTP服务信息解析请求，确保协议正确
+        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
         
-        // 创建HTTP服务对象
-        IHttpService httpService = BurpExtender.helpers.buildHttpService(
-                host, port, isSecure);
-        
-        // 使用HTTP服务信息重新解析请求，避免HTTP service details错误
-        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(httpService, requestBytes);
+        String host = service.getHost();
+        int port = service.getPort();
+        boolean isSecure = service.getProtocol().equalsIgnoreCase("https");
         
         BurpExtender.printOutput(
             String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
@@ -103,7 +111,7 @@ public class RequestManager {
                     
                     // 创建请求对象
                     IHttpRequestResponse requestResponse = 
-                        BurpExtender.callbacks.makeHttpRequest(httpService, requestBytes);
+                        BurpExtender.callbacks.makeHttpRequest(service, requestBytes);
                     
                     // 获取响应数据
                     byte[] response = requestResponse.getResponse();
@@ -155,6 +163,178 @@ public class RequestManager {
             BurpExtender.printError("[!] 未知错误: " + e.getMessage());
             return null;
         }
+    }
+    
+    /**
+     * 异步发送HTTP请求
+     * 
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param callback 请求回调接口
+     */
+    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, RequestCallback callback) {
+        makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, null, callback);
+    }
+    
+    /**
+     * 异步发送HTTP请求（带历史记录）
+     * 
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @param callback 请求回调接口
+     */
+    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, RequestCallback callback) {
+        makeHttpRequestAsync(requestBytes, timeoutSeconds, requestId, null, callback);
+    }
+    
+    /**
+     * 异步发送HTTP请求（带历史记录和HTTP服务信息）
+     * 
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @param httpService 原始HTTP服务信息（包含正确的协议、主机、端口），可为null
+     * @param callback 请求回调接口
+     */
+    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, 
+                                      IHttpService httpService, RequestCallback callback) {
+        if (requestBytes == null || requestBytes.length == 0) {
+            BurpExtender.printError("[!] 请求数据为空");
+            if (callback != null) {
+                callback.onFailure("请求数据为空");
+            }
+            return;
+        }
+        
+        // 在后台线程中执行请求
+        executor.submit(() -> {
+            // 记录请求开始时间（在外层try之前，确保异常分支也能访问）
+            final long startTime = System.currentTimeMillis();
+            
+            try {
+                // 构建HTTP服务对象
+                IHttpService service = buildHttpService(requestBytes, httpService);
+                
+                // 使用HTTP服务信息解析请求，确保协议正确
+                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+                
+                String host = service.getHost();
+                int port = service.getPort();
+                boolean isSecure = service.getProtocol().equalsIgnoreCase("https");
+                
+                BurpExtender.printOutput(
+                    String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
+                        isSecure ? "https" : "http", host, port, timeoutSeconds));
+                
+                // 重试机制
+                for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                    try {
+                        if (attempt > 0) {
+                            // 非首次尝试，输出重试信息
+                            BurpExtender.printOutput(
+                                String.format("[*] 第%d次重试发送请求...", attempt + 1));
+                            // 指数退避策略
+                            Thread.sleep(1000 * (1 << attempt));
+                        }
+                        
+                        // 创建请求对象
+                        IHttpRequestResponse requestResponse = 
+                            BurpExtender.callbacks.makeHttpRequest(service, requestBytes);
+                        
+                        // 计算请求耗时
+                        long endTime = System.currentTimeMillis();
+                        long responseTime = endTime - startTime;
+                        
+                        // 获取响应数据
+                        byte[] response = requestResponse.getResponse();
+                        
+                        if (response != null && response.length > 0) {
+                            // 解析响应信息
+                            IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                            
+                            // 记录成功的历史记录
+                            recordingService.recordSuccess(requestId, requestBytes, response, 
+                                                          requestInfo, responseInfo, responseTime);
+                            
+                            BurpExtender.printOutput(
+                                String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节", 
+                                    responseTime, response.length));
+                            if (callback != null) {
+                                callback.onSuccess(response);
+                            }
+                            return;
+                        } else {
+                            BurpExtender.printError("[!] 收到空响应，准备重试...");
+                        }
+                    } catch (Exception e) {
+                        BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
+                        // 记录异常堆栈信息
+                        e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
+                    }
+                }
+                
+                // 达到最大重试次数，请求失败
+                long responseTime = System.currentTimeMillis() - startTime;
+                recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                             "达到最大重试次数，请求失败", responseTime);
+                
+                BurpExtender.printError("[!] 达到最大重试次数，请求失败");
+                if (callback != null) {
+                    callback.onFailure("达到最大重试次数，请求失败");
+                }
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 发送请求时发生异常: " + e.getMessage());
+                // 记录异常堆栈信息
+                e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
+                
+                // 记录异常的历史记录
+                long responseTime = System.currentTimeMillis() - startTime;
+                try {
+                    // 重新构建HTTP服务信息
+                    IHttpService service = buildHttpService(requestBytes, httpService);
+                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+                    
+                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
+                } catch (Exception ex) {
+                    // 如果创建HTTP服务失败，使用基本的请求分析
+                    BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
+                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
+                }
+                
+                if (callback != null) {
+                    callback.onFailure("发送请求时发生异常: " + e.getMessage());
+                }
+            }
+        });
+    }
+    
+    /**
+     * 构建HTTP服务对象
+     * 优先使用原始HTTP服务信息（包含正确的协议），否则从请求数据中推断
+     * 
+     * @param requestBytes 请求数据
+     * @param originalService 原始HTTP服务信息，可为null
+     * @return 构建好的HTTP服务对象
+     */
+    private IHttpService buildHttpService(byte[] requestBytes, IHttpService originalService) {
+        // 如果有原始HTTP服务信息，优先使用它来保留正确的协议
+        if (originalService != null) {
+            return originalService;
+        }
+        
+        // 没有原始HTTP服务信息，从请求数据中推断
+        IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+        List<String> headers = tempRequestInfo.getHeaders();
+        
+        String host = extractHost(headers);
+        int port = extractPort(headers, host);
+        boolean isSecure = determineIsHttps(headers, port);
+        
+        return BurpExtender.helpers.buildHttpService(host, port, isSecure);
     }
     
     /**
@@ -233,16 +413,18 @@ public class RequestManager {
             }
         }
         
-        // 根据是否为HTTPS设置默认端口
-        if (determineIsHttps(headers, port) && port == 80) {
+        // 默认端口根据协议确定
+        boolean isHttps = determineIsHttps(headers, port);
+        if (isHttps && port == 80) {
             port = 443;
         }
-        
+
         return port;
     }
     
     /**
      * 判断是否为HTTPS请求
+     * 综合多种方式检测：请求行URL、Host头端口、端口值
      */
     private boolean determineIsHttps(List<String> headers, int port) {
         // 首先检查第一行是否包含HTTPS
@@ -250,170 +432,21 @@ public class RequestManager {
         if (firstLine.contains("https://")) {
             return true;
         }
-        
-        // 然后根据端口判断
-        return port == 443;
-    }
-    
-    /**
-     * 从请求信息中提取主机名
-     */
-    private String getHostFromRequest(IRequestInfo requestInfo) {
-        return extractHost(requestInfo.getHeaders());
-    }
-    
-    /**
-     * 从请求信息中提取端口号
-     */
-    private int getPortFromRequest(IRequestInfo requestInfo) {
-        return extractPort(requestInfo.getHeaders(), getHostFromRequest(requestInfo));
-    }
-    
-    /**
-     * 判断是否为HTTPS请求
-     */
-    private boolean isHttpsRequest(IRequestInfo requestInfo, int port) {
-        return determineIsHttps(requestInfo.getHeaders(), port);
-    }
-    
-    /**
-     * 异步发送HTTP请求
-     * 
-     * @param requestBytes 原始请求字节数组
-     * @param timeoutSeconds 超时时间(秒)
-     * @param callback 请求回调接口
-     */
-    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, RequestCallback callback) {
-        makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, callback); // 默认requestId为-1
-    }
-    
-    /**
-     * 异步发送HTTP请求（带历史记录）
-     * 
-     * @param requestBytes 原始请求字节数组
-     * @param timeoutSeconds 超时时间(秒)
-     * @param requestId 关联的请求ID，用于历史记录
-     * @param callback 请求回调接口
-     */
-    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, RequestCallback callback) {
-        if (requestBytes == null || requestBytes.length == 0) {
-            BurpExtender.printError("[!] 请求数据为空");
-            if (callback != null) {
-                callback.onFailure("请求数据为空");
+
+        // 检查Host头是否包含443端口
+        for (String header : headers) {
+            if (header.toLowerCase().startsWith("host:")) {
+                String hostValue = header.substring(5).trim();
+                // Host头显式指定443端口，如 "example.com:443"
+                if (hostValue.endsWith(":443")) {
+                    return true;
+                }
+                break;
             }
-            return;
         }
-        
-        // 在后台线程中执行请求
-        executor.submit(() -> {
-            // 记录请求开始时间（在外层try之前，确保异常分支也能访问）
-            final long startTime = System.currentTimeMillis();
-            
-            try {
-                // 提取主机和端口信息
-                IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-                String host = getHostFromRequest(tempRequestInfo);
-                int port = getPortFromRequest(tempRequestInfo);
-                boolean isSecure = isHttpsRequest(tempRequestInfo, port);
-                
-                // 创建HTTP服务对象
-                IHttpService httpService = BurpExtender.helpers.buildHttpService(
-                        host, port, isSecure);
-                
-                // 使用HTTP服务信息重新解析请求，避免HTTP service details错误
-                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(httpService, requestBytes);
-                
-                BurpExtender.printOutput(
-                    String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
-                        isSecure ? "https" : "http", host, port, timeoutSeconds));
-                
-                // 重试机制
-                for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
-                    try {
-                        if (attempt > 0) {
-                            // 非首次尝试，输出重试信息
-                            BurpExtender.printOutput(
-                                String.format("[*] 第%d次重试发送请求...", attempt + 1));
-                            // 指数退避策略
-                            Thread.sleep(1000 * (1 << attempt));
-                        }
-                        
-                        // 创建请求对象
-                        IHttpRequestResponse requestResponse = 
-                            BurpExtender.callbacks.makeHttpRequest(httpService, requestBytes);
-                        
-                        // 计算请求耗时
-                        long endTime = System.currentTimeMillis();
-                        long responseTime = endTime - startTime;
-                        
-                        // 获取响应数据
-                        byte[] response = requestResponse.getResponse();
-                        
-                        if (response != null && response.length > 0) {
-                            // 解析响应信息
-                            IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
-                            
-                            // 记录成功的历史记录
-                            recordingService.recordSuccess(requestId, requestBytes, response, 
-                                                          requestInfo, responseInfo, responseTime);
-                            
-                            BurpExtender.printOutput(
-                                String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节", 
-                                    responseTime, response.length));
-                            if (callback != null) {
-                                callback.onSuccess(response);
-                            }
-                            return;
-                        } else {
-                            BurpExtender.printError("[!] 收到空响应，准备重试...");
-                        }
-                    } catch (Exception e) {
-                        BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
-                        // 记录异常堆栈信息
-                        e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
-                    }
-                }
-                
-                // 达到最大重试次数，请求失败
-                long responseTime = System.currentTimeMillis() - startTime;
-                recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                             "达到最大重试次数，请求失败", responseTime);
-                
-                BurpExtender.printError("[!] 达到最大重试次数，请求失败");
-                if (callback != null) {
-                    callback.onFailure("达到最大重试次数，请求失败");
-                }
-            } catch (Exception e) {
-                BurpExtender.printError("[!] 发送请求时发生异常: " + e.getMessage());
-                // 记录异常堆栈信息
-                e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
-                
-                // 记录异常的历史记录
-                long responseTime = System.currentTimeMillis() - startTime;
-                try {
-                    // 重新创建HTTP服务信息
-                    IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-                    String host = getHostFromRequest(tempRequestInfo);
-                    int port = getPortFromRequest(tempRequestInfo);
-                    boolean isSecure = isHttpsRequest(tempRequestInfo, port);
-                    IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, isSecure);
-                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(httpService, requestBytes);
-                    
-                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
-                } catch (Exception ex) {
-                    // 如果创建HTTP服务失败，使用基本的请求分析
-                    BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
-                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
-                }
-                
-                if (callback != null) {
-                    callback.onFailure("发送请求时发生异常: " + e.getMessage());
-                }
-            }
-        });
+
+        // 根据端口判断
+        return port == 443;
     }
     
     /**

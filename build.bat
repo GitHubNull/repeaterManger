@@ -20,13 +20,13 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 检查目标文件是否存在
-if not exist "target\enhanced-repeater-1.0-SNAPSHOT.jar" (
+if not exist "target\enhanced-repeater-1.0.0.jar" (
     echo 构建失败：未找到目标JAR文件
     exit /b 1
 )
 
 echo 构建成功！
-echo 插件文件位于: %CD%\target\enhanced-repeater-1.0-SNAPSHOT.jar
+echo 插件文件位于: %CD%\target\enhanced-repeater-1.0.0.jar
 
 :: 显示安装指南
 echo.
