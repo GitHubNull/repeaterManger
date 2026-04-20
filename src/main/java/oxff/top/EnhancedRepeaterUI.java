@@ -278,13 +278,6 @@ public class EnhancedRepeaterUI implements ITab {
             String protocol = "http";
             String host = "";
             int port = 80;
-            
-            for (int i = 0; i < requestListPanel.getRequestCount(); i++) {
-                // 通过请求列表面板获取数据
-                // 直接从requestDataMap获取不太方便，改用请求数据推断+表格协议信息
-                break;
-            }
-            
             // 从请求数据中提取host和port
             IRequestInfo tempInfo = BurpExtender.helpers.analyzeRequest(requestData);
             List<String> headers = tempInfo.getHeaders();

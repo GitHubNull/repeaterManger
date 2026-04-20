@@ -5,6 +5,8 @@ import javax.swing.border.*;
 import javax.swing.event.*;
 import javax.swing.text.*;
 import java.awt.*;
+import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.beans.*;
 import java.util.HashMap;
 
@@ -168,12 +170,12 @@ public class TextLineNumber extends JPanel implements CaretListener, DocumentLis
         SwingUtilities.invokeLater(() -> {
             try {
                 int endPos = component.getDocument().getLength();
-                Rectangle rect = component.modelToView(endPos);
+                Rectangle2D rect = component.modelToView2D(endPos);
                 
-                if (rect != null && rect.y != lastHeight) {
+                if (rect != null && rect.getY() != lastHeight) {
                     setPreferredWidth();
                     repaint();
-                    lastHeight = rect.y;
+                    lastHeight = (int) rect.getY();
                 }
             } catch (BadLocationException e) {
                 // 忽略异常
@@ -228,8 +230,8 @@ public class TextLineNumber extends JPanel implements CaretListener, DocumentLis
         
         // 获取当前视图中第一行的位置
         Rectangle clip = g.getClipBounds();
-        int rowStartOffset = component.viewToModel(new Point(0, clip.y));
-        int endOffset = component.viewToModel(new Point(0, clip.y + clip.height));
+        int rowStartOffset = component.viewToModel2D(new Point2D.Double(0, clip.y));
+        int endOffset = component.viewToModel2D(new Point2D.Double(0, clip.y + clip.height));
         
         while (rowStartOffset <= endOffset) {
             try {
@@ -277,12 +279,12 @@ public class TextLineNumber extends JPanel implements CaretListener, DocumentLis
      * 计算绘制行号的垂直位置
      */
     private int getOffsetY(int rowStartOffset, FontMetrics fontMetrics) throws BadLocationException {
-        Rectangle r = component.modelToView(rowStartOffset);
+        Rectangle2D r = component.modelToView2D(rowStartOffset);
         int lineHeight = fontMetrics.getHeight();
-        int y = r.y + r.height;
+        int y = (int) (r.getY() + r.getHeight());
         int descent = 0;
         
-        if (r.height == lineHeight) {
+        if (r.getHeight() == lineHeight) {
             descent = fontMetrics.getDescent();
         } else {
             if (fonts == null) {

@@ -7,7 +7,6 @@ import burp.IHttpRequestResponse;
 
 import javax.swing.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class PopMenu implements IContextMenuFactory {
