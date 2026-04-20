@@ -1002,28 +1002,61 @@ public class EnhancedRepeaterUI implements ITab {
      */
     public void refreshAllData() {
         BurpExtender.printOutput("[*] 开始刷新界面数据...");
-        
+
         // 清空当前数据
         requestListPanel.clearAllRequests();
         historyPanel.clearAllHistory();
-        
+
         // 重置当前选中的请求ID
         currentRequestId = -1;
-        
+
         // 清空请求历史记录映射
         requestHistoryMap.clear();
-        
-        try {
-            // 创建一个MainUI实例，通过它调用loadPersistedData方法加载数据
-            oxff.top.ui.MainUI mainUI = new oxff.top.ui.MainUI(requestListPanel, requestPanel, responsePanel, historyPanel);
-            
-            // 调用加载数据方法
-            mainUI.loadPersistedData();
-            
-            BurpExtender.printOutput("[+] 数据刷新请求已提交，请等待数据加载完成");
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 刷新数据时出错: " + e.getMessage());
-            e.printStackTrace();
-        }
+
+        new Thread(() -> {
+            try {
+                // 1. 加载请求数据（使用addRequest避免重复插入数据库）
+                RequestDAO requestDAO = new RequestDAO();
+                java.util.List<java.util.Map<String, Object>> requests = requestDAO.getAllRequests();
+                BurpExtender.printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
+
+                for (java.util.Map<String, Object> request : requests) {
+                    int dbId = (Integer) request.get("id");
+                    String protocol = (String) request.get("protocol");
+                    String domain = (String) request.get("domain");
+                    String path = (String) request.get("path");
+                    String query = (String) request.get("query");
+                    String method = (String) request.get("method");
+                    byte[] requestData = (byte[]) request.get("request_data");
+
+                    requestListPanel.addRequest(dbId, protocol, domain, path, query, method, requestData);
+
+                    java.awt.Color color = (java.awt.Color) request.get("color");
+                    String comment = (String) request.get("comment");
+                    if (color != null) {
+                        requestListPanel.getRequestColors().put(dbId, color);
+                    }
+                    if (comment != null && !comment.isEmpty()) {
+                        requestListPanel.updateRequestComment(dbId, comment);
+                    }
+                }
+
+                // 2. 加载历史记录到内存缓存
+                HistoryDAO historyDAO = new HistoryDAO();
+                java.util.List<RequestResponseRecord> allHistory = historyDAO.getAllHistory();
+                BurpExtender.printOutput("[+] 从数据库加载 " + allHistory.size() + " 条历史记录");
+
+                for (RequestResponseRecord record : allHistory) {
+                    int requestId = record.getRequestId();
+                    if (requestId > 0) {
+                        requestHistoryMap.computeIfAbsent(requestId, k -> new ArrayList<>()).add(record);
+                    }
+                }
+
+                BurpExtender.printOutput("[+] 数据刷新完成");
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 刷新数据时出错: " + e.getMessage());
+            }
+        }).start();
     }
 }

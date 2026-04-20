@@ -225,37 +225,31 @@ public class MainUI extends JPanel {
                 BurpExtender.printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
                 
                 for (Map<String, Object> request : requests) {
-                    // 获取数据库ID（仅用于日志记录和调试）
-                    // int id = (Integer) request.get("id");
+                    // 获取数据库ID（用于保持与历史记录的关联一致性）
+                    int dbId = (Integer) request.get("id");
                     String protocol = (String) request.get("protocol");
                     String domain = (String) request.get("domain");
                     String path = (String) request.get("path");
                     String query = (String) request.get("query");
                     String method = (String) request.get("method");
                     byte[] requestData = (byte[]) request.get("request_data");
-                    
-                    // 构建URL
-                    String url = protocol + "://" + domain + path;
-                    if (query != null && !query.isEmpty()) {
-                        url += "?" + query;
-                    }
-                    
-                    // 添加到请求列表面板
-                    int localId = requestListPanel.addNewRequest(url, method, requestData);
-                    
+
+                    // 使用addRequest直接添加到UI，避免addNewRequest重复插入数据库导致ID不一致
+                    requestListPanel.addRequest(dbId, protocol, domain, path, query, method, requestData);
+
                     // 设置颜色和备注
                     java.awt.Color color = (java.awt.Color) request.get("color");
                     String comment = (String) request.get("comment");
-                    
+
                     if (color != null) {
                         Map<Integer, Color> colors = requestListPanel.getRequestColors();
                         if (colors != null) {
-                            colors.put(localId, color);
+                            colors.put(dbId, color);
                         }
                     }
-                    
+
                     if (comment != null && !comment.isEmpty()) {
-                        requestListPanel.updateRequestComment(localId, comment);
+                        requestListPanel.updateRequestComment(dbId, comment);
                     }
                 }
                 
