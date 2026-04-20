@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 自定义JSON格式导入器
  */
 public class CustomJsonImporter {
+    @SuppressWarnings("unused")
     private final DatabaseManager dbManager;
     private final RequestDAO requestDAO;
     private final HistoryDAO historyDAO;

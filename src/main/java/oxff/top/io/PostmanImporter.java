@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
  * Postman Collection v2.1.0 导入器
  */
 public class PostmanImporter {
+    @SuppressWarnings("unused")
     private final DatabaseManager dbManager;
     private final RequestDAO requestDAO;
     private final HistoryDAO historyDAO;
@@ -501,6 +502,7 @@ public class PostmanImporter {
         return "{}".getBytes(StandardCharsets.UTF_8);
     }
 
+    @SuppressWarnings("unused")
     private byte[] reconstructRawRequest(String method, UrlComponents url, List<PostmanHeader> headers, byte[] bodyBytes) {
         StringBuilder rawRequest = new StringBuilder();
 

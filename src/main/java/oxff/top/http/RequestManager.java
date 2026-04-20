@@ -5,8 +5,24 @@ import burp.IHttpRequestResponse;
 import burp.IHttpService;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
+import oxff.top.logging.LogManager;
 import oxff.top.service.HistoryRecordingService;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URL;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 
 /**
@@ -224,9 +240,34 @@ public class RequestManager {
                 boolean isSecure = service.getProtocol().equalsIgnoreCase("https");
                 
                 BurpExtender.printOutput(
-                    String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
+                    String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)",
                         isSecure ? "https" : "http", host, port, timeoutSeconds));
-                
+
+                // 检查是否启用代理模式
+                ProxyConfig proxyConfig = ProxyConfig.getInstance();
+                if (proxyConfig.isProxyEnabled()) {
+                    BurpExtender.printOutput(
+                        String.format("[D] 通过代理 %s:%d 发送请求",
+                            proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
+                    byte[] proxyResponse = makeHttpRequestWithProxy(
+                        requestBytes, service, timeoutSeconds);
+                    if (proxyResponse != null) {
+                        long responseTime = System.currentTimeMillis() - startTime;
+                        IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(proxyResponse);
+                        recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
+                            requestInfo, responseInfo, responseTime);
+                        BurpExtender.printOutput(
+                            String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
+                                responseTime, proxyResponse.length));
+                        if (callback != null) {
+                            callback.onSuccess(proxyResponse);
+                        }
+                        return;
+                    } else {
+                        BurpExtender.printError("[!] 代理请求返回空响应，尝试直接发送...");
+                    }
+                }
+
                 // 重试机制
                 for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
                     try {
@@ -449,6 +490,191 @@ public class RequestManager {
         return port == 443;
     }
     
+    /**
+     * 通过代理发送HTTP请求
+     * 使用java.net.HttpURLConnection通过指定代理发送请求，绕过Burp的请求管道
+     *
+     * @param requestBytes 原始请求字节数组
+     * @param service HTTP服务信息
+     * @param timeoutSeconds 超时时间(秒)
+     * @return 响应字节数组（包含完整的HTTP响应：状态行+头+体），失败返回null
+     */
+    private byte[] makeHttpRequestWithProxy(byte[] requestBytes, IHttpService service, int timeoutSeconds) {
+        HttpURLConnection conn = null;
+        try {
+            String protocol = service.getProtocol();
+            String host = service.getHost();
+            int port = service.getPort();
+
+            // 解析请求行获取方法和路径
+            String requestStr = new String(requestBytes, "UTF-8");
+            String firstLine = requestStr.substring(0, requestStr.indexOf("\r\n"));
+            String[] requestParts = firstLine.split("\\s+");
+            String method = requestParts[0];
+            String path = requestParts.length >= 2 ? requestParts[1] : "/";
+
+            // 构建完整URL
+            String urlStr = String.format("%s://%s:%d%s", protocol, host, port, path);
+            URL url = new URL(urlStr);
+
+            // 创建代理对象
+            ProxyConfig proxyConfig = ProxyConfig.getInstance();
+            Proxy proxy = proxyConfig.toJavaProxy();
+
+            // 打开连接
+            conn = (HttpURLConnection) url.openConnection(proxy);
+            conn.setRequestMethod(method);
+            conn.setConnectTimeout(timeoutSeconds * 1000);
+            conn.setReadTimeout(timeoutSeconds * 1000);
+            conn.setInstanceFollowRedirects(false);
+
+            // 解析请求头
+            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+            List<String> headers = requestInfo.getHeaders();
+            boolean hasContentType = false;
+            for (int i = 1; i < headers.size(); i++) {
+                String header = headers.get(i);
+                int colonIdx = header.indexOf(':');
+                if (colonIdx > 0) {
+                    String headerName = header.substring(0, colonIdx).trim();
+                    String headerValue = header.substring(colonIdx + 1).trim();
+                    // 跳过Host头（由URLConnection自动设置）和Proxy相关头
+                    if (headerName.equalsIgnoreCase("Host") || headerName.equalsIgnoreCase("Proxy-Connection")) {
+                        continue;
+                    }
+                    if (headerName.equalsIgnoreCase("Content-Type")) {
+                        hasContentType = true;
+                    }
+                    conn.setRequestProperty(headerName, headerValue);
+                }
+            }
+
+            // 处理HTTPS信任所有证书
+            if (conn instanceof HttpsURLConnection) {
+                setupTrustAllSSL((HttpsURLConnection) conn);
+            }
+
+            // 判断是否有请求体
+            int bodyOffset = findBodyOffset(requestBytes);
+            boolean hasBody = bodyOffset > 0 && bodyOffset < requestBytes.length;
+
+            if (hasBody) {
+                conn.setDoOutput(true);
+                if (!hasContentType) {
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                }
+            }
+
+            // 发送请求
+            conn.connect();
+
+            if (hasBody) {
+                byte[] bodyBytes = new byte[requestBytes.length - bodyOffset];
+                System.arraycopy(requestBytes, bodyOffset, bodyBytes, 0, bodyBytes.length);
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(bodyBytes);
+                    os.flush();
+                }
+            }
+
+            // 读取响应
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            int responseCode = conn.getResponseCode();
+            String responseMessage = conn.getResponseMessage();
+
+            // 构建状态行
+            String statusLine = String.format("HTTP/1.1 %d %s\r\n", responseCode, responseMessage != null ? responseMessage : "");
+            baos.write(statusLine.getBytes("UTF-8"));
+
+            // 构建响应头
+            for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
+                String headerName = entry.getKey();
+                if (headerName == null) continue; // 跳过状态行
+                for (String headerValue : entry.getValue()) {
+                    baos.write(String.format("%s: %s\r\n", headerName, headerValue).getBytes("UTF-8"));
+                }
+            }
+            baos.write("\r\n".getBytes("UTF-8"));
+
+            // 读取响应体
+            InputStream is = null;
+            try {
+                is = conn.getInputStream();
+            } catch (Exception e) {
+                is = conn.getErrorStream();
+            }
+
+            if (is != null) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    baos.write(buffer, 0, bytesRead);
+                }
+                is.close();
+            }
+
+            byte[] response = baos.toByteArray();
+            BurpExtender.printOutput(
+                String.format("[D] 代理响应: HTTP %d, 响应总大小: %d 字节", responseCode, response.length));
+            return response;
+
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 代理请求失败: " + e.getMessage());
+            return null;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+    }
+
+    /**
+     * 查找请求体起始偏移量
+     * 在HTTP请求中，头部和正文之间以\r\n\r\n分隔
+     *
+     * @param requestBytes 原始请求字节数组
+     * @return 请求体起始偏移量，如果没有正文则返回-1
+     */
+    private int findBodyOffset(byte[] requestBytes) {
+        // 查找 \r\n\r\n 分隔符
+        for (int i = 0; i < requestBytes.length - 3; i++) {
+            if (requestBytes[i] == '\r' && requestBytes[i + 1] == '\n'
+                && requestBytes[i + 2] == '\r' && requestBytes[i + 3] == '\n') {
+                return i + 4;
+            }
+        }
+        // 查找 \n\n 分隔符（非标准但偶尔出现）
+        for (int i = 0; i < requestBytes.length - 1; i++) {
+            if (requestBytes[i] == '\n' && requestBytes[i + 1] == '\n') {
+                return i + 2;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 配置HTTPS连接信任所有SSL证书
+     * 仅用于调试代理场景，生产环境慎用
+     *
+     * @param conn HTTPS连接对象
+     */
+    private void setupTrustAllSSL(HttpsURLConnection conn) {
+        try {
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                }
+            }, new java.security.SecureRandom());
+            conn.setSSLSocketFactory(sslContext.getSocketFactory());
+            conn.setHostnameVerifier((hostname, session) -> true);
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 设置SSL信任失败: " + e.getMessage());
+        }
+    }
+
     /**
      * 关闭请求管理器，清理资源
      */

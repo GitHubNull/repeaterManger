@@ -8,6 +8,7 @@ import oxff.top.ui.BurpResponsePanel;
 import oxff.top.ui.HistoryPanel;
 import oxff.top.ui.RequestListPanel;
 import oxff.top.ui.ConfigPanel;
+import oxff.top.ui.LogPanel;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
 import oxff.top.db.HistoryDAO;
@@ -48,6 +49,7 @@ public class EnhancedRepeaterUI implements ITab {
     private final BurpResponsePanel responsePanel;    // 右上响应展示区
     private final HistoryPanel historyPanel;          // 右下历史记录
     private final ConfigPanel configPanel;            // 配置面板
+    private final LogPanel logPanel;                  // 日志面板
     
     // 布局管理器
     private final LayoutManager layoutManager;
@@ -131,12 +133,19 @@ public class EnhancedRepeaterUI implements ITab {
         
         // 创建配置面板
         configPanel = new ConfigPanel();
-        
+
+        // 创建日志面板
+        logPanel = new LogPanel();
+
         // 创建选项卡面板
         tabbedPane = new JTabbedPane();
         tabbedPane.addTab("请求管理", mainSplitPane);
         tabbedPane.addTab("配置", configPanel);
-        
+        tabbedPane.addTab("日志", logPanel);
+
+        // 注册LogPanel到LogManager
+        oxff.top.logging.LogManager.getInstance().setLogPanel(logPanel);
+
         // 添加到主面板
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
     }

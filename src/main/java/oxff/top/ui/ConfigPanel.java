@@ -4,6 +4,9 @@ import oxff.top.config.DatabaseConfig;
 import oxff.top.db.DatabaseManager;
 import oxff.top.io.DataExporter;
 import oxff.top.io.DataImporter;
+import oxff.top.logging.LogLevel;
+import oxff.top.logging.LogManager;
+import oxff.top.http.ProxyConfig;
 import burp.BurpExtender;
 
 import javax.swing.*;
@@ -26,6 +29,20 @@ public class ConfigPanel extends JPanel {
     private final JButton applySessionFileButton;
     private final JCheckBox autoSaveCheckbox;
     private final JComboBox<String> saveIntervalCombo;
+
+    // 日志与调试配置UI组件
+    private final JComboBox<String> logLevelCombo;
+    private final JCheckBox fileLogCheckbox;
+    private final JTextField logDirField;
+    private final JButton browseLogDirButton;
+    private final JComboBox<String> maxFileSizeCombo;
+    private final JComboBox<String> maxBackupCombo;
+    private final JCheckBox uiLogCheckbox;
+    private final JComboBox<String> maxEntriesCombo;
+    private final JCheckBox burpConsoleCheckbox;
+    private final JCheckBox proxyEnabledCheckbox;
+    private final JTextField proxyHostField;
+    private final JTextField proxyPortField;
 
     /**
      * 创建配置面板
@@ -136,6 +153,147 @@ public class ConfigPanel extends JPanel {
         saveConfigButton.addActionListener(e -> saveConfig());
         storagePanel.add(saveConfigButton, c);
 
+        // ===== 日志与调试配置区域 =====
+        JPanel debugPanel = new JPanel(new GridBagLayout());
+        debugPanel.setBorder(BorderFactory.createTitledBorder("日志与调试配置"));
+        GridBagConstraints dc = new GridBagConstraints();
+        dc.fill = GridBagConstraints.HORIZONTAL;
+        dc.insets = new Insets(5, 5, 5, 5);
+
+        // 日志级别
+        dc.gridx = 0; dc.gridy = 0; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("日志级别:"), dc);
+
+        dc.gridx = 1; dc.gridy = 0; dc.gridwidth = 2; dc.weightx = 1.0;
+        logLevelCombo = new JComboBox<>(new String[]{"DEBUG", "INFO", "WARN", "ERROR"});
+        String currentLevel = dbManager.getConfig().getLogLevel();
+        logLevelCombo.setSelectedItem(currentLevel);
+        debugPanel.add(logLevelCombo, dc);
+
+        // 文件日志开关
+        dc.gridx = 0; dc.gridy = 1; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("文件日志:"), dc);
+
+        dc.gridx = 1; dc.gridy = 1; dc.gridwidth = 1; dc.weightx = 0;
+        fileLogCheckbox = new JCheckBox("启用", dbManager.getConfig().isLogFileEnabled());
+        debugPanel.add(fileLogCheckbox, dc);
+
+        dc.gridx = 2; dc.gridy = 1; dc.gridwidth = 1; dc.weightx = 1.0;
+        // 日志目录行
+        dc.gridx = 0; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("日志目录:"), dc);
+
+        dc.gridx = 1; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 1.0;
+        logDirField = new JTextField(20);
+        String logDir = dbManager.getConfig().getLogFileDirectory();
+        logDirField.setText(logDir != null && !logDir.isEmpty() ? logDir :
+            System.getProperty("user.dir") + "/repeater_manager/logs");
+        debugPanel.add(logDirField, dc);
+
+        dc.gridx = 2; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 0;
+        browseLogDirButton = new JButton("浏览...");
+        browseLogDirButton.addActionListener(e -> browseForLogDirectory());
+        debugPanel.add(browseLogDirButton, dc);
+
+        // 单文件大小限制
+        dc.gridx = 0; dc.gridy = 3; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("单文件大小:"), dc);
+
+        dc.gridx = 1; dc.gridy = 3; dc.gridwidth = 2; dc.weightx = 1.0;
+        maxFileSizeCombo = new JComboBox<>(new String[]{"1 MB", "5 MB", "10 MB", "50 MB"});
+        long currentMaxSize = dbManager.getConfig().getLogFileMaxSize();
+        if (currentMaxSize <= 1048576) maxFileSizeCombo.setSelectedIndex(0);
+        else if (currentMaxSize <= 5242880) maxFileSizeCombo.setSelectedIndex(1);
+        else if (currentMaxSize <= 10485760) maxFileSizeCombo.setSelectedIndex(2);
+        else maxFileSizeCombo.setSelectedIndex(3);
+        debugPanel.add(maxFileSizeCombo, dc);
+
+        // 最大备份数
+        dc.gridx = 0; dc.gridy = 4; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("最大备份数:"), dc);
+
+        dc.gridx = 1; dc.gridy = 4; dc.gridwidth = 2; dc.weightx = 1.0;
+        maxBackupCombo = new JComboBox<>(new String[]{"3", "5", "10", "20"});
+        int currentBackups = dbManager.getConfig().getLogFileMaxBackups();
+        if (currentBackups <= 3) maxBackupCombo.setSelectedIndex(0);
+        else if (currentBackups <= 5) maxBackupCombo.setSelectedIndex(1);
+        else if (currentBackups <= 10) maxBackupCombo.setSelectedIndex(2);
+        else maxBackupCombo.setSelectedIndex(3);
+        debugPanel.add(maxBackupCombo, dc);
+
+        // UI日志开关
+        dc.gridx = 0; dc.gridy = 5; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("UI日志:"), dc);
+
+        dc.gridx = 1; dc.gridy = 5; dc.gridwidth = 1; dc.weightx = 0;
+        uiLogCheckbox = new JCheckBox("启用", dbManager.getConfig().isLogUIEnabled());
+        debugPanel.add(uiLogCheckbox, dc);
+
+        dc.gridx = 2; dc.gridy = 5; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("最大条目数:"), dc);
+
+        // 最大条目数（放在同一行）
+        JPanel maxEntriesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        maxEntriesCombo = new JComboBox<>(new String[]{"128", "256", "512", "1024"});
+        int currentMaxEntries = dbManager.getConfig().getLogUIMaxEntries();
+        if (currentMaxEntries <= 128) maxEntriesCombo.setSelectedIndex(0);
+        else if (currentMaxEntries <= 256) maxEntriesCombo.setSelectedIndex(1);
+        else if (currentMaxEntries <= 512) maxEntriesCombo.setSelectedIndex(2);
+        else maxEntriesCombo.setSelectedIndex(3);
+        maxEntriesPanel.add(maxEntriesCombo);
+
+        // 这里将最大条目数放在第5行后面（通过修改gridx）
+        dc.gridx = 1; dc.gridy = 5; dc.gridwidth = 2; dc.weightx = 1.0;
+        JPanel uiLogRowPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        uiLogRowPanel.add(uiLogCheckbox);
+        uiLogRowPanel.add(new JLabel("最大条目数:"));
+        uiLogRowPanel.add(maxEntriesCombo);
+        debugPanel.add(uiLogRowPanel, dc);
+
+        // Burp控制台开关
+        dc.gridx = 0; dc.gridy = 6; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("Burp控制台:"), dc);
+
+        dc.gridx = 1; dc.gridy = 6; dc.gridwidth = 2; dc.weightx = 1.0;
+        burpConsoleCheckbox = new JCheckBox("启用Burp控制台输出", dbManager.getConfig().isLogBurpConsoleEnabled());
+        debugPanel.add(burpConsoleCheckbox, dc);
+
+        // 代理配置分隔
+        dc.gridx = 0; dc.gridy = 7; dc.gridwidth = 3; dc.weightx = 1.0;
+        debugPanel.add(new JSeparator(), dc);
+
+        // HTTP代理开关
+        dc.gridx = 0; dc.gridy = 8; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("HTTP代理:"), dc);
+
+        dc.gridx = 1; dc.gridy = 8; dc.gridwidth = 2; dc.weightx = 1.0;
+        ProxyConfig proxyConfig = ProxyConfig.getInstance();
+        proxyEnabledCheckbox = new JCheckBox("启用代理（调试用）", proxyConfig.isProxyEnabled());
+        debugPanel.add(proxyEnabledCheckbox, dc);
+
+        // 代理主机
+        dc.gridx = 0; dc.gridy = 9; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("代理主机:"), dc);
+
+        dc.gridx = 1; dc.gridy = 9; dc.gridwidth = 2; dc.weightx = 1.0;
+        proxyHostField = new JTextField(proxyConfig.getProxyHost(), 20);
+        debugPanel.add(proxyHostField, dc);
+
+        // 代理端口
+        dc.gridx = 0; dc.gridy = 10; dc.gridwidth = 1; dc.weightx = 0;
+        debugPanel.add(new JLabel("代理端口:"), dc);
+
+        dc.gridx = 1; dc.gridy = 10; dc.gridwidth = 2; dc.weightx = 1.0;
+        proxyPortField = new JTextField(String.valueOf(proxyConfig.getProxyPort()), 10);
+        debugPanel.add(proxyPortField, dc);
+
+        // 保存配置按钮（调试区域）
+        dc.gridx = 1; dc.gridy = 11; dc.gridwidth = 2; dc.weightx = 0;
+        dc.anchor = GridBagConstraints.EAST;
+        JButton saveDebugConfigButton = new JButton("保存日志与调试配置");
+        saveDebugConfigButton.addActionListener(e -> saveDebugConfig());
+        debugPanel.add(saveDebugConfigButton, dc);
+
         // 导入导出面板
         JPanel ioPanel = new JPanel(new BorderLayout());
         ioPanel.setBorder(BorderFactory.createTitledBorder("数据导入导出"));
@@ -188,7 +346,12 @@ public class ConfigPanel extends JPanel {
         // 创建顶部面板
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.add(storagePanel, BorderLayout.NORTH);
-        topPanel.add(ioPanel, BorderLayout.CENTER);
+
+        // 中间面板包含日志配置和导入导出
+        JPanel middlePanel = new JPanel(new BorderLayout());
+        middlePanel.add(debugPanel, BorderLayout.NORTH);
+        middlePanel.add(ioPanel, BorderLayout.CENTER);
+        topPanel.add(middlePanel, BorderLayout.CENTER);
 
         add(topPanel, BorderLayout.NORTH);
 
@@ -397,6 +560,97 @@ public class ConfigPanel extends JPanel {
         } else {
             JOptionPane.showMessageDialog(this,
                 "保存配置失败，请检查权限或路径。", "保存失败", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * 保存日志与调试配置
+     */
+    private void saveDebugConfig() {
+        DatabaseConfig config = dbManager.getConfig();
+        LogManager logManager = LogManager.getInstance();
+
+        // 日志级别
+        String level = (String) logLevelCombo.getSelectedItem();
+        config.setLogLevel(level);
+        logManager.setLevel(LogLevel.fromName(level));
+
+        // 文件日志
+        boolean fileEnabled = fileLogCheckbox.isSelected();
+        config.setLogFileEnabled(fileEnabled);
+        logManager.setFileLoggingEnabled(fileEnabled);
+
+        // 日志目录
+        String logDir = logDirField.getText().trim();
+        config.setLogFileDirectory(logDir);
+
+        // 单文件大小
+        int sizeIndex = maxFileSizeCombo.getSelectedIndex();
+        long[] sizes = {1048576, 5242880, 10485760, 52428800};
+        config.setLogFileMaxSize(sizes[sizeIndex]);
+
+        // 最大备份数
+        int backupIndex = maxBackupCombo.getSelectedIndex();
+        int[] backups = {3, 5, 10, 20};
+        config.setLogFileMaxBackups(backups[backupIndex]);
+
+        // UI日志
+        boolean uiEnabled = uiLogCheckbox.isSelected();
+        config.setLogUIEnabled(uiEnabled);
+        logManager.setUILoggingEnabled(uiEnabled);
+
+        // 最大条目数
+        int entriesIndex = maxEntriesCombo.getSelectedIndex();
+        int[] entries = {128, 256, 512, 1024};
+        config.setLogUIMaxEntries(entries[entriesIndex]);
+
+        // Burp控制台
+        boolean burpEnabled = burpConsoleCheckbox.isSelected();
+        config.setLogBurpConsoleEnabled(burpEnabled);
+        logManager.setBurpConsoleEnabled(burpEnabled);
+
+        // 代理配置
+        ProxyConfig proxyConfig = ProxyConfig.getInstance();
+        proxyConfig.setProxyEnabled(proxyEnabledCheckbox.isSelected());
+        proxyConfig.setProxyHost(proxyHostField.getText().trim());
+        try {
+            proxyConfig.setProxyPort(Integer.parseInt(proxyPortField.getText().trim()));
+        } catch (NumberFormatException e) {
+            proxyConfig.setProxyPort(8080);
+            proxyPortField.setText("8080");
+        }
+        proxyConfig.saveToConfig(config);
+
+        if (config.saveConfig()) {
+            logManager.success("[+] 日志与调试配置已保存");
+            JOptionPane.showMessageDialog(this,
+                "日志与调试配置已保存并生效。\n注意：文件日志目录和大小变更需重启后完全生效。",
+                "保存成功", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            logManager.error("[!] 保存日志与调试配置失败");
+            JOptionPane.showMessageDialog(this,
+                "保存配置失败，请检查权限或路径。", "保存失败", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * 浏览选择日志目录
+     */
+    private void browseForLogDirectory() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("选择日志目录");
+        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+        String currentLogDir = logDirField.getText().trim();
+        if (currentLogDir != null && !currentLogDir.isEmpty()) {
+            File dir = new File(currentLogDir);
+            if (dir.exists()) {
+                fileChooser.setCurrentDirectory(dir);
+            }
+        }
+
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            logDirField.setText(fileChooser.getSelectedFile().getAbsolutePath());
         }
     }
 

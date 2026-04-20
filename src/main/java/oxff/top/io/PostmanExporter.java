@@ -561,6 +561,7 @@ public class PostmanExporter {
         JsonArray headers;
         String body;
         String contentType;
+        @SuppressWarnings("unused")
         int statusCode;
         String statusText;
     }

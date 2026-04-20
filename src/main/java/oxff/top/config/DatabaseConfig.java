@@ -26,6 +26,21 @@ public class DatabaseConfig {
     public static final String KEY_AUTO_SAVE = "auto.save";
     public static final String KEY_SAVE_INTERVAL = "save.interval";
 
+    // 日志配置键
+    public static final String KEY_LOG_LEVEL = "log.level";
+    public static final String KEY_LOG_FILE_ENABLED = "log.file.enabled";
+    public static final String KEY_LOG_FILE_DIRECTORY = "log.file.directory";
+    public static final String KEY_LOG_FILE_MAX_SIZE = "log.file.max_size";
+    public static final String KEY_LOG_FILE_MAX_BACKUPS = "log.file.max_backups";
+    public static final String KEY_LOG_UI_ENABLED = "log.ui.enabled";
+    public static final String KEY_LOG_UI_MAX_ENTRIES = "log.ui.max_entries";
+    public static final String KEY_LOG_BURP_CONSOLE_ENABLED = "log.burp_console.enabled";
+
+    // 代理配置键
+    public static final String KEY_PROXY_ENABLED = "proxy.enabled";
+    public static final String KEY_PROXY_HOST = "proxy.host";
+    public static final String KEY_PROXY_PORT = "proxy.port";
+
     // 旧版配置键（用于迁移）
     private static final String OLD_KEY_DB_PATH = "db.path";
     private static final String OLD_KEY_DB_FILENAME = "db.filename";
@@ -101,6 +116,21 @@ public class DatabaseConfig {
         properties.setProperty(KEY_STORAGE_BASE_DIR, "");
         properties.setProperty(KEY_AUTO_SAVE, "true");
         properties.setProperty(KEY_SAVE_INTERVAL, "5"); // 5分钟
+
+        // 日志默认配置
+        properties.setProperty(KEY_LOG_LEVEL, "INFO");
+        properties.setProperty(KEY_LOG_FILE_ENABLED, "true");
+        properties.setProperty(KEY_LOG_FILE_DIRECTORY, "");
+        properties.setProperty(KEY_LOG_FILE_MAX_SIZE, "5242880"); // 5MB
+        properties.setProperty(KEY_LOG_FILE_MAX_BACKUPS, "5");
+        properties.setProperty(KEY_LOG_UI_ENABLED, "true");
+        properties.setProperty(KEY_LOG_UI_MAX_ENTRIES, "128");
+        properties.setProperty(KEY_LOG_BURP_CONSOLE_ENABLED, "true");
+
+        // 代理默认配置
+        properties.setProperty(KEY_PROXY_ENABLED, "false");
+        properties.setProperty(KEY_PROXY_HOST, "127.0.0.1");
+        properties.setProperty(KEY_PROXY_PORT, "8080");
 
         BurpExtender.printOutput("[+] 已使用默认配置（自动模式）");
     }
@@ -259,5 +289,113 @@ public class DatabaseConfig {
         } catch (NumberFormatException e) {
             return 5; // 默认5分钟
         }
+    }
+
+    // ========== 日志配置便捷方法 ==========
+
+    public String getLogLevel() {
+        return properties.getProperty(KEY_LOG_LEVEL, "INFO");
+    }
+
+    public void setLogLevel(String level) {
+        properties.setProperty(KEY_LOG_LEVEL, level);
+    }
+
+    public boolean isLogFileEnabled() {
+        return Boolean.parseBoolean(properties.getProperty(KEY_LOG_FILE_ENABLED, "true"));
+    }
+
+    public void setLogFileEnabled(boolean enabled) {
+        properties.setProperty(KEY_LOG_FILE_ENABLED, String.valueOf(enabled));
+    }
+
+    public String getLogFileDirectory() {
+        return properties.getProperty(KEY_LOG_FILE_DIRECTORY, "");
+    }
+
+    public void setLogFileDirectory(String directory) {
+        properties.setProperty(KEY_LOG_FILE_DIRECTORY, directory);
+    }
+
+    public long getLogFileMaxSize() {
+        try {
+            return Long.parseLong(properties.getProperty(KEY_LOG_FILE_MAX_SIZE, "5242880"));
+        } catch (NumberFormatException e) {
+            return 5242880; // 默认5MB
+        }
+    }
+
+    public void setLogFileMaxSize(long maxSize) {
+        properties.setProperty(KEY_LOG_FILE_MAX_SIZE, String.valueOf(maxSize));
+    }
+
+    public int getLogFileMaxBackups() {
+        try {
+            return Integer.parseInt(properties.getProperty(KEY_LOG_FILE_MAX_BACKUPS, "5"));
+        } catch (NumberFormatException e) {
+            return 5;
+        }
+    }
+
+    public void setLogFileMaxBackups(int maxBackups) {
+        properties.setProperty(KEY_LOG_FILE_MAX_BACKUPS, String.valueOf(maxBackups));
+    }
+
+    public boolean isLogUIEnabled() {
+        return Boolean.parseBoolean(properties.getProperty(KEY_LOG_UI_ENABLED, "true"));
+    }
+
+    public void setLogUIEnabled(boolean enabled) {
+        properties.setProperty(KEY_LOG_UI_ENABLED, String.valueOf(enabled));
+    }
+
+    public int getLogUIMaxEntries() {
+        try {
+            return Integer.parseInt(properties.getProperty(KEY_LOG_UI_MAX_ENTRIES, "128"));
+        } catch (NumberFormatException e) {
+            return 128;
+        }
+    }
+
+    public void setLogUIMaxEntries(int maxEntries) {
+        properties.setProperty(KEY_LOG_UI_MAX_ENTRIES, String.valueOf(maxEntries));
+    }
+
+    public boolean isLogBurpConsoleEnabled() {
+        return Boolean.parseBoolean(properties.getProperty(KEY_LOG_BURP_CONSOLE_ENABLED, "true"));
+    }
+
+    public void setLogBurpConsoleEnabled(boolean enabled) {
+        properties.setProperty(KEY_LOG_BURP_CONSOLE_ENABLED, String.valueOf(enabled));
+    }
+
+    // ========== 代理配置便捷方法 ==========
+
+    public boolean isProxyEnabled() {
+        return Boolean.parseBoolean(properties.getProperty(KEY_PROXY_ENABLED, "false"));
+    }
+
+    public void setProxyEnabled(boolean enabled) {
+        properties.setProperty(KEY_PROXY_ENABLED, String.valueOf(enabled));
+    }
+
+    public String getProxyHost() {
+        return properties.getProperty(KEY_PROXY_HOST, "127.0.0.1");
+    }
+
+    public void setProxyHost(String host) {
+        properties.setProperty(KEY_PROXY_HOST, host);
+    }
+
+    public int getProxyPort() {
+        try {
+            return Integer.parseInt(properties.getProperty(KEY_PROXY_PORT, "8080"));
+        } catch (NumberFormatException e) {
+            return 8080;
+        }
+    }
+
+    public void setProxyPort(int port) {
+        properties.setProperty(KEY_PROXY_PORT, String.valueOf(port));
     }
 }
