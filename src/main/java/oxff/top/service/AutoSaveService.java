@@ -155,11 +155,17 @@ public class AutoSaveService {
             // 这里由于我们使用的是SQLite，数据实时保存，所以不需要额外的保存操作
             // 如果需要，可以在这里添加任何清理或优化操作
             
-            // 执行WAL检查点，确保数据已写入主数据库文件
+            // 执行检查点操作，确保数据已写入主数据库文件
+            // 注意：由于使用的是DELETE journal mode（非WAL），使用TRUNCATE检查点
             try (java.sql.Connection conn = dbManager.getConnection();
                  java.sql.Statement stmt = conn.createStatement()) {
-                // 执行检查点操作
-                stmt.execute("PRAGMA wal_checkpoint(FULL)");
+                // 先尝试WAL检查点（如果恰好处于WAL模式）
+                try {
+                    stmt.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+                } catch (java.sql.SQLException e) {
+                    // 如果不是WAL模式，忽略此错误，DELETE模式下数据已实时写入
+                    BurpExtender.printOutput("[*] 非WAL模式，跳过WAL检查点");
+                }
                 BurpExtender.printOutput("[+] 已执行数据库检查点操作，确保数据已持久化");
             } catch (java.sql.SQLException e) {
                 BurpExtender.printError("[!] 执行数据库检查点时出错: " + e.getMessage());

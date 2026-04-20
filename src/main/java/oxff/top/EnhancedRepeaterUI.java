@@ -11,6 +11,7 @@ import oxff.top.ui.ConfigPanel;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
 import oxff.top.db.HistoryDAO;
+import oxff.top.db.RequestDAO;
 
 import javax.swing.*;
 import java.awt.*;
@@ -54,9 +55,8 @@ public class EnhancedRepeaterUI implements ITab {
     // 功能组件
     private final RequestManager requestManager;
     
-    // 当前选中的请求ID（在requestListPanel中的ID）
+    // 当前选中的请求ID（数据库中的ID）
     private int currentRequestId = -1;
-    private int nextRequestId = 1;  // 用于生成新的请求ID
     
     // 请求历史记录映射: 请求ID -> 历史记录列表
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
@@ -195,11 +195,20 @@ public class EnhancedRepeaterUI implements ITab {
         requestPanel.clear();
         responsePanel.clear();
         
-        // 创建新请求项并添加到列表
+        // 创建新请求项并添加到列表，同时保存到数据库
         String newRequestTemplate = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
-        requestListPanel.addRequest(nextRequestId, "http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
-        currentRequestId = nextRequestId;
-        nextRequestId++;
+        
+        // 保存请求到数据库，获取数据库生成的ID
+        RequestDAO requestDAO = new RequestDAO();
+        int dbId = requestDAO.saveRequest("http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
+        
+        if (dbId <= 0) {
+            BurpExtender.printError("[!] 创建新请求时保存到数据库失败");
+            return;
+        }
+        
+        requestListPanel.addRequest(dbId, "http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
+        currentRequestId = dbId;
         
         // 更新历史面板标题
         historyPanel.setBorderTitle("请求历史记录 - 新建请求");
@@ -423,21 +432,18 @@ public class EnhancedRepeaterUI implements ITab {
                 
                 // 更新请求列表中的当前请求（如果是新增的请求）
                 if (currentRequestId >= 0) {
-                    // 使用extractUrlFromRequest方法解析URL组件，避免直接调用getUrl()
                     String protocol = "http";
                     String host = "";
                     String path = "/";
                     String query = "";
                     
                     try {
-                        // 尝试使用标准方式获取URL组件
                         URL parsedUrl = requestInfo.getUrl();
                         protocol = parsedUrl.getProtocol();
                         host = parsedUrl.getHost();
                         path = parsedUrl.getPath();
                         query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                     } catch (Exception e) {
-                        // 如果标准方式失败，从URL字符串中解析
                         BurpExtender.printOutput("[*] 使用备选方法解析URL组件: " + url);
                         if (url.startsWith("https://")) {
                             protocol = "https";
@@ -467,10 +473,9 @@ public class EnhancedRepeaterUI implements ITab {
                     requestListPanel.updateRequest(currentRequestId, protocol, host, path, query, method);
                 }
                 
-                // 创建历史记录
+                // 创建历史记录用于UI显示（数据库保存已由HistoryRecordingService完成）
                 RequestResponseRecord record;
                 try {
-                    // 尝试使用标准方式创建记录
                     URL parsedUrl = requestInfo.getUrl();
                     record = new RequestResponseRecord(
                         currentRequestId,
@@ -481,10 +486,8 @@ public class EnhancedRepeaterUI implements ITab {
                         method
                     );
                 } catch (Exception e) {
-                    // 如果获取URL失败，使用提取的URL字符串和简单解析
                     BurpExtender.printOutput("[*] 使用备选方法解析URL: " + url);
                     
-                    // 解析URL组件
                     String protocol = "http";
                     String host = "";
                     String path = "/";
@@ -524,46 +527,23 @@ public class EnhancedRepeaterUI implements ITab {
                     );
                 }
                 
-                // 设置其他属性
-                long responseTime = 0; // We don't have timing info in async version, set to 0
                 record.setStatusCode(statusCode);
                 record.setResponseLength(response.length);
-                record.setResponseTime((int)responseTime);
+                record.setResponseTime(0);
                 record.setRequestData(requestBytes);
                 record.setResponseData(response);
                 record.setTimestamp(new Date());
                 
-                // 保存到数据库
-                HistoryDAO historyDAO = new HistoryDAO();
+                // 添加到当前请求的历史记录（仅内存）
+                addHistoryRecord(currentRequestId, record);
                 
-                // 验证当前请求ID是否有效，如果无效则使用-1
-                int validRequestId = currentRequestId;
-                if (currentRequestId > 0) {
-                    // 简单的验证，确保requestId是合理的正数
-                    BurpExtender.printOutput("[*] 正在保存历史记录，请求ID: " + currentRequestId);
-                } else {
-                    BurpExtender.printOutput("[*] 正在保存历史记录，请求ID无效，将使用NULL");
-                    validRequestId = -1;
-                }
+                // 更新历史面板显示
+                historyPanel.addHistoryRecord(record);
                 
-                // 设置有效的请求ID
-                record.setRequestId(validRequestId);
-                int historyId = historyDAO.saveHistory(record);
-                
-                if (historyId > 0) {
-                    // 添加到当前请求的历史记录
-                    addHistoryRecord(validRequestId, record);
-                    
-                    // 更新历史面板显示
-                    historyPanel.addHistoryRecord(record);
-                    
-                    // 记录日志
-                    BurpExtender.printOutput(String.format(
-                        "[+] 请求完成: %s %s → HTTP %d (%d 字节)", 
-                        method, url, statusCode, response.length));
-                } else {
-                    BurpExtender.printError("[!] 保存历史记录到数据库失败");
-                }
+                // 记录日志
+                BurpExtender.printOutput(String.format(
+                    "[+] 请求完成: %s %s → HTTP %d (%d 字节)", 
+                    method, url, statusCode, response.length));
             } catch (Exception ex) {
                 BurpExtender.printError("[!] 处理响应时发生异常: " + ex.getMessage());
                 JOptionPane.showMessageDialog(mainPanel, 
@@ -592,21 +572,18 @@ public class EnhancedRepeaterUI implements ITab {
             String method = requestInfo.getMethod();
             String url = extractUrlFromRequest(requestBytes, requestInfo);
             
-            // 使用extractUrlFromRequest方法解析URL组件，避免直接调用getUrl()
             String protocol = "http";
             String host = "";
             String path = "/";
             String query = "";
             
             try {
-                // 尝试使用标准方式获取URL组件
                 URL parsedUrl = requestInfo.getUrl();
                 protocol = parsedUrl.getProtocol();
                 host = parsedUrl.getHost();
                 path = parsedUrl.getPath();
                 query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
             } catch (Exception e) {
-                // 如果标准方式失败，从URL字符串中解析
                 BurpExtender.printOutput("[*] 使用备选方法解析URL组件: " + url);
                 if (url.startsWith("https://")) {
                     protocol = "https";
@@ -633,12 +610,12 @@ public class EnhancedRepeaterUI implements ITab {
                 }
             }
             
-            // 更新请求列表中的当前请求（如果是新增的请求）
+            // 更新请求列表中的当前请求
             if (currentRequestId >= 0) {
                 requestListPanel.updateRequest(currentRequestId, protocol, host, path, query, method);
             }
             
-            // 创建历史记录
+            // 创建历史记录用于UI显示（数据库保存已由HistoryRecordingService完成）
             RequestResponseRecord record = new RequestResponseRecord(
                 currentRequestId,
                 protocol,
@@ -648,33 +625,23 @@ public class EnhancedRepeaterUI implements ITab {
                 method
             );
             
-            // 设置失败相关的属性
-            record.setStatusCode(0); // 0 indicates failure
+            record.setStatusCode(0);
             record.setResponseLength(0);
             record.setResponseTime(0);
             record.setRequestData(requestBytes);
-            record.setResponseData(new byte[0]); // Empty response for failed requests
+            record.setResponseData(new byte[0]);
             record.setTimestamp(new Date());
             record.setComment("请求失败: " + errorMessage);
             
-            // 保存到数据库
-            HistoryDAO historyDAO = new HistoryDAO();
-            int historyId = historyDAO.saveHistory(record);
+            // 添加到当前请求的历史记录（仅内存）
+            addHistoryRecord(currentRequestId, record);
             
-            if (historyId > 0) {
-                // 添加到当前请求的历史记录
-                addHistoryRecord(currentRequestId, record);
-                
-                // 更新历史面板显示
-                historyPanel.addHistoryRecord(record);
-                
-                // 记录日志
-                BurpExtender.printOutput(String.format(
-                    "[+] 请求失败已记录: %s %s → 错误: %s", 
-                    method, url, errorMessage));
-            } else {
-                BurpExtender.printError("[!] 保存失败请求历史记录到数据库失败");
-            }
+            // 更新历史面板显示
+            historyPanel.addHistoryRecord(record);
+            
+            BurpExtender.printOutput(String.format(
+                "[+] 请求失败已记录: %s %s → 错误: %s", 
+                method, url, errorMessage));
         } catch (Exception ex) {
             BurpExtender.printError("[!] 处理失败响应时发生异常: " + ex.getMessage());
         }
@@ -797,10 +764,18 @@ public class EnhancedRepeaterUI implements ITab {
                     url = "分析请求出错";
                 }
                 
-                // 添加到请求列表
-                requestListPanel.addRequest(nextRequestId, protocol, domain, path, query, method, request);
-                currentRequestId = nextRequestId;
-                nextRequestId++;
+                // 保存请求到数据库，获取数据库生成的ID
+                RequestDAO requestDAO = new RequestDAO();
+                int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
+                
+                if (dbId <= 0) {
+                    BurpExtender.printError("[!] 保存请求到数据库失败");
+                    return;
+                }
+                
+                // 添加到请求列表，使用数据库ID
+                requestListPanel.addRequest(dbId, protocol, domain, path, query, method, request);
+                currentRequestId = dbId;
                 
                 // 设置请求内容
                 requestPanel.setRequest(request);
@@ -888,8 +863,11 @@ public class EnhancedRepeaterUI implements ITab {
                         }
                         
                         String url = (isHttps ? "https://" : "http://") + host + path;
-                        if (url.startsWith("http://http://") || url.startsWith("https://https://")) {
-                            url = url.substring(7); // 修复可能的双重协议
+                        // 修复可能的双重协议前缀
+                        while (url.startsWith("http://http://") || url.startsWith("https://https://") ||
+                               url.startsWith("http://https://") || url.startsWith("https://http://")) {
+                            url = url.replace("http://", "").replace("https://", "");
+                            url = (isHttps ? "https://" : "http://") + url;
                         }
                         return url;
                     } else {

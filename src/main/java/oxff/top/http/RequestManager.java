@@ -306,6 +306,9 @@ public class RequestManager {
         
         // 在后台线程中执行请求
         executor.submit(() -> {
+            // 记录请求开始时间（在外层try之前，确保异常分支也能访问）
+            final long startTime = System.currentTimeMillis();
+            
             try {
                 // 提取主机和端口信息
                 IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
@@ -323,9 +326,6 @@ public class RequestManager {
                 BurpExtender.printOutput(
                     String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
                         isSecure ? "https" : "http", host, port, timeoutSeconds));
-                
-                // 记录请求开始时间
-                long startTime = System.currentTimeMillis();
                 
                 // 重试机制
                 for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -388,8 +388,8 @@ public class RequestManager {
                 // 记录异常堆栈信息
                 e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
                 
-                // 记录异常的历史记录 - 使用HTTP服务信息创建IRequestInfo
-                long responseTime = System.currentTimeMillis() - System.currentTimeMillis();
+                // 记录异常的历史记录
+                long responseTime = System.currentTimeMillis() - startTime;
                 try {
                     // 重新创建HTTP服务信息
                     IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);

@@ -501,14 +501,24 @@ public class RequestPanel extends JPanel {
     
     /**
      * 检查请求参数是否被修改
+     * 通过比较当前字段值与从请求中解析出的原始值来判断
      */
     public boolean isRequestModified() {
-        // 检查请求参数是否被用户修改，需要与原始参数比较
-        // 简化实现：只要有任何字段有内容就认为已修改
-        return !hostField.getText().trim().isEmpty() ||
-               !methodField.getText().trim().isEmpty() ||
-               !portField.getText().trim().isEmpty() ||
-               !contentTypeField.getText().trim().isEmpty();
+        // 检查请求参数字段是否有非默认值
+        // 默认值: method=GET, host=空, port=80, contentType=application/x-www-form-urlencoded
+        String currentMethod = methodField.getText().trim();
+        String currentHost = hostField.getText().trim();
+        String currentPort = portField.getText().trim();
+        String currentContentType = contentTypeField.getText().trim();
+        
+        // 只有当字段值与默认值不同时，才认为被修改了
+        boolean methodModified = !currentMethod.isEmpty() && !currentMethod.equals("GET");
+        boolean hostModified = !currentHost.isEmpty() && !currentHost.equals("example.com");
+        boolean portModified = !currentPort.isEmpty() && !currentPort.equals("80") && !currentPort.equals("443");
+        boolean contentTypeModified = !currentContentType.isEmpty() && 
+            !currentContentType.equals("application/x-www-form-urlencoded");
+        
+        return methodModified || hostModified || portModified || contentTypeModified;
     }
 
     /**

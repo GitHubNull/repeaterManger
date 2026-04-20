@@ -144,8 +144,6 @@ public class RequestListPanel extends JPanel {
      * 添加新的请求
      */
     public int addNewRequest(String url, String method, byte[] requestData) {
-        int requestId = nextRequestId++;
-        
         // 解析URL组件
         String protocol = url.startsWith("https://") ? "https" : "http";
         String remaining = url.substring(protocol.length() + 3); // 跳过 "://"
@@ -171,11 +169,27 @@ public class RequestListPanel extends JPanel {
             path = remaining;
         }
         
-        // 创建记录并添加到表格
-        RequestRecord record = new RequestRecord(requestId, protocol, domain, path, query, method, requestData);
+        // 保存到数据库获取真实的数据库ID
+        int dbId = -1;
+        try {
+            RequestDAO requestDAO = new RequestDAO();
+            dbId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
+            if (dbId > 0) {
+                BurpExtender.printOutput("[+] 请求已保存到数据库，ID: " + dbId);
+            } else {
+                BurpExtender.printError("[!] 保存请求到数据库失败，使用自增ID");
+                dbId = nextRequestId++;
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 保存请求到数据库失败: " + e.getMessage());
+            dbId = nextRequestId++;
+        }
+        
+        // 创建记录并添加到表格，使用数据库ID
+        RequestRecord record = new RequestRecord(dbId, protocol, domain, path, query, method, requestData);
         addRequestRecord(record);
         
-        return requestId;
+        return dbId;
     }
     
     /**
@@ -281,19 +295,8 @@ public class RequestListPanel extends JPanel {
             BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
         }
         
-        // 保存到数据库
-        try {
-            RequestDAO requestDAO = new RequestDAO();
-            int savedId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
-            
-            if (savedId > 0) {
-                BurpExtender.printOutput("[+] 请求已保存到数据库，ID: " + savedId);
-            } else {
-                BurpExtender.printError("[!] 保存请求到数据库失败");
-            }
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 保存请求到数据库失败: " + e.getMessage());
-        }
+        // 注意：此方法假设调用方已将请求保存到数据库并传入数据库ID
+        // 不在此处再次保存，避免重复保存导致ID不一致
         
         // 更新颜色和注释映射
         requestColors.put(id, null);

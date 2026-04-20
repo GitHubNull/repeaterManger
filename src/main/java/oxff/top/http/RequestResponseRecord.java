@@ -307,12 +307,12 @@ public class RequestResponseRecord {
             return "";
         }
         
-        comment = comment.trim();
-        if (comment.length() <= maxLength) {
-            return comment;
+        String trimmed = comment.trim();
+        if (trimmed.length() <= maxLength) {
+            return trimmed;
         }
         
-        return comment.substring(0, maxLength) + "...";
+        return trimmed.substring(0, maxLength) + "...";
     }
     
     /**

@@ -122,14 +122,19 @@ public class DataExporter {
             }
             
             try {
-                // 确保所有事务已提交，并执行WAL检查点
+                // 确保所有事务已提交，并执行检查点
                 try (Connection conn = dbManager.getConnection()) {
-                    BurpExtender.printOutput("[*] 执行WAL检查点以确保所有数据都已写入磁盘");
+                    BurpExtender.printOutput("[*] 执行数据库检查点以确保所有数据都已写入磁盘");
                     Statement stmt = conn.createStatement();
-                    stmt.execute("PRAGMA wal_checkpoint(FULL)");
+                    try {
+                        stmt.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+                    } catch (SQLException e) {
+                        // 如果不是WAL模式，忽略此错误
+                        BurpExtender.printOutput("[*] 非WAL模式，跳过WAL检查点");
+                    }
                     stmt.close();
                 } catch (SQLException e) {
-                    BurpExtender.printError("[!] 执行WAL检查点时出错: " + e.getMessage());
+                    BurpExtender.printError("[!] 执行数据库检查点时出错: " + e.getMessage());
                 }
                 
                 // 关闭数据库以确保所有写入都已完成
@@ -236,17 +241,14 @@ public class DataExporter {
     private void exportDataToJson(Component parent, File outputFile) {
         BurpExtender.printOutput("[*] 开始从数据库导出数据到JSON");
         try (Connection conn = dbManager.getConnection()) {
-            // 这里实现从数据库中读取数据并转换为JSON格式
-            // 示例: 使用JSONObject或Gson等库将查询结果转换为JSON
             
-            // 临时代码 - 创建一个简单的JSON文件
             try (PrintWriter writer = new PrintWriter(outputFile)) {
                 writer.println("{");
                 writer.println("  \"requests\": [");
                 
-                // 从请求表查询数据
+                // 从请求表查询数据 - 使用正确的列名
                 try (Statement stmt = conn.createStatement();
-                     ResultSet rs = stmt.executeQuery("SELECT id, data FROM requests")) {
+                     ResultSet rs = stmt.executeQuery("SELECT id, protocol, domain, path, query, method, comment, color, request_data FROM requests")) {
                     
                     boolean first = true;
                     while (rs.next()) {
@@ -256,12 +258,26 @@ public class DataExporter {
                         first = false;
                         
                         int id = rs.getInt("id");
-                        byte[] data = rs.getBytes("data");
-                        String base64Data = java.util.Base64.getEncoder().encodeToString(data);
+                        String protocol = rs.getString("protocol");
+                        String domain = rs.getString("domain");
+                        String path = rs.getString("path");
+                        String query = rs.getString("query");
+                        String method = rs.getString("method");
+                        String comment = rs.getString("comment");
+                        String color = rs.getString("color");
+                        byte[] data = rs.getBytes("request_data");
+                        String base64Data = data != null ? java.util.Base64.getEncoder().encodeToString(data) : "";
                         
                         writer.print("    {");
                         writer.print("\"id\": " + id + ", ");
-                        writer.print("\"data\": \"" + base64Data + "\"");
+                        writer.print("\"protocol\": " + toJsonString(protocol) + ", ");
+                        writer.print("\"domain\": " + toJsonString(domain) + ", ");
+                        writer.print("\"path\": " + toJsonString(path) + ", ");
+                        writer.print("\"query\": " + toJsonString(query) + ", ");
+                        writer.print("\"method\": " + toJsonString(method) + ", ");
+                        writer.print("\"comment\": " + toJsonString(comment) + ", ");
+                        writer.print("\"color\": " + toJsonString(color) + ", ");
+                        writer.print("\"request_data\": \"" + base64Data + "\"");
                         writer.print("}");
                     }
                     writer.println();
@@ -273,7 +289,8 @@ public class DataExporter {
                 // 从历史表查询数据
                 try (Statement stmt = conn.createStatement();
                      ResultSet rs = stmt.executeQuery(
-                             "SELECT id, request_id, request_data, response_data, timestamp FROM history")) {
+                             "SELECT id, request_id, method, protocol, domain, path, query, status_code, " +
+                             "response_length, response_time, timestamp, comment, color, request_data, response_data FROM history")) {
                     
                     boolean first = true;
                     while (rs.next()) {
@@ -284,20 +301,41 @@ public class DataExporter {
                         
                         int id = rs.getInt("id");
                         int requestId = rs.getInt("request_id");
+                        String method = rs.getString("method");
+                        String protocol = rs.getString("protocol");
+                        String domain = rs.getString("domain");
+                        String path = rs.getString("path");
+                        String query = rs.getString("query");
+                        int statusCode = rs.getInt("status_code");
+                        int responseLength = rs.getInt("response_length");
+                        int responseTime = rs.getInt("response_time");
+                        java.sql.Timestamp timestamp = rs.getTimestamp("timestamp");
+                        String comment = rs.getString("comment");
+                        String color = rs.getString("color");
                         byte[] requestData = rs.getBytes("request_data");
                         byte[] responseData = rs.getBytes("response_data");
-                        long timestamp = rs.getLong("timestamp");
                         
-                        String requestBase64 = java.util.Base64.getEncoder().encodeToString(requestData);
+                        String requestBase64 = requestData != null ? 
+                                java.util.Base64.getEncoder().encodeToString(requestData) : "";
                         String responseBase64 = responseData != null ? 
                                 java.util.Base64.getEncoder().encodeToString(responseData) : "";
                         
                         writer.print("    {");
                         writer.print("\"id\": " + id + ", ");
                         writer.print("\"request_id\": " + requestId + ", ");
+                        writer.print("\"method\": " + toJsonString(method) + ", ");
+                        writer.print("\"protocol\": " + toJsonString(protocol) + ", ");
+                        writer.print("\"domain\": " + toJsonString(domain) + ", ");
+                        writer.print("\"path\": " + toJsonString(path) + ", ");
+                        writer.print("\"query\": " + toJsonString(query) + ", ");
+                        writer.print("\"status_code\": " + statusCode + ", ");
+                        writer.print("\"response_length\": " + responseLength + ", ");
+                        writer.print("\"response_time\": " + responseTime + ", ");
+                        writer.print("\"timestamp\": " + (timestamp != null ? timestamp.getTime() : 0) + ", ");
+                        writer.print("\"comment\": " + toJsonString(comment) + ", ");
+                        writer.print("\"color\": " + toJsonString(color) + ", ");
                         writer.print("\"request_data\": \"" + requestBase64 + "\", ");
-                        writer.print("\"response_data\": \"" + responseBase64 + "\", ");
-                        writer.print("\"timestamp\": " + timestamp);
+                        writer.print("\"response_data\": \"" + responseBase64 + "\"");
                         writer.print("}");
                     }
                     writer.println();
@@ -334,7 +372,7 @@ public class DataExporter {
                     
                     // 如果有记录，获取一些示例
                     if (count > 0) {
-                        try (ResultSet sample = stmt.executeQuery("SELECT id, length(data) FROM requests LIMIT 3")) {
+                        try (ResultSet sample = stmt.executeQuery("SELECT id, length(request_data) FROM requests LIMIT 3")) {
                             while (sample.next()) {
                                 BurpExtender.printOutput("[*] 请求ID: " + sample.getInt(1) + 
                                                         ", 数据大小: " + sample.getInt(2) + " 字节");
@@ -389,5 +427,35 @@ public class DataExporter {
             os.flush();
             BurpExtender.printOutput("[*] 共复制了 " + totalBytes + " 字节");
         }
+    }
+    
+    /**
+     * 将字符串转为JSON安全的字符串（处理转义和null值）
+     */
+    private String toJsonString(String value) {
+        if (value == null) {
+            return "null";
+        }
+        // 转义JSON特殊字符
+        StringBuilder sb = new StringBuilder();
+        sb.append("\"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 32) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        sb.append("\"");
+        return sb.toString();
     }
 } 
