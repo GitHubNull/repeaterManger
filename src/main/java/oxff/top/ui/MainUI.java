@@ -74,17 +74,17 @@ public class MainUI extends JPanel {
         requestResponseSplitPane.setTopComponent(requestPanel);
         requestResponseSplitPane.setBottomComponent(responsePanel);
         requestResponseSplitPane.setResizeWeight(0.5);
-        
-        // 创建右侧分离面板（请求/响应和历史记录）
-        JSplitPane rightSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        rightSplitPane.setTopComponent(requestResponseSplitPane);
-        rightSplitPane.setBottomComponent(historyPanel);
-        rightSplitPane.setResizeWeight(0.7);
-        
-        // 创建主分离面板（左侧请求列表和右侧面板）
+
+        // 创建左侧分离面板（请求列表和历史记录）
+        JSplitPane leftSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        leftSplitPane.setTopComponent(requestListPanel);
+        leftSplitPane.setBottomComponent(historyPanel);
+        leftSplitPane.setResizeWeight(0.5);
+
+        // 创建主分离面板（左侧面板和右侧请求/响应）
         JSplitPane mainSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        mainSplitPane.setLeftComponent(requestListPanel);
-        mainSplitPane.setRightComponent(rightSplitPane);
+        mainSplitPane.setLeftComponent(leftSplitPane);
+        mainSplitPane.setRightComponent(requestResponseSplitPane);
         mainSplitPane.setResizeWeight(0.3);
         
         // 创建选项卡面板，添加主界面和配置面板

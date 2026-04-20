@@ -26,19 +26,19 @@ import java.net.URL;
 
 /**
  * 增强型Repeater主界面 - 组装和协调所有组件
- * 
+ *
  * 总体布局：
- * 1. 左侧：请求报文列表面板，展示所有接收到的请求
- * 2. 右侧：
- *    - 上部：请求和响应编辑/展示区域（可切换布局）
+ * 1. 左侧（上下结构）：
+ *    - 上部：请求报文列表面板，展示所有接收到的请求
  *    - 下部：当前选中请求的历史重放记录列表
+ * 2. 右侧：请求和响应编辑/展示区域（可切换布局）
  */
 public class EnhancedRepeaterUI implements ITab {
     
     // 主UI组件
     private final JPanel mainPanel;
     private final JSplitPane mainSplitPane;          // 左右分割
-    private final JSplitPane rightSplitPane;         // 右侧上下分割
+    private final JSplitPane leftSplitPane;          // 左侧上下分割
     private final JSplitPane editorSplitPane;        // 编辑区分割
     private final JTabbedPane tabbedPane;            // 选项卡面板
     
@@ -111,20 +111,20 @@ public class EnhancedRepeaterUI implements ITab {
         editorPanel.add(editorControlPanel, BorderLayout.NORTH);
         editorPanel.add(editorSplitPane, BorderLayout.CENTER);
         
-        // 创建右侧上下分割面板
-        rightSplitPane = new JSplitPane(
+        // 创建左侧上下分割面板（请求列表 + 历史记录）
+        leftSplitPane = new JSplitPane(
             JSplitPane.VERTICAL_SPLIT,
-            editorPanel,
+            requestListPanel,
             historyPanel
         );
-        rightSplitPane.setResizeWeight(0.7);
-        rightSplitPane.setDividerLocation(500);
-        
+        leftSplitPane.setResizeWeight(0.5);
+        leftSplitPane.setDividerLocation(300);
+
         // 创建主分割面板（左右）
         mainSplitPane = new JSplitPane(
             JSplitPane.HORIZONTAL_SPLIT,
-            requestListPanel,
-            rightSplitPane
+            leftSplitPane,
+            editorPanel
         );
         mainSplitPane.setResizeWeight(0.3);
         mainSplitPane.setDividerLocation(350);

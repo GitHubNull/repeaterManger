@@ -153,6 +153,7 @@ public class HistoryPanel extends JPanel {
         historyTable = new JTable(historyTableModel);
         historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         historyTable.setAutoCreateRowSorter(true);
+        historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         
         // 设置列宽度
         historyTable.getColumnModel().getColumn(0).setPreferredWidth(40);   // 序号列
@@ -163,16 +164,16 @@ public class HistoryPanel extends JPanel {
         historyTable.getColumnModel().getColumn(2).setMaxWidth(80);         // 限制最大宽度
         historyTable.getColumnModel().getColumn(3).setPreferredWidth(60);   // 协议列
         historyTable.getColumnModel().getColumn(3).setMaxWidth(80);         // 限制最大宽度
-        historyTable.getColumnModel().getColumn(4).setPreferredWidth(150);  // 域名列
-        historyTable.getColumnModel().getColumn(5).setPreferredWidth(180);  // 路径列
-        historyTable.getColumnModel().getColumn(6).setPreferredWidth(150);  // 查询参数列
+        historyTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // 域名列
+        historyTable.getColumnModel().getColumn(5).setPreferredWidth(120);  // 路径列
+        historyTable.getColumnModel().getColumn(6).setPreferredWidth(100);  // 查询参数列
         historyTable.getColumnModel().getColumn(7).setPreferredWidth(70);   // 状态码列
         historyTable.getColumnModel().getColumn(7).setMaxWidth(90);         // 限制最大宽度
         historyTable.getColumnModel().getColumn(8).setPreferredWidth(90);   // 响应长度列
         historyTable.getColumnModel().getColumn(8).setMaxWidth(110);        // 限制最大宽度
         historyTable.getColumnModel().getColumn(9).setPreferredWidth(70);   // 耗时列
         historyTable.getColumnModel().getColumn(9).setMaxWidth(90);         // 限制最大宽度
-        historyTable.getColumnModel().getColumn(10).setPreferredWidth(150); // 备注列
+        historyTable.getColumnModel().getColumn(10).setPreferredWidth(100); // 备注列
         
         // 创建排序器
         tableRowSorter = new TableRowSorter<>(historyTableModel);
