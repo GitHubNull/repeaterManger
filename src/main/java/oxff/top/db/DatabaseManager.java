@@ -13,18 +13,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 数据库管理类，负责管理数据库连接
+ * 每次插件加载都会生成新的数据库文件
  */
 public class DatabaseManager {
     private static DatabaseManager instance;
     private final DatabaseConfig dbConfig;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final Object connectionLock = new Object();
-    
+
+    // 当前会话的数据库文件路径
+    private String currentDbPath;
+
     // 私有构造函数，防止直接实例化
     private DatabaseManager() {
         this.dbConfig = new DatabaseConfig();
     }
-    
+
     /**
      * 获取单例实例
      */
@@ -34,14 +38,21 @@ public class DatabaseManager {
         }
         return instance;
     }
-    
+
     /**
-     * 获取数据库文件路径
+     * 获取当前数据库文件路径
      */
     public String getDatabaseFilePath() {
-        return dbConfig.getDatabasePath();
+        return currentDbPath != null ? currentDbPath : dbConfig.getEffectiveDatabasePath();
     }
-    
+
+    /**
+     * 获取当前数据库文件路径（别名）
+     */
+    public String getCurrentDatabasePath() {
+        return currentDbPath;
+    }
+
     /**
      * 关闭数据库连接管理器
      */
@@ -52,7 +63,19 @@ public class DatabaseManager {
             BurpExtender.printOutput("[+] 数据库连接管理器已关闭");
         }
     }
-    
+
+    /**
+     * 重置以开始新会话（生成新的数据库文件）
+     */
+    public void resetForNewSession() {
+        synchronized (connectionLock) {
+            BurpExtender.printOutput("[*] 重置数据库管理器以开始新会话...");
+            initialized.set(false);
+            currentDbPath = null;
+            BurpExtender.printOutput("[+] 数据库管理器已重置，下次初始化将使用新数据库文件");
+        }
+    }
+
     /**
      * 初始化数据库
      */
@@ -61,22 +84,22 @@ public class DatabaseManager {
             BurpExtender.printOutput("[*] 数据库已经初始化，跳过初始化过程");
             return true;
         }
-        
+
         try {
-            // 确保数据库目录存在
-            String dbPath = dbConfig.getDatabasePath();
-            File dbFile = new File(dbPath);
+            // 解析当前会话的数据库路径
+            currentDbPath = dbConfig.getEffectiveDatabasePath();
+            File dbFile = new File(currentDbPath);
             File dbDir = dbFile.getParentFile();
-            
-            BurpExtender.printOutput("[*] 数据库文件路径: " + dbPath);
-            
+
+            BurpExtender.printOutput("[*] 数据库文件路径: " + currentDbPath);
+
             if (!dbDir.exists()) {
                 BurpExtender.printOutput("[*] 创建数据库目录: " + dbDir.getAbsolutePath());
                 if (!dbDir.mkdirs()) {
                     throw new IOException("无法创建数据库目录: " + dbDir.getAbsolutePath());
                 }
             }
-            
+
             // 显式加载SQLite JDBC驱动
             try {
                 Class.forName("org.sqlite.JDBC");
@@ -85,120 +108,38 @@ public class DatabaseManager {
                 BurpExtender.printError("[!] SQLite JDBC驱动加载失败: " + e.getMessage());
                 throw new SQLException("SQLite JDBC驱动未找到", e);
             }
-            
+
             // 使用简单的JDBC连接
             String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
             BurpExtender.printOutput("[*] JDBC URL: " + jdbcUrl);
-            
+
             // 创建临时连接用于初始化
             try (Connection tempConnection = DriverManager.getConnection(jdbcUrl);
                  Statement stmt = tempConnection.createStatement()) {
-                
+
                 BurpExtender.printOutput("[+] 数据库连接成功");
-                
+
                 // 设置SQLite配置
                 stmt.execute("PRAGMA journal_mode=DELETE");
                 stmt.execute("PRAGMA synchronous=NORMAL");
                 stmt.execute("PRAGMA foreign_keys=ON");
-                
-                // 初始化数据库表
-                if (!dbFile.exists()) {
-                    BurpExtender.printOutput("[*] 数据库文件不存在，创建新数据库");
-                    initializeTablesWithConnection(tempConnection);
-                } else {
-                    // 检查表结构
-                    checkAndUpdateTables(tempConnection);
-                }
+
+                // 每次初始化都是新文件，直接创建表
+                initializeTablesWithConnection(tempConnection);
             }
-            
+
             initialized.set(true);
-            BurpExtender.printOutput("[+] 数据库初始化成功");
+            BurpExtender.printOutput("[+] 数据库初始化成功: " + currentDbPath);
             return true;
         } catch (Exception e) {
             BurpExtender.printError("[!] 数据库初始化失败: " + e.getMessage());
             e.printStackTrace();
             initialized.set(false);
+            currentDbPath = null;
             return false;
         }
     }
-    
-    /**
-     * 检查并更新表结构
-     */
-    private void checkAndUpdateTables(Connection conn) throws SQLException {
-        try (Statement stmt = conn.createStatement()) {
-            // 检查requests表是否存在
-            try {
-                stmt.executeQuery("SELECT 1 FROM requests LIMIT 1");
-            } catch (SQLException e) {
-                // 表不存在，创建表
-                initializeTablesWithConnection(conn);
-                return;
-            }
-            
-            // 检查history表是否存在
-            try {
-                stmt.executeQuery("SELECT 1 FROM history LIMIT 1");
-                // 表存在，检查是否需要更新外键约束
-                updateHistoryTableForeignKey(conn);
-            } catch (SQLException e) {
-                // 表不存在，创建表
-                initializeTablesWithConnection(conn);
-            }
-        }
-    }
-    
-    /**
-     * 更新历史表的外键约束（从CASCADE改为SET NULL）
-     */
-    private void updateHistoryTableForeignKey(Connection conn) throws SQLException {
-        try (Statement stmt = conn.createStatement()) {
-            // 检查当前的外键约束定义
-            try (ResultSet rs = stmt.executeQuery("SELECT sql FROM sqlite_master WHERE type='table' AND name='history'")) {
-                if (rs.next()) {
-                    String tableSql = rs.getString("sql");
-                    if (tableSql != null && tableSql.contains("ON DELETE CASCADE")) {
-                        BurpExtender.printOutput("[*] 检测到旧的外键约束定义，正在更新...");
-                        
-                        // 由于SQLite不支持直接修改外键约束，我们需要重新创建表
-                        // 1. 创建临时表
-                        stmt.execute(
-                            "CREATE TABLE history_temp (" +
-                            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                            "request_id INTEGER, " +
-                            "method TEXT, " +
-                            "protocol TEXT, " +
-                            "domain TEXT, " +
-                            "path TEXT, " +
-                            "query TEXT, " +
-                            "status_code INTEGER, " +
-                            "response_length INTEGER, " +
-                            "response_time INTEGER, " +
-                            "timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                            "comment TEXT, " +
-                            "color TEXT, " +
-                            "request_data BLOB, " +
-                            "response_data BLOB, " +
-                            "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
-                            ")"
-                        );
-                        
-                        // 2. 复制数据
-                        stmt.execute("INSERT INTO history_temp SELECT * FROM history");
-                        
-                        // 3. 删除旧表
-                        stmt.execute("DROP TABLE history");
-                        
-                        // 4. 重命名临时表
-                        stmt.execute("ALTER TABLE history_temp RENAME TO history");
-                        
-                        BurpExtender.printOutput("[+] 历史表外键约束更新完成");
-                    }
-                }
-            }
-        }
-    }
-    
+
     /**
      * 获取数据库连接（每次创建新连接）
      */
@@ -213,22 +154,21 @@ public class DatabaseManager {
                 }
             }
         }
-        
+
         synchronized (connectionLock) {
             try {
-                // 每次创建新连接
-                String dbPath = dbConfig.getDatabasePath();
-                File dbFile = new File(dbPath);
+                // 每次创建新连接，使用当前会话的数据库路径
+                File dbFile = new File(currentDbPath);
                 String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
                 Connection newConnection = DriverManager.getConnection(jdbcUrl);
-                
+
                 // 设置SQLite配置
                 try (Statement stmt = newConnection.createStatement()) {
                     stmt.execute("PRAGMA journal_mode=DELETE");
                     stmt.execute("PRAGMA synchronous=NORMAL");
                     stmt.execute("PRAGMA foreign_keys=ON");
                 }
-                
+
                 return newConnection;
             } catch (Exception e) {
                 BurpExtender.printError("[!] 创建数据库连接失败: " + e.getMessage());
@@ -236,21 +176,21 @@ public class DatabaseManager {
             }
         }
     }
-    
+
     /**
      * 关闭数据库连接
      */
     public void close() {
         closeConnections();
     }
-    
+
     /**
      * 获取配置对象
      */
     public DatabaseConfig getConfig() {
         return dbConfig;
     }
-    
+
     /**
      * 检查数据库连接是否可用
      */
@@ -258,20 +198,20 @@ public class DatabaseManager {
         if (!initialized.get()) {
             return false;
         }
-        
+
         try (Connection conn = getConnection()) {
             return conn != null && conn.isValid(2); // 缩短超时时间
         } catch (Exception e) {
             return false;
         }
     }
-    
+
     /**
      * 使用现有连接初始化表结构
      */
     private void initializeTablesWithConnection(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            
+
             // 请求表
             stmt.execute(
                 "CREATE TABLE IF NOT EXISTS requests (" +
@@ -287,7 +227,7 @@ public class DatabaseManager {
                 "request_data BLOB" +
                 ")"
             );
-            
+
             // 历史记录表
             stmt.execute(
                 "CREATE TABLE IF NOT EXISTS history (" +
@@ -309,27 +249,27 @@ public class DatabaseManager {
                 "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +  // Changed from CASCADE to SET NULL
                 ")"
             );
-            
+
             // 创建索引提升查询性能
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_domain ON requests (domain)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_method ON requests (method)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_request_id ON history (request_id)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_domain ON history (domain)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_status_code ON history (status_code)");
-            
+
             BurpExtender.printOutput("[+] 数据库表结构初始化成功");
         }
     }
-    
+
     /**
      * 检查数据库状态，包括表是否存在和记录数
      */
     public void checkDatabaseStatus() {
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
-            
+
             BurpExtender.printOutput("[*] 正在检查数据库状态...");
-            
+
             // 检查requests表
             try {
                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS count FROM requests");
@@ -341,7 +281,7 @@ public class DatabaseManager {
             } catch (SQLException e) {
                 BurpExtender.printOutput("[!] 请求表(requests)不存在或查询失败: " + e.getMessage());
             }
-            
+
             // 检查history表
             try {
                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS count FROM history");
@@ -353,14 +293,14 @@ public class DatabaseManager {
             } catch (SQLException e) {
                 BurpExtender.printOutput("[!] 历史表(history)不存在或查询失败: " + e.getMessage());
             }
-            
-            BurpExtender.printOutput("[*] 数据库检查完成，数据库文件路径: " + dbConfig.getDatabasePath());
-            
+
+            BurpExtender.printOutput("[*] 数据库检查完成，数据库文件路径: " + currentDbPath);
+
         } catch (SQLException e) {
             BurpExtender.printError("[!] 检查数据库状态失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 测试数据库连接并写入测试数据
      */
@@ -369,19 +309,19 @@ public class DatabaseManager {
             BurpExtender.printError("[!] 数据库未初始化，无法进行测试");
             return;
         }
-        
+
         Connection conn = null;
         Statement stmt = null;
         ResultSet rs = null;
-        
+
         try {
             // 获取连接
             conn = getConnection();
             conn.setAutoCommit(false); // 开始事务
-            
+
             // 创建测试数据
             stmt = conn.createStatement();
-            
+
             // 先检查是否存在测试数据
             rs = stmt.executeQuery("SELECT COUNT(*) FROM requests WHERE domain = 'test.example.com'");
             if (rs.next() && rs.getInt(1) > 0) {
@@ -389,28 +329,28 @@ public class DatabaseManager {
                 stmt.execute("DELETE FROM requests WHERE domain = 'test.example.com'");
                 BurpExtender.printOutput("[*] 已清理旧的测试数据");
             }
-            
+
             // 插入新的测试数据
             String testData = "INSERT INTO requests (protocol, domain, path, query, method, request_data, add_time) " +
                              "VALUES ('http', 'test.example.com', '/', '', 'GET', 'test request', CURRENT_TIMESTAMP)";
-            
+
             int affectedRows = stmt.executeUpdate(testData);
-            
+
             if (affectedRows > 0) {
                 BurpExtender.printOutput("[+] 测试数据插入成功");
                 conn.commit(); // 提交事务
-                
+
                 // 验证数据
                 rs = stmt.executeQuery("SELECT COUNT(*) FROM requests");
                 if (rs.next()) {
                     BurpExtender.printOutput("[*] 当前请求表记录数: " + rs.getInt(1));
                 }
-                
+
                 // 删除测试数据
                 stmt.execute("DELETE FROM requests WHERE domain = 'test.example.com'");
                 conn.commit(); // 提交删除操作
                 BurpExtender.printOutput("[+] 测试数据已清理");
-                
+
                 BurpExtender.printOutput("[+] 数据库测试完成");
             } else {
                 BurpExtender.printError("[!] 测试数据插入失败");
@@ -443,4 +383,4 @@ public class DatabaseManager {
             }
         }
     }
-} 
+}

@@ -5,52 +5,65 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Properties;
 
 import burp.BurpExtender;
 
 /**
- * 数据库配置管理类
+ * 数据库配置管理类 - 支持三种存储模式：自动、指定目录、指定文件
  */
 public class DatabaseConfig {
     private static final String CONFIG_FILE = "repeater_manager_config.properties";
-    private static final String DEFAULT_DB_NAME = "repeater_manager.db";
-    
+
     private Properties properties;
     private File configFile;
-    
+
     // 配置属性键名
-    public static final String KEY_DB_PATH = "db.path";
-    public static final String KEY_DB_FILENAME = "db.filename";
+    public static final String KEY_STORAGE_MODE = "storage.mode";
+    public static final String KEY_STORAGE_BASE_DIR = "storage.base_dir";
     public static final String KEY_AUTO_SAVE = "auto.save";
     public static final String KEY_SAVE_INTERVAL = "save.interval";
-    
+
+    // 旧版配置键（用于迁移）
+    private static final String OLD_KEY_DB_PATH = "db.path";
+    private static final String OLD_KEY_DB_FILENAME = "db.filename";
+
+    // 存储模式
+    public static final String MODE_AUTO = "auto";
+    public static final String MODE_DIRECTORY = "directory";
+    public static final String MODE_FILE = "file";
+
+    // 当前会话文件名（不持久化）
+    private String sessionFile;
+
     /**
      * 初始化数据库配置
      */
     public DatabaseConfig() {
         properties = new Properties();
-        
+
         // 获取用户主目录下的.burp目录
         String userHome = System.getProperty("user.home");
         File burpDir = new File(userHome, ".burp");
-        
+
         // 确保burp配置目录存在
         if (!burpDir.exists()) {
             burpDir.mkdirs();
         }
-        
+
         // 配置文件路径
         configFile = new File(burpDir, CONFIG_FILE);
-        
+
         // 如果配置文件存在，加载它
         if (configFile.exists()) {
             try (FileInputStream fis = new FileInputStream(configFile)) {
                 properties.load(fis);
                 BurpExtender.printOutput("[+] 已加载配置文件：" + configFile.getAbsolutePath());
+                migrateOldConfig();
             } catch (IOException e) {
                 BurpExtender.printError("[!] 加载配置文件失败: " + e.getMessage());
-                // 使用默认配置
                 setDefaultConfig();
             }
         } else {
@@ -59,22 +72,39 @@ public class DatabaseConfig {
             saveConfig();
         }
     }
-    
+
+    /**
+     * 从旧版配置迁移
+     */
+    private void migrateOldConfig() {
+        // 如果存在旧版配置但没有新版配置，进行迁移
+        if (properties.containsKey(OLD_KEY_DB_PATH) && !properties.containsKey(KEY_STORAGE_MODE)) {
+            String oldPath = properties.getProperty(OLD_KEY_DB_PATH, "");
+            String oldFilename = properties.getProperty(OLD_KEY_DB_FILENAME, "");
+            if (!oldPath.isEmpty() && !oldFilename.isEmpty()) {
+                properties.setProperty(KEY_STORAGE_MODE, MODE_DIRECTORY);
+                properties.setProperty(KEY_STORAGE_BASE_DIR, oldPath);
+                BurpExtender.printOutput("[*] 已从旧版配置迁移到新版存储配置");
+            }
+            // 移除旧版键
+            properties.remove(OLD_KEY_DB_PATH);
+            properties.remove(OLD_KEY_DB_FILENAME);
+            saveConfig();
+        }
+    }
+
     /**
      * 设置默认配置
      */
     private void setDefaultConfig() {
-        String userHome = System.getProperty("user.home");
-        File burpDir = new File(userHome, ".burp");
-        
-        properties.setProperty(KEY_DB_PATH, burpDir.getAbsolutePath());
-        properties.setProperty(KEY_DB_FILENAME, DEFAULT_DB_NAME);
+        properties.setProperty(KEY_STORAGE_MODE, MODE_AUTO);
+        properties.setProperty(KEY_STORAGE_BASE_DIR, "");
         properties.setProperty(KEY_AUTO_SAVE, "true");
         properties.setProperty(KEY_SAVE_INTERVAL, "5"); // 5分钟
-        
-        BurpExtender.printOutput("[+] 已使用默认配置");
+
+        BurpExtender.printOutput("[+] 已使用默认配置（自动模式）");
     }
-    
+
     /**
      * 保存配置到文件
      */
@@ -88,47 +118,138 @@ public class DatabaseConfig {
             return false;
         }
     }
-    
+
     /**
-     * 获取数据库文件路径
+     * 生成数据库文件名
+     * 格式: repeater_manager_YYYY_MMDD_HHmm_ssSSS.sqlite3
+     */
+    public static String generateDatabaseFilename() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy_MMdd_HHmm_ssSSS");
+        return "repeater_manager_" + sdf.format(new Date()) + ".sqlite3";
+    }
+
+    /**
+     * 获取默认基础目录（Burp启动目录下的repeater_manager）
+     */
+    public static String getDefaultBaseDirectory() {
+        String userDir = System.getProperty("user.dir");
+        File repeaterDir = new File(userDir, "repeater_manager");
+        return repeaterDir.getAbsolutePath();
+    }
+
+    /**
+     * 获取有效的数据库路径（根据当前模式解析）
+     */
+    public String getEffectiveDatabasePath() {
+        // 1. 如果设置了当前会话文件名，直接使用
+        if (sessionFile != null && !sessionFile.isEmpty()) {
+            return sessionFile;
+        }
+
+        // 2. 根据存储模式确定基础目录
+        String baseDir;
+        String mode = getStorageMode();
+
+        if (MODE_DIRECTORY.equals(mode)) {
+            baseDir = getBaseDirectory();
+            if (baseDir == null || baseDir.isEmpty()) {
+                baseDir = getDefaultBaseDirectory();
+            }
+        } else {
+            // auto 模式或其他
+            baseDir = getDefaultBaseDirectory();
+        }
+
+        // 确保目录存在
+        File dir = new File(baseDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        // 3. 生成新的数据库文件名
+        return Paths.get(baseDir, generateDatabaseFilename()).toString();
+    }
+
+    /**
+     * 获取存储模式
+     */
+    public String getStorageMode() {
+        return properties.getProperty(KEY_STORAGE_MODE, MODE_AUTO);
+    }
+
+    /**
+     * 设置存储模式
+     */
+    public void setStorageMode(String mode) {
+        properties.setProperty(KEY_STORAGE_MODE, mode);
+    }
+
+    /**
+     * 获取基础目录
+     */
+    public String getBaseDirectory() {
+        return properties.getProperty(KEY_STORAGE_BASE_DIR, "");
+    }
+
+    /**
+     * 设置基础目录
+     */
+    public void setBaseDirectory(String baseDir) {
+        properties.setProperty(KEY_STORAGE_BASE_DIR, baseDir);
+    }
+
+    /**
+     * 获取当前会话文件名（不持久化）
+     */
+    public String getSessionFile() {
+        return sessionFile;
+    }
+
+    /**
+     * 设置当前会话文件名（不持久化）
+     */
+    public void setSessionFile(String sessionFile) {
+        this.sessionFile = sessionFile;
+    }
+
+    /**
+     * 获取数据库文件路径（兼容旧版调用）
      */
     public String getDatabasePath() {
-        String dbPath = properties.getProperty(KEY_DB_PATH);
-        String dbFilename = properties.getProperty(KEY_DB_FILENAME);
-        return Paths.get(dbPath, dbFilename).toString();
+        return getEffectiveDatabasePath();
     }
-    
+
     /**
-     * 设置数据库路径
+     * 设置数据库路径（兼容旧版调用，转为目录模式）
      */
     public void setDatabasePath(String path) {
         File file = new File(path);
-        properties.setProperty(KEY_DB_PATH, file.getParent());
-        properties.setProperty(KEY_DB_FILENAME, file.getName());
+        setStorageMode(MODE_DIRECTORY);
+        setBaseDirectory(file.getParent());
         saveConfig();
     }
-    
+
     /**
      * 获取自定义属性值
      */
     public String getProperty(String key, String defaultValue) {
         return properties.getProperty(key, defaultValue);
     }
-    
+
     /**
      * 设置自定义属性值
      */
     public void setProperty(String key, String value) {
         properties.setProperty(key, value);
     }
-    
+
     /**
      * 判断是否启用自动保存
      */
     public boolean isAutoSaveEnabled() {
         return Boolean.parseBoolean(properties.getProperty(KEY_AUTO_SAVE, "true"));
     }
-    
+
     /**
      * 获取自动保存间隔（分钟）
      */
@@ -139,4 +260,4 @@ public class DatabaseConfig {
             return 5; // 默认5分钟
         }
     }
-} 
+}
