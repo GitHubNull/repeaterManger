@@ -3,8 +3,6 @@ package oxff.top.logging;
 import burp.IBurpExtenderCallbacks;
 import oxff.top.ui.LogPanel;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**

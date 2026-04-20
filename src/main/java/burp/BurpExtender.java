@@ -20,6 +20,7 @@ public class BurpExtender implements IBurpExtender {
     public static IExtensionHelpers helpers;
 
     // 日志输出流（保留用于兼容，实际日志通过LogManager）
+    @SuppressWarnings("unused")
     private static PrintWriter stdout;
     private static PrintWriter stderr;
 
