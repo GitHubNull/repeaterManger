@@ -2,8 +2,6 @@ package oxff.top.http;
 
 import oxff.top.config.DatabaseConfig;
 import oxff.top.logging.LogManager;
-import oxff.top.logging.LogLevel;
-
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 
