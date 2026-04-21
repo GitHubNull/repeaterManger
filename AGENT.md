@@ -1,0 +1,158 @@
+# AGENT.md
+
+> 本文档为 AI 编码助手（如 Claude Code、Cursor 等）提供项目上下文和开发指南。
+
+## 项目概述
+
+**Enhanced Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理功能。项目使用 Java 8 编写，基于 Burp Extender API，采用 MVC 架构。
+
+- **版本**: 1.5.1
+- **Java 版本**: 8（source/target 兼容）
+- **构建工具**: Maven
+- **许可证**: Apache License 2.0
+
+## 架构概览
+
+```
++---------------------+
+|      UI Layer       |  Java Swing + RSyntaxTextArea
++---------------------+
+|   Service Layer     |  AutoSave / GC / HistoryRecording
++---------------------+
+|   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager
++---------------------+
+|   Data Storage      |  SQLite + File Blobs (Pool 去重架构)
++---------------------+
+```
+
+### 核心组件
+
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| 扩展入口 | `burp/BurpExtender.java` | 实现 IBurpExtender 接口，初始化所有组件 |
+| 主 UI 控制器 | `oxff/top/EnhancedRepeaterUI.java` | 协调所有 UI 面板和功能组件 |
+| 数据库管理 | `oxff/top/db/DatabaseManager.java` | SQLite 连接池、Schema 初始化、会话管理 |
+| Pool 去重 | `oxff/top/db/pool/PoolManager.java` | 字符串/头部/Body 内容去重存储 |
+| 请求管理 | `oxff/top/http/RequestManager.java` | 异步 HTTP 请求发送 |
+| 历史录制 | `oxff/top/service/HistoryRecordingService.java` | 异步队列化历史记录保存 |
+| 垃圾回收 | `oxff/top/service/GarbageCollectorService.java` | 自动清理零引用 Pool 数据 |
+| 自动保存 | `oxff/top/service/AutoSaveService.java` | 定时数据库检查点 |
+| 日志管理 | `oxff/top/logging/LogManager.java` | 多通道日志分发和级别过滤 |
+| ERM 存档 | `oxff/top/io/ErmArchiveWriter.java` / `ErmArchiveReader.java` | 加密存档导入导出 |
+| 数据导入导出 | `oxff/top/io/DataExporter.java` / `DataImporter.java` | 统一导入导出调度 |
+| 配置管理 | `oxff/top/config/DatabaseConfig.java` | 存储模式/日志/代理配置 |
+
+## 关键设计决策
+
+### Pool 去重架构
+
+数据库采用 Pool 架构，将 HTTP 请求/响应的内容拆分为多个去重组件：
+
+- **string_pool**: 域名、路径、查询参数通过 SHA-256 哈希去重
+- **header_pool**: HTTP 头部数据去重
+- **body_pool**: 小体积 Body 行内存储（SQLite BLOB）
+- **file_pool**: 大体积 Body 外置文件存储（blobs/ 目录）
+- **gc_queue**: 垃圾回收队列
+
+每个 Pool 条目维护 `ref_count` 引用计数。删除请求时减少引用，GC 服务定期清理零引用条目。
+
+### 连接池
+
+`DatabaseManager` 使用 `BlockingQueue<Connection>` 实现简易连接池，通过 JDK 动态代理拦截 `close()` 调用将连接归还池中，使现有 `try-with-resources` 代码无需修改。
+
+### 会话目录
+
+每次加载插件创建新的会话目录（时间戳命名），包含：
+- `repeater_manager.sqlite3` — 数据库文件
+- `blobs/` — 外置 Body 数据
+- `logs/` — 日志文件
+
+### ERM 存档格式
+
+自定义二进制存档格式，支持可选的 AES-256-CBC + HMAC-SHA256 加密：
+- 32 字节文件头（魔法数字 + 格式版本 + 标志 + 条目数 + manifest 偏移 + CRC）
+- 数据条目（路径 + 压缩方式 + 数据 + CRC）
+- manifest JSON 条目
+- 16 字节文件尾（魔法数字 + data CRC + footer CRC）
+
+### 日志系统
+
+`LogManager` 单例统一管理三个输出通道：
+- `BurpConsoleHandler` → Burp Suite 输出面板
+- `RollingFileHandler` → 滚动文件日志
+- `UIHandler` → 插件日志面板
+
+支持级别过滤：DEBUG / INFO / SUCCESS / WARN / ERROR
+
+## 构建命令
+
+```bash
+mvn clean package
+```
+
+构建产物：
+- `target/enhanced-repeater-1.5.1.jar` — 开发版本
+- `target/releases/enhanced-repeater-1.5.1-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+
+## 数据库 Schema
+
+两个主表 + 四个 Pool 表 + GC 队列表：
+
+```sql
+-- 主表
+requests (id, protocol, domain_hash, path_hash, query_hash, method, add_time, comment, color, req_header_hash, req_body_hash, req_body_storage)
+history  (id, request_id, method, protocol, domain_hash, path_hash, query_hash, status_code, response_length, response_time, timestamp, comment, color, req_header_hash, req_body_hash, req_body_storage, resp_header_hash, resp_body_hash, resp_body_storage)
+
+-- Pool 表
+string_pool (hash, value, ref_count)
+header_pool (hash, data, size, ref_count)
+body_pool   (hash, data, size, ref_count, is_binary)
+file_pool   (hash, relative_path, size, ref_count, is_binary)
+
+-- GC 队列
+gc_queue (id, pool_type, hash, enqueued_at)
+
+-- 元数据
+schema_meta (key, value)
+```
+
+## 依赖版本
+
+| 依赖 | 版本 | Maven 坐标 |
+|------|------|-----------|
+| Burp Extender API | 2.1 | net.portswigger.burp.extender:burp-extender-api |
+| RSyntaxTextArea | 3.3.3 | com.fifesoft:rsyntaxtextarea |
+| SQLite JDBC | 3.42.0.0 | org.xerial:sqlite-jdbc |
+| HikariCP | 5.0.1 | com.zaxxer:HikariCP |
+| Gson | 2.10.1 | com.google.code.gson:gson |
+| Commons IO | 2.11.0 | commons-io:commons-io |
+| Commons Lang | 3.12.0 | org.apache.commons:commons-lang3 |
+
+## 编码约定
+
+- **语言**: Java 8（不使用 Lambda 之外的 Java 9+ 特性）
+- **包结构**: `burp` 包仅含入口点，业务代码在 `oxff.top` 下
+- **日志**: 使用 `BurpExtender.printOutput()` / `printError()` 或 `LogManager` 方法
+- **数据库访问**: 通过 DAO 类（RequestDAO / HistoryDAO），使用 `try-with-resources` 管理连接
+- **UI 线程**: Swing UI 操作必须在 EDT 中执行（`SwingUtilities.invokeLater`）
+- **单例模式**: DatabaseManager / LogManager / HistoryRecordingService 等使用单例
+- **异步操作**: HTTP 请求发送、数据加载、历史记录保存均在后台线程执行
+
+## 注意事项
+
+1. **不要修改 `burp` 包路径**：Burp Suite 要求入口类在 `burp` 包下
+2. **SQLite 限制**：SQLite 不支持真正的并发写入，写操作需串行化
+3. **内存管理**：Body 数据可能很大，使用 Pool 去重和文件外置减少内存占用
+4. **Burp API 兼容性**：使用 `IBurpExtenderCallbacks` 和 `IExtensionHelpers` 进行 HTTP 操作
+5. **HTTPS 协议保留**：发送请求时需通过 `IHttpService` 保留 HTTPS 协议信息
+6. **错误过滤**：`BurpExtender.shouldFilterError()` 过滤 IntelliJ 相关的无害 ClassNotFoundException
+7. **GC 依赖**：删除请求后需触发 GC 清理关联的 Pool 数据
+
+## CI/CD
+
+项目使用 GitHub Actions（`.github/workflows/release.yml`）：
+
+- **触发条件**: 推送 `v*` 格式标签（如 `v1.0.0`）或手动触发
+- **构建**: JDK 8 + Maven
+- **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
+- **预发布**: 标签包含 `-` 后缀（如 `v1.0.0-beta`）时标记为预发布
