@@ -57,7 +57,8 @@ public class ErmArchiveWriter {
             FileNameExtensionFilter filter = new FileNameExtensionFilter(
                     "ERM存档 (*.erm)", "erm");
             fileChooser.setFileFilter(filter);
-            fileChooser.setSelectedFile(new File("repeater_export.erm"));
+            fileChooser.setSelectedFile(new File(
+                    oxff.top.config.DatabaseConfig.generateSessionDirectoryName() + ".erm"));
 
             int result = fileChooser.showSaveDialog(parent);
             if (result != JFileChooser.APPROVE_OPTION) {

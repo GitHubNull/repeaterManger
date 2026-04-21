@@ -49,7 +49,8 @@ public class PostmanExporter {
             fileChooser.setDialogTitle("导出Postman Collection");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("Postman Collection (*.json)", "json");
             fileChooser.setFileFilter(filter);
-            fileChooser.setSelectedFile(new File("replayer_postman_export.json"));
+            fileChooser.setSelectedFile(new File(
+                    oxff.top.config.DatabaseConfig.generateSessionDirectoryName() + ".json"));
 
             int result = fileChooser.showSaveDialog(parent);
             if (result != JFileChooser.APPROVE_OPTION) {

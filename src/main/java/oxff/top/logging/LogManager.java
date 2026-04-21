@@ -51,6 +51,7 @@ public class LogManager {
 
     /**
      * 初始化文件日志Handler
+     * 若已存在 RollingFileHandler，先关闭旧的再创建新的（幂等）
      *
      * @param logDirectory 日志目录
      * @param maxFileSize  单文件最大字节数
@@ -58,6 +59,13 @@ public class LogManager {
      */
     public void initializeFileHandler(String logDirectory, long maxFileSize, int maxBackups) {
         try {
+            // 幂等：若已存在旧的文件 Handler，先关闭并移除
+            if (rollingFileHandler != null) {
+                handlers.remove(rollingFileHandler);
+                rollingFileHandler.close();
+                rollingFileHandler = null;
+            }
+
             rollingFileHandler = new RollingFileHandler(logDirectory, maxFileSize, maxBackups);
             rollingFileHandler.setEnabled(fileLoggingEnabled);
             handlers.add(rollingFileHandler);
@@ -68,6 +76,32 @@ public class LogManager {
                     "文件日志处理器初始化失败: " + e.getMessage()));
             }
         }
+    }
+
+    /**
+     * 重定位文件日志 Handler 到新的日志目录
+     * 用于会话切换时将日志输出移动到新会话的 logs/ 目录
+     *
+     * @param newLogDirectory 新的日志目录路径
+     */
+    public void relocateFileHandler(String newLogDirectory) {
+        if (!fileLoggingEnabled) {
+            return;
+        }
+
+        long maxSize = 5 * 1024 * 1024; // 默认5MB
+        int maxBackups = 5;
+
+        // 保留旧 Handler 的配置
+        if (rollingFileHandler != null) {
+            // 读取旧配置（使用默认值，因为 RollingFileHandler 不暴露这些字段）
+            // 关闭旧 Handler
+            handlers.remove(rollingFileHandler);
+            rollingFileHandler.close();
+            rollingFileHandler = null;
+        }
+
+        initializeFileHandler(newLogDirectory, maxSize, maxBackups);
     }
 
     /**

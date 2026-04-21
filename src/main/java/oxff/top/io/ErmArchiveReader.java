@@ -204,6 +204,10 @@ public class ErmArchiveReader {
                 throw new SQLException("导入数据库后初始化失败");
             }
 
+            // 重定位日志到新会话目录
+            oxff.top.logging.LogManager.getInstance().relocateFileHandler(
+                dbManager.getLogsDirectory().getAbsolutePath());
+
             BurpExtender.printOutput("[+] ERM存档导入成功，新数据库: " + newDbPath);
 
             // 10. 刷新 UI

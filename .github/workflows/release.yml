@@ -61,8 +61,8 @@ jobs:
             exit 1
           fi
           
-          # 找到生成的 jar 文件
-          JAR_PATH=$(find target/releases/ -name "enhanced-repeater-*.jar" | head -n 1)
+          # 找到生成的 jar 文件（Maven resources plugin 已复制到 target/releases/）
+          JAR_PATH=$(find target/releases/ -name "enhanced-repeater-*.jar" ! -name "*-*-*-*.jar" | head -n 1)
           if [ -z "$JAR_PATH" ]; then
             echo "找不到构建后的 jar 文件"
             exit 1
@@ -71,11 +71,6 @@ jobs:
           # 输出 jar 路径供后续步骤使用
           echo "jar_path=$JAR_PATH" >> $GITHUB_OUTPUT
           echo "构建成功: $JAR_PATH"
-          
-          # 创建一个不带时间戳的文件副本，使文件名更规范
-          RELEASE_JAR="target/releases/enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar"
-          cp "$JAR_PATH" "$RELEASE_JAR"
-          echo "release_jar=$RELEASE_JAR" >> $GITHUB_OUTPUT
       
       - name: 提取提交信息作为发布说明
         id: release-notes
@@ -151,7 +146,6 @@ jobs:
             --title "Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}" \
             --notes-file release_notes.md \
             $PRERELEASE \
-            "${{ steps.build.outputs.release_jar }}" \
             "${{ steps.build.outputs.jar_path }}")
           
           if [ $? -eq 0 ]; then

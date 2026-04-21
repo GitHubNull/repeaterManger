@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Properties;
@@ -50,8 +49,11 @@ public class DatabaseConfig {
     public static final String MODE_DIRECTORY = "directory";
     public static final String MODE_FILE = "file";
 
-    // 当前会话文件名（不持久化）
+    // 当前会话文件名（不持久化，FILE 模式使用）
     private String sessionFile;
+
+    // 当前会话目录（不持久化，AUTO/DIRECTORY 模式使用）
+    private SessionDirectory sessionDirectory;
 
     /**
      * 初始化数据库配置
@@ -150,12 +152,22 @@ public class DatabaseConfig {
     }
 
     /**
+     * 生成会话目录名称
+     * 格式: repeater_manager_YYYY_MMDD_HHmm_ssSSS
+     * 与原数据库文件名格式一致（去掉 .sqlite3 后缀）
+     */
+    public static String generateSessionDirectoryName() {
+        return SessionDirectory.generateSessionDirectoryName();
+    }
+
+    /**
      * 生成数据库文件名
      * 格式: repeater_manager_YYYY_MMDD_HHmm_ssSSS.sqlite3
+     * @deprecated 使用 {@link #generateSessionDirectoryName()} 代替，会话目录模式下数据库文件名为固定名称
      */
+    @Deprecated
     public static String generateDatabaseFilename() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy_MMdd_HHmm_ssSSS");
-        return "repeater_manager_" + sdf.format(new Date()) + ".sqlite3";
+        return generateSessionDirectoryName() + ".sqlite3";
     }
 
     /**
@@ -169,14 +181,21 @@ public class DatabaseConfig {
 
     /**
      * 获取有效的数据库路径（根据当前模式解析）
+     * AUTO/DIRECTORY 模式下返回会话目录内的固定名称数据库文件
+     * FILE 模式下返回用户指定的文件路径
      */
     public String getEffectiveDatabasePath() {
-        // 1. 如果设置了当前会话文件名，直接使用
+        // 1. 如果设置了当前会话文件名（FILE 模式），直接使用
         if (sessionFile != null && !sessionFile.isEmpty()) {
             return sessionFile;
         }
 
-        // 2. 根据存储模式确定基础目录
+        // 2. 如果已有会话目录，返回其中的数据库文件
+        if (sessionDirectory != null) {
+            return sessionDirectory.getDatabaseFile().getAbsolutePath();
+        }
+
+        // 3. 根据存储模式创建新的会话目录
         String baseDir;
         String mode = getStorageMode();
 
@@ -190,14 +209,15 @@ public class DatabaseConfig {
             baseDir = getDefaultBaseDirectory();
         }
 
-        // 确保目录存在
+        // 确保基础目录存在
         File dir = new File(baseDir);
         if (!dir.exists()) {
             dir.mkdirs();
         }
 
-        // 3. 生成新的数据库文件名
-        return Paths.get(baseDir, generateDatabaseFilename()).toString();
+        // 创建新的时间戳会话目录
+        sessionDirectory = SessionDirectory.createNew(baseDir);
+        return sessionDirectory.getDatabaseFile().getAbsolutePath();
     }
 
     /**
@@ -240,6 +260,51 @@ public class DatabaseConfig {
      */
     public void setSessionFile(String sessionFile) {
         this.sessionFile = sessionFile;
+    }
+
+    /**
+     * 获取或创建当前会话目录
+     * 如果尚未创建会话目录，则根据当前模式创建一个新的
+     *
+     * @return 当前会话目录，FILE 模式下返回 null
+     */
+    public SessionDirectory getOrCreateSessionDirectory() {
+        if (sessionDirectory != null) {
+            return sessionDirectory;
+        }
+
+        // FILE 模式：从 sessionFile 路径推断会话目录（DB 文件的父目录）
+        if (sessionFile != null && !sessionFile.isEmpty()) {
+            File dbFile = new File(sessionFile);
+            sessionDirectory = new SessionDirectory(dbFile.getParentFile());
+            return sessionDirectory;
+        }
+
+        // AUTO/DIRECTORY 模式：调用 getEffectiveDatabasePath() 会创建会话目录
+        getEffectiveDatabasePath();
+        return sessionDirectory;
+    }
+
+    /**
+     * 设置会话目录（不持久化）
+     * 用于会话切换时设置新的会话目录
+     */
+    public void setSessionDirectory(SessionDirectory dir) {
+        this.sessionDirectory = dir;
+    }
+
+    /**
+     * 获取日志目录
+     * 优先使用会话目录下的 logs/，若会话目录不可用则回退到旧默认值
+     *
+     * @return 日志目录的 File 对象
+     */
+    public File getLogsDirectory() {
+        if (sessionDirectory != null) {
+            return sessionDirectory.getLogsDir();
+        }
+        // 回退：旧默认值
+        return new File(getDefaultBaseDirectory(), "logs");
     }
 
     /**

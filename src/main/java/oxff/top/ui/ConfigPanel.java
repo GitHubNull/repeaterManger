@@ -112,9 +112,9 @@ public class ConfigPanel extends JPanel {
         storageModeCombo.addActionListener(e -> onStorageModeChanged());
         storagePanel.add(storageModeCombo, c);
 
-        // 当前数据库文件
+        // 当前会话目录
         c.gridx = 0; c.gridy = 1; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("当前数据库:"), c);
+        storagePanel.add(new JLabel("当前会话:"), c);
 
         c.gridx = 1; c.gridy = 1; c.gridwidth = 2; c.weightx = 1.0;
         currentDbPathField = new JTextField(30);
@@ -241,8 +241,14 @@ public class ConfigPanel extends JPanel {
         dc.gridx = 1; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 1.0;
         logDirField = new JTextField(20);
         String logDir = dbManager.getConfig().getLogFileDirectory();
-        logDirField.setText(logDir != null && !logDir.isEmpty() ? logDir :
-            System.getProperty("user.dir") + "/repeater_manager/logs");
+        if (logDir != null && !logDir.isEmpty()) {
+            logDirField.setText(logDir);
+        } else {
+            // 默认使用会话目录的 logs/ 子目录
+            File sessionLogsDir = dbManager.getLogsDirectory();
+            logDirField.setText(sessionLogsDir != null ? sessionLogsDir.getAbsolutePath() :
+                System.getProperty("user.dir") + "/repeater_manager/logs");
+        }
         loggingPanel.add(logDirField, dc);
 
         dc.gridx = 2; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 0;
@@ -424,11 +430,18 @@ public class ConfigPanel extends JPanel {
     // ========== 存储配置相关方法 ==========
 
     private void updateCurrentDbPathField() {
-        String path = dbManager.getCurrentDatabasePath();
-        if (path == null) {
-            path = dbManager.getConfig().getEffectiveDatabasePath();
+        // 显示会话目录路径（比固定名称的数据库文件更有意义）
+        oxff.top.config.SessionDirectory sessionDir = dbManager.getConfig().getOrCreateSessionDirectory();
+        if (sessionDir != null) {
+            currentDbPathField.setText(sessionDir.getAbsolutePath());
+        } else {
+            // 回退：显示数据库文件路径
+            String path = dbManager.getCurrentDatabasePath();
+            if (path == null) {
+                path = dbManager.getConfig().getEffectiveDatabasePath();
+            }
+            currentDbPathField.setText(path);
         }
-        currentDbPathField.setText(path);
     }
 
     private void updateBaseDirField() {
@@ -446,20 +459,29 @@ public class ConfigPanel extends JPanel {
     }
 
     private void updateInfoArea() {
-        String path = dbManager.getCurrentDatabasePath();
-        if (path == null) {
-            path = dbManager.getConfig().getEffectiveDatabasePath();
+        oxff.top.config.SessionDirectory sessionDir = dbManager.getConfig().getOrCreateSessionDirectory();
+        String sessionDirPath = sessionDir != null ? sessionDir.getAbsolutePath() : "未创建";
+        String dbPath = dbManager.getCurrentDatabasePath();
+        if (dbPath == null) {
+            dbPath = dbManager.getConfig().getEffectiveDatabasePath();
         }
+        String blobsDir = sessionDir != null ? sessionDir.getBlobsDir().getAbsolutePath() : "-";
+        String logsDir = sessionDir != null ? sessionDir.getLogsDir().getAbsolutePath() : "-";
+
         infoArea.setText(
-            "当前数据库文件: " + path + "\n" +
+            "当前会话目录: " + sessionDirPath + "\n" +
+            "数据库文件: " + dbPath + "\n" +
+            "Body数据目录: " + blobsDir + "\n" +
+            "日志目录: " + logsDir + "\n" +
             "存储模式: " + getModeDisplayName(dbManager.getConfig().getStorageMode()) + "\n" +
             "自动保存: " + (dbManager.getConfig().isAutoSaveEnabled() ? "启用" : "禁用") + "\n" +
             "保存间隔: " + dbManager.getConfig().getAutoSaveInterval() + "分钟\n\n" +
             "说明:\n" +
-            "- 每次加载插件或重启Burp Suite都会自动生成新的数据库文件\n" +
-            "- 旧的数据库文件会保留在存储目录中\n" +
-            "- 可以配置存储目录，但文件名仍然会自动生成\n" +
-            "- 指定文件仅对当前会话有效，重启后会恢复自动命名"
+            "- 每次加载插件或重启Burp Suite都会自动生成新的会话目录\n" +
+            "- 会话目录以时间戳命名，内含数据库、body数据、日志\n" +
+            "- 旧的会话目录会保留在存储目录中\n" +
+            "- 可以配置基础存储目录，会话目录名仍然会自动生成\n" +
+            "- 指定文件模式不创建时间戳子目录，数据存放在DB文件同目录"
         );
     }
 
@@ -528,9 +550,12 @@ public class ConfigPanel extends JPanel {
             // 重置并重新初始化以使用新目录
             dbManager.resetForNewSession();
             if (dbManager.initialize()) {
+                // 重定位日志到新会话目录
+                LogManager.getInstance().relocateFileHandler(
+                    dbManager.getLogsDirectory().getAbsolutePath());
                 refreshStorageInfo();
                 JOptionPane.showMessageDialog(this,
-                    "已切换到新存储目录并生成新的数据库文件。\n旧数据在当前会话中不再可用。",
+                    "已切换到新存储目录并生成新的会话目录。\n旧数据在当前会话中不再可用。",
                     "目录已更改", JOptionPane.INFORMATION_MESSAGE);
             }
         }
@@ -544,6 +569,9 @@ public class ConfigPanel extends JPanel {
 
         dbManager.resetForNewSession();
         if (dbManager.initialize()) {
+            // 重定位日志到新会话目录
+            LogManager.getInstance().relocateFileHandler(
+                dbManager.getLogsDirectory().getAbsolutePath());
             refreshStorageInfo();
             storageModeCombo.setSelectedIndex(0);
             onStorageModeChanged();
@@ -574,6 +602,9 @@ public class ConfigPanel extends JPanel {
 
         dbManager.resetForNewSession();
         if (dbManager.initialize()) {
+            // 重定位日志到新会话目录
+            LogManager.getInstance().relocateFileHandler(
+                dbManager.getLogsDirectory().getAbsolutePath());
             refreshStorageInfo();
             JOptionPane.showMessageDialog(this,
                 "已应用会话文件名: " + file.getAbsolutePath() + "\n注意：此设置仅在当前会话有效。",

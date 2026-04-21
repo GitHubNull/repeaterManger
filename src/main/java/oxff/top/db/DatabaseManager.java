@@ -101,7 +101,7 @@ public class DatabaseManager {
     }
 
     /**
-     * 重置以开始新会话（生成新的数据库文件）
+     * 重置以开始新会话（生成新的会话目录和数据库文件）
      */
     public void resetForNewSession() {
         synchronized (connectionLock) {
@@ -119,7 +119,9 @@ public class DatabaseManager {
             }
             initialized.set(false);
             currentDbPath = null;
-            BurpExtender.printOutput("[+] 数据库管理器已重置，下次初始化将使用新数据库文件");
+            // 清除会话目录状态，下次初始化时将创建新的会话目录
+            dbConfig.setSessionDirectory(null);
+            BurpExtender.printOutput("[+] 数据库管理器已重置，下次初始化将使用新会话目录");
         }
     }
 
@@ -139,6 +141,13 @@ public class DatabaseManager {
             File dbDir = dbFile.getParentFile();
 
             BurpExtender.printOutput("[*] 数据库文件路径: " + currentDbPath);
+
+            // 确保会话目录结构完整（含 blobs/、logs/ 子目录）
+            oxff.top.config.SessionDirectory sessionDir = dbConfig.getOrCreateSessionDirectory();
+            if (sessionDir != null) {
+                sessionDir.ensureCreated();
+                BurpExtender.printOutput("[+] 会话目录: " + sessionDir.getAbsolutePath());
+            }
 
             if (!dbDir.exists()) {
                 BurpExtender.printOutput("[*] 创建数据库目录: " + dbDir.getAbsolutePath());
@@ -556,7 +565,7 @@ public class DatabaseManager {
     }
 
     /**
-     * 获取数据库文件所在目录
+     * 获取数据库文件所在目录（即会话目录）
      */
     public File getDatabaseParentDirectory() {
         String path = getDatabaseFilePath();
@@ -565,6 +574,14 @@ public class DatabaseManager {
         }
         File dbFile = new File(path);
         return dbFile.getParentFile();
+    }
+
+    /**
+     * 获取当前会话的日志目录
+     * 优先使用会话目录下的 logs/，若会话目录不可用则回退到旧默认值
+     */
+    public File getLogsDirectory() {
+        return dbConfig.getLogsDirectory();
     }
 
     /**

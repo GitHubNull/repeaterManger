@@ -43,17 +43,16 @@ public class BurpExtender implements IBurpExtender {
             // 初始化带有正确编码的输出流（保留用于LogManager之前的输出）
             initializeOutputStreams(callbacks);
 
-            // 初始化日志管理器（在数据库初始化之前）
+            // 阶段1：初始化日志管理器（仅 BurpConsoleHandler）
             logManager.initialize(callbacks);
 
-            // 从配置加载日志和代理设置
-            loadLogConfig();
+            // 阶段2：加载早期配置（日志级别、UI、控制台、代理，不含文件 Handler）
+            loadLogConfigEarly();
 
-            // 测试数据库连接和持久化
-            logManager.info("[*] 正在测试数据库连接和持久化...");
+            // 阶段3：初始化数据库（创建会话目录 + 数据库）
+            logManager.info("[*] 正在初始化数据库...");
             oxff.top.db.DatabaseManager dbManager = oxff.top.db.DatabaseManager.getInstance();
 
-            // 确保数据库初始化
             if (dbManager.initialize()) {
                 logManager.success("[+] 数据库初始化成功");
 
@@ -66,6 +65,9 @@ public class BurpExtender implements IBurpExtender {
             } else {
                 logManager.error("[!] 数据库初始化失败");
             }
+
+            // 阶段4：加载晚期配置（文件日志 Handler → 会话目录的 logs/）
+            loadLogConfigLate();
 
             // 创建UI和功能组件
             repeaterUI = new EnhancedRepeaterUI();
@@ -97,9 +99,10 @@ public class BurpExtender implements IBurpExtender {
     }
 
     /**
-     * 从配置文件加载日志和代理设置
+     * 早期配置加载 - 日志级别、UI、控制台、代理（不含文件 Handler）
+     * 在数据库初始化之前调用
      */
-    private void loadLogConfig() {
+    private void loadLogConfigEarly() {
         try {
             oxff.top.config.DatabaseConfig config =
                 oxff.top.db.DatabaseManager.getInstance().getConfig();
@@ -108,19 +111,9 @@ public class BurpExtender implements IBurpExtender {
             String levelStr = config.getProperty("log.level", "INFO");
             logManager.setLevel(LogLevel.fromName(levelStr));
 
-            // 文件日志
+            // 文件日志开关（先记录状态，Handler 在 loadLogConfigLate 中创建）
             boolean fileEnabled = Boolean.parseBoolean(config.getProperty("log.file.enabled", "true"));
             logManager.setFileLoggingEnabled(fileEnabled);
-
-            if (fileEnabled) {
-                String logDir = config.getProperty("log.file.directory", "");
-                if (logDir == null || logDir.isEmpty()) {
-                    logDir = System.getProperty("user.dir") + "/repeater_manager/logs";
-                }
-                long maxSize = Long.parseLong(config.getProperty("log.file.max_size", "5242880"));
-                int maxBackups = Integer.parseInt(config.getProperty("log.file.max_backups", "5"));
-                logManager.initializeFileHandler(logDir, maxSize, maxBackups);
-            }
 
             // UI日志
             boolean uiEnabled = Boolean.parseBoolean(config.getProperty("log.ui.enabled", "true"));
@@ -135,7 +128,44 @@ public class BurpExtender implements IBurpExtender {
             proxyConfig.loadFromConfig(config);
         } catch (Exception e) {
             // 配置加载失败不应阻止插件运行
-            System.err.println("加载日志配置失败: " + e.getMessage());
+            System.err.println("加载早期日志配置失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 晚期配置加载 - 文件日志 Handler
+     * 在数据库初始化之后调用，将会话目录的 logs/ 子目录作为日志目录
+     */
+    private void loadLogConfigLate() {
+        try {
+            oxff.top.config.DatabaseConfig config =
+                oxff.top.db.DatabaseManager.getInstance().getConfig();
+
+            boolean fileEnabled = config.isLogFileEnabled();
+            if (!fileEnabled) {
+                return;
+            }
+
+            // 确定日志目录：优先使用用户自定义目录，否则使用会话目录的 logs/
+            String logDir = config.getLogFileDirectory();
+            if (logDir == null || logDir.isEmpty()) {
+                // 使用会话目录的 logs/ 子目录
+                java.io.File sessionLogsDir = oxff.top.db.DatabaseManager.getInstance().getLogsDirectory();
+                if (sessionLogsDir != null) {
+                    logDir = sessionLogsDir.getAbsolutePath();
+                } else {
+                    // 回退到旧默认值
+                    logDir = System.getProperty("user.dir") + "/repeater_manager/logs";
+                }
+            }
+
+            long maxSize = config.getLogFileMaxSize();
+            int maxBackups = config.getLogFileMaxBackups();
+            logManager.initializeFileHandler(logDir, maxSize, maxBackups);
+            logManager.info("[+] 文件日志已初始化: " + logDir);
+        } catch (Exception e) {
+            // 文件日志初始化失败不应阻止插件运行
+            System.err.println("加载晚期日志配置失败: " + e.getMessage());
         }
     }
 
