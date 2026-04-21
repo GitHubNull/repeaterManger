@@ -14,35 +14,38 @@ import java.awt.*;
 import java.io.File;
 
 /**
- * 配置面板 - 用于配置存储和数据导入导出功能
+ * 配置面板 - 使用子标签页组织不同类别的配置项
  */
 public class ConfigPanel extends JPanel {
     private final DatabaseManager dbManager;
 
     // 存储配置UI组件
-    private final JComboBox<String> storageModeCombo;
-    private final JTextField currentDbPathField;
-    private final JTextField baseDirField;
-    private final JButton browseDirButton;
-    private final JButton resetDirButton;
-    private final JTextField sessionFileField;
-    private final JButton applySessionFileButton;
-    private final JCheckBox autoSaveCheckbox;
-    private final JComboBox<String> saveIntervalCombo;
+    private JComboBox<String> storageModeCombo;
+    private JTextField currentDbPathField;
+    private JTextField baseDirField;
+    private JButton browseDirButton;
+    private JButton resetDirButton;
+    private JTextField sessionFileField;
+    private JButton applySessionFileButton;
+    private JCheckBox autoSaveCheckbox;
+    private JComboBox<String> saveIntervalCombo;
+    private JTextArea infoArea;
 
-    // 日志与调试配置UI组件
-    private final JComboBox<String> logLevelCombo;
-    private final JCheckBox fileLogCheckbox;
-    private final JTextField logDirField;
-    private final JButton browseLogDirButton;
-    private final JComboBox<String> maxFileSizeCombo;
-    private final JComboBox<String> maxBackupCombo;
-    private final JCheckBox uiLogCheckbox;
-    private final JComboBox<String> maxEntriesCombo;
-    private final JCheckBox burpConsoleCheckbox;
-    private final JCheckBox proxyEnabledCheckbox;
-    private final JTextField proxyHostField;
-    private final JTextField proxyPortField;
+    // 日志配置UI组件
+    private JComboBox<String> logLevelCombo;
+    private JCheckBox fileLogCheckbox;
+    private JTextField logDirField;
+    private JButton browseLogDirButton;
+    private JComboBox<String> maxFileSizeCombo;
+    private JComboBox<String> maxBackupCombo;
+    private JCheckBox uiLogCheckbox;
+    private JComboBox<String> maxEntriesCombo;
+    private JCheckBox burpConsoleCheckbox;
+
+    // 代理配置UI组件
+    private JCheckBox proxyEnabledCheckbox;
+    private JTextField proxyHostField;
+    private JTextField proxyPortField;
 
     /**
      * 创建配置面板
@@ -52,7 +55,38 @@ public class ConfigPanel extends JPanel {
 
         dbManager = DatabaseManager.getInstance();
 
-        // 创建存储配置区域
+        // ===== 创建子标签页 =====
+        JTabbedPane configTabbedPane = new JTabbedPane(JTabbedPane.TOP);
+
+        // ----- 存储配置标签页 -----
+        JPanel storageTab = createStorageTab();
+        configTabbedPane.addTab("存储配置", storageTab);
+
+        // ----- 日志标签页 -----
+        JPanel loggingTab = createLoggingTab();
+        configTabbedPane.addTab("日志", loggingTab);
+
+        // ----- 代理调试标签页 -----
+        JPanel proxyTab = createProxyTab();
+        configTabbedPane.addTab("代理调试", proxyTab);
+
+        // ----- 数据导入导出标签页 -----
+        JPanel ioTab = createDataIOTab();
+        configTabbedPane.addTab("数据导入导出", ioTab);
+
+        add(configTabbedPane, BorderLayout.CENTER);
+
+        // 初始化UI状态
+        onStorageModeChanged();
+    }
+
+    /**
+     * 创建存储配置标签页
+     */
+    private JPanel createStorageTab() {
+        JPanel tab = new JPanel(new BorderLayout());
+
+        // 存储设置区域
         JPanel storagePanel = new JPanel(new GridBagLayout());
         storagePanel.setBorder(BorderFactory.createTitledBorder("存储配置"));
 
@@ -153,51 +187,72 @@ public class ConfigPanel extends JPanel {
         saveConfigButton.addActionListener(e -> saveConfig());
         storagePanel.add(saveConfigButton, c);
 
-        // ===== 日志与调试配置区域 =====
-        JPanel debugPanel = new JPanel(new GridBagLayout());
-        debugPanel.setBorder(BorderFactory.createTitledBorder("日志与调试配置"));
+        tab.add(storagePanel, BorderLayout.NORTH);
+
+        // 数据库信息区域
+        JPanel infoPanel = new JPanel(new BorderLayout());
+        infoPanel.setBorder(BorderFactory.createTitledBorder("数据库信息"));
+
+        infoArea = new JTextArea(10, 40);
+        infoArea.setEditable(false);
+        updateInfoArea();
+        infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
+
+        tab.add(infoPanel, BorderLayout.CENTER);
+
+        return tab;
+    }
+
+    /**
+     * 创建日志配置标签页
+     */
+    private JPanel createLoggingTab() {
+        JPanel tab = new JPanel(new BorderLayout());
+
+        JPanel loggingPanel = new JPanel(new GridBagLayout());
+        loggingPanel.setBorder(BorderFactory.createTitledBorder("日志配置"));
+
         GridBagConstraints dc = new GridBagConstraints();
         dc.fill = GridBagConstraints.HORIZONTAL;
         dc.insets = new Insets(5, 5, 5, 5);
 
         // 日志级别
         dc.gridx = 0; dc.gridy = 0; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("日志级别:"), dc);
+        loggingPanel.add(new JLabel("日志级别:"), dc);
 
         dc.gridx = 1; dc.gridy = 0; dc.gridwidth = 2; dc.weightx = 1.0;
         logLevelCombo = new JComboBox<>(new String[]{"DEBUG", "INFO", "WARN", "ERROR"});
         String currentLevel = dbManager.getConfig().getLogLevel();
         logLevelCombo.setSelectedItem(currentLevel);
-        debugPanel.add(logLevelCombo, dc);
+        loggingPanel.add(logLevelCombo, dc);
 
         // 文件日志开关
         dc.gridx = 0; dc.gridy = 1; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("文件日志:"), dc);
+        loggingPanel.add(new JLabel("文件日志:"), dc);
 
         dc.gridx = 1; dc.gridy = 1; dc.gridwidth = 1; dc.weightx = 0;
         fileLogCheckbox = new JCheckBox("启用", dbManager.getConfig().isLogFileEnabled());
-        debugPanel.add(fileLogCheckbox, dc);
+        loggingPanel.add(fileLogCheckbox, dc);
 
-        dc.gridx = 2; dc.gridy = 1; dc.gridwidth = 1; dc.weightx = 1.0;
         // 日志目录行
         dc.gridx = 0; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("日志目录:"), dc);
+        loggingPanel.add(new JLabel("日志目录:"), dc);
 
         dc.gridx = 1; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 1.0;
         logDirField = new JTextField(20);
         String logDir = dbManager.getConfig().getLogFileDirectory();
         logDirField.setText(logDir != null && !logDir.isEmpty() ? logDir :
             System.getProperty("user.dir") + "/repeater_manager/logs");
-        debugPanel.add(logDirField, dc);
+        loggingPanel.add(logDirField, dc);
 
         dc.gridx = 2; dc.gridy = 2; dc.gridwidth = 1; dc.weightx = 0;
         browseLogDirButton = new JButton("浏览...");
         browseLogDirButton.addActionListener(e -> browseForLogDirectory());
-        debugPanel.add(browseLogDirButton, dc);
+        loggingPanel.add(browseLogDirButton, dc);
 
         // 单文件大小限制
         dc.gridx = 0; dc.gridy = 3; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("单文件大小:"), dc);
+        loggingPanel.add(new JLabel("单文件大小:"), dc);
 
         dc.gridx = 1; dc.gridy = 3; dc.gridwidth = 2; dc.weightx = 1.0;
         maxFileSizeCombo = new JComboBox<>(new String[]{"1 MB", "5 MB", "10 MB", "50 MB"});
@@ -206,11 +261,11 @@ public class ConfigPanel extends JPanel {
         else if (currentMaxSize <= 5242880) maxFileSizeCombo.setSelectedIndex(1);
         else if (currentMaxSize <= 10485760) maxFileSizeCombo.setSelectedIndex(2);
         else maxFileSizeCombo.setSelectedIndex(3);
-        debugPanel.add(maxFileSizeCombo, dc);
+        loggingPanel.add(maxFileSizeCombo, dc);
 
         // 最大备份数
         dc.gridx = 0; dc.gridy = 4; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("最大备份数:"), dc);
+        loggingPanel.add(new JLabel("最大备份数:"), dc);
 
         dc.gridx = 1; dc.gridy = 4; dc.gridwidth = 2; dc.weightx = 1.0;
         maxBackupCombo = new JComboBox<>(new String[]{"3", "5", "10", "20"});
@@ -219,82 +274,109 @@ public class ConfigPanel extends JPanel {
         else if (currentBackups <= 5) maxBackupCombo.setSelectedIndex(1);
         else if (currentBackups <= 10) maxBackupCombo.setSelectedIndex(2);
         else maxBackupCombo.setSelectedIndex(3);
-        debugPanel.add(maxBackupCombo, dc);
+        loggingPanel.add(maxBackupCombo, dc);
 
-        // UI日志开关
+        // UI日志开关 + 最大条目数（放在同一行）
         dc.gridx = 0; dc.gridy = 5; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("UI日志:"), dc);
+        loggingPanel.add(new JLabel("UI日志:"), dc);
 
-        dc.gridx = 1; dc.gridy = 5; dc.gridwidth = 1; dc.weightx = 0;
+        dc.gridx = 1; dc.gridy = 5; dc.gridwidth = 2; dc.weightx = 1.0;
         uiLogCheckbox = new JCheckBox("启用", dbManager.getConfig().isLogUIEnabled());
-        debugPanel.add(uiLogCheckbox, dc);
-
-        dc.gridx = 2; dc.gridy = 5; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("最大条目数:"), dc);
-
-        // 最大条目数（放在同一行）
-        JPanel maxEntriesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         maxEntriesCombo = new JComboBox<>(new String[]{"128", "256", "512", "1024"});
         int currentMaxEntries = dbManager.getConfig().getLogUIMaxEntries();
         if (currentMaxEntries <= 128) maxEntriesCombo.setSelectedIndex(0);
         else if (currentMaxEntries <= 256) maxEntriesCombo.setSelectedIndex(1);
         else if (currentMaxEntries <= 512) maxEntriesCombo.setSelectedIndex(2);
         else maxEntriesCombo.setSelectedIndex(3);
-        maxEntriesPanel.add(maxEntriesCombo);
 
-        // 这里将最大条目数放在第5行后面（通过修改gridx）
-        dc.gridx = 1; dc.gridy = 5; dc.gridwidth = 2; dc.weightx = 1.0;
         JPanel uiLogRowPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         uiLogRowPanel.add(uiLogCheckbox);
         uiLogRowPanel.add(new JLabel("最大条目数:"));
         uiLogRowPanel.add(maxEntriesCombo);
-        debugPanel.add(uiLogRowPanel, dc);
+        loggingPanel.add(uiLogRowPanel, dc);
 
         // Burp控制台开关
         dc.gridx = 0; dc.gridy = 6; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("Burp控制台:"), dc);
+        loggingPanel.add(new JLabel("Burp控制台:"), dc);
 
         dc.gridx = 1; dc.gridy = 6; dc.gridwidth = 2; dc.weightx = 1.0;
         burpConsoleCheckbox = new JCheckBox("启用Burp控制台输出", dbManager.getConfig().isLogBurpConsoleEnabled());
-        debugPanel.add(burpConsoleCheckbox, dc);
+        loggingPanel.add(burpConsoleCheckbox, dc);
 
-        // 代理配置分隔
-        dc.gridx = 0; dc.gridy = 7; dc.gridwidth = 3; dc.weightx = 1.0;
-        debugPanel.add(new JSeparator(), dc);
+        // 保存日志配置按钮
+        dc.gridx = 1; dc.gridy = 7; dc.gridwidth = 2; dc.weightx = 0;
+        dc.anchor = GridBagConstraints.EAST;
+        JButton saveLoggingConfigButton = new JButton("保存日志配置");
+        saveLoggingConfigButton.addActionListener(e -> saveLoggingConfig());
+        loggingPanel.add(saveLoggingConfigButton, dc);
+
+        tab.add(loggingPanel, BorderLayout.NORTH);
+
+        return tab;
+    }
+
+    /**
+     * 创建代理调试标签页
+     */
+    private JPanel createProxyTab() {
+        JPanel tab = new JPanel(new BorderLayout());
+
+        JPanel proxyPanel = new JPanel(new GridBagLayout());
+        proxyPanel.setBorder(BorderFactory.createTitledBorder("HTTP代理配置"));
+
+        GridBagConstraints pc = new GridBagConstraints();
+        pc.fill = GridBagConstraints.HORIZONTAL;
+        pc.insets = new Insets(5, 5, 5, 5);
+
+        // 说明文字
+        pc.gridx = 0; pc.gridy = 0; pc.gridwidth = 3; pc.weightx = 1.0;
+        JLabel descLabel = new JLabel("配置HTTP代理用于调试，代理将影响插件发出的所有HTTP请求");
+        descLabel.setForeground(new Color(100, 100, 100));
+        proxyPanel.add(descLabel, pc);
 
         // HTTP代理开关
-        dc.gridx = 0; dc.gridy = 8; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("HTTP代理:"), dc);
+        pc.gridx = 0; pc.gridy = 1; pc.gridwidth = 1; pc.weightx = 0;
+        proxyPanel.add(new JLabel("HTTP代理:"), pc);
 
-        dc.gridx = 1; dc.gridy = 8; dc.gridwidth = 2; dc.weightx = 1.0;
+        pc.gridx = 1; pc.gridy = 1; pc.gridwidth = 2; pc.weightx = 1.0;
         ProxyConfig proxyConfig = ProxyConfig.getInstance();
         proxyEnabledCheckbox = new JCheckBox("启用代理（调试用）", proxyConfig.isProxyEnabled());
-        debugPanel.add(proxyEnabledCheckbox, dc);
+        proxyPanel.add(proxyEnabledCheckbox, pc);
 
         // 代理主机
-        dc.gridx = 0; dc.gridy = 9; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("代理主机:"), dc);
+        pc.gridx = 0; pc.gridy = 2; pc.gridwidth = 1; pc.weightx = 0;
+        proxyPanel.add(new JLabel("代理主机:"), pc);
 
-        dc.gridx = 1; dc.gridy = 9; dc.gridwidth = 2; dc.weightx = 1.0;
+        pc.gridx = 1; pc.gridy = 2; pc.gridwidth = 2; pc.weightx = 1.0;
         proxyHostField = new JTextField(proxyConfig.getProxyHost(), 20);
-        debugPanel.add(proxyHostField, dc);
+        proxyPanel.add(proxyHostField, pc);
 
         // 代理端口
-        dc.gridx = 0; dc.gridy = 10; dc.gridwidth = 1; dc.weightx = 0;
-        debugPanel.add(new JLabel("代理端口:"), dc);
+        pc.gridx = 0; pc.gridy = 3; pc.gridwidth = 1; pc.weightx = 0;
+        proxyPanel.add(new JLabel("代理端口:"), pc);
 
-        dc.gridx = 1; dc.gridy = 10; dc.gridwidth = 2; dc.weightx = 1.0;
+        pc.gridx = 1; pc.gridy = 3; pc.gridwidth = 2; pc.weightx = 1.0;
         proxyPortField = new JTextField(String.valueOf(proxyConfig.getProxyPort()), 10);
-        debugPanel.add(proxyPortField, dc);
+        proxyPanel.add(proxyPortField, pc);
 
-        // 保存配置按钮（调试区域）
-        dc.gridx = 1; dc.gridy = 11; dc.gridwidth = 2; dc.weightx = 0;
-        dc.anchor = GridBagConstraints.EAST;
-        JButton saveDebugConfigButton = new JButton("保存日志与调试配置");
-        saveDebugConfigButton.addActionListener(e -> saveDebugConfig());
-        debugPanel.add(saveDebugConfigButton, dc);
+        // 保存代理配置按钮
+        pc.gridx = 1; pc.gridy = 4; pc.gridwidth = 2; pc.weightx = 0;
+        pc.anchor = GridBagConstraints.EAST;
+        JButton saveProxyConfigButton = new JButton("保存代理配置");
+        saveProxyConfigButton.addActionListener(e -> saveProxyConfig());
+        proxyPanel.add(saveProxyConfigButton, pc);
 
-        // 导入导出面板
+        tab.add(proxyPanel, BorderLayout.NORTH);
+
+        return tab;
+    }
+
+    /**
+     * 创建数据导入导出标签页
+     */
+    private JPanel createDataIOTab() {
+        JPanel tab = new JPanel(new BorderLayout());
+
         JPanel ioPanel = new JPanel(new BorderLayout());
         ioPanel.setBorder(BorderFactory.createTitledBorder("数据导入导出"));
 
@@ -332,32 +414,12 @@ public class ConfigPanel extends JPanel {
 
         ioPanel.add(rowsPanel, BorderLayout.CENTER);
 
-        // 创建顶部面板
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.add(storagePanel, BorderLayout.NORTH);
+        tab.add(ioPanel, BorderLayout.NORTH);
 
-        // 中间面板包含日志配置和导入导出
-        JPanel middlePanel = new JPanel(new BorderLayout());
-        middlePanel.add(debugPanel, BorderLayout.NORTH);
-        middlePanel.add(ioPanel, BorderLayout.CENTER);
-        topPanel.add(middlePanel, BorderLayout.CENTER);
-
-        add(topPanel, BorderLayout.NORTH);
-
-        // 信息面板
-        JPanel infoPanel = new JPanel(new BorderLayout());
-        infoPanel.setBorder(BorderFactory.createTitledBorder("数据库信息"));
-
-        JTextArea infoArea = new JTextArea(10, 40);
-        infoArea.setEditable(false);
-        updateInfoArea(infoArea);
-        infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
-
-        add(infoPanel, BorderLayout.CENTER);
-
-        // 初始化UI状态
-        onStorageModeChanged();
+        return tab;
     }
+
+    // ========== 存储配置相关方法 ==========
 
     private void updateCurrentDbPathField() {
         String path = dbManager.getCurrentDatabasePath();
@@ -381,7 +443,7 @@ public class ConfigPanel extends JPanel {
         }
     }
 
-    private void updateInfoArea(JTextArea infoArea) {
+    private void updateInfoArea() {
         String path = dbManager.getCurrentDatabasePath();
         if (path == null) {
             path = dbManager.getConfig().getEffectiveDatabasePath();
@@ -397,6 +459,15 @@ public class ConfigPanel extends JPanel {
             "- 可以配置存储目录，但文件名仍然会自动生成\n" +
             "- 指定文件仅对当前会话有效，重启后会恢复自动命名"
         );
+    }
+
+    /**
+     * 刷新存储配置标签页中的信息
+     */
+    public void refreshStorageInfo() {
+        updateCurrentDbPathField();
+        updateBaseDirField();
+        updateInfoArea();
     }
 
     private String getModeDisplayName(String mode) {
@@ -455,7 +526,7 @@ public class ConfigPanel extends JPanel {
             // 重置并重新初始化以使用新目录
             dbManager.resetForNewSession();
             if (dbManager.initialize()) {
-                updateCurrentDbPathField();
+                refreshStorageInfo();
                 JOptionPane.showMessageDialog(this,
                     "已切换到新存储目录并生成新的数据库文件。\n旧数据在当前会话中不再可用。",
                     "目录已更改", JOptionPane.INFORMATION_MESSAGE);
@@ -471,7 +542,7 @@ public class ConfigPanel extends JPanel {
 
         dbManager.resetForNewSession();
         if (dbManager.initialize()) {
-            updateCurrentDbPathField();
+            refreshStorageInfo();
             storageModeCombo.setSelectedIndex(0);
             onStorageModeChanged();
             JOptionPane.showMessageDialog(this,
@@ -501,7 +572,7 @@ public class ConfigPanel extends JPanel {
 
         dbManager.resetForNewSession();
         if (dbManager.initialize()) {
-            updateCurrentDbPathField();
+            refreshStorageInfo();
             JOptionPane.showMessageDialog(this,
                 "已应用会话文件名: " + file.getAbsolutePath() + "\n注意：此设置仅在当前会话有效。",
                 "应用成功", JOptionPane.INFORMATION_MESSAGE);
@@ -552,10 +623,12 @@ public class ConfigPanel extends JPanel {
         }
     }
 
+    // ========== 日志配置相关方法 ==========
+
     /**
-     * 保存日志与调试配置
+     * 保存日志配置
      */
-    private void saveDebugConfig() {
+    private void saveLoggingConfig() {
         DatabaseConfig config = dbManager.getConfig();
         LogManager logManager = LogManager.getInstance();
 
@@ -598,25 +671,13 @@ public class ConfigPanel extends JPanel {
         config.setLogBurpConsoleEnabled(burpEnabled);
         logManager.setBurpConsoleEnabled(burpEnabled);
 
-        // 代理配置
-        ProxyConfig proxyConfig = ProxyConfig.getInstance();
-        proxyConfig.setProxyEnabled(proxyEnabledCheckbox.isSelected());
-        proxyConfig.setProxyHost(proxyHostField.getText().trim());
-        try {
-            proxyConfig.setProxyPort(Integer.parseInt(proxyPortField.getText().trim()));
-        } catch (NumberFormatException e) {
-            proxyConfig.setProxyPort(8080);
-            proxyPortField.setText("8080");
-        }
-        proxyConfig.saveToConfig(config);
-
         if (config.saveConfig()) {
-            logManager.success("[+] 日志与调试配置已保存");
+            logManager.success("[+] 日志配置已保存");
             JOptionPane.showMessageDialog(this,
-                "日志与调试配置已保存并生效。\n注意：文件日志目录和大小变更需重启后完全生效。",
+                "日志配置已保存并生效。\n注意：文件日志目录和大小变更需重启后完全生效。",
                 "保存成功", JOptionPane.INFORMATION_MESSAGE);
         } else {
-            logManager.error("[!] 保存日志与调试配置失败");
+            logManager.error("[!] 保存日志配置失败");
             JOptionPane.showMessageDialog(this,
                 "保存配置失败，请检查权限或路径。", "保存失败", JOptionPane.ERROR_MESSAGE);
         }
@@ -643,7 +704,40 @@ public class ConfigPanel extends JPanel {
         }
     }
 
-    // 导出导入方法
+    // ========== 代理配置相关方法 ==========
+
+    /**
+     * 保存代理配置
+     */
+    private void saveProxyConfig() {
+        DatabaseConfig config = dbManager.getConfig();
+        LogManager logManager = LogManager.getInstance();
+        ProxyConfig proxyConfig = ProxyConfig.getInstance();
+
+        proxyConfig.setProxyEnabled(proxyEnabledCheckbox.isSelected());
+        proxyConfig.setProxyHost(proxyHostField.getText().trim());
+        try {
+            proxyConfig.setProxyPort(Integer.parseInt(proxyPortField.getText().trim()));
+        } catch (NumberFormatException e) {
+            proxyConfig.setProxyPort(8080);
+            proxyPortField.setText("8080");
+        }
+        proxyConfig.saveToConfig(config);
+
+        if (config.saveConfig()) {
+            logManager.success("[+] 代理配置已保存");
+            JOptionPane.showMessageDialog(this,
+                "代理配置已保存。",
+                "保存成功", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            logManager.error("[!] 保存代理配置失败");
+            JOptionPane.showMessageDialog(this,
+                "保存配置失败，请检查权限或路径。", "保存失败", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // ========== 数据导入导出方法 ==========
+
     private void exportDatabase() {
         try {
             BurpExtender.printOutput("[*] 正在启动SQLite数据库导出...");
@@ -661,6 +755,7 @@ public class ConfigPanel extends JPanel {
             BurpExtender.printOutput("[*] 正在启动SQLite数据库导入...");
             DataImporter importer = new DataImporter();
             importer.importFromSQLite(this);
+            refreshStorageInfo();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
@@ -685,6 +780,7 @@ public class ConfigPanel extends JPanel {
             BurpExtender.printOutput("[*] 正在启动Postman Collection导入...");
             DataImporter importer = new DataImporter();
             importer.importFromPostman(this);
+            refreshStorageInfo();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
@@ -697,6 +793,7 @@ public class ConfigPanel extends JPanel {
             BurpExtender.printOutput("[*] 正在启动智能导入...");
             DataImporter importer = new DataImporter();
             importer.smartImport(this);
+            refreshStorageInfo();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
