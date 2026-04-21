@@ -18,7 +18,6 @@ public class FormatDetector {
     public enum ImportFormat {
         SQLITE3,
         POSTMAN_V21,
-        CUSTOM_JSON,
         UNKNOWN
     }
 
@@ -89,11 +88,6 @@ public class FormatDetector {
                 return ImportFormat.POSTMAN_V21;
             }
 
-            // 检测自定义JSON格式
-            if (isCustomJsonFormat(rootObject)) {
-                return ImportFormat.CUSTOM_JSON;
-            }
-
             // 备用检测：如果有item数组且第一个元素有request，也认为是Postman
             if (rootObject.has("item") && rootObject.get("item").isJsonArray()) {
                 return ImportFormat.POSTMAN_V21;
@@ -137,11 +131,4 @@ public class FormatDetector {
         return false;
     }
 
-    /**
-     * 判断是否为自定义JSON格式
-     */
-    private static boolean isCustomJsonFormat(JsonObject rootObject) {
-        // 自定义格式必须有requests和history字段
-        return rootObject.has("requests") && rootObject.has("history");
-    }
 }

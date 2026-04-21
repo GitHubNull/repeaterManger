@@ -8,12 +8,10 @@ import java.awt.Component;
 public class DataExporter {
 
     private final SQLiteExporter sqliteExporter;
-    private final CustomJsonExporter jsonExporter;
     private final PostmanExporter postmanExporter;
 
     public DataExporter() {
         this.sqliteExporter = new SQLiteExporter();
-        this.jsonExporter = new CustomJsonExporter();
         this.postmanExporter = new PostmanExporter();
     }
 
@@ -22,13 +20,6 @@ public class DataExporter {
      */
     public boolean exportToSQLite(Component parent) {
         return sqliteExporter.export(parent);
-    }
-
-    /**
-     * 导出到自定义JSON格式
-     */
-    public boolean exportToJson(Component parent) {
-        return jsonExporter.export(parent);
     }
 
     /**

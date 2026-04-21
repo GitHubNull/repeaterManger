@@ -14,12 +14,10 @@ import java.io.File;
 public class DataImporter {
 
     private final SQLiteImporter sqliteImporter;
-    private final CustomJsonImporter jsonImporter;
     private final PostmanImporter postmanImporter;
 
     public DataImporter() {
         this.sqliteImporter = new SQLiteImporter();
-        this.jsonImporter = new CustomJsonImporter();
         this.postmanImporter = new PostmanImporter();
     }
 
@@ -52,12 +50,10 @@ public class DataImporter {
                 return sqliteImporter.importFromFile(parent);
             case POSTMAN_V21:
                 return postmanImporter.importFromFile(parent);
-            case CUSTOM_JSON:
-                return jsonImporter.importFromFile(parent);
             case UNKNOWN:
             default:
                 JOptionPane.showMessageDialog(parent,
-                    "无法识别的文件格式。\n支持的格式: SQLite3 (.sqlite3, .db), Postman Collection v2.1 (.json), 自定义JSON (.json)",
+                    "无法识别的文件格式。\n支持的格式: SQLite3 (.sqlite3, .db), Postman Collection v2.1 (.json)",
                     "格式错误", JOptionPane.ERROR_MESSAGE);
                 return false;
         }
@@ -68,13 +64,6 @@ public class DataImporter {
      */
     public boolean importFromSQLite(Component parent) {
         return sqliteImporter.importFromFile(parent);
-    }
-
-    /**
-     * 从自定义JSON导入
-     */
-    public boolean importFromJson(Component parent) {
-        return jsonImporter.importFromFile(parent);
     }
 
     /**

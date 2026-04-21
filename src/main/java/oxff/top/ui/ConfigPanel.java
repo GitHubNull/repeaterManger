@@ -312,17 +312,6 @@ public class ConfigPanel extends JPanel {
         sqliteRow.add(importDbButton);
         rowsPanel.add(sqliteRow);
 
-        // JSON行
-        JPanel jsonRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        jsonRow.add(new JLabel("JSON (.json):"));
-        JButton exportJsonButton = new JButton("导出");
-        exportJsonButton.addActionListener(e -> exportToJson());
-        jsonRow.add(exportJsonButton);
-        JButton importJsonButton = new JButton("导入");
-        importJsonButton.addActionListener(e -> importFromJson());
-        jsonRow.add(importJsonButton);
-        rowsPanel.add(jsonRow);
-
         // Postman行
         JPanel postmanRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         postmanRow.add(new JLabel("Postman v2.1 (.json):"));
@@ -672,30 +661,6 @@ public class ConfigPanel extends JPanel {
             BurpExtender.printOutput("[*] 正在启动SQLite数据库导入...");
             DataImporter importer = new DataImporter();
             importer.importFromSQLite(this);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
-        }
-    }
-
-    private void exportToJson() {
-        try {
-            BurpExtender.printOutput("[*] 正在启动JSON数据导出...");
-            DataExporter exporter = new DataExporter();
-            exporter.exportToJson(this);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导出操作发生错误: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
-        }
-    }
-
-    private void importFromJson() {
-        try {
-            BurpExtender.printOutput("[*] 正在启动JSON数据导入...");
-            DataImporter importer = new DataImporter();
-            importer.importFromJson(this);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
