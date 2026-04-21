@@ -24,6 +24,17 @@ public class RequestResponseRecord {
     private Color color;               // 标记颜色
     private byte[] requestData;        // 原始请求数据
     private byte[] responseData;       // 原始响应数据
+
+    // ---- 去重存储引用字段（DAO 层使用，上层代码无需感知） ----
+    private String domainHash;          // → string_pool.hash
+    private String pathHash;            // → string_pool.hash
+    private String queryHash;           // → string_pool.hash
+    private String reqHeaderHash;       // → header_pool.hash
+    private String reqBodyHash;         // → body_pool.hash / file_pool.hash
+    private String reqBodyStorage;      // "inline" | "file" | "none"
+    private String respHeaderHash;      // → header_pool.hash
+    private String respBodyHash;        // → body_pool.hash / file_pool.hash
+    private String respBodyStorage;     // "inline" | "file" | "none"
     
     /**
      * 默认构造函数
@@ -298,6 +309,35 @@ public class RequestResponseRecord {
     public void setResponseData(byte[] responseData) {
         this.responseData = responseData;
     }
+
+    // ---- 去重存储字段 Getters/Setters ----
+
+    public String getDomainHash() { return domainHash; }
+    public void setDomainHash(String domainHash) { this.domainHash = domainHash; }
+
+    public String getPathHash() { return pathHash; }
+    public void setPathHash(String pathHash) { this.pathHash = pathHash; }
+
+    public String getQueryHash() { return queryHash; }
+    public void setQueryHash(String queryHash) { this.queryHash = queryHash; }
+
+    public String getReqHeaderHash() { return reqHeaderHash; }
+    public void setReqHeaderHash(String reqHeaderHash) { this.reqHeaderHash = reqHeaderHash; }
+
+    public String getReqBodyHash() { return reqBodyHash; }
+    public void setReqBodyHash(String reqBodyHash) { this.reqBodyHash = reqBodyHash; }
+
+    public String getReqBodyStorage() { return reqBodyStorage; }
+    public void setReqBodyStorage(String reqBodyStorage) { this.reqBodyStorage = reqBodyStorage; }
+
+    public String getRespHeaderHash() { return respHeaderHash; }
+    public void setRespHeaderHash(String respHeaderHash) { this.respHeaderHash = respHeaderHash; }
+
+    public String getRespBodyHash() { return respBodyHash; }
+    public void setRespBodyHash(String respBodyHash) { this.respBodyHash = respBodyHash; }
+
+    public String getRespBodyStorage() { return respBodyStorage; }
+    public void setRespBodyStorage(String respBodyStorage) { this.respBodyStorage = respBodyStorage; }
     
     /**
      * 获取截断后的备注文本用于表格显示

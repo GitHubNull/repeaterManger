@@ -14,9 +14,15 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.EnumSet;
 
 /**
  * SQLite数据库导出器
@@ -91,6 +97,16 @@ public class SQLiteExporter {
             // 复制数据库文件
             copyFile(sourceDb, outputFile);
 
+            // 复制 blobs/ 目录（v2 Schema 的文件型 Body 存储）
+            File sourceDir = sourceDb.getParentFile();
+            File sourceBlobs = new File(sourceDir, "blobs");
+            if (sourceBlobs.exists() && sourceBlobs.isDirectory()) {
+                File outputDir = outputFile.getParentFile();
+                File targetBlobs = new File(outputDir, "blobs");
+                copyDirectory(sourceBlobs, targetBlobs);
+                BurpExtender.printOutput("[+] blobs/ 目录已复制");
+            }
+
             BurpExtender.printOutput("[+] 数据导出成功: " + outputFile.getAbsolutePath());
             JOptionPane.showMessageDialog(parent,
                 "SQLite数据库导出成功！\n文件: " + outputFile.getAbsolutePath(),
@@ -140,5 +156,33 @@ public class SQLiteExporter {
                 position += inChannel.transferTo(position, 1024 * 1024, outChannel);
             }
         }
+    }
+
+    /**
+     * 递归复制目录
+     */
+    private void copyDirectory(File source, File target) throws IOException {
+        if (!source.exists()) return;
+
+        Path sourcePath = source.toPath();
+        Path targetPath = target.toPath();
+
+        java.nio.file.Files.walkFileTree(sourcePath, EnumSet.noneOf(FileVisitOption.class), Integer.MAX_VALUE,
+            new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                    Path relative = sourcePath.relativize(dir);
+                    Path targetDir = targetPath.resolve(relative);
+                    java.nio.file.Files.createDirectories(targetDir);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Path relative = sourcePath.relativize(file);
+                    java.nio.file.Files.copy(file, targetPath.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
     }
 }

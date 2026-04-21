@@ -2,20 +2,29 @@ package oxff.top.io;
 
 import burp.BurpExtender;
 import oxff.top.db.DatabaseManager;
+import oxff.top.db.HistoryDAO;
+import oxff.top.db.RequestDAO;
+import oxff.top.http.RequestResponseRecord;
 
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.Color;
 import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.EnumSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -101,6 +110,15 @@ public class SQLiteImporter {
         Files.copy(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
         BurpExtender.printOutput("[+] 已复制数据库文件到: " + targetFile.getAbsolutePath());
 
+        // 复制 blobs/ 目录（v2 Schema 的文件型 Body 存储）
+        File sourceDir = sourceFile.getParentFile();
+        File sourceBlobs = new File(sourceDir, "blobs");
+        if (sourceBlobs.exists() && sourceBlobs.isDirectory()) {
+            File targetBlobs = new File(targetDir, "blobs");
+            copyDirectory(sourceBlobs, targetBlobs);
+            BurpExtender.printOutput("[+] blobs/ 目录已复制");
+        }
+
         // 设置为当前会话文件并重新初始化
         dbManager.getConfig().setSessionFile(newDbPath);
         dbManager.resetForNewSession();
@@ -118,6 +136,7 @@ public class SQLiteImporter {
 
     /**
      * 从SQLite数据库直接导入数据到当前数据库（合并模式）
+     * 使用 DAO 层写入，自动适配 v2 Schema（去重存储）
      */
     public void importDataFromSQLite(String sourceDbPath) {
         try {
@@ -127,75 +146,115 @@ public class SQLiteImporter {
                 return;
             }
 
+            RequestDAO requestDAO = new RequestDAO();
+            HistoryDAO historyDAO = new HistoryDAO();
+
             Connection sourceConn = java.sql.DriverManager.getConnection("jdbc:sqlite:" + sourceDbPath);
-            Connection targetConn = dbManager.getConnection();
 
             try {
-                targetConn.setAutoCommit(false);
-
                 // 导入请求数据
                 Statement stmt = sourceConn.createStatement();
                 ResultSet rs = stmt.executeQuery("SELECT * FROM requests");
 
                 while (rs.next()) {
-                    PreparedStatement pstmt = targetConn.prepareStatement(
-                        "INSERT INTO requests (protocol, domain, path, query, method, request_data, comment, color, add_time) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-                        Statement.RETURN_GENERATED_KEYS);
+                    String protocol = rs.getString("protocol");
+                    String domain = rs.getString("domain");
+                    String path = rs.getString("path");
+                    String query = rs.getString("query");
+                    String method = rs.getString("method");
+                    String comment = rs.getString("comment");
+                    String colorStr = rs.getString("color");
+                    byte[] requestData = rs.getBytes("request_data");
 
-                    pstmt.setString(1, rs.getString("protocol"));
-                    pstmt.setString(2, rs.getString("domain"));
-                    pstmt.setString(3, rs.getString("path"));
-                    pstmt.setString(4, rs.getString("query"));
-                    pstmt.setString(5, rs.getString("method"));
-                    pstmt.setBytes(6, rs.getBytes("request_data"));
-                    pstmt.setString(7, rs.getString("comment"));
-                    pstmt.setString(8, rs.getString("color"));
+                    int newId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
 
-                    pstmt.executeUpdate();
-                    pstmt.close();
+                    if (newId > 0) {
+                        if (comment != null && !comment.isEmpty()) {
+                            requestDAO.updateRequestComment(newId, comment);
+                        }
+                        if (colorStr != null && !colorStr.isEmpty()) {
+                            try {
+                                requestDAO.updateRequestColor(newId, Color.decode(colorStr));
+                            } catch (Exception e) {
+                                // 忽略颜色解析错误
+                            }
+                        }
+                    }
                 }
 
                 // 导入历史数据
                 rs = stmt.executeQuery("SELECT * FROM history");
                 while (rs.next()) {
-                    PreparedStatement pstmt = targetConn.prepareStatement(
-                        "INSERT INTO history (request_id, method, protocol, domain, path, query, status_code, " +
-                        "response_length, response_time, comment, color, request_data, response_data, timestamp) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
+                    RequestResponseRecord record = new RequestResponseRecord();
 
-                    pstmt.setObject(1, rs.getObject("request_id"));
-                    pstmt.setString(2, rs.getString("method"));
-                    pstmt.setString(3, rs.getString("protocol"));
-                    pstmt.setString(4, rs.getString("domain"));
-                    pstmt.setString(5, rs.getString("path"));
-                    pstmt.setString(6, rs.getString("query"));
-                    pstmt.setInt(7, rs.getInt("status_code"));
-                    pstmt.setInt(8, rs.getInt("response_length"));
-                    pstmt.setInt(9, rs.getInt("response_time"));
-                    pstmt.setString(10, rs.getString("comment"));
-                    pstmt.setString(11, rs.getString("color"));
-                    pstmt.setBytes(12, rs.getBytes("request_data"));
-                    pstmt.setBytes(13, rs.getBytes("response_data"));
+                    int requestId = rs.getInt("request_id");
+                    if (rs.wasNull()) {
+                        requestId = -1;
+                    }
+                    record.setRequestId(requestId);
+                    record.setMethod(rs.getString("method"));
+                    record.setProtocol(rs.getString("protocol"));
+                    record.setDomain(rs.getString("domain"));
+                    record.setPath(rs.getString("path"));
+                    record.setQueryParameters(rs.getString("query"));
+                    record.setStatusCode(rs.getInt("status_code"));
+                    record.setResponseLength(rs.getInt("response_length"));
+                    record.setResponseTime(rs.getInt("response_time"));
+                    record.setComment(rs.getString("comment"));
 
-                    pstmt.executeUpdate();
-                    pstmt.close();
+                    String colorStr = rs.getString("color");
+                    if (colorStr != null && !colorStr.isEmpty()) {
+                        try {
+                            record.setColor(Color.decode(colorStr));
+                        } catch (Exception e) {
+                            // 忽略颜色解析错误
+                        }
+                    }
+
+                    record.setRequestData(rs.getBytes("request_data"));
+                    record.setResponseData(rs.getBytes("response_data"));
+
+                    historyDAO.saveHistory(record);
                 }
 
-                targetConn.commit();
                 BurpExtender.printOutput("[+] SQLite数据合并导入完成");
 
             } catch (Exception e) {
-                targetConn.rollback();
                 BurpExtender.printError("[!] 导入数据时出错: " + e.getMessage());
             } finally {
                 sourceConn.close();
-                targetConn.setAutoCommit(true);
-                targetConn.close();
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 导入数据库时出错: " + e.getMessage());
         }
+    }
+
+    /**
+     * 递归复制目录
+     */
+    private void copyDirectory(File source, File target) throws IOException {
+        if (!source.exists()) return;
+
+        Path sourcePath = source.toPath();
+        Path targetPath = target.toPath();
+
+        Files.walkFileTree(sourcePath, EnumSet.noneOf(FileVisitOption.class), Integer.MAX_VALUE,
+            new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                    Path relative = sourcePath.relativize(dir);
+                    Path targetDir = targetPath.resolve(relative);
+                    Files.createDirectories(targetDir);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Path relative = sourcePath.relativize(file);
+                    Files.copy(file, targetPath.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
     }
 
     private void refreshUIAfterImport() {

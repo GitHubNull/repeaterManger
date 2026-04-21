@@ -2,6 +2,8 @@ package oxff.top.db;
 
 import burp.BurpExtender;
 import oxff.top.config.DatabaseConfig;
+import oxff.top.service.GarbageCollectorService;
+
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
@@ -32,6 +34,12 @@ public class DatabaseManager {
 
     // 当前会话的数据库文件路径
     private String currentDbPath;
+
+    // 垃圾回收服务
+    private GarbageCollectorService gcService;
+
+    /** 当前 Schema 版本号 */
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     // 私有构造函数，防止直接实例化
     private DatabaseManager() {
@@ -68,6 +76,16 @@ public class DatabaseManager {
     public void closeConnections() {
         synchronized (connectionLock) {
             BurpExtender.printOutput("[*] 正在关闭数据库连接管理器...");
+
+            // 停止 GC 服务
+            if (gcService != null) {
+                gcService.stop();
+                gcService = null;
+            }
+
+            // 标记正常关闭
+            setCleanShutdown(true);
+
             // 关闭连接池中的所有连接
             Connection conn;
             while ((conn = connectionPool.poll()) != null) {
@@ -171,6 +189,17 @@ public class DatabaseManager {
 
             initialized.set(true);
             BurpExtender.printOutput("[+] 数据库初始化成功: " + currentDbPath);
+
+            // 检查是否需要从旧 Schema 迁移
+            checkAndRunMigration();
+
+            // 标记非正常关闭（启动时），正常关闭时在 closeConnections 中设置为 true
+            setCleanShutdown(false);
+
+            // 启动垃圾回收服务
+            gcService = new GarbageCollectorService();
+            gcService.start();
+
             return true;
         } catch (Exception e) {
             BurpExtender.printError("[!] 数据库初始化失败: " + e.getMessage());
@@ -354,67 +383,343 @@ public class DatabaseManager {
 
     /**
      * 使用现有连接初始化表结构
+     * 检查 schema 版本，如果是新数据库则直接创建 v2 Schema，
+     * 如果是旧数据库则保留旧 Schema（迁移由 checkAndRunMigration 处理）
      */
     private void initializeTablesWithConnection(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
 
-            // 请求表
-            stmt.execute(
-                "CREATE TABLE IF NOT EXISTS requests (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "protocol TEXT, " +
-                "domain TEXT, " +
-                "path TEXT, " +
-                "query TEXT, " +
-                "method TEXT, " +
-                "add_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "comment TEXT, " +
-                "color TEXT, " +
-                "request_data BLOB" +
-                ")"
-            );
+            // 检查 schema_meta 表是否存在，判断是新库还是旧库
+            boolean isNewDatabase = !tableExists(conn, "schema_meta");
 
-            // 历史记录表
-            stmt.execute(
-                "CREATE TABLE IF NOT EXISTS history (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "request_id INTEGER, " +  // Allow NULL for unsaved requests
-                "method TEXT, " +
-                "protocol TEXT, " +
-                "domain TEXT, " +
-                "path TEXT, " +
-                "query TEXT, " +
-                "status_code INTEGER, " +
-                "response_length INTEGER, " +
-                "response_time INTEGER, " +
-                "timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "comment TEXT, " +
-                "color TEXT, " +
-                "request_data BLOB, " +
-                "response_data BLOB, " +
-                "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +  // Changed from CASCADE to SET NULL
-                ")"
-            );
-
-            // 创建索引提升查询性能
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_domain ON requests (domain)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_method ON requests (method)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_request_id ON history (request_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_domain ON history (domain)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_status_code ON history (status_code)");
-
-            // 修复AUTOINCREMENT序列：如果requests表为空，重置序列计数器
-            // 这是为了修复之前testDatabaseWithSampleData插入测试数据消耗ID的问题
-            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM requests")) {
-                if (rs.next() && rs.getInt(1) == 0) {
-                    // 表为空时，删除sqlite_sequence中的记录，使ID从1重新开始
-                    stmt.execute("DELETE FROM sqlite_sequence WHERE name = 'requests'");
-                    BurpExtender.printOutput("[*] requests表为空，已重置AUTOINCREMENT序列");
-                }
+            if (isNewDatabase) {
+                // 新数据库：直接创建 v2 Schema
+                initializeV2Schema(stmt);
+            } else {
+                // 旧数据库（已有数据）：保留现有表结构
+                // 确保基础表存在（兼容旧版本）
+                ensureLegacyTablesExist(stmt);
+                // 池表可能已经由迁移创建
+                ensurePoolTablesExist(stmt);
             }
 
             BurpExtender.printOutput("[+] 数据库表结构初始化成功");
         }
+    }
+
+    /**
+     * 初始化 v2 Schema（新数据库）
+     */
+    private void initializeV2Schema(Statement stmt) throws SQLException {
+        // 元数据表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS schema_meta (" +
+            "key TEXT PRIMARY KEY, " +
+            "value TEXT NOT NULL" +
+            ")"
+        );
+
+        // 初始化元数据
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '" + CURRENT_SCHEMA_VERSION + "')");
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('migration_in_progress', '0')");
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('migration_batch_offset', '0')");
+
+        // 创建池表
+        createPoolTables(stmt);
+
+        // GC 队列表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS gc_queue (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "pool_type TEXT NOT NULL, " +
+            "hash TEXT NOT NULL, " +
+            "enqueued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_gc_queue_pool ON gc_queue(pool_type, hash)");
+
+        // 请求表（v2 结构：使用枚举和 hash 引用）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS requests (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "protocol INTEGER NOT NULL DEFAULT 0, " +
+            "domain_hash TEXT, " +
+            "path_hash TEXT, " +
+            "query_hash TEXT, " +
+            "method INTEGER NOT NULL DEFAULT 0, " +
+            "add_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "comment TEXT, " +
+            "color TEXT, " +
+            "req_header_hash TEXT, " +
+            "req_body_hash TEXT, " +
+            "req_body_storage TEXT DEFAULT 'inline'" +
+            ")"
+        );
+
+        // 历史记录表（v2 结构）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS history (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "request_id INTEGER, " +
+            "method INTEGER NOT NULL DEFAULT 0, " +
+            "protocol INTEGER NOT NULL DEFAULT 0, " +
+            "domain_hash TEXT, " +
+            "path_hash TEXT, " +
+            "query_hash TEXT, " +
+            "status_code INTEGER, " +
+            "response_length INTEGER, " +
+            "response_time INTEGER, " +
+            "timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "comment TEXT, " +
+            "color TEXT, " +
+            "req_header_hash TEXT, " +
+            "req_body_hash TEXT, " +
+            "req_body_storage TEXT DEFAULT 'inline', " +
+            "resp_header_hash TEXT, " +
+            "resp_body_hash TEXT, " +
+            "resp_body_storage TEXT DEFAULT 'inline', " +
+            "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
+            ")"
+        );
+
+        // 创建索引
+        createV2Indexes(stmt);
+
+        BurpExtender.printOutput("[+] v2 Schema 初始化完成");
+    }
+
+    /**
+     * 创建池表
+     */
+    private void createPoolTables(Statement stmt) throws SQLException {
+        // 字符串池
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS string_pool (" +
+            "hash TEXT PRIMARY KEY, " +
+            "value TEXT NOT NULL, " +
+            "ref_count INTEGER NOT NULL DEFAULT 1, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_string_pool_ref ON string_pool(ref_count)");
+
+        // 头部池
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS header_pool (" +
+            "hash TEXT PRIMARY KEY, " +
+            "data BLOB NOT NULL, " +
+            "size INTEGER NOT NULL, " +
+            "ref_count INTEGER NOT NULL DEFAULT 1, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_header_pool_ref ON header_pool(ref_count)");
+
+        // 行内 Body 池
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS body_pool (" +
+            "hash TEXT PRIMARY KEY, " +
+            "data BLOB NOT NULL, " +
+            "size INTEGER NOT NULL, " +
+            "ref_count INTEGER NOT NULL DEFAULT 1, " +
+            "is_binary INTEGER NOT NULL DEFAULT 0, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_body_pool_ref ON body_pool(ref_count)");
+
+        // 文件型 Body 池
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS file_pool (" +
+            "hash TEXT PRIMARY KEY, " +
+            "relative_path TEXT NOT NULL, " +
+            "size INTEGER NOT NULL, " +
+            "ref_count INTEGER NOT NULL DEFAULT 1, " +
+            "is_binary INTEGER NOT NULL DEFAULT 1, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_file_pool_ref ON file_pool(ref_count)");
+    }
+
+    /**
+     * 创建 v2 索引
+     */
+    private void createV2Indexes(Statement stmt) throws SQLException {
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_domain_hash ON requests(domain_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_method ON requests(method)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_req_header ON requests(req_header_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_req_body ON requests(req_body_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_request_id ON history(request_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_domain_hash ON history(domain_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_status_code ON history(status_code)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_req_header ON history(req_header_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_resp_header ON history(resp_header_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_req_body ON history(req_body_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_resp_body ON history(resp_body_hash)");
+    }
+
+    /**
+     * 确保旧版表存在（兼容已存在的旧数据库）
+     */
+    private void ensureLegacyTablesExist(Statement stmt) throws SQLException {
+        // 旧版请求表（如果不存在则创建）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS requests (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "protocol TEXT, " +
+            "domain TEXT, " +
+            "path TEXT, " +
+            "query TEXT, " +
+            "method TEXT, " +
+            "add_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "comment TEXT, " +
+            "color TEXT, " +
+            "request_data BLOB" +
+            ")"
+        );
+
+        // 旧版历史记录表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS history (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "request_id INTEGER, " +
+            "method TEXT, " +
+            "protocol TEXT, " +
+            "domain TEXT, " +
+            "path TEXT, " +
+            "query TEXT, " +
+            "status_code INTEGER, " +
+            "response_length INTEGER, " +
+            "response_time INTEGER, " +
+            "timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "comment TEXT, " +
+            "color TEXT, " +
+            "request_data BLOB, " +
+            "response_data BLOB, " +
+            "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
+            ")"
+        );
+
+        // 旧版索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_domain ON requests (domain)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_method ON requests (method)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_request_id ON history (request_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_domain ON history (domain)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_status_code ON history (status_code)");
+    }
+
+    /**
+     * 确保池表存在（可能在迁移过程中已创建）
+     */
+    private void ensurePoolTablesExist(Statement stmt) throws SQLException {
+        createPoolTables(stmt);
+
+        // GC 队列表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS gc_queue (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "pool_type TEXT NOT NULL, " +
+            "hash TEXT NOT NULL, " +
+            "enqueued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_gc_queue_pool ON gc_queue(pool_type, hash)");
+
+        // schema_meta 表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS schema_meta (" +
+            "key TEXT PRIMARY KEY, " +
+            "value TEXT NOT NULL" +
+            ")"
+        );
+    }
+
+    /**
+     * 检查表是否存在
+     */
+    private boolean tableExists(Connection conn, String tableName) {
+        try (ResultSet rs = conn.getMetaData().getTables(null, null, tableName, null)) {
+            return rs.next();
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 检查并执行 Schema 迁移
+     */
+    private void checkAndRunMigration() {
+        try {
+            int currentVersion = getSchemaVersion();
+            if (currentVersion < CURRENT_SCHEMA_VERSION) {
+                BurpExtender.printOutput("[*] 检测到旧版 Schema (v" + currentVersion + ")，开始迁移到 v" + CURRENT_SCHEMA_VERSION + "...");
+                DedupMigrationService migrationService = new DedupMigrationService();
+                boolean success = migrationService.migrate();
+                if (success) {
+                    BurpExtender.printOutput("[+] Schema 迁移成功完成");
+                } else {
+                    BurpExtender.printError("[!] Schema 迁移失败，部分功能可能不可用");
+                }
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] Schema 迁移检查失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取当前 Schema 版本
+     */
+    public int getSchemaVersion() {
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            // 检查 schema_meta 表是否存在
+            if (!tableExists(conn, "schema_meta")) {
+                return 1; // 旧版数据库
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT value FROM schema_meta WHERE key = 'schema_version'")) {
+                if (rs.next()) {
+                    return Integer.parseInt(rs.getString("value"));
+                }
+            }
+        } catch (Exception e) {
+            // 忽略，返回默认版本
+        }
+        return 1;
+    }
+
+    /**
+     * 设置 clean_shutdown 标记
+     */
+    private void setCleanShutdown(boolean clean) {
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            // 确保 schema_meta 表存在
+            stmt.execute("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+            stmt.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('clean_shutdown', '" + (clean ? "1" : "0") + "')");
+        } catch (Exception e) {
+            // 忽略，非关键操作
+        }
+    }
+
+    /**
+     * 获取数据库文件所在目录
+     */
+    public File getDatabaseParentDirectory() {
+        String path = getDatabaseFilePath();
+        if (path == null) {
+            return null;
+        }
+        File dbFile = new File(path);
+        return dbFile.getParentFile();
+    }
+
+    /**
+     * 获取 GC 服务实例
+     */
+    public GarbageCollectorService getGcService() {
+        return gcService;
     }
 
     /**
