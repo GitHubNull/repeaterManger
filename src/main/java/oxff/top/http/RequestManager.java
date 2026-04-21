@@ -329,10 +329,18 @@ public class RequestManager {
             byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
             List<String> headers = new ArrayList<>(reqInfo.getHeaders());
 
+            // 获取请求方法
+            String method = reqInfo.getMethod().toUpperCase();
+
             // 移除所有现有的 Content-Length 头，再按实际 body 长度重新添加
             headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
+
+            // 始终为 POST/PUT/PATCH 添加 Content-Length（即使 body 为空也要设置为 0）
+            // 否则服务器会等待 body 数据直到超时，导致请求耗时 10+ 秒
             if (body.length > 0) {
                 headers.add("Content-Length: " + body.length);
+            } else if ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) {
+                headers.add("Content-Length: 0");
             }
 
             return BurpExtender.helpers.buildHttpMessage(headers, body);
@@ -547,12 +555,18 @@ public class RequestManager {
             // 判断是否有请求体
             int bodyOffset = findBodyOffset(requestBytes);
             boolean hasBody = bodyOffset > 0 && bodyOffset < requestBytes.length;
+            boolean isBodyMethod = method.equalsIgnoreCase("POST") || method.equalsIgnoreCase("PUT") || method.equalsIgnoreCase("PATCH");
 
             if (hasBody) {
                 conn.setDoOutput(true);
                 if (!hasContentType) {
                     conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
                 }
+            } else if (isBodyMethod) {
+                // POST/PUT/PATCH 即使 body 为空，也必须调用 setDoOutput(true) 并显式写入空 body
+                // 否则 HttpURLConnection 不会正确关闭输出流，代理会等待 body 数据直到超时（~10秒）
+                conn.setDoOutput(true);
+                conn.setFixedLengthStreamingMode(0);
             }
 
             // 发送请求
@@ -563,6 +577,11 @@ public class RequestManager {
                 System.arraycopy(requestBytes, bodyOffset, bodyBytes, 0, bodyBytes.length);
                 try (OutputStream os = conn.getOutputStream()) {
                     os.write(bodyBytes);
+                    os.flush();
+                }
+            } else if (isBodyMethod) {
+                // 显式获取并关闭输出流，通知代理 body 传输完成
+                try (OutputStream os = conn.getOutputStream()) {
                     os.flush();
                 }
             }

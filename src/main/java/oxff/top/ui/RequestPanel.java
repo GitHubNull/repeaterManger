@@ -813,7 +813,13 @@ public class RequestPanel extends JPanel {
                     
                     // 发送请求
                     IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, useHttps);
-                    response = BurpExtender.callbacks.makeHttpRequest(httpService, finalRequest);
+                    
+                    // 修正 Content-Length，确保与实际 body 一致
+                    // 对于 POST/PUT/PATCH 请求，即使 body 为空也要显式设置 Content-Length: 0
+                    // 否则服务器会等待 body 数据直到超时（表现为请求耗时 10+ 秒）
+                    byte[] fixedRequest = fixContentLength(finalRequest, httpService);
+                    
+                    response = BurpExtender.callbacks.makeHttpRequest(httpService, fixedRequest);
                     
                     final IHttpRequestResponse finalResponse = response;
                     final long elapsedMs = System.currentTimeMillis() - requestStartTime;
@@ -989,6 +995,36 @@ public class RequestPanel extends JPanel {
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 保存历史记录时出错: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 修正请求的 Content-Length 头，确保与实际 body 大小一致。
+     * 对于 POST/PUT/PATCH 请求，即使 body 为空也显式设置 Content-Length: 0，
+     * 防止服务器等待 body 数据导致超时（表现为请求耗时 10+ 秒）。
+     */
+    private byte[] fixContentLength(byte[] requestBytes, IHttpService service) {
+        try {
+            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+            int bodyOffset = reqInfo.getBodyOffset();
+            byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
+            List<String> headers = new ArrayList<>(reqInfo.getHeaders());
+            String method = reqInfo.getMethod().toUpperCase();
+
+            // 移除现有的 Content-Length
+            headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
+
+            // 添加正确的 Content-Length
+            if (body.length > 0) {
+                headers.add("Content-Length: " + body.length);
+            } else if ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) {
+                headers.add("Content-Length: 0");
+            }
+
+            return BurpExtender.helpers.buildHttpMessage(headers, body);
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 修正 Content-Length 失败: " + e.getMessage());
+            return requestBytes;
         }
     }
 }
