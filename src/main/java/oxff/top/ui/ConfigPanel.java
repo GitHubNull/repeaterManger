@@ -383,16 +383,18 @@ public class ConfigPanel extends JPanel {
         JPanel rowsPanel = new JPanel();
         rowsPanel.setLayout(new BoxLayout(rowsPanel, BoxLayout.Y_AXIS));
 
-        // SQLite3行
-        JPanel sqliteRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        sqliteRow.add(new JLabel("SQLite3 (.sqlite3):"));
-        JButton exportDbButton = new JButton("导出");
-        exportDbButton.addActionListener(e -> exportDatabase());
-        sqliteRow.add(exportDbButton);
-        JButton importDbButton = new JButton("导入");
-        importDbButton.addActionListener(e -> importDatabase());
-        sqliteRow.add(importDbButton);
-        rowsPanel.add(sqliteRow);
+        // ERM存档行
+        JPanel ermRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        ermRow.add(new JLabel("ERM存档 (.erm):"));
+        JCheckBox encryptCheckbox = new JCheckBox("加密");
+        JButton exportErmButton = new JButton("导出");
+        exportErmButton.addActionListener(e -> exportErm(encryptCheckbox.isSelected()));
+        ermRow.add(exportErmButton);
+        ermRow.add(encryptCheckbox);
+        JButton importErmButton = new JButton("导入");
+        importErmButton.addActionListener(e -> importErm());
+        ermRow.add(importErmButton);
+        rowsPanel.add(ermRow);
 
         // Postman行
         JPanel postmanRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
@@ -738,11 +740,11 @@ public class ConfigPanel extends JPanel {
 
     // ========== 数据导入导出方法 ==========
 
-    private void exportDatabase() {
+    private void exportErm(boolean encrypted) {
         try {
-            BurpExtender.printOutput("[*] 正在启动SQLite数据库导出...");
+            BurpExtender.printOutput("[*] 正在启动ERM存档导出...");
             DataExporter exporter = new DataExporter();
-            exporter.exportToSQLite(this);
+            exporter.exportToErm(this, encrypted);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导出操作发生错误: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
@@ -750,11 +752,11 @@ public class ConfigPanel extends JPanel {
         }
     }
 
-    private void importDatabase() {
+    private void importErm() {
         try {
-            BurpExtender.printOutput("[*] 正在启动SQLite数据库导入...");
+            BurpExtender.printOutput("[*] 正在启动ERM存档导入...");
             DataImporter importer = new DataImporter();
-            importer.importFromSQLite(this);
+            importer.importFromErm(this);
             refreshStorageInfo();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,

@@ -7,19 +7,19 @@ import java.awt.Component;
  */
 public class DataExporter {
 
-    private final SQLiteExporter sqliteExporter;
+    private final ErmArchiveWriter ermWriter;
     private final PostmanExporter postmanExporter;
 
     public DataExporter() {
-        this.sqliteExporter = new SQLiteExporter();
+        this.ermWriter = new ErmArchiveWriter();
         this.postmanExporter = new PostmanExporter();
     }
 
     /**
-     * 导出到SQLite3格式
+     * 导出到ERM存档格式
      */
-    public boolean exportToSQLite(Component parent) {
-        return sqliteExporter.export(parent);
+    public boolean exportToErm(Component parent, boolean encrypted) {
+        return ermWriter.export(parent, encrypted);
     }
 
     /**

@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 public class FormatDetector {
 
     public enum ImportFormat {
+        ERM,
         SQLITE3,
         POSTMAN_V21,
         UNKNOWN
@@ -31,25 +32,58 @@ public class FormatDetector {
 
         String name = file.getName().toLowerCase();
 
-        // 步骤1: 根据扩展名和文件头快速检测SQLite
+        // 步骤1: 根据扩展名和文件头检测ERM（优先级最高）
+        if (name.endsWith(".erm")) {
+            if (isErmFile(file)) {
+                return ImportFormat.ERM;
+            }
+        }
+
+        // 步骤2: 根据扩展名和文件头检测SQLite
         if (name.endsWith(".sqlite3") || name.endsWith(".db") || name.endsWith(".sqlite")) {
             if (isSQLiteFile(file)) {
                 return ImportFormat.SQLITE3;
             }
         }
 
-        // 步骤2: 对于.json文件或没有扩展名的文件，检查内容
+        // 步骤3: 对于.json文件或没有扩展名的文件，检查内容
         if (name.endsWith(".json") || !name.contains(".")) {
             return detectJsonFormat(file);
         }
 
-        // 步骤3: 即使扩展名不匹配，也尝试检测SQLite魔术字节
+        // 步骤4: 即使扩展名不匹配，也尝试检测ERM魔术字节
+        if (isErmFile(file)) {
+            return ImportFormat.ERM;
+        }
+
+        // 步骤5: 尝试检测SQLite魔术字节
         if (isSQLiteFile(file)) {
             return ImportFormat.SQLITE3;
         }
 
-        // 步骤4: 尝试作为JSON解析
+        // 步骤6: 尝试作为JSON解析
         return detectJsonFormat(file);
+    }
+
+    /**
+     * 检测是否为ERM存档文件（通过魔法字节）
+     */
+    private static boolean isErmFile(File file) {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] header = new byte[4];
+            int read = fis.read(header);
+            if (read < 4) {
+                return false;
+            }
+            for (int i = 0; i < ErmFormatConstants.MAGIC_HEADER.length; i++) {
+                if (header[i] != ErmFormatConstants.MAGIC_HEADER[i]) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**

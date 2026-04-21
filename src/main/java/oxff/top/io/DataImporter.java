@@ -13,11 +13,11 @@ import java.io.File;
  */
 public class DataImporter {
 
-    private final SQLiteImporter sqliteImporter;
+    private final ErmArchiveReader ermReader;
     private final PostmanImporter postmanImporter;
 
     public DataImporter() {
-        this.sqliteImporter = new SQLiteImporter();
+        this.ermReader = new ErmArchiveReader();
         this.postmanImporter = new PostmanImporter();
     }
 
@@ -28,7 +28,7 @@ public class DataImporter {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("导入数据文件");
         fileChooser.setFileFilter(new FileNameExtensionFilter(
-            "支持的数据文件 (*.sqlite3, *.db, *.json)", "sqlite3", "db", "json"));
+                "支持的数据文件 (*.erm, *.json)", "erm", "json"));
 
         int result = fileChooser.showOpenDialog(parent);
         if (result != JFileChooser.APPROVE_OPTION) {
@@ -46,24 +46,29 @@ public class DataImporter {
         BurpExtender.printOutput("[*] 检测到文件格式: " + format);
 
         switch (format) {
-            case SQLITE3:
-                return sqliteImporter.importFromFile(parent);
+            case ERM:
+                return ermReader.importFromFile(parent);
             case POSTMAN_V21:
                 return postmanImporter.importFromFile(parent);
+            case SQLITE3:
+                JOptionPane.showMessageDialog(parent,
+                        "旧版 SQLite3 格式已不再支持，请使用 ERM 存档格式 (.erm) 导入。",
+                        "格式不再支持", JOptionPane.WARNING_MESSAGE);
+                return false;
             case UNKNOWN:
             default:
                 JOptionPane.showMessageDialog(parent,
-                    "无法识别的文件格式。\n支持的格式: SQLite3 (.sqlite3, .db), Postman Collection v2.1 (.json)",
-                    "格式错误", JOptionPane.ERROR_MESSAGE);
+                        "无法识别的文件格式。\n支持的格式: ERM存档 (.erm), Postman Collection v2.1 (.json)",
+                        "格式错误", JOptionPane.ERROR_MESSAGE);
                 return false;
         }
     }
 
     /**
-     * 从SQLite数据库导入
+     * 从ERM存档导入
      */
-    public boolean importFromSQLite(Component parent) {
-        return sqliteImporter.importFromFile(parent);
+    public boolean importFromErm(Component parent) {
+        return ermReader.importFromFile(parent);
     }
 
     /**
