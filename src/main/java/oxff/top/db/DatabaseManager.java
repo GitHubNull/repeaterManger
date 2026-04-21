@@ -396,15 +396,35 @@ public class DatabaseManager {
                 // 新数据库：直接创建 v2 Schema
                 initializeV2Schema(stmt);
             } else {
-                // 旧数据库（已有数据）：保留现有表结构
-                // 确保基础表存在（兼容旧版本）
-                ensureLegacyTablesExist(stmt);
-                // 池表可能已经由迁移创建
-                ensurePoolTablesExist(stmt);
+                // 已有 schema_meta 表，检查版本号
+                int schemaVersion = getSchemaVersionFromConnection(conn);
+                if (schemaVersion >= CURRENT_SCHEMA_VERSION) {
+                    // 已经是 v2 Schema，只需确保池表存在
+                    ensurePoolTablesExist(stmt);
+                } else {
+                    // 旧数据库（v1）：保留现有表结构，等待迁移
+                    ensureLegacyTablesExist(stmt);
+                    ensurePoolTablesExist(stmt);
+                }
             }
 
             BurpExtender.printOutput("[+] 数据库表结构初始化成功");
         }
+    }
+
+    /**
+     * 从指定连接获取 Schema 版本号（不经过连接池）
+     */
+    private int getSchemaVersionFromConnection(Connection conn) {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT value FROM schema_meta WHERE key = 'schema_version'")) {
+            if (rs.next()) {
+                return Integer.parseInt(rs.getString("value"));
+            }
+        } catch (Exception e) {
+            // 忽略，返回默认版本
+        }
+        return 1;
     }
 
     /**
