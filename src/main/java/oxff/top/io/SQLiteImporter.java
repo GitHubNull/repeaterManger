@@ -2,14 +2,10 @@ package oxff.top.io;
 
 import burp.BurpExtender;
 import oxff.top.db.DatabaseManager;
-import oxff.top.db.HistoryDAO;
-import oxff.top.db.RequestDAO;
-import oxff.top.http.RequestResponseRecord;
 
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import java.awt.Color;
 import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
@@ -20,10 +16,7 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.EnumSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -132,101 +125,6 @@ public class SQLiteImporter {
 
         // 刷新UI
         refreshUIAfterImport();
-    }
-
-    /**
-     * 从SQLite数据库直接导入数据到当前数据库（合并模式）
-     * 使用 DAO 层写入，自动适配 v2 Schema（去重存储）
-     */
-    public void importDataFromSQLite(String sourceDbPath) {
-        try {
-            File sourceFile = new File(sourceDbPath);
-            if (!sourceFile.exists()) {
-                BurpExtender.printError("[!] 源数据库文件不存在: " + sourceDbPath);
-                return;
-            }
-
-            RequestDAO requestDAO = new RequestDAO();
-            HistoryDAO historyDAO = new HistoryDAO();
-
-            Connection sourceConn = java.sql.DriverManager.getConnection("jdbc:sqlite:" + sourceDbPath);
-
-            try {
-                // 导入请求数据
-                Statement stmt = sourceConn.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM requests");
-
-                while (rs.next()) {
-                    String protocol = rs.getString("protocol");
-                    String domain = rs.getString("domain");
-                    String path = rs.getString("path");
-                    String query = rs.getString("query");
-                    String method = rs.getString("method");
-                    String comment = rs.getString("comment");
-                    String colorStr = rs.getString("color");
-                    byte[] requestData = rs.getBytes("request_data");
-
-                    int newId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
-
-                    if (newId > 0) {
-                        if (comment != null && !comment.isEmpty()) {
-                            requestDAO.updateRequestComment(newId, comment);
-                        }
-                        if (colorStr != null && !colorStr.isEmpty()) {
-                            try {
-                                requestDAO.updateRequestColor(newId, Color.decode(colorStr));
-                            } catch (Exception e) {
-                                // 忽略颜色解析错误
-                            }
-                        }
-                    }
-                }
-
-                // 导入历史数据
-                rs = stmt.executeQuery("SELECT * FROM history");
-                while (rs.next()) {
-                    RequestResponseRecord record = new RequestResponseRecord();
-
-                    int requestId = rs.getInt("request_id");
-                    if (rs.wasNull()) {
-                        requestId = -1;
-                    }
-                    record.setRequestId(requestId);
-                    record.setMethod(rs.getString("method"));
-                    record.setProtocol(rs.getString("protocol"));
-                    record.setDomain(rs.getString("domain"));
-                    record.setPath(rs.getString("path"));
-                    record.setQueryParameters(rs.getString("query"));
-                    record.setStatusCode(rs.getInt("status_code"));
-                    record.setResponseLength(rs.getInt("response_length"));
-                    record.setResponseTime(rs.getInt("response_time"));
-                    record.setComment(rs.getString("comment"));
-
-                    String colorStr = rs.getString("color");
-                    if (colorStr != null && !colorStr.isEmpty()) {
-                        try {
-                            record.setColor(Color.decode(colorStr));
-                        } catch (Exception e) {
-                            // 忽略颜色解析错误
-                        }
-                    }
-
-                    record.setRequestData(rs.getBytes("request_data"));
-                    record.setResponseData(rs.getBytes("response_data"));
-
-                    historyDAO.saveHistory(record);
-                }
-
-                BurpExtender.printOutput("[+] SQLite数据合并导入完成");
-
-            } catch (Exception e) {
-                BurpExtender.printError("[!] 导入数据时出错: " + e.getMessage());
-            } finally {
-                sourceConn.close();
-            }
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 导入数据库时出错: " + e.getMessage());
-        }
     }
 
     /**

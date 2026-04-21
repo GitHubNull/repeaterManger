@@ -502,7 +502,6 @@ public class PostmanImporter {
         return "{}".getBytes(StandardCharsets.UTF_8);
     }
 
-    @SuppressWarnings("unused")
     private byte[] reconstructRawRequest(String method, UrlComponents url, List<PostmanHeader> headers, byte[] bodyBytes) {
         StringBuilder rawRequest = new StringBuilder();
 

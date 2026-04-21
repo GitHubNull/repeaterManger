@@ -84,35 +84,7 @@ public class RequestResponseRecord {
         this.method = method;
         
         // 解析URL
-        try {
-            URL parsedUrl = new URL(url);
-            this.protocol = parsedUrl.getProtocol();
-            this.domain = parsedUrl.getHost();
-            this.path = parsedUrl.getPath();
-            this.queryParameters = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-        } catch (MalformedURLException e) {
-            // 如果URL解析失败，使用简单的字符串处理
-            this.protocol = url.startsWith("https://") ? "https" : "http";
-            String remaining = url.substring(protocol.length() + 3);
-            
-            int pathStart = remaining.indexOf('/');
-            if (pathStart > 0) {
-                this.domain = remaining.substring(0, pathStart);
-                remaining = remaining.substring(pathStart);
-            } else {
-                this.domain = remaining;
-                remaining = "/";
-            }
-            
-            int queryStart = remaining.indexOf('?');
-            if (queryStart > 0) {
-                this.path = remaining.substring(0, queryStart);
-                this.queryParameters = remaining.substring(queryStart + 1);
-            } else {
-                this.path = remaining;
-                this.queryParameters = "";
-            }
-        }
+        parseUrl(url);
         
         this.statusCode = statusCode;
         this.responseLength = responseLength;
@@ -123,11 +95,11 @@ public class RequestResponseRecord {
     }
     
     /**
-     * 将URL解析为各个组件
+     * 将URL解析为各个组件（协议、域名、路径、查询参数）
+     * 支持带协议和不带协议前缀的URL
      * 
      * @param url 原始URL
      */
-    @SuppressWarnings("unused")
     private void parseUrl(String url) {
         try {
             // 处理没有协议的URL

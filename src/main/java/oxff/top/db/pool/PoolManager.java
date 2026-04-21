@@ -25,10 +25,14 @@ public class PoolManager {
     // 头部缓存：hash → 头部字节数据
     private final ConcurrentHashMap<String, byte[]> headerCache = new ConcurrentHashMap<>();
 
-    @SuppressWarnings("unused")
+    /** existenceCache 的最大条目数（覆盖所有池类型） */
     private static final int MAX_CACHE_SIZE = 2000;
+    /** stringCache 的最大条目数 */
     private static final int MAX_STRING_CACHE_SIZE = 1000;
+    /** headerCache 的最大条目数 */
     private static final int MAX_HEADER_CACHE_SIZE = 500;
+    /** 缓存淘汰时保留的比例（淘汰最旧的25%） */
+    private static final double CACHE_EVICT_RATIO = 0.75;
 
     public PoolManager() {
         this.hasher = new ContentHasher();
@@ -69,6 +73,7 @@ public class PoolManager {
         }
 
         existenceCache.put("string:" + hash, true);
+        trimExistenceCacheIfNeeded();
         stringCache.put(hash, value);
         trimStringCacheIfNeeded();
 
@@ -117,6 +122,8 @@ public class PoolManager {
             return;
         }
         releasePoolEntry(conn, "string_pool", hash, "string");
+        // 引用释放后清除字符串缓存，避免 GC 回收后返回已删除的数据
+        stringCache.remove(hash);
     }
 
     // ========== 头部池操作 ==========
@@ -151,6 +158,7 @@ public class PoolManager {
         }
 
         existenceCache.put("header:" + hash, true);
+        trimExistenceCacheIfNeeded();
         headerCache.put(hash, headerData);
         trimHeaderCacheIfNeeded();
 
@@ -272,6 +280,7 @@ public class PoolManager {
         }
 
         existenceCache.put("body:" + hash, true);
+        trimExistenceCacheIfNeeded();
     }
 
     private void ensureBodyFile(Connection conn, String hash, byte[] body) throws SQLException {
@@ -299,6 +308,7 @@ public class PoolManager {
         }
 
         existenceCache.put("file:" + hash, true);
+        trimExistenceCacheIfNeeded();
     }
 
     /**
@@ -357,17 +367,42 @@ public class PoolManager {
     }
 
     /**
-     * 缓存大小控制
+     * 缓存大小控制 - 使用部分淘汰策略，避免一次性清除所有缓存
      */
     private void trimStringCacheIfNeeded() {
         if (stringCache.size() > MAX_STRING_CACHE_SIZE) {
-            stringCache.clear();
+            evictCache(stringCache, (int) (MAX_STRING_CACHE_SIZE * CACHE_EVICT_RATIO));
         }
     }
 
     private void trimHeaderCacheIfNeeded() {
         if (headerCache.size() > MAX_HEADER_CACHE_SIZE) {
-            headerCache.clear();
+            evictCache(headerCache, (int) (MAX_HEADER_CACHE_SIZE * CACHE_EVICT_RATIO));
+        }
+    }
+
+    private void trimExistenceCacheIfNeeded() {
+        if (existenceCache.size() > MAX_CACHE_SIZE) {
+            evictCache(existenceCache, (int) (MAX_CACHE_SIZE * CACHE_EVICT_RATIO));
+        }
+    }
+
+    /**
+     * 通用缓存淘汰：保留 targetSize 条目，移除多余条目
+     * ConcurrentHashMap 无序，所以这里是随机淘汰（近似 FIFO）
+     */
+    private <K, V> void evictCache(ConcurrentHashMap<K, V> cache, int targetSize) {
+        int toRemove = cache.size() - targetSize;
+        if (toRemove <= 0) {
+            return;
+        }
+        int removed = 0;
+        for (K key : cache.keySet()) {
+            if (removed >= toRemove) {
+                break;
+            }
+            cache.remove(key);
+            removed++;
         }
     }
 }
