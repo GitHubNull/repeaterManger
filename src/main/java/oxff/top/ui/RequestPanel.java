@@ -771,13 +771,12 @@ public class RequestPanel extends JPanel {
     }
 
     /**
-     * 发送请求并处理响应
+     * 发送请求并处理响应（异步方式，不阻塞UI线程）
      */
     private void sendRequest() {
         byte[] request = null;
         IRequestInfo requestInfo = null;
         String url = null;
-        IHttpRequestResponse response = null;
         
         try {
             // 获取请求数据
@@ -793,77 +792,124 @@ public class RequestPanel extends JPanel {
             
             BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (超时时间: " + getTimeout() + "秒)");
             
-            // 创建HTTP服务
-            URL urlObj = new URL(url);
-            String host = urlObj.getHost();
-            int port = urlObj.getPort() == -1 ? urlObj.getDefaultPort() : urlObj.getPort();
-            boolean useHttps = urlObj.getProtocol().equalsIgnoreCase("https");
+            // 禁用发送按钮，防止重复点击
+            sendButton.setEnabled(false);
+            sendButton.setText("发送中...");
             
-            // 发送请求
-            IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, useHttps);
-            response = BurpExtender.callbacks.makeHttpRequest(httpService, request);
+            // 在后台线程中发送请求，避免阻塞UI
+            final byte[] finalRequest = request;
+            final IRequestInfo finalRequestInfo = requestInfo;
+            final String finalUrl = url;
             
-            if (response != null && response.getResponse() != null) {
+            new Thread(() -> {
+                IHttpRequestResponse response = null;
                 try {
-                    // 解析URL组件
-                    URL parsedUrl = requestInfo.getUrl();
-                    String protocol = parsedUrl.getProtocol();
-                    String domain = parsedUrl.getHost();
-                    String path = parsedUrl.getPath();
-                    String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-                    String method = requestInfo.getMethod();
+                    // 创建HTTP服务
+                    URL urlObj = new URL(finalUrl);
+                    String host = urlObj.getHost();
+                    int port = urlObj.getPort() == -1 ? urlObj.getDefaultPort() : urlObj.getPort();
+                    boolean useHttps = urlObj.getProtocol().equalsIgnoreCase("https");
                     
-                    // 保存请求到数据库
-                    RequestDAO requestDAO = new RequestDAO();
-                    int requestId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
+                    // 发送请求
+                    IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, useHttps);
+                    response = BurpExtender.callbacks.makeHttpRequest(httpService, finalRequest);
                     
-                    if (requestId > 0) {
-                        // 保存响应到数据库
-                        HistoryDAO historyDAO = new HistoryDAO();
-                        int historyId = historyDAO.saveHistory(requestId, requestInfo, request, response.getResponse());
-                        
-                        if (historyId > 0) {
-                            // 更新UI
-                            if (responseEditor != null) {
-                                responseEditor.setText(response.getResponse());
+                    final IHttpRequestResponse finalResponse = response;
+                    
+                    if (finalResponse != null && finalResponse.getResponse() != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            try {
+                                handleSuccessfulResponse(finalRequest, finalRequestInfo, finalResponse, finalUrl);
+                            } catch (Exception e) {
+                                BurpExtender.printError("[!] 处理响应时出错: " + e.getMessage());
                             }
-                            
-                            // 更新历史记录面板
-                            if (mainUI != null && mainUI.getHistoryPanel() != null) {
-                                mainUI.getHistoryPanel().addHistoryRecord(requestId, response);
-                            }
-                            
-                            BurpExtender.printOutput("[+] 请求和响应已保存到数据库，请求ID: " + requestId + ", 历史ID: " + historyId);
-                        } else {
-                            BurpExtender.printError("[!] 保存响应到数据库失败");
-                            throw new Exception("保存响应到数据库失败");
-                        }
+                        });
                     } else {
-                        BurpExtender.printError("[!] 保存请求到数据库失败");
-                        throw new Exception("保存请求到数据库失败");
+                        SwingUtilities.invokeLater(() -> {
+                            BurpExtender.printError("[!] 请求发送失败");
+                            JOptionPane.showMessageDialog(RequestPanel.this,
+                                "请求发送失败，未收到响应",
+                                "错误",
+                                JOptionPane.ERROR_MESSAGE);
+                        });
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 数据库操作失败: " + e.getMessage());
-                    throw e;
+                    SwingUtilities.invokeLater(() -> {
+                        BurpExtender.printError("[!] 发送请求时出错: " + e.getMessage());
+                        JOptionPane.showMessageDialog(RequestPanel.this,
+                            "发送请求失败: " + e.getMessage(),
+                            "错误",
+                            JOptionPane.ERROR_MESSAGE);
+                    });
+                } finally {
+                    // 无论成功与否，都在后台线程保存历史记录
+                    saveHistoryRecord(finalRequest, finalRequestInfo, response, finalUrl);
+                    // 恢复发送按钮状态
+                    SwingUtilities.invokeLater(() -> {
+                        sendButton.setEnabled(true);
+                        sendButton.setText("发送请求");
+                    });
                 }
-            } else {
-                BurpExtender.printError("[!] 请求发送失败");
-                throw new Exception("请求发送失败，未收到响应");
-            }
+            }, "EnhancedRepeater-SendRequest").start();
+            
         } catch (Exception e) {
-            BurpExtender.printError("[!] 发送请求时出错: " + e.getMessage());
+            BurpExtender.printError("[!] 准备请求时出错: " + e.getMessage());
+            sendButton.setEnabled(true);
+            sendButton.setText("发送请求");
             // 显示错误对话框
             SwingUtilities.invokeLater(() -> {
                 JOptionPane.showMessageDialog(
                     this,
-                    "发送请求失败: " + e.getMessage(),
+                    "准备请求失败: " + e.getMessage(),
                     "错误",
                     JOptionPane.ERROR_MESSAGE
                 );
             });
-        } finally {
-            // 确保无论请求成功与否都保存历史记录
-            saveHistoryRecord(request, requestInfo, response, url);
+        }
+    }
+    
+    /**
+     * 处理成功响应（在EDT中调用）
+     */
+    private void handleSuccessfulResponse(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url) {
+        try {
+            // 解析URL组件
+            URL parsedUrl = requestInfo.getUrl();
+            String protocol = parsedUrl.getProtocol();
+            String domain = parsedUrl.getHost();
+            String path = parsedUrl.getPath();
+            String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+            String method = requestInfo.getMethod();
+            
+            // 更新响应编辑器
+            if (responseEditor != null) {
+                responseEditor.setText(response.getResponse());
+            }
+            
+            // 保存请求到数据库
+            RequestDAO requestDAO = new RequestDAO();
+            int requestId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
+            
+            if (requestId > 0) {
+                // 保存响应到数据库
+                HistoryDAO historyDAO = new HistoryDAO();
+                int historyId = historyDAO.saveHistory(requestId, requestInfo, request, response.getResponse());
+                
+                if (historyId > 0) {
+                    // 更新历史记录面板
+                    if (mainUI != null && mainUI.getHistoryPanel() != null) {
+                        mainUI.getHistoryPanel().addHistoryRecord(requestId, response);
+                    }
+                    
+                    BurpExtender.printOutput("[+] 请求和响应已保存到数据库，请求ID: " + requestId + ", 历史ID: " + historyId);
+                } else {
+                    BurpExtender.printError("[!] 保存响应到数据库失败");
+                }
+            } else {
+                BurpExtender.printError("[!] 保存请求到数据库失败");
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 处理响应数据时出错: " + e.getMessage());
         }
     }
     

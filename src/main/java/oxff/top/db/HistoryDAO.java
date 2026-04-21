@@ -108,8 +108,7 @@ public class HistoryDAO {
         try {
             conn = DatabaseManager.getInstance().getConnection();
             
-            // 简化事务管理，直接使用自动提交模式
-            BurpExtender.printOutput("[*] 开始保存历史记录（IRequestInfo）");
+            // 简化事务管理，直接使用自动提交模式;
             
             int historyId = saveHistoryInternal(conn, requestId, requestInfo, requestData, responseData);
             
@@ -266,8 +265,7 @@ public class HistoryDAO {
             
             conn = dbManager.getConnection();
             
-            // 简化事务管理，直接使用自动提交模式
-            BurpExtender.printOutput("[*] 开始保存历史记录");
+            // 简化事务管理，直接使用自动提交模式;
             
             int historyId = saveHistoryInternal(conn, record);
             

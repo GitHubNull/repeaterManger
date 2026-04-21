@@ -4,7 +4,6 @@ import burp.BurpExtender;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
 import oxff.top.db.HistoryDAO;
-import oxff.top.db.DatabaseManager;
 import oxff.top.http.RequestResponseRecord;
 import java.util.Date;
 import java.util.List;
@@ -95,20 +94,11 @@ public class HistoryRecordingService {
      */
     private void processRecordingTask(RecordingTask task) {
         try {
-            // 验证数据库连接
-            if (!DatabaseManager.getInstance().isConnectionValid()) {
-                BurpExtender.printError("[!] 数据库连接无效，跳过历史记录保存");
-                if (task.callback != null) {
-                    task.callback.onFailure("数据库连接无效");
-                }
-                return;
-            }
-            
+            // 直接保存历史记录，跳过连接有效性检查（SQLite本地文件，连接几乎不会失效）
             // 保存历史记录
             int historyId = historyDAO.saveHistory(task.record);
             
             if (historyId > 0) {
-                BurpExtender.printOutput("[+] 历史记录保存成功，ID: " + historyId);
                 if (task.callback != null) {
                     task.callback.onSuccess(historyId);
                 }

@@ -18,6 +18,8 @@ import java.net.HttpURLConnection;
 import java.net.Proxy;
 import java.net.URL;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -35,7 +37,7 @@ public class RequestManager {
         void onFailure(String errorMessage);
     }
     
-    private static final int MAX_RETRIES = 3;
+    // 不再重试，单次请求直接返回结果（重试会导致请求耗时翻倍）
     private final ExecutorService executor;
     private final HistoryRecordingService recordingService;
     
@@ -109,53 +111,37 @@ public class RequestManager {
         // 记录请求开始时间
         long startTime = System.currentTimeMillis();
         
-        // 创建Future任务
+        // 创建Future任务（单次请求，不重试，避免耗时翻倍）
         Future<byte[]> future = executor.submit(() -> {
-            // 重试机制
-            for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
-                try {
-                    if (attempt > 0) {
-                        // 非首次尝试，输出重试信息
-                        BurpExtender.printOutput(
-                            String.format("[*] 第%d次重试发送请求...", attempt + 1));
-                        // 指数退避策略
-                        Thread.sleep(1000 * (1 << attempt));
-                    }
-                    
-                    // 创建请求对象
-                    IHttpRequestResponse requestResponse = 
-                        BurpExtender.callbacks.makeHttpRequest(service, requestBytes);
-                    
-                    // 获取响应数据
-                    byte[] response = requestResponse.getResponse();
-                    
-                    if (response != null && response.length > 0) {
-                        // 计算响应时间
-                        long responseTime = System.currentTimeMillis() - startTime;
-                        
-                        // 解析响应信息
-                        IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
-                        
-                        // 记录成功的历史记录
-                        recordingService.recordSuccess(requestId, requestBytes, response, 
-                                                      requestInfo, responseInfo, responseTime);
-                        
-                        return response;
-                    } else {
-                        BurpExtender.printError("[!] 收到空响应，准备重试...");
-                    }
-                } catch (Exception e) {
-                    BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
+            try {
+                // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正）
+                byte[] fixedBytes = updateContentLength(requestBytes, service);
+
+                // 单次发送，不重试
+                IHttpRequestResponse requestResponse =
+                    BurpExtender.callbacks.makeHttpRequest(service, fixedBytes);
+
+                byte[] response = requestResponse.getResponse();
+                long responseTime = System.currentTimeMillis() - startTime;
+
+                if (response != null && response.length > 0) {
+                    IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                    recordingService.recordSuccess(requestId, fixedBytes, response,
+                                                  requestInfo, responseInfo, responseTime);
+                    return response;
+                } else {
+                    BurpExtender.printError("[!] 收到空响应");
+                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                 "收到空响应", responseTime);
+                    return null;
                 }
+            } catch (Exception e) {
+                long responseTime = System.currentTimeMillis() - startTime;
+                BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
+                recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                                             "请求发送失败: " + e.getMessage(), responseTime);
+                return null;
             }
-            
-            // 请求失败，记录失败历史
-            long responseTime = System.currentTimeMillis() - startTime;
-            recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                         "达到最大重试次数，请求失败", responseTime);
-            
-            BurpExtender.printError("[!] 达到最大重试次数，请求失败");
-            return null;
         });
         
         try {
@@ -248,8 +234,8 @@ public class RequestManager {
                             proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
                     byte[] proxyResponse = makeHttpRequestWithProxy(
                         requestBytes, service, timeoutSeconds);
+                    long responseTime = System.currentTimeMillis() - startTime;
                     if (proxyResponse != null) {
-                        long responseTime = System.currentTimeMillis() - startTime;
                         IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(proxyResponse);
                         recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
                             requestInfo, responseInfo, responseTime);
@@ -259,67 +245,44 @@ public class RequestManager {
                         if (callback != null) {
                             callback.onSuccess(proxyResponse);
                         }
-                        return;
                     } else {
-                        BurpExtender.printError("[!] 代理请求返回空响应，尝试直接发送...");
+                        BurpExtender.printError("[!] 代理请求返回空响应");
+                        recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                                                     "代理请求返回空响应", responseTime);
+                        if (callback != null) {
+                            callback.onFailure("代理请求返回空响应");
+                        }
                     }
+                    return;
                 }
 
-                // 重试机制
-                for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
-                    try {
-                        if (attempt > 0) {
-                            // 非首次尝试，输出重试信息
-                            BurpExtender.printOutput(
-                                String.format("[*] 第%d次重试发送请求...", attempt + 1));
-                            // 指数退避策略
-                            Thread.sleep(1000 * (1 << attempt));
-                        }
-                        
-                        // 创建请求对象
-                        IHttpRequestResponse requestResponse = 
-                            BurpExtender.callbacks.makeHttpRequest(service, requestBytes);
-                        
-                        // 计算请求耗时
-                        long endTime = System.currentTimeMillis();
-                        long responseTime = endTime - startTime;
-                        
-                        // 获取响应数据
-                        byte[] response = requestResponse.getResponse();
-                        
-                        if (response != null && response.length > 0) {
-                            // 解析响应信息
-                            IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
-                            
-                            // 记录成功的历史记录
-                            recordingService.recordSuccess(requestId, requestBytes, response, 
-                                                          requestInfo, responseInfo, responseTime);
-                            
-                            BurpExtender.printOutput(
-                                String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节", 
-                                    responseTime, response.length));
-                            if (callback != null) {
-                                callback.onSuccess(response);
-                            }
-                            return;
-                        } else {
-                            BurpExtender.printError("[!] 收到空响应，准备重试...");
-                        }
-                    } catch (Exception e) {
-                        BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
-                        // 记录异常堆栈信息
-                        e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
-                    }
-                }
-                
-                // 达到最大重试次数，请求失败
+                // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正功能）
+                byte[] fixedBytes = updateContentLength(requestBytes, service);
+
+                // 单次发送，不重试，避免请求耗时翻倍
+                IHttpRequestResponse requestResponse =
+                    BurpExtender.callbacks.makeHttpRequest(service, fixedBytes);
+
                 long responseTime = System.currentTimeMillis() - startTime;
-                recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                             "达到最大重试次数，请求失败", responseTime);
-                
-                BurpExtender.printError("[!] 达到最大重试次数，请求失败");
-                if (callback != null) {
-                    callback.onFailure("达到最大重试次数，请求失败");
+                byte[] response = requestResponse.getResponse();
+
+                if (response != null && response.length > 0) {
+                    IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                    recordingService.recordSuccess(requestId, fixedBytes, response,
+                                                  requestInfo, responseInfo, responseTime);
+                    BurpExtender.printOutput(
+                        String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
+                            responseTime, response.length));
+                    if (callback != null) {
+                        callback.onSuccess(response);
+                    }
+                } else {
+                    BurpExtender.printError("[!] 收到空响应");
+                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                 "收到空响应", responseTime);
+                    if (callback != null) {
+                        callback.onFailure("收到空响应");
+                    }
                 }
             } catch (Exception e) {
                 BurpExtender.printError("[!] 发送请求时发生异常: " + e.getMessage());
@@ -350,6 +313,36 @@ public class RequestManager {
         });
     }
     
+    /**
+     * 自动更新请求的 Content-Length 头，确保与实际 body 大小一致。
+     * 与 Burp Repeater 的"Update Content-Length"功能相同，防止因 Content-Length 不匹配
+     * 导致服务器等待更多数据而引发的超时（通常表现为请求耗时 8-11 秒）。
+     *
+     * @param requestBytes 原始请求字节数组
+     * @param service      HTTP 服务信息（用于 Burp 解析）
+     * @return 已修正 Content-Length 的请求字节数组，失败时返回原始数组
+     */
+    private byte[] updateContentLength(byte[] requestBytes, IHttpService service) {
+        try {
+            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+            int bodyOffset = reqInfo.getBodyOffset();
+            byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
+            List<String> headers = new ArrayList<>(reqInfo.getHeaders());
+
+            // 移除所有现有的 Content-Length 头，再按实际 body 长度重新添加
+            headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
+            if (body.length > 0) {
+                headers.add("Content-Length: " + body.length);
+            }
+
+            return BurpExtender.helpers.buildHttpMessage(headers, body);
+        } catch (Exception e) {
+            // 更新失败时使用原始请求，不阻断主流程
+            BurpExtender.printError("[!] 更新 Content-Length 失败，使用原始请求: " + e.getMessage());
+            return requestBytes;
+        }
+    }
+
     /**
      * 构建HTTP服务对象
      * 优先使用原始HTTP服务信息（包含正确的协议），否则从请求数据中推断

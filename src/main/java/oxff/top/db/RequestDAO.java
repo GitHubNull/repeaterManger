@@ -223,7 +223,6 @@ public class RequestDAO {
                     byte[] requestData = rs.getBytes("request_data");
                     if (requestData != null && requestData.length > 0) {
                         request.put("request_data", requestData);
-                        BurpExtender.printOutput("[*] 加载请求ID: " + id + ", 数据大小: " + requestData.length + " 字节");
                     } else {
                         // 如果请求数据为空，创建一个简单的请求
                         String basicRequest = createBasicRequest(
@@ -292,7 +291,6 @@ public class RequestDAO {
                         byte[] requestData = rs.getBytes("request_data");
                         if (requestData != null && requestData.length > 0) {
                             request.put("request_data", requestData);
-                            BurpExtender.printOutput("[*] 加载请求ID: " + requestId + ", 数据大小: " + requestData.length + " 字节");
                         } else {
                             // 如果请求数据为空，创建一个简单的请求
                             String basicRequest = createBasicRequest(

@@ -274,7 +274,7 @@ public class EnhancedRepeaterUI implements ITab {
     }
     
     /**
-     * 从请求列表的表格数据中重建IHttpService
+     * 从请求数据中重建IHttpService
      * 解决从已保存请求重新发送时HTTPS协议丢失的问题
      * 
      * @param requestId 请求ID
@@ -283,10 +283,10 @@ public class EnhancedRepeaterUI implements ITab {
      */
     private IHttpService rebuildHttpServiceFromRequestList(int requestId, byte[] requestData) {
         try {
-            // 从请求列表的表格中查找协议、主机信息
             String protocol = "http";
             String host = "";
             int port = 80;
+            
             // 从请求数据中提取host和port
             IRequestInfo tempInfo = BurpExtender.helpers.analyzeRequest(requestData);
             List<String> headers = tempInfo.getHeaders();
@@ -308,23 +308,39 @@ public class EnhancedRepeaterUI implements ITab {
                 }
             }
             
-            // 从数据库中获取保存的协议信息（这是最可靠的方式）
+            // 从数据库中获取保存的协议信息（按ID单条查询，避免全表扫描）
             try {
                 oxff.top.db.RequestDAO requestDAO = new oxff.top.db.RequestDAO();
-                java.util.List<java.util.Map<String, Object>> requests = requestDAO.getAllRequests();
-                for (java.util.Map<String, Object> req : requests) {
-                    if ((Integer) req.get("id") == requestId) {
-                        protocol = (String) req.get("protocol");
-                        host = (String) req.get("domain");
-                        break;
+                java.util.Map<String, Object> request = requestDAO.getRequest(requestId);
+                if (request != null) {
+                    protocol = (String) request.get("protocol");
+                    String dbDomain = (String) request.get("domain");
+                    if (dbDomain != null && !dbDomain.isEmpty()) {
+                        host = dbDomain;
                     }
                 }
             } catch (Exception e) {
                 BurpExtender.printOutput("[*] 从数据库获取协议信息失败，使用请求数据推断: " + e.getMessage());
             }
             
-            // 根据协议设置默认端口
+            // 综合判断HTTPS：优先数据库协议，再结合请求头判断
             boolean isSecure = protocol.equalsIgnoreCase("https");
+            
+            // 额外检查请求头中的HTTPS指示
+            if (!isSecure) {
+                String firstLine = headers.get(0);
+                if (firstLine.contains("https://")) {
+                    isSecure = true;
+                }
+                for (String header : headers) {
+                    if (header.toLowerCase().startsWith("host:") && header.contains(":443")) {
+                        isSecure = true;
+                        break;
+                    }
+                }
+            }
+            
+            // 根据协议设置默认端口
             if (isSecure && port == 80) {
                 port = 443;
             } else if (!isSecure && port == 443) {

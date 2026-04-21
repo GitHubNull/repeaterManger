@@ -10,16 +10,25 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 /**
  * 数据库管理类，负责管理数据库连接
- * 每次插件加载都会生成新的数据库文件
+ * 使用连接池复用连接，避免频繁创建/销毁连接的开销
  */
 public class DatabaseManager {
     private static DatabaseManager instance;
     private final DatabaseConfig dbConfig;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final Object connectionLock = new Object();
+
+    // 连接池：复用数据库连接，避免每次请求都新建连接
+    private static final int POOL_SIZE = 5;
+    private final BlockingQueue<Connection> connectionPool = new ArrayBlockingQueue<>(POOL_SIZE);
 
     // 当前会话的数据库文件路径
     private String currentDbPath;
@@ -59,6 +68,17 @@ public class DatabaseManager {
     public void closeConnections() {
         synchronized (connectionLock) {
             BurpExtender.printOutput("[*] 正在关闭数据库连接管理器...");
+            // 关闭连接池中的所有连接
+            Connection conn;
+            while ((conn = connectionPool.poll()) != null) {
+                try {
+                    if (!conn.isClosed()) {
+                        conn.close();
+                    }
+                } catch (SQLException e) {
+                    // 忽略关闭错误
+                }
+            }
             initialized.set(false);
             BurpExtender.printOutput("[+] 数据库连接管理器已关闭");
         }
@@ -70,6 +90,17 @@ public class DatabaseManager {
     public void resetForNewSession() {
         synchronized (connectionLock) {
             BurpExtender.printOutput("[*] 重置数据库管理器以开始新会话...");
+            // 先关闭现有连接池中的连接
+            Connection conn;
+            while ((conn = connectionPool.poll()) != null) {
+                try {
+                    if (!conn.isClosed()) {
+                        conn.close();
+                    }
+                } catch (SQLException e) {
+                    // 忽略关闭错误
+                }
+            }
             initialized.set(false);
             currentDbPath = null;
             BurpExtender.printOutput("[+] 数据库管理器已重置，下次初始化将使用新数据库文件");
@@ -128,6 +159,16 @@ public class DatabaseManager {
                 initializeTablesWithConnection(tempConnection);
             }
 
+            // 预填充连接池
+            connectionPool.clear();
+            for (int i = 0; i < POOL_SIZE; i++) {
+                Connection poolConn = createNewConnection();
+                if (poolConn != null) {
+                    connectionPool.offer(poolConn);
+                }
+            }
+            BurpExtender.printOutput("[+] 数据库连接池已创建，大小: " + connectionPool.size());
+
             initialized.set(true);
             BurpExtender.printOutput("[+] 数据库初始化成功: " + currentDbPath);
             return true;
@@ -141,7 +182,27 @@ public class DatabaseManager {
     }
 
     /**
-     * 获取数据库连接（每次创建新连接）
+     * 创建新的数据库连接（内部方法）
+     */
+    private Connection createNewConnection() throws SQLException {
+        File dbFile = new File(currentDbPath);
+        String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
+        Connection conn = DriverManager.getConnection(jdbcUrl);
+
+        // 设置SQLite配置（仅在连接创建时执行一次）
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("PRAGMA journal_mode=DELETE");
+            stmt.execute("PRAGMA synchronous=NORMAL");
+            stmt.execute("PRAGMA foreign_keys=ON");
+        }
+
+        return conn;
+    }
+
+    /**
+     * 获取数据库连接（从连接池获取，返回代理连接）
+     * 返回的Connection代理在调用close()时会自动归还到连接池，
+     * 因此现有使用try-with-resources的代码无需修改。
      */
     public Connection getConnection() throws SQLException {
         if (!initialized.get()) {
@@ -155,25 +216,110 @@ public class DatabaseManager {
             }
         }
 
-        synchronized (connectionLock) {
-            try {
-                // 每次创建新连接，使用当前会话的数据库路径
-                File dbFile = new File(currentDbPath);
-                String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
-                Connection newConnection = DriverManager.getConnection(jdbcUrl);
-
-                // 设置SQLite配置
-                try (Statement stmt = newConnection.createStatement()) {
-                    stmt.execute("PRAGMA journal_mode=DELETE");
-                    stmt.execute("PRAGMA synchronous=NORMAL");
-                    stmt.execute("PRAGMA foreign_keys=ON");
-                }
-
-                return newConnection;
-            } catch (Exception e) {
-                BurpExtender.printError("[!] 创建数据库连接失败: " + e.getMessage());
-                throw new SQLException("创建数据库连接失败: " + e.getMessage());
+        try {
+            // 从连接池获取连接（最多等待2秒）
+            Connection conn = connectionPool.poll(2, java.util.concurrent.TimeUnit.SECONDS);
+            if (conn == null || conn.isClosed()) {
+                // 如果池中连接不可用，创建新连接
+                conn = createNewConnection();
             }
+            // 返回代理连接，close()时自动归还到池中
+            return createPooledConnectionProxy(conn);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            // 中断时直接创建新连接
+            return createPooledConnectionProxy(createNewConnection());
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 获取数据库连接失败: " + e.getMessage());
+            throw new SQLException("获取数据库连接失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 创建连接池代理：拦截close()调用，将连接归还到池中而非真正关闭
+     * 这样现有的try-with-resources代码无需修改即可自动复用连接
+     */
+    private Connection createPooledConnectionProxy(Connection realConnection) {
+        return (Connection) Proxy.newProxyInstance(
+            Connection.class.getClassLoader(),
+            new Class[]{Connection.class},
+            new PooledConnectionInvocationHandler(realConnection)
+        );
+    }
+
+    /**
+     * 连接池代理的调用处理器
+     * 拦截close()方法，将连接归还到池中
+     */
+    private class PooledConnectionInvocationHandler implements InvocationHandler {
+        private final Connection realConnection;
+        private boolean closed = false;
+
+        PooledConnectionInvocationHandler(Connection realConnection) {
+            this.realConnection = realConnection;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            // 拦截close()方法，归还连接到池中
+            if ("close".equals(method.getName())) {
+                if (!closed) {
+                    closed = true;
+                    // 确保连接处于自动提交模式（SQLite默认）
+                    try {
+                        if (!realConnection.getAutoCommit()) {
+                            realConnection.setAutoCommit(true);
+                        }
+                    } catch (SQLException e) {
+                        // 忽略
+                    }
+                    // 归还到连接池
+                    if (!realConnection.isClosed()) {
+                        if (!connectionPool.offer(realConnection)) {
+                            // 池已满，真正关闭连接
+                            realConnection.close();
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // 拦截isClosed()方法，返回代理的关闭状态
+            if ("isClosed".equals(method.getName())) {
+                return closed || realConnection.isClosed();
+            }
+
+            // 如果代理已关闭，除close/isClosed外的方法都抛异常
+            if (closed) {
+                throw new SQLException("Connection is closed");
+            }
+
+            // 其他方法委托给真实连接
+            return method.invoke(realConnection, args);
+        }
+    }
+
+    /**
+     * 归还数据库连接到连接池
+     * @deprecated 使用连接代理后无需手动调用，close()会自动归还
+     */
+    @Deprecated
+    public void returnConnection(Connection conn) {
+        if (conn == null) return;
+        try {
+            // 如果是代理连接，直接close即可归还
+            if (Proxy.isProxyClass(conn.getClass())) {
+                conn.close();
+                return;
+            }
+            // 原始连接直接归还到池
+            if (!conn.isClosed()) {
+                if (!connectionPool.offer(conn)) {
+                    conn.close();
+                }
+            }
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 归还数据库连接失败: " + e.getMessage());
         }
     }
 
