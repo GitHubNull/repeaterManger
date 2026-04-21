@@ -33,8 +33,8 @@ public class RequestManager {
      * 请求回调接口
      */
     public interface RequestCallback {
-        void onSuccess(byte[] response);
-        void onFailure(String errorMessage);
+        void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs);
+        void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs);
     }
     
     // 不再重试，单次请求直接返回结果（重试会导致请求耗时翻倍）
@@ -201,7 +201,7 @@ public class RequestManager {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             if (callback != null) {
-                callback.onFailure("请求数据为空");
+                callback.onFailure("请求数据为空", 0, 0, 0);
             }
             return;
         }
@@ -243,14 +243,14 @@ public class RequestManager {
                             String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
                                 responseTime, proxyResponse.length));
                         if (callback != null) {
-                            callback.onSuccess(proxyResponse);
+                            callback.onSuccess(proxyResponse, startTime, System.currentTimeMillis(), responseTime);
                         }
                     } else {
                         BurpExtender.printError("[!] 代理请求返回空响应");
                         recordingService.recordFailure(requestId, requestBytes, requestInfo,
                                                      "代理请求返回空响应", responseTime);
                         if (callback != null) {
-                            callback.onFailure("代理请求返回空响应");
+                            callback.onFailure("代理请求返回空响应", startTime, System.currentTimeMillis(), responseTime);
                         }
                     }
                     return;
@@ -274,14 +274,14 @@ public class RequestManager {
                         String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
                             responseTime, response.length));
                     if (callback != null) {
-                        callback.onSuccess(response);
+                        callback.onSuccess(response, startTime, System.currentTimeMillis(), responseTime);
                     }
                 } else {
                     BurpExtender.printError("[!] 收到空响应");
                     recordingService.recordFailure(requestId, fixedBytes, requestInfo,
                                                  "收到空响应", responseTime);
                     if (callback != null) {
-                        callback.onFailure("收到空响应");
+                        callback.onFailure("收到空响应", startTime, System.currentTimeMillis(), responseTime);
                     }
                 }
             } catch (Exception e) {
@@ -307,7 +307,7 @@ public class RequestManager {
                 }
                 
                 if (callback != null) {
-                    callback.onFailure("发送请求时发生异常: " + e.getMessage());
+                    callback.onFailure("发送请求时发生异常: " + e.getMessage(), startTime, System.currentTimeMillis(), responseTime);
                 }
             }
         });

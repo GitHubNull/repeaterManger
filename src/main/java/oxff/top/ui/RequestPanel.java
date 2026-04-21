@@ -800,6 +800,7 @@ public class RequestPanel extends JPanel {
             final byte[] finalRequest = request;
             final IRequestInfo finalRequestInfo = requestInfo;
             final String finalUrl = url;
+            final long requestStartTime = System.currentTimeMillis();
             
             new Thread(() -> {
                 IHttpRequestResponse response = null;
@@ -815,11 +816,12 @@ public class RequestPanel extends JPanel {
                     response = BurpExtender.callbacks.makeHttpRequest(httpService, finalRequest);
                     
                     final IHttpRequestResponse finalResponse = response;
+                    final long elapsedMs = System.currentTimeMillis() - requestStartTime;
                     
                     if (finalResponse != null && finalResponse.getResponse() != null) {
                         SwingUtilities.invokeLater(() -> {
                             try {
-                                handleSuccessfulResponse(finalRequest, finalRequestInfo, finalResponse, finalUrl);
+                                handleSuccessfulResponse(finalRequest, finalRequestInfo, finalResponse, finalUrl, elapsedMs);
                             } catch (Exception e) {
                                 BurpExtender.printError("[!] 处理响应时出错: " + e.getMessage());
                             }
@@ -843,7 +845,8 @@ public class RequestPanel extends JPanel {
                     });
                 } finally {
                     // 无论成功与否，都在后台线程保存历史记录
-                    saveHistoryRecord(finalRequest, finalRequestInfo, response, finalUrl);
+                    long elapsedMs = System.currentTimeMillis() - requestStartTime;
+                    saveHistoryRecord(finalRequest, finalRequestInfo, response, finalUrl, elapsedMs);
                     // 恢复发送按钮状态
                     SwingUtilities.invokeLater(() -> {
                         sendButton.setEnabled(true);
@@ -871,7 +874,7 @@ public class RequestPanel extends JPanel {
     /**
      * 处理成功响应（在EDT中调用）
      */
-    private void handleSuccessfulResponse(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url) {
+    private void handleSuccessfulResponse(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url, long elapsedMs) {
         try {
             // 解析URL组件
             URL parsedUrl = requestInfo.getUrl();
@@ -893,7 +896,7 @@ public class RequestPanel extends JPanel {
             if (requestId > 0) {
                 // 保存响应到数据库
                 HistoryDAO historyDAO = new HistoryDAO();
-                int historyId = historyDAO.saveHistory(requestId, requestInfo, request, response.getResponse());
+                int historyId = historyDAO.saveHistory(requestId, requestInfo, request, response.getResponse(), elapsedMs);
                 
                 if (historyId > 0) {
                     // 更新历史记录面板
@@ -916,7 +919,7 @@ public class RequestPanel extends JPanel {
     /**
      * 保存历史记录
      */
-    private void saveHistoryRecord(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url) {
+    private void saveHistoryRecord(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url, long responseTime) {
         try {
             // 确保必要的参数不为空
             if (request == null || requestInfo == null) {
@@ -944,6 +947,7 @@ public class RequestPanel extends JPanel {
             record.setPath(path);
             record.setQueryParameters(query);
             record.setRequestData(request);
+            record.setResponseTime((int) responseTime);
             record.setTimestamp(new java.util.Date());
             
             // 设置响应相关数据
@@ -987,4 +991,4 @@ public class RequestPanel extends JPanel {
             BurpExtender.printError("[!] 保存历史记录时出错: " + e.getMessage());
         }
     }
-} 
+}

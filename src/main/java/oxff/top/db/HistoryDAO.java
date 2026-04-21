@@ -27,7 +27,7 @@ public class HistoryDAO {
     /**
      * 内部历史记录保存方法（用于IRequestInfo参数）
      */
-    private int saveHistoryInternal(Connection conn, int requestId, IRequestInfo requestInfo, byte[] requestData, byte[] responseData) throws SQLException {
+    private int saveHistoryInternal(Connection conn, int requestId, IRequestInfo requestInfo, byte[] requestData, byte[] responseData, long responseTime) throws SQLException {
         String url = requestInfo.getUrl().toString();
         String method = requestInfo.getMethod();
         int statusCode = BurpExtender.helpers.analyzeResponse(responseData).getStatusCode();
@@ -82,7 +82,7 @@ public class HistoryDAO {
             pstmt.setString(6, query);
             pstmt.setInt(7, statusCode);
             pstmt.setInt(8, responseData.length);
-            pstmt.setInt(9, 0); // response_time 默认为0
+            pstmt.setInt(9, (int) responseTime); // 响应耗时(ms)
             pstmt.setTimestamp(10, new java.sql.Timestamp(System.currentTimeMillis()));
             pstmt.setBytes(11, requestData);
             pstmt.setBytes(12, responseData);
@@ -103,14 +103,14 @@ public class HistoryDAO {
     /**
      * 保存历史记录（IRequestInfo版本）
      */
-    public int saveHistory(int requestId, IRequestInfo requestInfo, byte[] requestData, byte[] responseData) {
+    public int saveHistory(int requestId, IRequestInfo requestInfo, byte[] requestData, byte[] responseData, long responseTime) {
         Connection conn = null;
         try {
             conn = DatabaseManager.getInstance().getConnection();
             
             // 简化事务管理，直接使用自动提交模式;
             
-            int historyId = saveHistoryInternal(conn, requestId, requestInfo, requestData, responseData);
+            int historyId = saveHistoryInternal(conn, requestId, requestInfo, requestData, responseData, responseTime);
             
             if (historyId > 0) {
                 BurpExtender.printOutput("[+] 历史记录已保存，ID: " + historyId);
@@ -164,7 +164,7 @@ public class HistoryDAO {
                 fallbackRecord.setQueryParameters(query);
                 fallbackRecord.setStatusCode(BurpExtender.helpers.analyzeResponse(responseData).getStatusCode());
                 fallbackRecord.setResponseLength(responseData.length);
-                fallbackRecord.setResponseTime(0);
+                fallbackRecord.setResponseTime((int) responseTime);
                 fallbackRecord.setTimestamp(new java.util.Date());
                 fallbackRecord.setRequestData(requestData);
                 fallbackRecord.setResponseData(responseData);

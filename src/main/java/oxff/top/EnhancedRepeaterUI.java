@@ -9,6 +9,7 @@ import oxff.top.ui.HistoryPanel;
 import oxff.top.ui.RequestListPanel;
 import oxff.top.ui.ConfigPanel;
 import oxff.top.ui.LogPanel;
+import oxff.top.ui.StatusPanel;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
 import oxff.top.db.HistoryDAO;
@@ -50,6 +51,7 @@ public class EnhancedRepeaterUI implements ITab {
     private final HistoryPanel historyPanel;          // 右下历史记录
     private final ConfigPanel configPanel;            // 配置面板
     private final LogPanel logPanel;                  // 日志面板
+    private final StatusPanel statusPanel;            // 底部状态栏
     
     // 布局管理器
     private final LayoutManager layoutManager;
@@ -98,6 +100,9 @@ public class EnhancedRepeaterUI implements ITab {
         
         // 创建历史记录面板（右下）
         historyPanel = new HistoryPanel();
+
+        // 创建状态栏（底部）
+        statusPanel = new StatusPanel();
         
         // 设置发送请求按钮动作
         requestPanel.setSendButtonListener(e -> sendRequest());
@@ -112,6 +117,7 @@ public class EnhancedRepeaterUI implements ITab {
         JPanel editorPanel = new JPanel(new BorderLayout());
         editorPanel.add(editorControlPanel, BorderLayout.NORTH);
         editorPanel.add(editorSplitPane, BorderLayout.CENTER);
+        editorPanel.add(statusPanel, BorderLayout.SOUTH);
         
         // 创建左侧上下分割面板（请求列表 + 历史记录）
         leftSplitPane = new JSplitPane(
@@ -168,6 +174,7 @@ public class EnhancedRepeaterUI implements ITab {
         clearButton.addActionListener(e -> {
             requestPanel.clear();
             responsePanel.clear();
+            statusPanel.clear();
         });
         
         leftToolPanel.add(newRequestButton);
@@ -207,6 +214,7 @@ public class EnhancedRepeaterUI implements ITab {
     private void createNewRequest() {
         requestPanel.clear();
         responsePanel.clear();
+        statusPanel.clear();
         
         // 新建请求时重置HTTP服务信息
         currentHttpService = null;
@@ -245,6 +253,7 @@ public class EnhancedRepeaterUI implements ITab {
         // 清空编辑区域
         requestPanel.clear();
         responsePanel.clear();
+        statusPanel.clear();
         
         // 设置请求内容
         if (requestData != null && requestData.length > 0) {
@@ -472,11 +481,11 @@ public class EnhancedRepeaterUI implements ITab {
             // 传递currentHttpService以保留正确的协议信息（如HTTPS）
             requestManager.makeHttpRequestAsync(requestBytes, timeout, currentRequestId, currentHttpService, new RequestManager.RequestCallback() {
                 @Override
-                public void onSuccess(byte[] response) {
+                public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                     // 在EDT中更新UI
                     SwingUtilities.invokeLater(() -> {
                         try {
-                            handleResponseSuccess(requestBytes, response);
+                            handleResponseSuccess(requestBytes, response, requestTimeMs, responseTimeMs, durationMs);
                         } catch (Exception ex) {
                             BurpExtender.printError("[!] 处理响应时发生异常: " + ex.getMessage());
                             JOptionPane.showMessageDialog(mainPanel, 
@@ -490,12 +499,12 @@ public class EnhancedRepeaterUI implements ITab {
                 }
                 
                 @Override
-                public void onFailure(String errorMessage) {
+                public void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
                     // 在EDT中更新UI
                     SwingUtilities.invokeLater(() -> {
                         try {
                             // Record the failed request in history
-                            handleResponseFailure(requestBytes, errorMessage);
+                            handleResponseFailure(requestBytes, errorMessage, requestTimeMs, responseTimeMs, durationMs);
                             
                             BurpExtender.printError("[!] 请求失败: " + errorMessage);
                             JOptionPane.showMessageDialog(mainPanel, 
@@ -524,8 +533,10 @@ public class EnhancedRepeaterUI implements ITab {
     /**
      * 处理请求成功的响应
      */
-    private void handleResponseSuccess(byte[] requestBytes, byte[] response) {
+    private void handleResponseSuccess(byte[] requestBytes, byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
         if (response != null && response.length > 0) {
+            // 更新状态栏
+            statusPanel.updateStatus(true, response.length, requestTimeMs, responseTimeMs, durationMs);
             try {
                 // 设置响应面板内容
                 responsePanel.setResponse(response);
@@ -643,7 +654,7 @@ public class EnhancedRepeaterUI implements ITab {
                 
                 record.setStatusCode(statusCode);
                 record.setResponseLength(response.length);
-                record.setResponseTime(0);
+                record.setResponseTime((int) durationMs);
                 record.setRequestData(requestBytes);
                 record.setResponseData(response);
                 record.setTimestamp(new Date());
@@ -678,7 +689,9 @@ public class EnhancedRepeaterUI implements ITab {
     /**
      * 处理请求失败的响应
      */
-    private void handleResponseFailure(byte[] requestBytes, String errorMessage) {
+    private void handleResponseFailure(byte[] requestBytes, String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
+        // 更新状态栏
+        statusPanel.updateStatus(false, 0, requestTimeMs, responseTimeMs, durationMs);
         try {
             // 解析请求信息
             // 使用currentHttpService来解析请求，确保协议信息正确（如HTTPS）
@@ -747,7 +760,7 @@ public class EnhancedRepeaterUI implements ITab {
             
             record.setStatusCode(0);
             record.setResponseLength(0);
-            record.setResponseTime(0);
+            record.setResponseTime((int) durationMs);
             record.setRequestData(requestBytes);
             record.setResponseData(new byte[0]);
             record.setTimestamp(new Date());
@@ -905,6 +918,7 @@ public class EnhancedRepeaterUI implements ITab {
                 
                 // 清空响应内容
                 responsePanel.clear();
+                statusPanel.clear();
                 
                 // 更新历史面板标题
                 historyPanel.setBorderTitle("请求历史记录 - " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));

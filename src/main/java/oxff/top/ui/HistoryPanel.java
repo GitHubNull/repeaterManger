@@ -472,7 +472,7 @@ public class HistoryPanel extends JPanel {
             
             // 保存到数据库
             HistoryDAO historyDAO = new HistoryDAO();
-            int historyId = historyDAO.saveHistory(requestId, requestInfo, requestData, responseData);
+            int historyId = historyDAO.saveHistory(requestId, requestInfo, requestData, responseData, 0);
             
             if (historyId > 0) {
                 // 创建记录对象
