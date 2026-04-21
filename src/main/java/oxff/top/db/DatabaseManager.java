@@ -403,6 +403,16 @@ public class DatabaseManager {
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_domain ON history (domain)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_status_code ON history (status_code)");
 
+            // 修复AUTOINCREMENT序列：如果requests表为空，重置序列计数器
+            // 这是为了修复之前testDatabaseWithSampleData插入测试数据消耗ID的问题
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM requests")) {
+                if (rs.next() && rs.getInt(1) == 0) {
+                    // 表为空时，删除sqlite_sequence中的记录，使ID从1重新开始
+                    stmt.execute("DELETE FROM sqlite_sequence WHERE name = 'requests'");
+                    BurpExtender.printOutput("[*] requests表为空，已重置AUTOINCREMENT序列");
+                }
+            }
+
             BurpExtender.printOutput("[+] 数据库表结构初始化成功");
         }
     }
@@ -448,7 +458,9 @@ public class DatabaseManager {
     }
 
     /**
-     * 测试数据库连接并写入测试数据
+     * 测试数据库连接是否正常
+     * 注意：不再向requests表插入测试数据，避免消耗AUTOINCREMENT的ID序列，
+     * 导致用户实际请求的编号不从1开始。
      */
     public void testDatabaseWithSampleData() {
         if (!initialized.get()) {
@@ -456,77 +468,25 @@ public class DatabaseManager {
             return;
         }
 
-        Connection conn = null;
-        Statement stmt = null;
-        ResultSet rs = null;
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
 
-        try {
-            // 获取连接
-            conn = getConnection();
-            conn.setAutoCommit(false); // 开始事务
-
-            // 创建测试数据
-            stmt = conn.createStatement();
-
-            // 先检查是否存在测试数据
-            rs = stmt.executeQuery("SELECT COUNT(*) FROM requests WHERE domain = 'test.example.com'");
-            if (rs.next() && rs.getInt(1) > 0) {
-                // 如果存在测试数据，先删除
-                stmt.execute("DELETE FROM requests WHERE domain = 'test.example.com'");
-                BurpExtender.printOutput("[*] 已清理旧的测试数据");
-            }
-
-            // 插入新的测试数据
-            String testData = "INSERT INTO requests (protocol, domain, path, query, method, request_data, add_time) " +
-                             "VALUES ('http', 'test.example.com', '/', '', 'GET', 'test request', CURRENT_TIMESTAMP)";
-
-            int affectedRows = stmt.executeUpdate(testData);
-
-            if (affectedRows > 0) {
-                BurpExtender.printOutput("[+] 测试数据插入成功");
-                conn.commit(); // 提交事务
-
-                // 验证数据
-                rs = stmt.executeQuery("SELECT COUNT(*) FROM requests");
+            // 使用简单查询验证数据库连接和表结构，不写入任何数据
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM requests")) {
                 if (rs.next()) {
                     BurpExtender.printOutput("[*] 当前请求表记录数: " + rs.getInt(1));
                 }
-
-                // 删除测试数据
-                stmt.execute("DELETE FROM requests WHERE domain = 'test.example.com'");
-                conn.commit(); // 提交删除操作
-                BurpExtender.printOutput("[+] 测试数据已清理");
-
-                BurpExtender.printOutput("[+] 数据库测试完成");
-            } else {
-                BurpExtender.printError("[!] 测试数据插入失败");
-                conn.rollback();
             }
+
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM history")) {
+                if (rs.next()) {
+                    BurpExtender.printOutput("[*] 当前历史记录表记录数: " + rs.getInt(1));
+                }
+            }
+
+            BurpExtender.printOutput("[+] 数据库连接测试完成");
         } catch (Exception e) {
             BurpExtender.printError("[!] 数据库测试失败: " + e.getMessage());
-            try {
-                if (conn != null) {
-                    conn.rollback();
-                }
-            } catch (SQLException ex) {
-                BurpExtender.printError("[!] 回滚事务失败: " + ex.getMessage());
-            }
-        } finally {
-            // 确保所有资源都被正确关闭
-            try {
-                if (rs != null) rs.close();
-                if (stmt != null) stmt.close();
-                if (conn != null) {
-                    try {
-                        conn.setAutoCommit(true); // 恢复自动提交
-                    } catch (SQLException e) {
-                        // 忽略自动提交设置错误
-                    }
-                    conn.close();
-                }
-            } catch (SQLException e) {
-                BurpExtender.printError("[!] 关闭数据库资源失败: " + e.getMessage());
-            }
         }
     }
 }

@@ -409,6 +409,12 @@ public class RequestDAO {
             
             pstmt.executeUpdate();
             clearValidationCache();
+            
+            // 重置AUTOINCREMENT序列，使清空后新插入的记录ID从1开始
+            try (java.sql.Statement stmt = conn.createStatement()) {
+                stmt.execute("DELETE FROM sqlite_sequence WHERE name = 'requests'");
+            }
+            
             return true;
             
         } catch (SQLException e) {
