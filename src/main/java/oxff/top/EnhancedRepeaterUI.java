@@ -375,13 +375,15 @@ public class EnhancedRepeaterUI implements ITab {
         try {
             HistoryDAO historyDAO = new HistoryDAO();
             List<RequestResponseRecord> latestHistory = historyDAO.getLatestHistoryByRequestId(requestId, 1);
-            
+
             if (latestHistory != null && !latestHistory.isEmpty()) {
                 RequestResponseRecord latestRecord = latestHistory.get(0);
                 byte[] responseData = latestRecord.getResponseData();
-                
+
                 if (responseData != null && responseData.length > 0) {
                     responsePanel.setResponse(responseData);
+                    // 使用历史记录中的状态信息更新状态栏
+                    updateStatusFromRecord(latestRecord);
                     BurpExtender.printOutput("[+] 已加载请求ID " + requestId + " 的最新响应数据");
                 }
             }
@@ -802,6 +804,36 @@ public class EnhancedRepeaterUI implements ITab {
     }
     
     /**
+     * 根据历史记录更新状态栏
+     * 从RequestResponseRecord中提取状态码、响应大小、时间等信息
+     *
+     * @param record 请求响应历史记录
+     */
+    private void updateStatusFromRecord(RequestResponseRecord record) {
+        if (record == null) {
+            statusPanel.clear();
+            return;
+        }
+
+        int statusCode = record.getStatusCode();
+        boolean success = statusCode > 0 && statusCode < 400;
+
+        int responseSize = 0;
+        byte[] responseData = record.getResponseData();
+        if (responseData != null) {
+            responseSize = responseData.length;
+        }
+
+        // 从记录中恢复时间信息
+        int durationMs = record.getResponseTime();
+        long timestampMs = record.getTimestamp() != null ? record.getTimestamp().getTime() : 0;
+        long requestTimeMs = timestampMs - durationMs;
+        long responseTimeMs = timestampMs;
+
+        statusPanel.updateStatus(success, responseSize, requestTimeMs, responseTimeMs, durationMs);
+    }
+
+    /**
      * 设置鼠标指针样式
      */
     private void setCursor(Cursor cursor) {
@@ -819,10 +851,13 @@ public class EnhancedRepeaterUI implements ITab {
         if (record != null) {
             // 设置请求数据
             requestPanel.setRequest(record.getRequestData());
-            
+
             // 设置响应数据
             responsePanel.setResponse(record.getResponseData());
-            
+
+            // 使用历史记录中的状态信息更新状态栏
+            updateStatusFromRecord(record);
+
             BurpExtender.printOutput("[+] 已加载历史记录: " + record.toString());
         }
     }

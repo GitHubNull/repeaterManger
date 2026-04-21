@@ -188,6 +188,13 @@ public class HistoryPanel extends JPanel {
                 }
             }
         });
+
+        // 添加行选择变化监听，单击切换行时也触发回调以更新请求/响应/状态栏
+        historyTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                loadSelectedHistoryItem();
+            }
+        });
         
         // 设置状态码列的颜色渲染器
         historyTable.getColumnModel().getColumn(7).setCellRenderer(new DefaultTableCellRenderer() {
