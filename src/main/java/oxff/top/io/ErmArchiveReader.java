@@ -158,15 +158,41 @@ public class ErmArchiveReader {
             // 4. 解析清单
             ManifestInfo manifestInfo = parseManifest(entriesData, header);
             BurpExtender.printOutput("[+] 清单解析成功: app_version=" + manifestInfo.appVersion
-                    + ", blob_count=" + manifestInfo.blobCount);
+                    + ", format_version=" + manifestInfo.formatVersion
+                    + ", schema_version=" + manifestInfo.schemaVersion
+                    + ", blob_count=" + manifestInfo.blobCount
+                    + ", total_entries=" + manifestInfo.totalEntries);
+
+            // 4.1 校验清单格式版本一致性
+            if (manifestInfo.formatVersion != header.formatVersion) {
+                BurpExtender.printOutput("[!] 清单格式版本(" + manifestInfo.formatVersion
+                        + ")与文件头(" + header.formatVersion + ")不一致，以文件头为准");
+            }
+
+            // 4.2 校验清单schema版本兼容性
+            if (manifestInfo.schemaVersion > ErmFormatConstants.CURRENT_SCHEMA_VERSION) {
+                throw new IOException("存档schema版本(" + manifestInfo.schemaVersion
+                        + ")高于当前支持的版本(" + ErmFormatConstants.CURRENT_SCHEMA_VERSION
+                        + ")，请升级插件后重试");
+            }
+
+            // 4.3 构建存档信息摘要
+            String createdTimeStr = manifestInfo.createdAt > 0
+                    ? new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(manifestInfo.createdAt))
+                    : "未知";
+            String archiveSummary = "存档信息:\n"
+                    + "  来源版本: " + manifestInfo.appVersion + "\n"
+                    + "  创建时间: " + createdTimeStr + "\n"
+                    + "  条目数量: " + manifestInfo.totalEntries + " (其中blob文件: " + manifestInfo.blobCount + ")\n"
+                    + "  Schema版本: " + manifestInfo.schemaVersion
+                    + (header.isEncrypted ? "\n  加密: 是" : "");
 
             // 5. 确认导入（在 EDT 线程中执行）
             boolean[] confirmed = {false};
             javax.swing.SwingUtilities.invokeAndWait(() -> {
                 int confirm = JOptionPane.showConfirmDialog(parent,
-                        "导入操作将使用新的数据库文件，当前会话数据将不可用。\n"
-                                + "存档包含 " + header.entryCount + " 个条目"
-                                + (header.isEncrypted ? "（已加密）" : "") + "。\n是否继续？",
+                        "导入操作将使用新的数据库文件，当前会话数据将不可用。\n\n"
+                                + archiveSummary + "\n\n是否继续？",
                         "确认导入", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                 confirmed[0] = (confirm == JOptionPane.YES_OPTION);
             });
@@ -183,8 +209,9 @@ public class ErmArchiveReader {
                 targetDir.mkdirs();
             }
 
-            // 7. 提取所有条目
-            int[] results = extractEntries(entriesData, targetDir, targetFile, header.entryCount);
+            // 7. 提取所有条目（使用清单中指定的数据库条目路径）
+            String dbEntryPath = manifestInfo.dbEntry != null ? manifestInfo.dbEntry : ErmFormatConstants.DB_ENTRY_PATH;
+            int[] results = extractEntries(entriesData, targetDir, targetFile, header.entryCount, dbEntryPath);
             int successCount = results[0];
             int failCount = results[1];
 
@@ -451,10 +478,11 @@ public class ErmArchiveReader {
 
     /**
      * 提取所有数据条目
+     * @param dbEntryPath 清单中指定的数据库条目路径
      * @return [successCount, failCount]
      */
     private int[] extractEntries(byte[] entriesData, File targetDir, File targetDbFile,
-                                 int entryCount) throws IOException {
+                                 int entryCount, String dbEntryPath) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(entriesData));
         int successCount = 0;
         int failCount = 0;
@@ -494,7 +522,7 @@ public class ErmArchiveReader {
 
                 // 写入文件
                 File targetFile;
-                if (entryHeader.path.equals(ErmFormatConstants.DB_ENTRY_PATH)) {
+                if (entryHeader.path.equals(dbEntryPath)) {
                     targetFile = targetDbFile;
                 } else {
                     targetFile = new File(targetDir, entryHeader.path.replace('/', File.separatorChar));

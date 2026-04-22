@@ -516,15 +516,22 @@ public class PostmanImporter {
         }
         rawRequest.append(" HTTP/1.1\r\n");
 
-        // Host header
-        rawRequest.append("Host: ").append(url.domain).append("\r\n");
-
-        // 其他headers
-        boolean hasHost = false;
+        // 检查Postman headers中是否包含Host头
+        String postmanHost = null;
         for (PostmanHeader header : headers) {
             if (header.key.equalsIgnoreCase("Host")) {
-                hasHost = true;
-                continue; // 避免重复Host
+                postmanHost = header.value;
+                break;
+            }
+        }
+
+        // Host header: 优先使用Postman中指定的Host，否则用URL中的domain
+        rawRequest.append("Host: ").append(postmanHost != null ? postmanHost : url.domain).append("\r\n");
+
+        // 其他headers（跳过Host头避免重复）
+        for (PostmanHeader header : headers) {
+            if (header.key.equalsIgnoreCase("Host")) {
+                continue;
             }
             rawRequest.append(header.key).append(": ").append(header.value).append("\r\n");
         }

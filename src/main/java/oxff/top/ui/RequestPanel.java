@@ -36,8 +36,6 @@ public class RequestPanel extends JPanel {
     private JTextField portField;       // 端口号
     private JCheckBox httpsCheckbox;    // HTTPS开关
     private JTextField contentTypeField; // 内容类型
-    
-    private final MainUI mainUI;
 
     // 请求发送处理器
     private RequestPanelSender sender;
@@ -47,9 +45,7 @@ public class RequestPanel extends JPanel {
      */
     public RequestPanel(MainUI mainUI) {
         super(new BorderLayout());
-        
-        this.mainUI = mainUI;
-        
+
         // 创建请求文本区域
         requestTextArea = new JTextArea();
         requestTextArea.setFont(new Font("Monospaced", Font.PLAIN, 12));

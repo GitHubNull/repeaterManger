@@ -232,6 +232,15 @@ public class StorageConfigTab extends JPanel {
         }
     }
 
+    /**
+     * 通知主UI数据已变更（安全调用）
+     */
+    private void notifyDataChanged() {
+        if (onDataChanged != null) {
+            onDataChanged.run();
+        }
+    }
+
     private void onStorageModeChanged() {
         int modeIndex = storageModeCombo.getSelectedIndex();
 
@@ -281,6 +290,7 @@ public class StorageConfigTab extends JPanel {
                 LogManager.getInstance().relocateFileHandler(
                     dbManager.getLogsDirectory().getAbsolutePath());
                 refreshStorageInfo();
+                notifyDataChanged();
                 JOptionPane.showMessageDialog(this,
                     "已切换到新存储目录并生成新的会话目录。\n旧数据在当前会话中不再可用。",
                     "目录已更改", JOptionPane.INFORMATION_MESSAGE);
@@ -299,6 +309,7 @@ public class StorageConfigTab extends JPanel {
             LogManager.getInstance().relocateFileHandler(
                 dbManager.getLogsDirectory().getAbsolutePath());
             refreshStorageInfo();
+            notifyDataChanged();
             storageModeCombo.setSelectedIndex(0);
             onStorageModeChanged();
             JOptionPane.showMessageDialog(this,
@@ -331,6 +342,7 @@ public class StorageConfigTab extends JPanel {
             LogManager.getInstance().relocateFileHandler(
                 dbManager.getLogsDirectory().getAbsolutePath());
             refreshStorageInfo();
+            notifyDataChanged();
             JOptionPane.showMessageDialog(this,
                 "已应用会话文件名: " + file.getAbsolutePath() + "\n注意：此设置仅在当前会话有效。",
                 "应用成功", JOptionPane.INFORMATION_MESSAGE);
