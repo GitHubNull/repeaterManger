@@ -10,9 +10,9 @@ import oxff.top.http.ProxyConfig;
 import oxff.top.api.ApiExtractionRule;
 import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiRuleManager;
+import oxff.top.api.ApiRuleYamlIO;
 import oxff.top.api.ApiRuleSource;
 import oxff.top.api.ApiRuleMethod;
-import oxff.top.api.ApiExtractionRuleDAO;
 import oxff.top.db.RequestDAO;
 import oxff.top.db.pool.ContentSplitter;
 import oxff.top.db.pool.SplitResult;
@@ -980,6 +980,7 @@ public class ConfigPanel extends JPanel {
         apiRuleTable.getColumnModel().getColumn(4).setPreferredWidth(250); // 表达式
         apiRuleTable.getColumnModel().getColumn(5).setPreferredWidth(50);  // 启用
         apiRuleTable.getColumnModel().getColumn(6).setPreferredWidth(120); // 备注
+        apiRuleTable.getColumnModel().getColumn(7).setPreferredWidth(80);  // 存储类型
 
         // 排序器
         apiRuleSorter = new TableRowSorter<>(apiRuleTableModel);
@@ -1008,10 +1009,19 @@ public class ConfigPanel extends JPanel {
         JButton reExtractBtn = new JButton("重新提取所有API");
         reExtractBtn.setToolTipText("使用当前规则重新计算所有请求和历史记录的API值");
         reExtractBtn.addActionListener(e -> reExtractAllApis());
+        JButton exportYamlBtn = new JButton("导出YAML");
+        exportYamlBtn.setToolTipText("将所有规则导出为YAML格式文件");
+        exportYamlBtn.addActionListener(e -> exportRulesToYaml());
+        JButton importYamlBtn = new JButton("导入YAML");
+        importYamlBtn.setToolTipText("从YAML格式文件导入规则");
+        importYamlBtn.addActionListener(e -> importRulesFromYaml());
 
         buttonPanel.add(addRuleBtn);
         buttonPanel.add(editRuleBtn);
         buttonPanel.add(deleteRuleBtn);
+        buttonPanel.add(Box.createHorizontalStrut(20));
+        buttonPanel.add(exportYamlBtn);
+        buttonPanel.add(importYamlBtn);
         buttonPanel.add(Box.createHorizontalStrut(20));
         buttonPanel.add(reExtractBtn);
         tab.add(buttonPanel, BorderLayout.SOUTH);
@@ -1211,8 +1221,7 @@ public class ConfigPanel extends JPanel {
      * 刷新规则表格数据
      */
     private void refreshApiRuleTable() {
-        ApiExtractionRuleDAO dao = new ApiExtractionRuleDAO();
-        List<ApiExtractionRule> rules = dao.getAllRules();
+        List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getAllRulesForDisplay();
         apiRuleTableModel.setRules(rules);
     }
 
@@ -1223,10 +1232,8 @@ public class ConfigPanel extends JPanel {
         ApiExtractionRule newRule = new ApiExtractionRule();
         newRule.setPriority(apiRuleTableModel.getRowCount() + 1);
         if (showRuleEditDialog(newRule, true)) {
-            ApiExtractionRuleDAO dao = new ApiExtractionRuleDAO();
-            int id = dao.saveRule(newRule);
-            if (id > 0) {
-                ApiRuleManager.getInstance().refreshCache();
+            int id = ApiRuleManager.getInstance().addRule(newRule);
+            if (id != -1) {
                 refreshApiRuleTable();
                 reExtractAllApisSilently();
             } else {
@@ -1248,14 +1255,14 @@ public class ConfigPanel extends JPanel {
         ApiExtractionRule rule = apiRuleTableModel.getRule(modelRow);
         if (rule == null) return;
 
+        // 保存编辑前的规则副本，用于判断存储位置变更
+        ApiExtractionRule oldRule = copyRule(rule);
         if (showRuleEditDialog(rule, false)) {
-            ApiExtractionRuleDAO dao = new ApiExtractionRuleDAO();
-            if (dao.updateRule(rule)) {
-                ApiRuleManager.getInstance().refreshCache();
+            if (ApiRuleManager.getInstance().updateRule(oldRule, rule)) {
                 refreshApiRuleTable();
                 reExtractAllApisSilently();
             } else {
-                JOptionPane.showMessageDialog(this, "更新规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+                refreshApiRuleTable(); // 即使部分失败也刷新表格
             }
         }
     }
@@ -1280,13 +1287,99 @@ public class ConfigPanel extends JPanel {
                 "\n表达式: " + rule.getExpression(),
                 "确认删除", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm == JOptionPane.YES_OPTION) {
-            ApiExtractionRuleDAO dao = new ApiExtractionRuleDAO();
-            if (dao.deleteRule(rule.getId())) {
-                ApiRuleManager.getInstance().refreshCache();
+            if (ApiRuleManager.getInstance().deleteRule(rule.getId())) {
                 refreshApiRuleTable();
                 reExtractAllApisSilently();
             } else {
                 JOptionPane.showMessageDialog(this, "删除规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    /**
+     * 复制规则对象（用于保存编辑前状态）
+     */
+    private ApiExtractionRule copyRule(ApiExtractionRule source) {
+        return new ApiExtractionRule(
+                source.getId(), source.getName(), source.getSource(), source.getMethod(),
+                source.getExpression(), source.isEnabled(), source.getPriority(), source.getRemark(),
+                source.isPersistent(), source.isGlobal()
+        );
+    }
+
+    /**
+     * 导出规则到YAML文件
+     */
+    private void exportRulesToYaml() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("导出API提取规则");
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+        fileChooser.setSelectedFile(new File("api_extraction_rules.yaml"));
+
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
+                file = new File(file.getAbsolutePath() + ".yaml");
+            }
+            List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getAllRulesForDisplay();
+            if (rules.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "没有规则可导出", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            if (ApiRuleYamlIO.writeToFile(rules, file.getAbsolutePath())) {
+                JOptionPane.showMessageDialog(this,
+                        "已导出 " + rules.size() + " 条规则到:\n" + file.getAbsolutePath(),
+                        "导出成功", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "导出规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    /**
+     * 从YAML文件导入规则
+     */
+    private void importRulesFromYaml() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("导入API提取规则");
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            List<ApiExtractionRule> importedRules = ApiRuleYamlIO.readFromFile(file.getAbsolutePath());
+            if (importedRules.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "文件中没有找到有效规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            // 选择导入模式
+            String[] options = {"合并（保留现有规则）", "替换（清除现有规则）", "取消"};
+            int choice = JOptionPane.showOptionDialog(this,
+                    "检测到 " + importedRules.size() + " 条规则\n请选择导入模式:",
+                    "导入模式", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
+                    null, options, options[0]);
+
+            if (choice == 0) {
+                // 合并模式
+                int added = ApiRuleManager.getInstance().importRulesMerge(importedRules);
+                refreshApiRuleTable();
+                reExtractAllApisSilently();
+                JOptionPane.showMessageDialog(this,
+                        "合并导入完成\n新增 " + added + " 条规则（去重后）",
+                        "导入成功", JOptionPane.INFORMATION_MESSAGE);
+            } else if (choice == 1) {
+                // 替换模式
+                int confirm = JOptionPane.showConfirmDialog(this,
+                        "替换模式将删除所有现有规则，确定继续吗？",
+                        "确认替换", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    ApiRuleManager.getInstance().importRulesReplace(importedRules);
+                    refreshApiRuleTable();
+                    reExtractAllApisSilently();
+                    JOptionPane.showMessageDialog(this,
+                            "替换导入完成，共导入 " + importedRules.size() + " 条规则",
+                            "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                }
             }
         }
     }
@@ -1397,6 +1490,26 @@ public class ConfigPanel extends JPanel {
         remarkField.setToolTipText("备注信息，用于记录规则用途或注意事项");
         formPanel.add(remarkField, fc);
 
+        // 持久化选项
+        fc.gridx = 0; fc.gridy = 8; fc.weightx = 0; fc.gridwidth = 1;
+        formPanel.add(new JLabel("持久化:"), fc);
+        fc.gridx = 1; fc.gridy = 8; fc.weightx = 1.0; fc.gridwidth = 2;
+        JPanel persistPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        JCheckBox persistentCheckbox = new JCheckBox("持久化到项目", rule.isPersistent());
+        persistentCheckbox.setToolTipText("将规则保存到当前项目的SQLite数据库中，项目内持久保存");
+        JCheckBox globalCheckbox = new JCheckBox("持久化到全局", rule.isGlobal());
+        globalCheckbox.setToolTipText("将规则保存到全局YAML文件，新项目加载时自动加载此规则");
+        persistPanel.add(persistentCheckbox);
+        persistPanel.add(globalCheckbox);
+        formPanel.add(persistPanel, fc);
+
+        // 持久化提示
+        fc.gridx = 1; fc.gridy = 9; fc.weightx = 1.0; fc.gridwidth = 2;
+        JLabel persistHintLabel = new JLabel("若两者均不勾选，规则仅保存在内存中，重启后丢失");
+        persistHintLabel.setForeground(new Color(120, 120, 120));
+        persistHintLabel.setFont(persistHintLabel.getFont().deriveFont(Font.PLAIN, 11f));
+        formPanel.add(persistHintLabel, fc);
+
         // 按钮行
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
         final boolean[] confirmed = {false};
@@ -1436,6 +1549,8 @@ public class ConfigPanel extends JPanel {
             rule.setExpression(expression);
             rule.setEnabled(enabledCheckbox.isSelected());
             rule.setRemark(remarkField.getText().trim());
+            rule.setPersistent(persistentCheckbox.isSelected());
+            rule.setGlobal(globalCheckbox.isSelected());
             confirmed[0] = true;
             dialog.dispose();
         });
@@ -1543,8 +1658,7 @@ public class ConfigPanel extends JPanel {
         Thread worker = new Thread(() -> {
             try {
                 BurpExtender.printOutput("[*] 规则变更，自动重新提取所有API值...");
-                ApiExtractionRuleDAO ruleDAO = new ApiExtractionRuleDAO();
-                List<ApiExtractionRule> rules = ruleDAO.getAllRules();
+                List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getActiveRules();
                 oxff.top.db.pool.PoolManager poolMgr = new oxff.top.db.pool.PoolManager();
                 ContentSplitter splitter = new ContentSplitter();
 
@@ -1719,8 +1833,7 @@ public class ConfigPanel extends JPanel {
 
         Thread worker = new Thread(() -> {
             try {
-                ApiExtractionRuleDAO ruleDAO = new ApiExtractionRuleDAO();
-                List<ApiExtractionRule> rules = ruleDAO.getAllRules();
+                List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getActiveRules();
                 oxff.top.db.pool.PoolManager poolMgr = new oxff.top.db.pool.PoolManager();
                 ContentSplitter splitter = new ContentSplitter();
 
@@ -1917,7 +2030,7 @@ public class ConfigPanel extends JPanel {
      * API提取规则表格模型
      */
     private class ApiRuleTableModel extends AbstractTableModel {
-        private final String[] COLUMN_NAMES = {"优先级", "名称", "来源", "方法", "表达式", "启用", "备注"};
+        private final String[] COLUMN_NAMES = {"优先级", "名称", "来源", "方法", "表达式", "启用", "备注", "存储类型"};
         private List<ApiExtractionRule> rules = new ArrayList<>();
 
         public void setRules(List<ApiExtractionRule> rules) {
@@ -1967,6 +2080,7 @@ public class ConfigPanel extends JPanel {
                 case 4: return rule.getExpression();
                 case 5: return rule.isEnabled();
                 case 6: return rule.getRemark();
+                case 7: return rule.getStorageTypeDisplay();
                 default: return null;
             }
         }
@@ -1980,11 +2094,11 @@ public class ConfigPanel extends JPanel {
         public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
             if (columnIndex == 5 && aValue instanceof Boolean) {
                 ApiExtractionRule rule = rules.get(rowIndex);
-                rule.setEnabled((Boolean) aValue);
-                // 直接保存到数据库
-                ApiExtractionRuleDAO dao = new ApiExtractionRuleDAO();
-                dao.updateRule(rule);
-                ApiRuleManager.getInstance().refreshCache();
+                boolean newEnabled = (Boolean) aValue;
+                // 保存旧规则状态用于updateRule
+                ApiExtractionRule oldRule = copyRule(rule);
+                rule.setEnabled(newEnabled);
+                ApiRuleManager.getInstance().updateRule(oldRule, rule);
                 fireTableCellUpdated(rowIndex, columnIndex);
                 ConfigPanel.this.reExtractAllApisSilently();
             }

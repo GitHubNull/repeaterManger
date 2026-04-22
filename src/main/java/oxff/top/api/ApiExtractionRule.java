@@ -12,6 +12,8 @@ public class ApiExtractionRule {
     private boolean enabled;
     private int priority;
     private String remark;
+    private boolean persistent; // 是否持久化到项目SQLite
+    private boolean global;     // 是否持久化到全局YAML
 
     public ApiExtractionRule() {
         this.name = "";
@@ -21,10 +23,13 @@ public class ApiExtractionRule {
         this.enabled = true;
         this.priority = 1;
         this.remark = "";
+        this.persistent = true;
+        this.global = true;
     }
 
     public ApiExtractionRule(int id, String name, ApiRuleSource source, ApiRuleMethod method,
-                             String expression, boolean enabled, int priority, String remark) {
+                             String expression, boolean enabled, int priority, String remark,
+                             boolean persistent, boolean global) {
         this.id = id;
         this.name = name != null ? name : "";
         this.source = source;
@@ -33,6 +38,8 @@ public class ApiExtractionRule {
         this.enabled = enabled;
         this.priority = priority;
         this.remark = remark != null ? remark : "";
+        this.persistent = persistent;
+        this.global = global;
     }
 
     public ApiExtractionRule(String name, ApiRuleSource source, ApiRuleMethod method,
@@ -44,6 +51,8 @@ public class ApiExtractionRule {
         this.enabled = enabled;
         this.priority = priority;
         this.remark = remark != null ? remark : "";
+        this.persistent = true;
+        this.global = true;
     }
 
     /**
@@ -122,9 +131,35 @@ public class ApiExtractionRule {
         this.remark = remark != null ? remark : "";
     }
 
+    public boolean isPersistent() {
+        return persistent;
+    }
+
+    public void setPersistent(boolean persistent) {
+        this.persistent = persistent;
+    }
+
+    public boolean isGlobal() {
+        return global;
+    }
+
+    public void setGlobal(boolean global) {
+        this.global = global;
+    }
+
+    /**
+     * 获取存储类型显示文本
+     */
+    public String getStorageTypeDisplay() {
+        if (persistent && global) return "项目+全局";
+        if (persistent) return "项目";
+        if (global) return "全局";
+        return "临时";
+    }
+
     @Override
     public String toString() {
-        return String.format("ApiExtractionRule{id=%d, name='%s', source=%s, method=%s, expression='%s', enabled=%b, priority=%d, remark='%s'}",
-                id, name, source, method, expression, enabled, priority, remark);
+        return String.format("ApiExtractionRule{id=%d, name='%s', source=%s, method=%s, expression='%s', enabled=%b, priority=%d, remark='%s', persistent=%b, global=%b}",
+                id, name, source, method, expression, enabled, priority, remark, persistent, global);
     }
 }

@@ -475,7 +475,7 @@ public class DatabaseManager {
             ")"
         );
 
-        // API提取规则表（v4 结构：v3 + name + remark）
+        // API提取规则表（v5 结构：v4 + global）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS api_extraction_rules (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -486,6 +486,7 @@ public class DatabaseManager {
             "enabled INTEGER NOT NULL DEFAULT 1, " +
             "priority INTEGER NOT NULL DEFAULT 1, " +
             "remark TEXT NOT NULL DEFAULT '', " +
+            "global INTEGER NOT NULL DEFAULT 1, " +
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
             ")"
         );
@@ -493,7 +494,7 @@ public class DatabaseManager {
         // 创建索引
         createV3Indexes(stmt);
 
-        BurpExtender.printOutput("[+] v4 Schema 初始化完成");
+        BurpExtender.printOutput("[+] v5 Schema 初始化完成");
     }
 
     /**
@@ -511,6 +512,11 @@ public class DatabaseManager {
         // v3→v4 迁移
         if (currentVersion < 4) {
             migrateV3ToV4(conn);
+        }
+
+        // v4→v5 迁移
+        if (currentVersion < 5) {
+            migrateV4ToV5(conn);
         }
     }
 
@@ -617,6 +623,31 @@ public class DatabaseManager {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4')");
 
             BurpExtender.printOutput("[+] v3→v4 迁移完成");
+        }
+    }
+
+    /**
+     * v4→v5 迁移：为 api_extraction_rules 表添加 global 列
+     */
+    private void migrateV4ToV5(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v4→v5迁移...");
+
+            // 为 api_extraction_rules 表添加 global 列
+            try {
+                stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN global INTEGER NOT NULL DEFAULT 1");
+                BurpExtender.printOutput("[+] api_extraction_rules表添加global列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] api_extraction_rules表添加global列失败: " + e.getMessage());
+                }
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '5')");
+
+            BurpExtender.printOutput("[+] v4→v5 迁移完成");
         }
     }
 

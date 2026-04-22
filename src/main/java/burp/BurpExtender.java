@@ -69,6 +69,14 @@ public class BurpExtender implements IBurpExtender {
             // 阶段4：加载晚期配置（文件日志 Handler → 会话目录的 logs/）
             loadLogConfigLate();
 
+            // 阶段4.5：加载全局API提取规则
+            try {
+                oxff.top.api.GlobalRuleManager.getInstance().loadRules();
+                logManager.success("[+] 全局API提取规则加载完成");
+            } catch (Exception e) {
+                logManager.error("[!] 全局API提取规则加载失败: " + e.getMessage());
+            }
+
             // 创建UI和功能组件
             repeaterUI = new EnhancedRepeaterUI();
 
