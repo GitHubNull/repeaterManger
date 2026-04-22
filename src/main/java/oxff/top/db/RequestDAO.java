@@ -1,7 +1,6 @@
 package oxff.top.db;
 
 import burp.BurpExtender;
-import burp.IRequestInfo;
 import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiRuleManager;
 import oxff.top.api.ApiExtractionRule;
@@ -37,41 +36,6 @@ public class RequestDAO {
         this.requestValidationCache = new ConcurrentHashMap<>();
         this.poolManager = new PoolManager();
         this.reconstructor = new ContentReconstructor();
-    }
-
-    /**
-     * 保存请求数据（从 IRequestInfo）
-     */
-    public int saveRequest(IRequestInfo requestInfo, byte[] requestData) {
-        String url = requestInfo.getUrl().toString();
-        String method = requestInfo.getMethod();
-
-        // 解析URL组件
-        String protocol = url.startsWith("https://") ? "https" : "http";
-        String remaining = url.substring(protocol.length() + 3);
-
-        String domain;
-        String path;
-        String query = "";
-
-        int pathStart = remaining.indexOf('/');
-        if (pathStart > 0) {
-            domain = remaining.substring(0, pathStart);
-            remaining = remaining.substring(pathStart);
-        } else {
-            domain = remaining;
-            remaining = "/";
-        }
-
-        int queryStart = remaining.indexOf('?');
-        if (queryStart > 0) {
-            path = remaining.substring(0, queryStart);
-            query = remaining.substring(queryStart + 1);
-        } else {
-            path = remaining;
-        }
-
-        return saveRequest(protocol, domain, path, query, method, requestData);
     }
 
     /**

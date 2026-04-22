@@ -1,10 +1,13 @@
 package oxff.top.http;
 
 import burp.BurpExtender;
-import burp.IHttpRequestResponse;
-import burp.IHttpService;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
+import oxff.top.api.MontoyaApiHolder;
 import oxff.top.service.HistoryRecordingService;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -40,11 +43,21 @@ public class RequestManager {
     // 不再重试，单次请求直接返回结果（重试会导致请求耗时翻倍）
     private final ExecutorService executor;
     private final HistoryRecordingService recordingService;
+    private final MontoyaApi api;
     
     /**
      * 创建请求管理器
      */
     public RequestManager() {
+        this(MontoyaApiHolder.getApi());
+    }
+
+    /**
+     * 创建请求管理器（传入MontoyaApi实例）
+     */
+    public RequestManager(MontoyaApi api) {
+        this.api = api;
+
         // 创建线程池执行器，避免阻塞UI线程
         executor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "EnhancedRepeater-RequestThread");
@@ -88,21 +101,21 @@ public class RequestManager {
      * @param httpService 原始HTTP服务信息（包含正确的协议、主机、端口），可为null
      * @return 响应字节数组，失败返回null
      */
-    public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId, IHttpService httpService) {
+    public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId, HttpService httpService) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             return null;
         }
         
         // 构建HTTP服务对象
-        IHttpService service = buildHttpService(requestBytes, httpService);
+        HttpService service = buildHttpService(requestBytes, httpService);
         
-        // 使用HTTP服务信息解析请求，确保协议正确
-        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+        // 使用Montoya API解析请求，确保协议正确
+        HttpRequest httpRequest = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
         
-        String host = service.getHost();
-        int port = service.getPort();
-        boolean isSecure = service.getProtocol().equalsIgnoreCase("https");
+        String host = service.host();
+        int port = service.port();
+        boolean isSecure = service.secure();
         
         BurpExtender.printOutput(
             String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
@@ -118,27 +131,27 @@ public class RequestManager {
                 byte[] fixedBytes = updateContentLength(requestBytes, service);
 
                 // 单次发送，不重试
-                IHttpRequestResponse requestResponse =
-                    BurpExtender.callbacks.makeHttpRequest(service, fixedBytes);
+                HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
+                HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
 
-                byte[] response = requestResponse.getResponse();
+                byte[] response = requestResponse.response().toByteArray().getBytes();
                 long responseTime = System.currentTimeMillis() - startTime;
 
                 if (response != null && response.length > 0) {
-                    IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                    HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
                     recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                  requestInfo, responseInfo, responseTime);
+                                                  httpRequest, httpResponse, responseTime);
                     return response;
                 } else {
                     BurpExtender.printError("[!] 收到空响应");
-                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                    recordingService.recordFailure(requestId, fixedBytes, httpRequest,
                                                  "收到空响应", responseTime);
                     return null;
                 }
             } catch (Exception e) {
                 long responseTime = System.currentTimeMillis() - startTime;
                 BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
-                recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                recordingService.recordFailure(requestId, requestBytes, httpRequest,
                                              "请求发送失败: " + e.getMessage(), responseTime);
                 return null;
             }
@@ -197,7 +210,7 @@ public class RequestManager {
      * @param callback 请求回调接口
      */
     public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, 
-                                      IHttpService httpService, RequestCallback callback) {
+                                      HttpService httpService, RequestCallback callback) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             if (callback != null) {
@@ -213,14 +226,14 @@ public class RequestManager {
             
             try {
                 // 构建HTTP服务对象
-                IHttpService service = buildHttpService(requestBytes, httpService);
+                HttpService service = buildHttpService(requestBytes, httpService);
                 
-                // 使用HTTP服务信息解析请求，确保协议正确
-                IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+                // 使用Montoya API解析请求，确保协议正确
+                HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
                 
-                String host = service.getHost();
-                int port = service.getPort();
-                boolean isSecure = service.getProtocol().equalsIgnoreCase("https");
+                String host = service.host();
+                int port = service.port();
+                boolean isSecure = service.secure();
                 
                 BurpExtender.printOutput(
                     String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)",
@@ -236,9 +249,9 @@ public class RequestManager {
                         requestBytes, service, timeoutSeconds);
                     long responseTime = System.currentTimeMillis() - startTime;
                     if (proxyResponse != null) {
-                        IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(proxyResponse);
+                        HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
                         recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
-                            requestInfo, responseInfo, responseTime);
+                            requestInfo, httpResponse, responseTime);
                         BurpExtender.printOutput(
                             String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
                                 responseTime, proxyResponse.length));
@@ -260,16 +273,16 @@ public class RequestManager {
                 byte[] fixedBytes = updateContentLength(requestBytes, service);
 
                 // 单次发送，不重试，避免请求耗时翻倍
-                IHttpRequestResponse requestResponse =
-                    BurpExtender.callbacks.makeHttpRequest(service, fixedBytes);
+                HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
+                HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
 
                 long responseTime = System.currentTimeMillis() - startTime;
-                byte[] response = requestResponse.getResponse();
+                byte[] response = requestResponse.response().toByteArray().getBytes();
 
                 if (response != null && response.length > 0) {
-                    IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                    HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
                     recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                  requestInfo, responseInfo, responseTime);
+                                                  requestInfo, httpResponse, responseTime);
                     BurpExtender.printOutput(
                         String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
                             responseTime, response.length));
@@ -287,21 +300,21 @@ public class RequestManager {
             } catch (Exception e) {
                 BurpExtender.printError("[!] 发送请求时发生异常: " + e.getMessage());
                 // 记录异常堆栈信息
-                e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
+                e.printStackTrace();
                 
                 // 记录异常的历史记录
                 long responseTime = System.currentTimeMillis() - startTime;
                 try {
-                    // 重新构建HTTP服务信息
-                    IHttpService service = buildHttpService(requestBytes, httpService);
-                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
+                    // 重新构建HTTP服务信息和请求信息
+                    HttpService service = buildHttpService(requestBytes, httpService);
+                    HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
                     
                     recordingService.recordFailure(requestId, requestBytes, requestInfo, 
                                                  "发送请求时发生异常: " + e.getMessage(), responseTime);
                 } catch (Exception ex) {
                     // 如果创建HTTP服务失败，使用基本的请求分析
                     BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
-                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                    HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
                     recordingService.recordFailure(requestId, requestBytes, requestInfo, 
                                                  "发送请求时发生异常: " + e.getMessage(), responseTime);
                 }
@@ -319,18 +332,20 @@ public class RequestManager {
      * 导致服务器等待更多数据而引发的超时（通常表现为请求耗时 8-11 秒）。
      *
      * @param requestBytes 原始请求字节数组
-     * @param service      HTTP 服务信息（用于 Burp 解析）
+     * @param service      HTTP 服务信息（用于解析请求）
      * @return 已修正 Content-Length 的请求字节数组，失败时返回原始数组
      */
-    private byte[] updateContentLength(byte[] requestBytes, IHttpService service) {
+    private byte[] updateContentLength(byte[] requestBytes, HttpService service) {
         try {
-            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
-            int bodyOffset = reqInfo.getBodyOffset();
+            HttpRequest reqInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+            int bodyOffset = reqInfo.bodyOffset();
             byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
-            List<String> headers = new ArrayList<>(reqInfo.getHeaders());
+            List<String> headers = new ArrayList<>(reqInfo.headers().stream()
+                .map(h -> h.name() + ": " + h.value())
+                .collect(java.util.stream.Collectors.toList()));
 
             // 获取请求方法
-            String method = reqInfo.getMethod().toUpperCase();
+            String method = reqInfo.method().toUpperCase();
 
             // 移除所有现有的 Content-Length 头，再按实际 body 长度重新添加
             headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
@@ -343,12 +358,29 @@ public class RequestManager {
                 headers.add("Content-Length: 0");
             }
 
-            return BurpExtender.helpers.buildHttpMessage(headers, body);
+            // 重建请求：将headers和body拼接
+            return buildRawHttpMessage(headers, body);
         } catch (Exception e) {
             // 更新失败时使用原始请求，不阻断主流程
             BurpExtender.printError("[!] 更新 Content-Length 失败，使用原始请求: " + e.getMessage());
             return requestBytes;
         }
+    }
+
+    /**
+     * 从header列表和body构建原始HTTP消息字节数组
+     */
+    private byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
+        StringBuilder sb = new StringBuilder();
+        for (String header : headers) {
+            sb.append(header).append("\r\n");
+        }
+        sb.append("\r\n");
+        byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        byte[] result = new byte[headerBytes.length + body.length];
+        System.arraycopy(headerBytes, 0, result, 0, headerBytes.length);
+        System.arraycopy(body, 0, result, headerBytes.length, body.length);
+        return result;
     }
 
     /**
@@ -359,21 +391,23 @@ public class RequestManager {
      * @param originalService 原始HTTP服务信息，可为null
      * @return 构建好的HTTP服务对象
      */
-    private IHttpService buildHttpService(byte[] requestBytes, IHttpService originalService) {
+    private HttpService buildHttpService(byte[] requestBytes, HttpService originalService) {
         // 如果有原始HTTP服务信息，优先使用它来保留正确的协议
         if (originalService != null) {
             return originalService;
         }
         
         // 没有原始HTTP服务信息，从请求数据中推断
-        IRequestInfo tempRequestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-        List<String> headers = tempRequestInfo.getHeaders();
+        HttpRequest tempRequestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
+        List<String> headerStrings = tempRequestInfo.headers().stream()
+            .map(h -> h.name() + ": " + h.value())
+            .collect(java.util.stream.Collectors.toList());
         
-        String host = extractHost(headers);
-        int port = extractPort(headers, host);
-        boolean isSecure = determineIsHttps(headers, port);
+        String host = extractHost(headerStrings);
+        int port = extractPort(headerStrings, host);
+        boolean isSecure = determineIsHttps(headerStrings, port);
         
-        return BurpExtender.helpers.buildHttpService(host, port, isSecure);
+        return HttpService.httpService(host, port, isSecure);
     }
     
     /**
@@ -497,12 +531,12 @@ public class RequestManager {
      * @param timeoutSeconds 超时时间(秒)
      * @return 响应字节数组（包含完整的HTTP响应：状态行+头+体），失败返回null
      */
-    private byte[] makeHttpRequestWithProxy(byte[] requestBytes, IHttpService service, int timeoutSeconds) {
+    private byte[] makeHttpRequestWithProxy(byte[] requestBytes, HttpService service, int timeoutSeconds) {
         HttpURLConnection conn = null;
         try {
-            String protocol = service.getProtocol();
-            String host = service.getHost();
-            int port = service.getPort();
+            String protocol = service.secure() ? "https" : "http";
+            String host = service.host();
+            int port = service.port();
 
             // 解析请求行获取方法和路径
             String requestStr = new String(requestBytes, "UTF-8");
@@ -527,8 +561,10 @@ public class RequestManager {
             conn.setInstanceFollowRedirects(false);
 
             // 解析请求头
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
-            List<String> headers = requestInfo.getHeaders();
+            HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+            List<String> headers = requestInfo.headers().stream()
+                .map(h -> h.name() + ": " + h.value())
+                .collect(java.util.stream.Collectors.toList());
             boolean hasContentType = false;
             for (int i = 1; i < headers.size(); i++) {
                 String header = headers.get(i);

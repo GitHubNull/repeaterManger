@@ -1,18 +1,21 @@
 package oxff.top.http;
 
 import burp.BurpExtender;
-import burp.IHttpService;
-import burp.IRequestInfo;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.requests.HttpRequest;
 import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiExtractionRule;
 import oxff.top.api.ApiRuleManager;
 
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * HTTP请求辅助工具类
- * 提供URL提取、IHttpService重建、API值计算等静态方法
+ * 提供URL提取、HttpService重建、API值计算等静态方法
  */
 public class HttpRequestHelper {
 
@@ -20,18 +23,20 @@ public class HttpRequestHelper {
      * 从请求中安全地提取URL信息
      *
      * @param requestBytes 请求字节数组
-     * @param requestInfo 已分析的请求信息
+     * @param httpRequest 已解析的HttpRequest对象
      * @param httpService 当前的HTTP服务信息（可为null）
      * @return 提取的URL，如果提取失败则返回简化URL或默认值
      */
-    public static String extractUrlFromRequest(byte[] requestBytes, IRequestInfo requestInfo, IHttpService httpService) {
+    public static String extractUrlFromRequest(byte[] requestBytes, HttpRequest httpRequest, HttpService httpService) {
         try {
             // 尝试使用标准方式获取URL
-            return requestInfo.getUrl().toString();
+            return httpRequest.url();
         } catch (Exception e) {
             // 如果标准方式失败，从请求头中提取
             try {
-                List<String> headers = requestInfo.getHeaders();
+                List<String> headers = httpRequest.headers().stream()
+                    .map(h -> h.name() + ": " + h.value())
+                    .collect(Collectors.toList());
                 String firstLine = headers.get(0); // 例如："GET /path HTTP/1.1"
 
                 // 从Host头中提取主机名
@@ -59,8 +64,7 @@ public class HttpRequestHelper {
                             isHttps = true;
                         }
                         // 3. 如果有httpService，使用其协议信息
-                        if (httpService != null &&
-                            "https".equalsIgnoreCase(httpService.getProtocol())) {
+                        if (httpService != null && httpService.secure()) {
                             isHttps = true;
                         }
 
@@ -86,22 +90,24 @@ public class HttpRequestHelper {
     }
 
     /**
-     * 从请求数据中重建IHttpService
+     * 从请求数据中重建HttpService
      * 解决从已保存请求重新发送时HTTPS协议丢失的问题
      *
      * @param requestId 请求ID
      * @param requestData 请求数据
-     * @return 重建的IHttpService对象
+     * @return 重建的HttpService对象
      */
-    public static IHttpService rebuildHttpService(int requestId, byte[] requestData) {
+    public static HttpService rebuildHttpService(int requestId, byte[] requestData) {
         try {
             String protocol = "http";
             String host = "";
             int port = 80;
 
             // 从请求数据中提取host和port
-            IRequestInfo tempInfo = BurpExtender.helpers.analyzeRequest(requestData);
-            List<String> headers = tempInfo.getHeaders();
+            HttpRequest tempRequest = HttpRequest.httpRequest(ByteArray.byteArray(requestData));
+            List<String> headers = tempRequest.headers().stream()
+                .map(h -> h.name() + ": " + h.value())
+                .collect(Collectors.toList());
 
             // 提取host
             for (String header : headers) {
@@ -163,11 +169,11 @@ public class HttpRequestHelper {
                 host = "unknown";
             }
 
-            return BurpExtender.helpers.buildHttpService(host, port, isSecure);
+            return HttpService.httpService(host, port, isSecure);
         } catch (Exception e) {
-            BurpExtender.printError("[!] 重建IHttpService失败: " + e.getMessage());
+            BurpExtender.printError("[!] 重建HttpService失败: " + e.getMessage());
             // 返回一个默认的HTTP服务
-            return BurpExtender.helpers.buildHttpService("unknown", 80, false);
+            return HttpService.httpService("unknown", 80, false);
         }
     }
 
@@ -177,8 +183,10 @@ public class HttpRequestHelper {
      */
     public static String computeApiFromRequest(String path, String query, byte[] requestBytes) {
         try {
-            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
-            List<String> headerList = new ArrayList<>(reqInfo.getHeaders());
+            HttpRequest reqInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
+            List<String> headerList = reqInfo.headers().stream()
+                .map(h -> h.name() + ": " + h.value())
+                .collect(Collectors.toList());
             String contentType = null;
             for (String header : headerList) {
                 if (header.toLowerCase().startsWith("content-type:")) {
@@ -186,7 +194,7 @@ public class HttpRequestHelper {
                     break;
                 }
             }
-            int bodyOffset = reqInfo.getBodyOffset();
+            int bodyOffset = reqInfo.bodyOffset();
             byte[] body = null;
             if (bodyOffset < requestBytes.length) {
                 body = java.util.Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);

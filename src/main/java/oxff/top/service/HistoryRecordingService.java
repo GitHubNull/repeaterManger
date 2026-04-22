@@ -1,14 +1,16 @@
 package oxff.top.service;
 
 import burp.BurpExtender;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.RequestResponseRecord;
+import java.net.URL;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 /**
  * 历史记录录制服务 - 统一管理HTTP请求响应的历史记录
@@ -120,11 +122,11 @@ public class HistoryRecordingService {
      * 记录成功的HTTP请求响应
      */
     public void recordSuccess(int requestId, byte[] requestBytes, byte[] responseBytes, 
-                             IRequestInfo requestInfo, IResponseInfo responseInfo, long responseTime) {
+                             HttpRequest requestInfo, HttpResponse responseInfo, long responseTime) {
         try {
             // 创建历史记录
             RequestResponseRecord record = createRecordFromRequest(requestId, requestInfo);
-            record.setStatusCode(responseInfo.getStatusCode());
+            record.setStatusCode(responseInfo.statusCode());
             record.setResponseLength(responseBytes != null ? responseBytes.length : 0);
             record.setResponseTime((int) responseTime);
             record.setRequestData(requestBytes);
@@ -159,7 +161,7 @@ public class HistoryRecordingService {
     /**
      * 记录失败的HTTP请求
      */
-    public void recordFailure(int requestId, byte[] requestBytes, IRequestInfo requestInfo, 
+    public void recordFailure(int requestId, byte[] requestBytes, HttpRequest requestInfo, 
                              String errorMessage, long responseTime) {
         try {
             // 创建历史记录
@@ -200,23 +202,26 @@ public class HistoryRecordingService {
     /**
      * 从请求信息创建记录
      */
-    private RequestResponseRecord createRecordFromRequest(int requestId, IRequestInfo requestInfo) {
+    private RequestResponseRecord createRecordFromRequest(int requestId, HttpRequest requestInfo) {
         try {
-            // 尝试使用Burp的URL解析
-            java.net.URL url = requestInfo.getUrl();
-            if (url != null && url.getHost() != null && !url.getHost().isEmpty()) {
-                String protocol = url.getProtocol();
-                String host = url.getHost();
-                String path = url.getPath() != null ? url.getPath() : "/";
-                String query = url.getQuery() != null ? url.getQuery() : "";
-                String method = requestInfo.getMethod();
-                
-                BurpExtender.printOutput("[+] 成功解析URL: " + protocol + "://" + host + path + (query.isEmpty() ? "" : "?" + query));
-                return new RequestResponseRecord(requestId, protocol, host, path, query, method);
+            // 尝试使用Montoya的URL解析
+            String urlStr = requestInfo.url();
+            if (urlStr != null && !urlStr.isEmpty()) {
+                URL url = new URL(urlStr);
+                if (url.getHost() != null && !url.getHost().isEmpty()) {
+                    String protocol = url.getProtocol();
+                    String host = url.getHost();
+                    String path = url.getPath() != null && !url.getPath().isEmpty() ? url.getPath() : "/";
+                    String query = url.getQuery() != null ? url.getQuery() : "";
+                    String method = requestInfo.method();
+                    
+                    BurpExtender.printOutput("[+] 成功解析URL: " + protocol + "://" + host + path + (query.isEmpty() ? "" : "?" + query));
+                    return new RequestResponseRecord(requestId, protocol, host, path, query, method);
+                }
             }
             
-            // 如果Burp的URL解析不完整，使用增强的备用方法
-            BurpExtender.printOutput("[*] Burp URL解析不完整，使用备用方法");
+            // 如果URL解析不完整，使用增强的备用方法
+            BurpExtender.printOutput("[*] URL解析不完整，使用备用方法");
             return createRecordFromRequestFallback(requestId, requestInfo);
             
         } catch (Exception e) {
@@ -229,9 +234,11 @@ public class HistoryRecordingService {
     /**
      * 增强的备用URL解析方法
      */
-    private RequestResponseRecord createRecordFromRequestFallback(int requestId, IRequestInfo requestInfo) {
-        String method = requestInfo.getMethod();
-        List<String> headers = requestInfo.getHeaders();
+    private RequestResponseRecord createRecordFromRequestFallback(int requestId, HttpRequest requestInfo) {
+        String method = requestInfo.method();
+        List<String> headers = requestInfo.headers().stream()
+            .map(h -> h.name() + ": " + h.value())
+            .collect(Collectors.toList());
         
         if (headers == null || headers.isEmpty()) {
             BurpExtender.printOutput("[!] 无法获取请求头，使用默认值");
@@ -257,7 +264,7 @@ public class HistoryRecordingService {
         // 尝试解析完整URL
         if (urlPart.startsWith("http://") || urlPart.startsWith("https://")) {
             try {
-                java.net.URL parsedUrl = new java.net.URL(urlPart);
+                URL parsedUrl = new URL(urlPart);
                 protocol = parsedUrl.getProtocol();
                 host = parsedUrl.getHost();
                 path = parsedUrl.getPath() != null ? parsedUrl.getPath() : "/";

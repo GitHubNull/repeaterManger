@@ -1,25 +1,26 @@
 package oxff.top.controller;
 
 import burp.BurpExtender;
-import burp.IContextMenuFactory;
-import burp.IContextMenuInvocation;
-import burp.IHttpRequestResponse;
+import burp.api.montoya.ui.contextmenu.ContextMenuEvent;
+import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
+import burp.api.montoya.http.message.HttpRequestResponse;
 
 import javax.swing.*;
+import java.awt.Component;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PopMenu implements IContextMenuFactory {
+public class PopMenu implements ContextMenuItemsProvider {
     @Override
-    public List<JMenuItem> createMenuItems(IContextMenuInvocation invocation) {
-        List<JMenuItem> menuItems = new ArrayList<>();
+    public List<Component> provideMenuItems(ContextMenuEvent event) {
+        List<Component> menuItems = new ArrayList<>();
 
         // 检查是否有请求被选中
-        IHttpRequestResponse[] selectedMessages = invocation.getSelectedMessages();
-        if (selectedMessages != null && selectedMessages.length > 0) {
-            final IHttpRequestResponse requestResponse = selectedMessages[0];
+        List<HttpRequestResponse> selectedResponses = event.selectedRequestResponses();
+        if (selectedResponses != null && !selectedResponses.isEmpty()) {
+            final HttpRequestResponse requestResponse = selectedResponses.get(0);
 
-            if (requestResponse != null && requestResponse.getRequest() != null) {
+            if (requestResponse != null && requestResponse.request() != null) {
                 // 创建菜单项
                 JMenuItem sendToEnhancedRepeater = new JMenuItem("发送到增强型Repeater");
                 sendToEnhancedRepeater.addActionListener(e -> {

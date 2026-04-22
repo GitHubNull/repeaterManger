@@ -1,8 +1,6 @@
 package oxff.top.ui;
 
 import burp.BurpExtender;
-import burp.IBurpExtenderCallbacks;
-import burp.IExtensionHelpers;
 import oxff.top.db.DatabaseManager;
 import oxff.top.db.RequestDAO;
 import oxff.top.db.history.HistoryReadDAO;
@@ -24,11 +22,6 @@ import java.util.Map;
 public class MainUI extends JPanel {
     private static final long serialVersionUID = 1L;
     
-    // 保留以供将来使用，例如在需要直接访问Burp API时
-    @SuppressWarnings("unused")
-    private IBurpExtenderCallbacks callbacks;
-    @SuppressWarnings("unused")
-    private IExtensionHelpers helpers;
     private final RequestListPanel requestListPanel;
     private final RequestPanel requestPanel;
     private final ResponsePanel responsePanel;
@@ -41,15 +34,9 @@ public class MainUI extends JPanel {
     
     /**
      * 创建主UI
-     * 
-     * @param callbacks Burp扩展回调
-     * @param helpers Burp辅助功能
      */
-    public MainUI(IBurpExtenderCallbacks callbacks, IExtensionHelpers helpers) {
+    public MainUI() {
         super(new BorderLayout());
-        
-        this.callbacks = callbacks;
-        this.helpers = helpers;
         
         // 初始化数据库
         this.dbManager = DatabaseManager.getInstance();
@@ -123,8 +110,6 @@ public class MainUI extends JPanel {
         this.historyPanel = historyPanel;
         
         // 将没有初始化的final字段设为null
-        this.callbacks = null;
-        this.helpers = null;
         this.configPanel = null;
         
         // 初始化数据库和DAO
@@ -156,8 +141,6 @@ public class MainUI extends JPanel {
         this.historyPanel = historyPanel;
         
         // 将没有初始化的字段设为null
-        this.callbacks = null;
-        this.helpers = null;
         this.configPanel = null;
         
         // 初始化数据库和DAO

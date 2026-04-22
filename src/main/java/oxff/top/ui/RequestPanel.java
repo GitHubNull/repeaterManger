@@ -1,8 +1,11 @@
 package oxff.top.ui;
 
 import burp.BurpExtender;
-import burp.IRequestInfo;
-import burp.ITextEditor;
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.ui.editor.HttpRequestEditor;
+import oxff.top.api.MontoyaApiHolder;
 import oxff.top.http.RequestDataHelper;
 import oxff.top.utils.TextLineNumber;
 
@@ -26,9 +29,8 @@ public class RequestPanel extends JPanel {
     private final JButton sendButton;
     private final JSpinner timeoutSpinner;
     
-    // HTTP请求编辑器组件
-    private ITextEditor requestEditor;  // Burp的文本编辑器接口
-    private ITextEditor responseEditor;
+    // Montoya请求编辑器
+    private HttpRequestEditor requestEditor;
     
     // HTTP请求参数输入字段
     private JTextField methodField;     // 请求方法
@@ -135,7 +137,7 @@ public class RequestPanel extends JPanel {
         add(topPanel, BorderLayout.NORTH);
         add(requestScrollPane, BorderLayout.CENTER);
         
-        // 初始化Burp编辑器
+        // 初始化Montoya编辑器
         initBurpEditor();
 
         // 初始化请求发送处理器
@@ -143,18 +145,17 @@ public class RequestPanel extends JPanel {
     }
     
     /**
-     * 初始化Burp编辑器
+     * 初始化Montoya请求编辑器
      */
     private void initBurpEditor() {
         try {
-            // 通过BurpExtender获取requestEditor，如果可用
-            if (BurpExtender.callbacks != null) {
-                requestEditor = BurpExtender.callbacks.createTextEditor();
-                requestEditor.setEditable(true);
+            MontoyaApi api = MontoyaApiHolder.getApi();
+            if (api != null) {
+                requestEditor = api.userInterface().createHttpRequestEditor();
             }
         } catch (Exception e) {
-            // 如果无法创建Burp编辑器，则使用标准文本区域
-            BurpExtender.printError("[!] 无法创建Burp编辑器: " + e.getMessage());
+            // 如果无法创建Montoya编辑器，则使用标准文本区域
+            BurpExtender.printError("[!] 无法创建Montoya编辑器: " + e.getMessage());
         }
     }
     
@@ -336,13 +337,6 @@ public class RequestPanel extends JPanel {
     public JTextArea getRequestTextArea() {
         return requestTextArea;
     }
-
-    /**
-     * 获取响应编辑器
-     */
-    public ITextEditor getResponseEditor() {
-        return responseEditor;
-    }
     
     /**
      * 清空请求内容
@@ -350,7 +344,7 @@ public class RequestPanel extends JPanel {
     public void clear() {
         requestTextArea.setText("");
         if (requestEditor != null) {
-            requestEditor.setText("".getBytes());
+            requestEditor.setRequest(HttpRequest.httpRequest());
         }
     }
     
@@ -391,14 +385,16 @@ public class RequestPanel extends JPanel {
             
             // 设置请求内容到编辑器
             if (requestEditor != null) {
-                requestEditor.setText(request);
+                requestEditor.setRequest(HttpRequest.httpRequest(ByteArray.byteArray(request)));
             } else {
                 setRequestText(request);
             }
             
-            // 分析请求信息
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(request);
-            List<String> headers = requestInfo.getHeaders();
+            // 使用Montoya API分析请求信息
+            HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(request));
+            List<String> headers = requestInfo.headers().stream()
+                .map(h -> h.name() + ": " + h.value())
+                .collect(java.util.stream.Collectors.toList());
             
             if (headers.isEmpty()) {
                 BurpExtender.printError("[!] 请求头为空，使用默认值");
@@ -443,10 +439,10 @@ public class RequestPanel extends JPanel {
             if (host.contains(":443") || port.equals("443")) {
                 isHttps = true;
             }
-            // 3. 根据Burp API解析的URL协议判断
+            // 3. 根据Montoya API解析的URL协议判断
             try {
-                java.net.URL parsedUrl = requestInfo.getUrl();
-                if ("https".equalsIgnoreCase(parsedUrl.getProtocol())) {
+                String urlStr = requestInfo.url();
+                if (urlStr != null && urlStr.startsWith("https://")) {
                     isHttps = true;
                 }
             } catch (Exception e) {
@@ -503,7 +499,7 @@ public class RequestPanel extends JPanel {
             // 从编辑器获取请求
             byte[] request;
             if (requestEditor != null) {
-                request = requestEditor.getText();
+                request = requestEditor.getRequest().toByteArray().getBytes();
             } else {
                 request = requestTextArea.getText().getBytes();
             }
@@ -519,10 +515,13 @@ public class RequestPanel extends JPanel {
                 BurpExtender.printOutput("[*] 检测到请求参数已修改，正在更新请求...");
                 
                 try {
-                    // 分析请求
-                    IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(request);
-                    List<String> headers = new ArrayList<>(requestInfo.getHeaders());
-                    byte[] body = Arrays.copyOfRange(request, requestInfo.getBodyOffset(), request.length);
+                    // 使用Montoya API分析请求
+                    HttpRequest reqInfo = HttpRequest.httpRequest(ByteArray.byteArray(request));
+                    int bodyOffset = reqInfo.bodyOffset();
+                    byte[] body = Arrays.copyOfRange(request, bodyOffset, request.length);
+                    List<String> headers = new ArrayList<>(reqInfo.headers().stream()
+                        .map(h -> h.name() + ": " + h.value())
+                        .collect(java.util.stream.Collectors.toList()));
                     
                     // 更新Host头
                     String newHost = hostField.getText().trim();
@@ -584,8 +583,8 @@ public class RequestPanel extends JPanel {
                         }
                     }
                     
-                    // 重建请求
-                    request = BurpExtender.helpers.buildHttpMessage(headers, body);
+                    // 重建请求：拼接headers和body
+                    request = buildRawHttpMessage(headers, body);
                     
                     // 验证重建后的请求
                     if (!RequestDataHelper.isValidHttpRequest(new String(request))) {
@@ -612,5 +611,19 @@ public class RequestPanel extends JPanel {
         }
     }
 
-
+    /**
+     * 从header列表和body构建原始HTTP消息字节数组
+     */
+    private byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
+        StringBuilder sb = new StringBuilder();
+        for (String header : headers) {
+            sb.append(header).append("\r\n");
+        }
+        sb.append("\r\n");
+        byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        byte[] result = new byte[headerBytes.length + body.length];
+        System.arraycopy(headerBytes, 0, result, 0, headerBytes.length);
+        System.arraycopy(body, 0, result, headerBytes.length, body.length);
+        return result;
+    }
 }

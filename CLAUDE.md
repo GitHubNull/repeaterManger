@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Enhanced Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
 
-- **Version**: 1.5.1
-- **Java**: 8 (source/target compatibility)
+- **Version**: 2.0.0
+- **Java**: 17 (source/target compatibility)
 - **Build**: Maven
 - **License**: Apache License 2.0
 
@@ -27,18 +27,19 @@ The project follows a layered architecture:
 ```
 
 Key components:
-- **BurpExtender.java**: Entry point implementing Burp Suite extension interface (`IBurpExtender`)
-- **EnhancedRepeaterUI.java**: Main UI controller that orchestrates all components (implements `ITab`)
+- **BurpExtender.java**: Entry point implementing Montoya SDK's `BurpExtension` interface, initialized via `initialize(MontoyaApi)`
+- **MontoyaApiHolder.java**: Static holder for `MontoyaApi` instance, bridges legacy static access pattern to constructor injection
+- **EnhancedRepeaterUI.java**: Main UI controller that orchestrates all components
 - **DatabaseManager.java**: Singleton managing SQLite connections (connection pool via `BlockingQueue` + JDK dynamic proxy), Schema initialization, session management
 - **PoolManager.java**: Content deduplication manager using SHA-256 hash-based pools
-- **RequestManager.java**: Async HTTP request sender with callback interface
+- **RequestManager.java**: Async HTTP request sender using `MontoyaApi.http().sendRequest()`
 - **HistoryRecordingService.java**: Singleton async queue-based history recording service
 - **GarbageCollectorService.java**: Background GC for zero-reference pool data cleanup
 - **AutoSaveService.java**: Scheduled database checkpoint service
 - **LogManager.java**: Multi-channel log dispatcher with level filtering (Burp console / rolling file / UI panel)
 - **ErmArchiveWriter/Reader.java**: Custom binary archive format with optional AES-256-CBC + HMAC-SHA256 encryption
 - **DatabaseConfig.java**: Configuration management (storage mode / logging / proxy)
-- **PopMenu.java**: Context menu factory ("Send to Enhanced Repeater")
+- **PopMenu.java**: Context menu provider implementing Montoya SDK's `ContextMenuItemsProvider`
 
 ## Key Features
 
@@ -68,8 +69,8 @@ mvn clean package
 ```
 
 The build process creates two JAR files:
-- Development version: `target/enhanced-repeater-1.5.1.jar`
-- Timestamped release: `target/releases/enhanced-repeater-1.5.1-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/enhanced-repeater-2.0.0.jar`
+- Timestamped release: `target/releases/enhanced-repeater-2.0.0-YYYYMMDD-HHMMSS.jar`
 
 ## Source Code Organization
 
@@ -78,12 +79,13 @@ src/main/java/
 ├── burp/
 │   └── BurpExtender.java              # Extension entry point (must be in burp package)
 └── oxff/top/
-    ├── EnhancedRepeaterUI.java         # Main UI controller (ITab implementation)
+    ├── EnhancedRepeaterUI.java         # Main UI controller
+    ├── MontoyaApiHolder.java           # Static bridge for MontoyaApi access
     ├── config/                        # Configuration management
     │   ├── DatabaseConfig.java         # Storage mode / logging / proxy config
     │   └── SessionDirectory.java       # Session directory (timestamp-named)
     ├── controller/                    # Context menu handlers
-    │   └── PopMenu.java               # "Send to Enhanced Repeater" context menu
+    │   └── PopMenu.java               # "Send to Enhanced Repeater" context menu (ContextMenuItemsProvider)
     ├── db/                            # Database access layer
     │   ├── DatabaseManager.java        # Singleton: connection pool + Schema init
     │   ├── HistoryDAO.java             # History CRUD operations
@@ -99,7 +101,9 @@ src/main/java/
     │       └── SplitResult.java        # Split operation result
     ├── http/                          # HTTP processing
     │   ├── ProxyConfig.java            # HTTP proxy configuration (singleton)
-    │   ├── RequestManager.java         # Async HTTP request sender
+    │   ├── RequestManager.java         # Async HTTP request sender (Montoya API)
+    │   ├── HttpRequestHelper.java      # HTTP request parsing utilities (Montoya types)
+    │   ├── RequestDataHelper.java      # Request data validation/repair utilities
     │   └── RequestResponseRecord.java  # Request-response data model
     ├── io/                            # Data import/export
     │   ├── DataExporter.java           # Export dispatcher
@@ -116,7 +120,7 @@ src/main/java/
     │   ├── LogEntry.java               # Log entry data class
     │   ├── LogHandler.java             # Abstract log handler
     │   ├── LogLevel.java               # DEBUG / INFO / SUCCESS / WARN / ERROR
-    │   ├── BurpConsoleHandler.java     # Burp console output handler
+    │   ├── BurpConsoleHandler.java     # Burp console output handler (Montoya Logging API)
     │   ├── RollingFileHandler.java     # Rolling file log handler
     │   └── UIHandler.java              # UI panel log handler
     ├── model/                         # Data models
@@ -126,10 +130,10 @@ src/main/java/
     ├── service/                       # Background services
     │   ├── AutoSaveService.java        # Scheduled database checkpoint
     │   ├── GarbageCollectorService.java # Zero-ref pool cleanup (10min interval)
-    │   └── HistoryRecordingService.java # Async queue-based history recording
+    │   └── HistoryRecordingService.java # Async queue-based history recording (Montoya types)
     ├── ui/                            # User interface components
-    │   ├── BurpRequestPanel.java       # Burp-style request editor
-    │   ├── BurpResponsePanel.java      # Burp-style response viewer
+    │   ├── BurpRequestPanel.java       # Burp-style request editor (legacy)
+    │   ├── BurpResponsePanel.java      # Burp-style response viewer (legacy)
     │   ├── ConfigPanel.java            # 4-tab config panel (storage/log/proxy/IO)
     │   ├── EnhancedRequestPanel.java   # Enhanced request panel
     │   ├── EnhancedResponsePanel.java  # Enhanced response panel
@@ -140,17 +144,60 @@ src/main/java/
     │   ├── MainUI.java                 # Main UI (legacy, used for data refresh)
     │   ├── RequestListPanel.java       # Request list with search/filter/color
     │   ├── RequestPanel.java           # Request detail panel
+    │   ├── RequestPanelSender.java     # Request send handler (Montoya API)
     │   ├── ResponsePanel.java          # Response display panel
     │   ├── StatusPanel.java            # Bottom status bar
+    │   ├── editor/                     # Burp-style editor components
+    │   │   ├── BurpRequestPanel.java   # Montoya HttpRequestEditor wrapper
+    │   │   └── BurpResponsePanel.java  # Montoya HttpResponseEditor wrapper
     │   ├── viewer/                     # HTTP viewer components
     │   │   ├── HttpViewer.java
     │   │   ├── HttpViewerPanel.java
     │   │   └── ViewMode.java           # VIEW_MODE enum
+    │   ├── config/                     # Configuration UI
+    │   │   └── ConfigPanel.java        # 4-tab config panel
+    │   ├── history/                    # History UI
+    │   │   └── HistoryPanel.java       # History list with search/filter
     │   └── layout/
     │       └── LayoutManager.java      # Layout switcher (HORIZONTAL/VERTICAL/REQUEST_ONLY/RESPONSE_ONLY)
     └── utils/
         └── TextLineNumber.java         # Line number utility for text components
 ```
+
+## Montoya SDK API Mapping
+
+The extension uses the Montoya SDK (`burp.api.montoya.*`) instead of the legacy Burp Extender API:
+
+| Legacy API | Montoya SDK Equivalent |
+|------------|----------------------|
+| `IBurpExtender` | `BurpExtension` |
+| `IBurpExtenderCallbacks` | `MontoyaApi` (obtained via `initialize()`) |
+| `IExtensionHelpers` | `HttpRequest`/`HttpResponse` static factory methods |
+| `IHttpRequestResponse` | `HttpRequestResponse` |
+| `IHttpService` | `HttpService` |
+| `IRequestInfo` | `HttpRequest` (use `.method()`, `.url()`, `.headers()`) |
+| `IResponseInfo` | `HttpResponse` (use `.statusCode()`, `.headers()`) |
+| `ITextEditor` | `HttpRequestEditor` / `HttpResponseEditor` |
+| `IMessageEditor` | `HttpRequestEditor` / `HttpResponseEditor` |
+| `ITab` | Register via `api.userInterface().registerSuiteTab()` |
+| `IContextMenuFactory` | `ContextMenuItemsProvider` |
+| `callbacks.makeHttpRequest()` | `api.http().sendRequest()` |
+| `callbacks.createTextEditor()` | `api.userInterface().createHttpRequestEditor()` |
+| `helpers.analyzeRequest()` | `HttpRequest.httpRequest(ByteArray)` |
+| `helpers.buildHttpMessage()` | Manual header/body assembly + `HttpRequest.httpRequest()` |
+| `helpers.buildHttpService()` | `HttpService.httpService()` |
+
+Key Montoya types:
+- `burp.api.montoya.MontoyaApi` - Main API entry point
+- `burp.api.montoya.core.ByteArray` - Wraps `byte[]` for API calls (use `ByteArray.byteArray(bytes)`)
+- `burp.api.montoya.http.HttpService` - HTTP service (host/port/protocol)
+- `burp.api.montoya.http.message.requests.HttpRequest` - HTTP request object
+- `burp.api.montoya.http.message.responses.HttpResponse` - HTTP response object
+- `burp.api.montoya.http.message.HttpHeader` - HTTP header (name/value)
+- `burp.api.montoya.http.message.HttpRequestResponse` - Request-response pair
+- `burp.api.montoya.logging.Logging` - Logging interface (`api.logging()`)
+- `burp.api.montoya.ui.editor.HttpRequestEditor` - Request editor component
+- `burp.api.montoya.ui.editor.HttpResponseEditor` - Response editor component
 
 ## Database Schema
 
@@ -176,7 +223,7 @@ SQLite is used with a custom connection pool (BlockingQueue + JDK Proxy for tran
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| Burp Suite Extender API | 2.1 | Required extension interface |
+| Montoya API | 2025.12 | Modern Burp Suite extension interface |
 | RSyntaxTextArea | 3.3.3 | Syntax highlighting editor |
 | SQLite JDBC | 3.42.0.0 | Local data persistence |
 | HikariCP | 5.0.1 | Declared but not actively used (custom pool instead) |
@@ -203,20 +250,23 @@ Data is persisted in session directories under `~/.burp/` (timestamp-named), eac
 
 ## Important Coding Conventions
 
-1. **Java 8 compatibility**: No Java 9+ features beyond lambdas
+1. **Java 17 compatibility**: Required by Montoya SDK; features like text blocks, sealed classes, records available
 2. **`burp` package must not be renamed**: Burp Suite requires the entry class in this package
-3. **Swing threading**: All UI operations must run on EDT (`SwingUtilities.invokeLater`)
-4. **Database access**: Use DAO classes with `try-with-resources`; connections are auto-returned to pool via proxy
-5. **Logging**: Use `BurpExtender.printOutput()`/`printError()` or `LogManager` methods
-6. **Singleton pattern**: DatabaseManager, LogManager, HistoryRecordingService, ProxyConfig
-7. **Async operations**: HTTP requests, data loading, and history recording run on background threads
-8. **HTTPS preservation**: Always use `IHttpService` when making requests to preserve HTTPS protocol info
-9. **Error filtering**: `BurpExtender.shouldFilterError()` filters IntelliJ-related harmless ClassNotFoundExceptions
+3. **Montoya SDK**: Use `burp.api.montoya.*` APIs exclusively; no legacy `burp.I*` interfaces
+4. **MontoyaApi access**: Prefer constructor injection; use `MontoyaApiHolder.getApi()` as fallback for static contexts
+5. **ByteArray wrapping**: Montoya API methods require `ByteArray.byteArray(bytes)` instead of raw `byte[]`
+6. **Swing threading**: All UI operations must run on EDT (`SwingUtilities.invokeLater`)
+7. **Database access**: Use DAO classes with `try-with-resources`; connections are auto-returned to pool via proxy
+8. **Logging**: Use `BurpExtender.printOutput()`/`printError()` or `LogManager` methods
+9. **Singleton pattern**: DatabaseManager, LogManager, HistoryRecordingService, ProxyConfig
+10. **Async operations**: HTTP requests, data loading, and history recording run on background threads
+11. **HTTPS preservation**: Always use `HttpService` when making requests to preserve HTTPS protocol info
+12. **Error filtering**: `BurpExtender.shouldFilterError()` filters IntelliJ-related harmless ClassNotFoundExceptions
 
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/release.yml`):
-- **Trigger**: Push `v*` tags (e.g., `v1.0.0`) or manual dispatch
-- **Build**: JDK 8 + Maven on Ubuntu
+- **Trigger**: Push `v*` tags (e.g., `v2.0.0`) or manual dispatch
+- **Build**: JDK 17 + Maven on Ubuntu
 - **Release**: Auto-creates GitHub Release with JAR attachment
-- **Prerelease**: Tags with `-` suffix (e.g., `v1.0.0-beta`) are marked as prerelease
+- **Prerelease**: Tags with `-` suffix (e.g., `v2.0.0-beta`) are marked as prerelease

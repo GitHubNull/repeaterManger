@@ -1,10 +1,13 @@
 package oxff.top.ui;
 
 import burp.BurpExtender;
-import burp.IHttpRequestResponse;
-import burp.IHttpService;
-import burp.IRequestInfo;
-import burp.IResponseInfo;
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
+import oxff.top.api.MontoyaApiHolder;
 import oxff.top.db.RequestDAO;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.RequestDataHelper;
@@ -20,6 +23,7 @@ public class RequestPanelSender {
     private final RequestPanel requestPanel;
     private final MainUI mainUI;
     private final JButton sendButton;
+    private final MontoyaApi api;
 
     /**
      * 创建请求发送处理器
@@ -31,6 +35,7 @@ public class RequestPanelSender {
         this.requestPanel = requestPanel;
         this.mainUI = mainUI;
         this.sendButton = sendButton;
+        this.api = MontoyaApiHolder.getApi();
     }
 
     /**
@@ -38,7 +43,6 @@ public class RequestPanelSender {
      */
     public void sendRequest() {
         byte[] request = null;
-        IRequestInfo requestInfo = null;
         String url = null;
 
         try {
@@ -48,8 +52,9 @@ public class RequestPanelSender {
                 return;
             }
 
-            requestInfo = BurpExtender.helpers.analyzeRequest(request);
-            url = requestInfo.getUrl().toString();
+            // 使用Montoya API解析请求以获取URL
+            HttpRequest httpRequest = HttpRequest.httpRequest(ByteArray.byteArray(request));
+            url = httpRequest.url();
 
             BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (超时时间: " + requestPanel.getTimeout() + "秒)");
 
@@ -57,31 +62,31 @@ public class RequestPanelSender {
             sendButton.setText("发送中...");
 
             final byte[] finalRequest = request;
-            final IRequestInfo finalRequestInfo = requestInfo;
             final String finalUrl = url;
             final long requestStartTime = System.currentTimeMillis();
 
             new Thread(() -> {
-                IHttpRequestResponse response = null;
                 try {
                     URL urlObj = new URL(finalUrl);
                     String host = urlObj.getHost();
                     int port = urlObj.getPort() == -1 ? urlObj.getDefaultPort() : urlObj.getPort();
                     boolean useHttps = urlObj.getProtocol().equalsIgnoreCase("https");
 
-                    IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, useHttps);
+                    HttpService httpService = HttpService.httpService(host, port, useHttps);
 
                     byte[] fixedRequest = RequestDataHelper.fixContentLength(finalRequest, httpService);
 
-                    response = BurpExtender.callbacks.makeHttpRequest(httpService, fixedRequest);
+                    HttpRequest requestToSend = HttpRequest.httpRequest(httpService, ByteArray.byteArray(fixedRequest));
+                    HttpRequestResponse response = api.http().sendRequest(requestToSend);
 
-                    final IHttpRequestResponse finalResponse = response;
+                    byte[] responseData = response.response().toByteArray().getBytes();
                     final long elapsedMs = System.currentTimeMillis() - requestStartTime;
 
-                    if (finalResponse != null && finalResponse.getResponse() != null) {
+                    if (responseData != null && responseData.length > 0) {
+                        final byte[] finalResponseData = responseData;
                         SwingUtilities.invokeLater(() -> {
                             try {
-                                handleSuccessfulResponse(finalRequest, finalRequestInfo, finalResponse, finalUrl, elapsedMs);
+                                handleSuccessfulResponse(finalRequest, requestToSend, response.response(), finalUrl, elapsedMs);
                             } catch (Exception e) {
                                 BurpExtender.printError("[!] 处理响应时出错: " + e.getMessage());
                             }
@@ -105,7 +110,7 @@ public class RequestPanelSender {
                     });
                 } finally {
                     long elapsedMs = System.currentTimeMillis() - requestStartTime;
-                    saveHistoryRecord(finalRequest, finalRequestInfo, response, finalUrl, elapsedMs);
+                    saveHistoryRecord(finalRequest, finalUrl, elapsedMs);
                     SwingUtilities.invokeLater(() -> {
                         sendButton.setEnabled(true);
                         sendButton.setText("发送请求");
@@ -131,29 +136,36 @@ public class RequestPanelSender {
     /**
      * 处理成功响应（在EDT中调用）
      */
-    private void handleSuccessfulResponse(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url, long elapsedMs) {
+    private void handleSuccessfulResponse(byte[] request, HttpRequest requestInfo, HttpResponse response, String url, long elapsedMs) {
         try {
-            URL parsedUrl = requestInfo.getUrl();
+            URL parsedUrl = new URL(url);
             String protocol = parsedUrl.getProtocol();
             String domain = parsedUrl.getHost();
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-            String method = requestInfo.getMethod();
-
-            if (requestPanel.getResponseEditor() != null) {
-                requestPanel.getResponseEditor().setText(response.getResponse());
-            }
+            String method = requestInfo.method();
 
             RequestDAO requestDAO = new RequestDAO();
             int requestId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
 
             if (requestId > 0) {
+                byte[] responseData = response.toByteArray().getBytes();
                 HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
-                int historyId = historyWriteDAO.saveHistory(requestId, requestInfo, request, response.getResponse(), elapsedMs);
+
+                oxff.top.http.RequestResponseRecord record = new oxff.top.http.RequestResponseRecord(
+                    requestId, protocol, domain, path, query, method);
+                record.setStatusCode(response.statusCode());
+                record.setResponseLength(responseData.length);
+                record.setResponseTime((int) elapsedMs);
+                record.setRequestData(request);
+                record.setResponseData(responseData);
+                record.setTimestamp(new java.util.Date());
+
+                int historyId = historyWriteDAO.saveHistory(record);
 
                 if (historyId > 0) {
                     if (mainUI != null && mainUI.getHistoryPanel() != null) {
-                        mainUI.getHistoryPanel().addHistoryRecord(requestId, response);
+                        mainUI.getHistoryPanel().addHistoryRecord(record);
                     }
 
                     BurpExtender.printOutput("[+] 请求和响应已保存到数据库，请求ID: " + requestId + ", 历史ID: " + historyId);
@@ -171,19 +183,28 @@ public class RequestPanelSender {
     /**
      * 保存历史记录
      */
-    private void saveHistoryRecord(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url, long responseTime) {
+    private void saveHistoryRecord(byte[] request, String url, long responseTime) {
         try {
-            if (request == null || requestInfo == null) {
+            if (request == null) {
                 BurpExtender.printError("[!] 无法保存历史记录：请求数据为空");
                 return;
             }
 
-            URL parsedUrl = requestInfo.getUrl();
+            HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(request));
+            String method = requestInfo.method();
+
+            URL parsedUrl;
+            try {
+                parsedUrl = new URL(url);
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 保存历史记录时URL解析失败: " + e.getMessage());
+                return;
+            }
+
             String protocol = parsedUrl.getProtocol();
             String domain = parsedUrl.getHost();
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-            String method = requestInfo.getMethod();
 
             int requestId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
 
@@ -197,26 +218,9 @@ public class RequestPanelSender {
             record.setRequestData(request);
             record.setResponseTime((int) responseTime);
             record.setTimestamp(new java.util.Date());
-
-            if (response != null && response.getResponse() != null) {
-                byte[] responseData = response.getResponse();
-                record.setResponseData(responseData);
-
-                try {
-                    IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(responseData);
-                    record.setStatusCode(responseInfo.getStatusCode());
-                    record.setResponseLength(responseData.length);
-                } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析响应信息失败: " + e.getMessage());
-                    record.setStatusCode(0);
-                    record.setResponseLength(0);
-                }
-            } else {
-                record.setResponseData(new byte[0]);
-                record.setStatusCode(0);
-                record.setResponseLength(0);
-                record.setComment("请求失败");
-            }
+            record.setResponseData(new byte[0]);
+            record.setStatusCode(0);
+            record.setResponseLength(0);
 
             HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
             int historyId = historyWriteDAO.saveHistory(record);

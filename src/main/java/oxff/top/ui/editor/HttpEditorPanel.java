@@ -73,7 +73,7 @@ public class HttpEditorPanel extends JPanel {
             );
             theme.apply(textArea);
         } catch (IOException e) {
-            BurpExtender.callbacks.printError("[!] 无法加载编辑器主题: " + e.getMessage());
+            BurpExtender.printError("[!] 无法加载编辑器主题: " + e.getMessage());
         }
         
         // 添加按键监听器，用于快捷键和缩进处理

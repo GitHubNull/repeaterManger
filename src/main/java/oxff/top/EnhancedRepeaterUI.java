@@ -1,6 +1,12 @@
 package oxff.top;
 
-import burp.*;
+import burp.BurpExtender;
+import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
+import burp.api.montoya.http.HttpService;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.http.HttpRequestHelper;
@@ -31,15 +37,17 @@ import java.net.URL;
  *    - 下部：当前选中请求的历史重放记录列表
  * 2. 右侧：请求和响应编辑/展示区域（可切换布局）
  */
-public class EnhancedRepeaterUI implements ITab {
-    
+public class EnhancedRepeaterUI {
+
+    private final MontoyaApi api;
+
     // 主UI组件
     private final JPanel mainPanel;
     private final JSplitPane mainSplitPane;          // 左右分割
     private final JSplitPane leftSplitPane;          // 左侧上下分割
     private final JSplitPane editorSplitPane;        // 编辑区分割
     private final JTabbedPane tabbedPane;            // 选项卡面板
-    
+
     // 功能面板
     private final RequestListPanel requestListPanel;  // 左侧请求列表
     private final BurpRequestPanel requestPanel;      // 右上请求编辑区
@@ -48,45 +56,49 @@ public class EnhancedRepeaterUI implements ITab {
     private final ConfigPanel configPanel;            // 配置面板
     private final LogPanel logPanel;                  // 日志面板
     private final StatusPanel statusPanel;            // 底部状态栏
-    
+
     // 布局管理器
     private final LayoutManager layoutManager;
-    
+
     // 功能组件
     private final RequestManager requestManager;
 
     // 请求调度处理器
     private final RequestDispatchHandler dispatchHandler;
-    
+
     /**
      * 创建增强型Repeater界面
+     *
+     * @param api MontoyaApi实例，用于创建编辑器等
      */
-    public EnhancedRepeaterUI() {
+    public EnhancedRepeaterUI(MontoyaApi api) {
+        this.api = api;
+
         // 初始化功能组件
-        requestManager = new RequestManager();
-        
+        requestManager = new RequestManager(api);
+
         // 初始化主面板
         mainPanel = new JPanel(new BorderLayout());
-        
+
         // 创建请求列表面板（左侧）
         requestListPanel = new RequestListPanel();
         requestListPanel.setRequestSelectedCallback(this::onRequestSelected);
-        
-        // 创建请求和响应面板（右上）
-        requestPanel = new BurpRequestPanel();
-        responsePanel = new BurpResponsePanel();
-        
+
+        // 创建请求和响应面板（右上），传入MontoyaApi用于创建编辑器
+        requestPanel = new BurpRequestPanel(api);
+        responsePanel = new BurpResponsePanel(api);
+
         // 创建编辑器分割面板
         editorSplitPane = new JSplitPane(
-            JSplitPane.HORIZONTAL_SPLIT, 
-            requestPanel, 
+            JSplitPane.HORIZONTAL_SPLIT,
+            requestPanel,
             responsePanel
         );
         editorSplitPane.setResizeWeight(0.5);
-        
+
         // 创建布局管理器
         layoutManager = new LayoutManager(editorSplitPane, LayoutType.HORIZONTAL);
-        
+
         // 创建历史记录面板（右下）
         historyPanel = new HistoryPanel();
 
@@ -98,19 +110,19 @@ public class EnhancedRepeaterUI implements ITab {
 
         // 设置发送请求按钮动作
         requestPanel.setSendButtonListener(e -> dispatchHandler.sendRequest());
-        
+
         // 设置历史记录双击回调
         historyPanel.setOnSelectRecord(dispatchHandler::loadHistoryRecord);
-        
+
         // 创建编辑区控制面板
         JPanel editorControlPanel = createEditorControlPanel();
-        
+
         // 组合编辑区和控制面板
         JPanel editorPanel = new JPanel(new BorderLayout());
         editorPanel.add(editorControlPanel, BorderLayout.NORTH);
         editorPanel.add(editorSplitPane, BorderLayout.CENTER);
         editorPanel.add(statusPanel, BorderLayout.SOUTH);
-        
+
         // 创建左侧上下分割面板（请求列表 + 历史记录）
         leftSplitPane = new JSplitPane(
             JSplitPane.VERTICAL_SPLIT,
@@ -128,7 +140,7 @@ public class EnhancedRepeaterUI implements ITab {
         );
         mainSplitPane.setResizeWeight(0.3);
         mainSplitPane.setDividerLocation(350);
-        
+
         // 创建配置面板
         configPanel = new ConfigPanel();
         configPanel.setOnDataChanged(() -> SwingUtilities.invokeLater(() -> refreshAllData()));
@@ -148,20 +160,27 @@ public class EnhancedRepeaterUI implements ITab {
         // 添加到主面板
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
     }
-    
+
+    /**
+     * 获取UI组件（供registerSuiteTab使用）
+     */
+    public Component getUiComponent() {
+        return mainPanel;
+    }
+
     /**
      * 创建编辑区域的控制面板
      */
     private JPanel createEditorControlPanel() {
         JPanel controlPanel = new JPanel(new BorderLayout());
-        
+
         // 左侧工具按钮区
         JPanel leftToolPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        
+
         JButton newRequestButton = new JButton("新建请求");
         newRequestButton.setToolTipText("创建新的空白请求");
         newRequestButton.addActionListener(e -> createNewRequest());
-        
+
         JButton clearButton = new JButton("清空");
         clearButton.setToolTipText("清空当前请求和响应内容");
         clearButton.addActionListener(e -> {
@@ -169,13 +188,13 @@ public class EnhancedRepeaterUI implements ITab {
             responsePanel.clear();
             statusPanel.clear();
         });
-        
+
         leftToolPanel.add(newRequestButton);
         leftToolPanel.add(clearButton);
-        
+
         // 右侧布局控制区
         JPanel rightToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        
+
         JComboBox<String> layoutComboBox = new JComboBox<>(new String[]{"左右布局", "上下布局", "仅请求", "仅响应"});
         layoutComboBox.setToolTipText("切换请求和响应的布局方式");
         layoutComboBox.addActionListener(e -> {
@@ -190,17 +209,17 @@ public class EnhancedRepeaterUI implements ITab {
                 layoutManager.setLayoutResponseOnly();
             }
         });
-        
+
         rightToolPanel.add(new JLabel("布局："));
         rightToolPanel.add(layoutComboBox);
-        
+
         // 添加到控制面板
         controlPanel.add(leftToolPanel, BorderLayout.WEST);
         controlPanel.add(rightToolPanel, BorderLayout.EAST);
-        
+
         return controlPanel;
     }
-    
+
     /**
      * 创建新请求
      */
@@ -208,22 +227,22 @@ public class EnhancedRepeaterUI implements ITab {
         requestPanel.clear();
         responsePanel.clear();
         statusPanel.clear();
-        
+
         // 新建请求时重置HTTP服务信息
         dispatchHandler.setCurrentHttpService(null);
-        
+
         // 创建新请求项并添加到列表，同时保存到数据库
         String newRequestTemplate = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
-        
+
         // 保存请求到数据库，获取数据库生成的ID
         RequestDAO requestDAO = new RequestDAO();
         int dbId = requestDAO.saveRequest("http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
-        
+
         if (dbId <= 0) {
             BurpExtender.printError("[!] 创建新请求时保存到数据库失败");
             return;
         }
-        
+
         requestListPanel.addRequest(dbId, "/", "GET", "http", "example.com", "/", "", newRequestTemplate.getBytes());
         dispatchHandler.setCurrentRequestId(dbId);
 
@@ -234,7 +253,7 @@ public class EnhancedRepeaterUI implements ITab {
         historyPanel.clearHistory();
         dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
     }
-    
+
     /**
      * 请求列表选中回调
      */
@@ -253,13 +272,16 @@ public class EnhancedRepeaterUI implements ITab {
             requestPanel.setRequest(requestData);
             BurpExtender.printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
 
-            // 从请求列表的表格数据中获取协议、主机、端口信息，重建IHttpService
-            // 这确保了从已保存请求重新发送时，HTTPS协议信息不会丢失
+            // 从请求列表的表格数据中获取协议、主机、端口信息，重建HttpService
             dispatchHandler.setCurrentHttpService(HttpRequestHelper.rebuildHttpService(requestId, requestData));
 
             // 获取请求信息，更新历史面板标题
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(dispatchHandler.getCurrentHttpService(), requestData);
-            String url = HttpRequestHelper.extractUrlFromRequest(requestData, requestInfo, dispatchHandler.getCurrentHttpService());
+            HttpRequest httpRequest = HttpRequest.httpRequest(ByteArray.byteArray(requestData));
+            HttpService service = dispatchHandler.getCurrentHttpService();
+            if (service != null) {
+                httpRequest = HttpRequest.httpRequest(service, ByteArray.byteArray(requestData));
+            }
+            String url = HttpRequestHelper.extractUrlFromRequest(requestData, httpRequest, service);
             historyPanel.setBorderTitle("请求历史记录 - " + url);
 
             // 尝试加载该请求的最新响应数据
@@ -289,7 +311,6 @@ public class EnhancedRepeaterUI implements ITab {
 
                 if (responseData != null && responseData.length > 0) {
                     responsePanel.setResponse(responseData);
-                    // 使用历史记录中的状态信息更新状态栏
                     dispatchHandler.updateStatusFromRecord(latestRecord);
                     BurpExtender.printOutput("[+] 已加载请求ID " + requestId + " 的最新响应数据");
                 }
@@ -298,53 +319,49 @@ public class EnhancedRepeaterUI implements ITab {
             BurpExtender.printError("[!] 加载最新响应数据失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 加载指定请求ID的历史记录
      */
     private void loadHistoryForRequest(int requestId) {
         // 清空历史记录面板
         historyPanel.clearHistory();
-        
+
         BurpExtender.printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
-        
+
         // 优先从数据库加载历史记录
         try {
             HistoryReadDAO historyReadDAO = new HistoryReadDAO();
             List<RequestResponseRecord> dbHistoryList = historyReadDAO.getHistoryByRequestId(requestId);
-            
+
             if (dbHistoryList != null && !dbHistoryList.isEmpty()) {
                 BurpExtender.printOutput(
-                    String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条", 
+                    String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条",
                         requestId, dbHistoryList.size()));
-                
-                // 将数据库中的历史记录添加到面板（按时间倒序）
+
                 for (RequestResponseRecord record : dbHistoryList) {
                     historyPanel.addHistoryRecord(record);
                 }
-                
-                // 同时更新内存中的历史记录映射
+
                 dispatchHandler.getRequestHistoryMap().put(requestId, new ArrayList<>(dbHistoryList));
-                
+
                 BurpExtender.printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
-                return; // 成功从数据库加载，直接返回
+                return;
             } else {
                 BurpExtender.printOutput(String.format("[*] 数据库中未找到请求ID %d 的历史记录", requestId));
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 从数据库加载历史记录失败: " + e.getMessage());
         }
-        
+
         // 如果数据库中没有或加载失败，尝试从内存映射中获取
         List<RequestResponseRecord> historyList = dispatchHandler.getRequestHistoryMap().get(requestId);
-        
-        // 如果存在历史记录，则添加到历史面板中
+
         if (historyList != null && !historyList.isEmpty()) {
             BurpExtender.printOutput(
-                String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条", 
+                String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条",
                     requestId, historyList.size()));
-            
-            // 将历史记录添加到面板
+
             for (RequestResponseRecord record : historyList) {
                 historyPanel.addHistoryRecord(record);
             }
@@ -352,19 +369,18 @@ public class EnhancedRepeaterUI implements ITab {
             BurpExtender.printOutput(
                 String.format("[*] 请求ID %d 没有历史记录", requestId));
         }
-        
-        // 确保历史面板显示正确的标题
+
         historyPanel.setBorderTitle("请求历史记录 - ID: " + requestId);
     }
 
     /**
      * 设置请求内容 - 用于从右键菜单接收请求
      */
-    public void setRequest(IHttpRequestResponse requestResponse) {
+    public void setRequest(HttpRequestResponse requestResponse) {
         try {
-            if (requestResponse != null && requestResponse.getRequest() != null) {
-                byte[] request = requestResponse.getRequest();
-                
+            if (requestResponse != null && requestResponse.request() != null) {
+                byte[] request = requestResponse.request().toByteArray().getBytes();
+
                 // 提取URL和方法信息
                 String url;
                 String method;
@@ -372,70 +388,35 @@ public class EnhancedRepeaterUI implements ITab {
                 String domain = "";
                 String path = "/";
                 String query = "";
-                
+
                 try {
-                    // 首先尝试使用HTTP服务信息进行分析
-                    IHttpService httpService = requestResponse.getHttpService();
-                    if (httpService != null) {
-                        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestResponse);
-                        url = requestInfo.getUrl().toString();
-                        method = requestInfo.getMethod();
-                        
-                        // 解析URL组件
-                        URL parsedUrl = requestInfo.getUrl();
-                        protocol = parsedUrl.getProtocol();
-                        domain = parsedUrl.getHost();
-                        path = parsedUrl.getPath();
-                        query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-                    } else {
-                        // 如果没有HTTP服务信息，从请求头中提取
-                        IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(request);
-                        method = requestInfo.getMethod();
-                        
-                        // 使用辅助方法提取URL
-                        url = HttpRequestHelper.extractUrlFromRequest(request, requestInfo, dispatchHandler.getCurrentHttpService());
-                        
-                        // 解析URL组件
-                        if (url.startsWith("https://")) {
-                            protocol = "https";
-                            url = url.substring(8);
-                        } else if (url.startsWith("http://")) {
-                            url = url.substring(7);
-                        }
-                        
-                        int pathIndex = url.indexOf('/');
-                        if (pathIndex > 0) {
-                            domain = url.substring(0, pathIndex);
-                            url = url.substring(pathIndex);
-                        } else {
-                            domain = url;
-                            url = "/";
-                        }
-                        
-                        int queryIndex = url.indexOf('?');
-                        if (queryIndex > 0) {
-                            path = url.substring(0, queryIndex);
-                            query = url.substring(queryIndex + 1);
-                        } else {
-                            path = url;
-                        }
-                    }
+                    HttpRequest httpRequest = requestResponse.request();
+                    HttpService httpService = requestResponse.httpService();
+
+                    url = httpRequest.url();
+                    method = httpRequest.method();
+
+                    // 解析URL组件
+                    URL parsedUrl = new URL(url);
+                    protocol = parsedUrl.getProtocol();
+                    domain = parsedUrl.getHost();
+                    path = parsedUrl.getPath();
+                    query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                 } catch (Exception e) {
-                    // 如果分析失败，设置默认值
                     BurpExtender.printError("[!] 分析请求时出错: " + e.getMessage());
                     method = "UNKNOWN";
                     url = "分析请求出错";
                 }
-                
+
                 // 保存请求到数据库，获取数据库生成的ID
                 RequestDAO requestDAO = new RequestDAO();
                 int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
-                
+
                 if (dbId <= 0) {
                     BurpExtender.printError("[!] 保存请求到数据库失败");
                     return;
                 }
-                
+
                 // 提取API值用于列表显示
                 String apiValue = HttpRequestHelper.computeApiFromRequest(path, query, request);
 
@@ -444,46 +425,30 @@ public class EnhancedRepeaterUI implements ITab {
                 dispatchHandler.setCurrentRequestId(dbId);
 
                 // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
-                dispatchHandler.setCurrentHttpService(requestResponse.getHttpService());
-                
+                dispatchHandler.setCurrentHttpService(requestResponse.httpService());
+
                 // 设置请求内容
                 requestPanel.setRequest(request);
-                
+
                 // 清空响应内容
                 responsePanel.clear();
                 statusPanel.clear();
-                
+
                 // 更新历史面板标题
                 historyPanel.setBorderTitle("请求历史记录 - " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
-                
+
                 // 清空历史记录并初始化新的历史记录列表
                 historyPanel.clearHistory();
                 dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
-                
+
                 BurpExtender.printOutput("[+] 请求已加载到增强型Repeater: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置请求失败: " + e.getMessage());
-            e.printStackTrace(new java.io.PrintStream(BurpExtender.callbacks.getStderr()));
+            e.printStackTrace();
         }
     }
-    
-    /**
-     * 获取标签页标题
-     */
-    @Override
-    public String getTabCaption() {
-        return "增强型Repeater";
-    }
-    
-    /**
-     * 获取UI组件
-     */
-    @Override
-    public Component getUiComponent() {
-        return mainPanel;
-    }
-    
+
     /**
      * 关闭资源
      */
@@ -500,19 +465,13 @@ public class EnhancedRepeaterUI implements ITab {
     public void refreshAllData() {
         BurpExtender.printOutput("[*] 开始刷新界面数据...");
 
-        // 清空当前数据
         requestListPanel.clearAllRequests();
         historyPanel.clearAllHistory();
-
-        // 重置当前选中的请求ID
         dispatchHandler.setCurrentRequestId(-1);
-
-        // 清空请求历史记录映射
         dispatchHandler.getRequestHistoryMap().clear();
 
         new Thread(() -> {
             try {
-                // 1. 加载请求数据（使用addRequest避免重复插入数据库）
                 RequestDAO requestDAO = new RequestDAO();
                 java.util.List<java.util.Map<String, Object>> requests = requestDAO.getAllRequests();
                 BurpExtender.printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
@@ -539,7 +498,6 @@ public class EnhancedRepeaterUI implements ITab {
                     }
                 }
 
-                // 2. 加载历史记录到内存缓存
                 HistoryReadDAO historyReadDAO = new HistoryReadDAO();
                 java.util.List<RequestResponseRecord> allHistory = historyReadDAO.getAllHistory();
                 BurpExtender.printOutput("[+] 从数据库加载 " + allHistory.size() + " 条历史记录");

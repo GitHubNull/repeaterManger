@@ -174,7 +174,7 @@ public class HttpViewerPanel extends JPanel implements HttpViewer {
             );
             theme.apply(textArea);
         } catch (IOException e) {
-            BurpExtender.callbacks.printError("[!] 无法加载编辑器主题: " + e.getMessage());
+            BurpExtender.printError("[!] 无法加载编辑器主题: " + e.getMessage());
         }
         
         return textArea;

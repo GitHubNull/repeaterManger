@@ -1,17 +1,17 @@
 package oxff.top.logging;
 
-import burp.IBurpExtenderCallbacks;
+import burp.api.montoya.MontoyaApi;
 
 /**
  * Burp控制台日志处理器 - 将日志输出到Burp Suite的标准输出/错误流
  */
 public class BurpConsoleHandler implements LogHandler {
 
-    private IBurpExtenderCallbacks callbacks;
+    private MontoyaApi api;
     private boolean enabled = true;
 
-    public BurpConsoleHandler(IBurpExtenderCallbacks callbacks) {
-        this.callbacks = callbacks;
+    public BurpConsoleHandler(MontoyaApi api) {
+        this.api = api;
     }
 
     public void setEnabled(boolean enabled) {
@@ -24,7 +24,7 @@ public class BurpConsoleHandler implements LogHandler {
 
     @Override
     public void publish(LogEntry entry) {
-        if (!enabled || callbacks == null) {
+        if (!enabled || api == null) {
             return;
         }
 
@@ -34,22 +34,22 @@ public class BurpConsoleHandler implements LogHandler {
             case DEBUG:
             case INFO:
             case SUCCESS:
-                callbacks.printOutput(message);
+                api.logging().logToOutput(message);
                 break;
             case WARN:
             case ERROR:
-                callbacks.printError(message);
+                api.logging().logToError(message);
                 break;
         }
     }
 
     @Override
     public void flush() {
-        // Burp回调无需刷新
+        // Burp日志API无需刷新
     }
 
     @Override
     public void close() {
-        callbacks = null;
+        api = null;
     }
 }

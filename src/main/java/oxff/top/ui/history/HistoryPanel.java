@@ -1,8 +1,6 @@
 package oxff.top.ui.history;
 
 import burp.BurpExtender;
-import burp.IHttpRequestResponse;
-import burp.IRequestInfo;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.RequestResponseRecord;
 
@@ -237,40 +235,43 @@ public class HistoryPanel extends JPanel {
     }
 
     /**
-     * 添加历史记录
+     * 添加历史记录（从 Montoya HttpRequestResponse）
      */
-    public void addHistoryRecord(int requestId, IHttpRequestResponse requestResponse) {
+    public void addHistoryRecord(int requestId, burp.api.montoya.http.message.HttpRequestResponse requestResponse) {
         try {
-            // 解析请求和响应
-            IRequestInfo requestInfo = BurpExtender.helpers.analyzeRequest(requestResponse);
-            byte[] requestData = requestResponse.getRequest();
-            byte[] responseData = requestResponse.getResponse();
-            int statusCode = BurpExtender.helpers.analyzeResponse(responseData).getStatusCode();
+            burp.api.montoya.http.message.requests.HttpRequest httpRequest = requestResponse.request();
+            burp.api.montoya.http.message.responses.HttpResponse httpResponse = requestResponse.response();
+
+            byte[] requestData = httpRequest.toByteArray().getBytes();
+            byte[] responseData = httpResponse.toByteArray().getBytes();
+            int statusCode = httpResponse.statusCode();
+
+            // 从请求URL解析信息
+            java.net.URL url = new java.net.URL(httpRequest.url());
+
+            // 创建记录对象
+            RequestResponseRecord record = new RequestResponseRecord();
+            record.setRequestId(requestId);
+            record.setMethod(httpRequest.method());
+            record.setProtocol(url.getProtocol());
+            record.setDomain(url.getHost());
+            record.setPath(url.getPath());
+            record.setQueryParameters(url.getQuery() != null ? url.getQuery() : "");
+            record.setStatusCode(statusCode);
+            record.setResponseLength(responseData.length);
+            record.setResponseTime(0);
+            record.setTimestamp(new java.util.Date());
+            record.setRequestData(requestData);
+            record.setResponseData(responseData);
 
             // 保存到数据库
             HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
-            int historyId = historyWriteDAO.saveHistory(requestId, requestInfo, requestData, responseData, 0);
+            int historyId = historyWriteDAO.saveHistory(record);
+            record.setId(historyId);
 
             if (historyId > 0) {
-                // 创建记录对象
-                RequestResponseRecord record = new RequestResponseRecord();
-                record.setId(historyId);
-                record.setRequestId(requestId);
-                record.setMethod(requestInfo.getMethod());
-                record.setProtocol(requestInfo.getUrl().getProtocol());
-                record.setDomain(requestInfo.getUrl().getHost());
-                record.setPath(requestInfo.getUrl().getPath());
-                record.setQueryParameters(requestInfo.getUrl().getQuery() != null ? requestInfo.getUrl().getQuery() : "");
-                record.setStatusCode(statusCode);
-                record.setResponseLength(responseData.length);
-                record.setResponseTime(0); // 暂时设为0
-                record.setTimestamp(new java.util.Date());
-                record.setRequestData(requestData);
-                record.setResponseData(responseData);
-
                 // 添加到UI
                 addHistoryRecord(record);
-
                 BurpExtender.printOutput("[+] 历史记录已保存到数据库，ID: " + historyId);
             } else {
                 BurpExtender.printError("[!] 保存历史记录到数据库失败");

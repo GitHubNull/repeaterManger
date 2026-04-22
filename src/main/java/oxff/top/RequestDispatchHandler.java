@@ -1,6 +1,10 @@
 package oxff.top;
 
-import burp.*;
+import burp.BurpExtender;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.requests.HttpRequest;
+import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
@@ -38,7 +42,7 @@ public class RequestDispatchHandler {
 
     // 当前请求状态
     private int currentRequestId = -1;
-    private IHttpService currentHttpService = null;
+    private HttpService currentHttpService = null;
 
     // 请求历史记录映射: 请求ID -> 历史记录列表
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
@@ -62,37 +66,22 @@ public class RequestDispatchHandler {
         this.requestManager = requestManager;
     }
 
-    /**
-     * 设置当前请求ID
-     */
     public void setCurrentRequestId(int requestId) {
         this.currentRequestId = requestId;
     }
 
-    /**
-     * 获取当前请求ID
-     */
     public int getCurrentRequestId() {
         return currentRequestId;
     }
 
-    /**
-     * 设置当前HTTP服务信息
-     */
-    public void setCurrentHttpService(IHttpService httpService) {
+    public void setCurrentHttpService(HttpService httpService) {
         this.currentHttpService = httpService;
     }
 
-    /**
-     * 获取当前HTTP服务信息
-     */
-    public IHttpService getCurrentHttpService() {
+    public HttpService getCurrentHttpService() {
         return currentHttpService;
     }
 
-    /**
-     * 获取请求历史记录映射
-     */
     public Map<Integer, List<RequestResponseRecord>> getRequestHistoryMap() {
         return requestHistoryMap;
     }
@@ -112,7 +101,6 @@ public class RequestDispatchHandler {
             }
 
             BurpExtender.printOutput("[*] 正在发送请求...");
-
             responsePanel.clear();
 
             int timeout = requestPanel.getTimeout();
@@ -144,7 +132,6 @@ public class RequestDispatchHandler {
                     SwingUtilities.invokeLater(() -> {
                         try {
                             handleResponseFailure(requestBytes, errorMessage, requestTimeMs, responseTimeMs, durationMs);
-
                             BurpExtender.printError("[!] 请求失败: " + errorMessage);
                             JOptionPane.showMessageDialog(mainPanel,
                                 "请求失败或超时，未收到响应数据: " + errorMessage,
@@ -178,17 +165,17 @@ public class RequestDispatchHandler {
             try {
                 responsePanel.setResponse(response);
 
-                IRequestInfo requestInfo;
+                HttpRequest requestInfo;
                 if (currentHttpService != null) {
-                    requestInfo = BurpExtender.helpers.analyzeRequest(currentHttpService, requestBytes);
+                    requestInfo = HttpRequest.httpRequest(currentHttpService, ByteArray.byteArray(requestBytes));
                 } else {
-                    requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                    requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
                 }
-                IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
+                HttpResponse responseInfo = HttpResponse.httpResponse(ByteArray.byteArray(response));
 
-                String method = requestInfo.getMethod();
+                String method = requestInfo.method();
                 String url = HttpRequestHelper.extractUrlFromRequest(requestBytes, requestInfo, currentHttpService);
-                int statusCode = responseInfo.getStatusCode();
+                int statusCode = responseInfo.statusCode();
 
                 if (currentRequestId >= 0) {
                     String protocol = "http";
@@ -197,7 +184,7 @@ public class RequestDispatchHandler {
                     String query = "";
 
                     try {
-                        URL parsedUrl = requestInfo.getUrl();
+                        URL parsedUrl = new URL(requestInfo.url());
                         protocol = parsedUrl.getProtocol();
                         host = parsedUrl.getHost();
                         path = parsedUrl.getPath();
@@ -235,7 +222,7 @@ public class RequestDispatchHandler {
 
                 RequestResponseRecord record;
                 try {
-                    URL parsedUrl = requestInfo.getUrl();
+                    URL parsedUrl = new URL(requestInfo.url());
                     record = new RequestResponseRecord(
                         currentRequestId,
                         parsedUrl.getProtocol(),
@@ -324,14 +311,14 @@ public class RequestDispatchHandler {
     public void handleResponseFailure(byte[] requestBytes, String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
         statusPanel.updateStatus(false, 0, requestTimeMs, responseTimeMs, durationMs);
         try {
-            IRequestInfo requestInfo;
+            HttpRequest requestInfo;
             if (currentHttpService != null) {
-                requestInfo = BurpExtender.helpers.analyzeRequest(currentHttpService, requestBytes);
+                requestInfo = HttpRequest.httpRequest(currentHttpService, ByteArray.byteArray(requestBytes));
             } else {
-                requestInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+                requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
             }
 
-            String method = requestInfo.getMethod();
+            String method = requestInfo.method();
             String url = HttpRequestHelper.extractUrlFromRequest(requestBytes, requestInfo, currentHttpService);
 
             String protocol = "http";
@@ -340,7 +327,7 @@ public class RequestDispatchHandler {
             String query = "";
 
             try {
-                URL parsedUrl = requestInfo.getUrl();
+                URL parsedUrl = new URL(requestInfo.url());
                 protocol = parsedUrl.getProtocol();
                 host = parsedUrl.getHost();
                 path = parsedUrl.getPath();
@@ -452,9 +439,6 @@ public class RequestDispatchHandler {
         statusPanel.updateStatus(success, responseSize, requestTimeMs, responseTimeMs, durationMs);
     }
 
-    /**
-     * 设置鼠标指针样式
-     */
     public void setCursor(Cursor cursor) {
         mainPanel.setCursor(cursor);
         requestPanel.setCursor(cursor);
@@ -463,9 +447,6 @@ public class RequestDispatchHandler {
         requestListPanel.setCursor(cursor);
     }
 
-    /**
-     * 加载历史记录项
-     */
     public void loadHistoryRecord(RequestResponseRecord record) {
         if (record != null) {
             requestPanel.setRequest(record.getRequestData());

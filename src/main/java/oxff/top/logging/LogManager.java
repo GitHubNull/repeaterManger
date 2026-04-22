@@ -1,6 +1,6 @@
 package oxff.top.logging;
 
-import burp.IBurpExtenderCallbacks;
+import burp.api.montoya.MontoyaApi;
 import oxff.top.ui.LogPanel;
 
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -41,10 +41,10 @@ public class LogManager {
     /**
      * 初始化日志管理器，注册Burp控制台Handler
      *
-     * @param callbacks Burp回调接口
+     * @param api MontoyaApi实例
      */
-    public void initialize(IBurpExtenderCallbacks callbacks) {
-        burpConsoleHandler = new BurpConsoleHandler(callbacks);
+    public void initialize(MontoyaApi api) {
+        burpConsoleHandler = new BurpConsoleHandler(api);
         burpConsoleHandler.setEnabled(burpConsoleEnabled);
         handlers.add(burpConsoleHandler);
     }

@@ -1,8 +1,8 @@
 package oxff.top.ui;
 
 import burp.BurpExtender;
-import burp.IResponseInfo;
-import burp.ITextEditor;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.utils.TextLineNumber;
 import javax.swing.*;
 import java.awt.*;
@@ -18,9 +18,6 @@ public class ResponsePanel extends JPanel {
     
     // 基本组件
     private final JTextArea responseTextArea;
-    
-    // HTTP响应编辑器组件
-    private ITextEditor responseEditor;  // Burp的文本编辑器接口
     
     // 响应信息字段
     private JTextField statusCodeField;     // 状态码
@@ -81,25 +78,6 @@ public class ResponsePanel extends JPanel {
         // 添加到主面板
         add(responseInfoPanel, BorderLayout.NORTH);
         add(responseScrollPane, BorderLayout.CENTER);
-        
-        // 初始化Burp编辑器
-        initBurpEditor();
-    }
-    
-    /**
-     * 初始化Burp编辑器
-     */
-    private void initBurpEditor() {
-        try {
-            // 通过BurpExtender获取responseEditor，如果可用
-            if (BurpExtender.callbacks != null) {
-                responseEditor = BurpExtender.callbacks.createTextEditor();
-                responseEditor.setEditable(false);
-            }
-        } catch (Exception e) {
-            // 如果无法创建Burp编辑器，则使用标准文本区域
-            BurpExtender.printError("[!] 无法创建Burp编辑器: " + e.getMessage());
-        }
     }
     
     /**
@@ -189,10 +167,6 @@ public class ResponsePanel extends JPanel {
         statusCodeField.setText("");
         contentTypeField.setText("");
         responseLengthField.setText("");
-        
-        if (responseEditor != null) {
-            responseEditor.setText("".getBytes());
-        }
     }
     
     /**
@@ -222,35 +196,23 @@ public class ResponsePanel extends JPanel {
             // 先清空已有内容
             clear();
             
-            // 设置响应内容到编辑器
-            if (responseEditor != null) {
-                responseEditor.setText(response);
-                // 同时更新文本区域用于显示
-                setResponseData(response);
-            } else {
-                setResponseData(response);
-            }
+            // 设置响应内容到文本区域
+            setResponseData(response);
             
-            // 分析响应信息
-            IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(response);
-            
+            // 使用 Montoya API 分析响应信息
+            HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
+
             // 显示状态码
-            statusCodeField.setText(String.valueOf(responseInfo.getStatusCode()));
-            
+            statusCodeField.setText(String.valueOf(httpResponse.statusCode()));
+
             // 设置Content-Type
-            String contentType = "";
-            for (String header : responseInfo.getHeaders()) {
-                if (header.toLowerCase().startsWith("content-type:")) {
-                    contentType = header.substring(13).trim();
-                    break;
-                }
-            }
+            String contentType = httpResponse.headerValue("Content-Type");
             contentTypeField.setText(contentType);
             
             // 设置响应长度
             responseLengthField.setText(String.valueOf(response.length));
             
-            BurpExtender.printOutput("[+] 响应已加载: HTTP " + responseInfo.getStatusCode() + 
+            BurpExtender.printOutput("[+] 响应已加载: HTTP " + httpResponse.statusCode() + 
                              " (" + response.length + " 字节)");
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置响应时出错: " + e.getMessage());

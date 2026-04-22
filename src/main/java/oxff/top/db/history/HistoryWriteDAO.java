@@ -1,7 +1,6 @@
 package oxff.top.db.history;
 
 import burp.BurpExtender;
-import burp.IRequestInfo;
 import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiRuleManager;
 import oxff.top.api.ApiExtractionRule;
@@ -30,59 +29,6 @@ public class HistoryWriteDAO {
         this.dbManager = DatabaseManager.getInstance();
         this.requestDAO = new RequestDAO();
         this.poolManager = new PoolManager();
-    }
-
-    /**
-     * 保存历史记录（IRequestInfo版本）
-     * 将IRequestInfo参数转换为RequestResponseRecord后委托给统一方法
-     */
-    public int saveHistory(int requestId, IRequestInfo requestInfo, byte[] requestData,
-                           byte[] responseData, long responseTime) {
-        Connection conn = null;
-        try {
-            conn = dbManager.getConnection();
-            conn.setAutoCommit(false);
-
-            try {
-                // 将IRequestInfo参数转换为RequestResponseRecord
-                RequestResponseRecord record = convertToRecord(requestId, requestInfo, requestData, responseData, responseTime);
-
-                int historyId = saveHistoryInternal(conn, record);
-
-                if (historyId > 0) {
-                    conn.commit();
-                    BurpExtender.printOutput("[+] 历史记录已保存，ID: " + historyId);
-                    return historyId;
-                } else {
-                    conn.rollback();
-                    BurpExtender.printError("[!] 保存历史记录失败：没有受影响的行");
-                    return -1;
-                }
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
-            }
-        } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存历史记录失败: " + e.getMessage());
-
-            // 特殊处理外键约束错误
-            if (e.getMessage().contains("FOREIGN KEY constraint failed")) {
-                BurpExtender.printError("[!] 外键约束失败，尝试使用NULL请求ID重新保存");
-
-                RequestResponseRecord fallbackRecord = convertToRecord(-1, requestInfo, requestData, responseData, responseTime);
-                return saveHistory(fallbackRecord);
-            }
-
-            return -1;
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    BurpExtender.printError("[!] 关闭数据库连接失败: " + e.getMessage());
-                }
-            }
-        }
     }
 
     /**
@@ -151,54 +97,6 @@ public class HistoryWriteDAO {
                 }
             }
         }
-    }
-
-    /**
-     * 将IRequestInfo参数转换为RequestResponseRecord
-     */
-    private RequestResponseRecord convertToRecord(int requestId, IRequestInfo requestInfo,
-                                                   byte[] requestData, byte[] responseData, long responseTime) {
-        RequestResponseRecord record = new RequestResponseRecord();
-        record.setRequestId(requestId);
-        record.setMethod(requestInfo.getMethod());
-
-        String url = requestInfo.getUrl().toString();
-        record.setProtocol(url.startsWith("https://") ? "https" : "http");
-
-        String protocol = url.startsWith("https://") ? "https" : "http";
-        String remaining = url.substring(protocol.length() + 3);
-        String domain;
-        String path;
-        String query = "";
-
-        int pathStart = remaining.indexOf('/');
-        if (pathStart > 0) {
-            domain = remaining.substring(0, pathStart);
-            remaining = remaining.substring(pathStart);
-        } else {
-            domain = remaining;
-            remaining = "/";
-        }
-
-        int queryStart = remaining.indexOf('?');
-        if (queryStart > 0) {
-            path = remaining.substring(0, queryStart);
-            query = remaining.substring(queryStart + 1);
-        } else {
-            path = remaining;
-        }
-
-        record.setDomain(domain);
-        record.setPath(path);
-        record.setQueryParameters(query);
-        record.setStatusCode(BurpExtender.helpers.analyzeResponse(responseData).getStatusCode());
-        record.setResponseLength(responseData != null ? responseData.length : 0);
-        record.setResponseTime((int) responseTime);
-        record.setTimestamp(new java.util.Date());
-        record.setRequestData(requestData);
-        record.setResponseData(responseData);
-
-        return record;
     }
 
     /**

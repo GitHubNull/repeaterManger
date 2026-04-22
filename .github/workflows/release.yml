@@ -22,10 +22,10 @@ jobs:
         with:
           fetch-depth: 0 # 获取完整历史以便提取提交信息
       
-      - name: 设置 JDK 8
+      - name: 设置 JDK 17
         uses: actions/setup-java@v3
         with:
-          java-version: '8'
+          java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
       

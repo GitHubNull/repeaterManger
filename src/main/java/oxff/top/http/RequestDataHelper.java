@@ -1,12 +1,14 @@
 package oxff.top.http;
 
 import burp.BurpExtender;
-import burp.IHttpService;
-import burp.IRequestInfo;
+import burp.api.montoya.core.ByteArray;
+import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.requests.HttpRequest;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 请求数据工具类 - 提供HTTP请求验证、修复和构建的静态方法
@@ -182,13 +184,15 @@ public class RequestDataHelper {
      * 对于 POST/PUT/PATCH 请求，即使 body 为空也显式设置 Content-Length: 0，
      * 防止服务器等待 body 数据导致超时（表现为请求耗时 10+ 秒）。
      */
-    public static byte[] fixContentLength(byte[] requestBytes, IHttpService service) {
+    public static byte[] fixContentLength(byte[] requestBytes, HttpService service) {
         try {
-            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
-            int bodyOffset = reqInfo.getBodyOffset();
+            HttpRequest reqInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+            int bodyOffset = reqInfo.bodyOffset();
             byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
-            List<String> headers = new ArrayList<>(reqInfo.getHeaders());
-            String method = reqInfo.getMethod().toUpperCase();
+            List<String> headers = new ArrayList<>(reqInfo.headers().stream()
+                .map(h -> h.name() + ": " + h.value())
+                .collect(Collectors.toList()));
+            String method = reqInfo.method().toUpperCase();
 
             // 移除现有的 Content-Length
             headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
@@ -200,10 +204,27 @@ public class RequestDataHelper {
                 headers.add("Content-Length: 0");
             }
 
-            return BurpExtender.helpers.buildHttpMessage(headers, body);
+            // 重建请求：将headers和body拼接
+            return buildRawHttpMessage(headers, body);
         } catch (Exception e) {
             BurpExtender.printError("[!] 修正 Content-Length 失败: " + e.getMessage());
             return requestBytes;
         }
+    }
+
+    /**
+     * 从header列表和body构建原始HTTP消息字节数组
+     */
+    private static byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
+        StringBuilder sb = new StringBuilder();
+        for (String header : headers) {
+            sb.append(header).append("\r\n");
+        }
+        sb.append("\r\n");
+        byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        byte[] result = new byte[headerBytes.length + body.length];
+        System.arraycopy(headerBytes, 0, result, 0, headerBytes.length);
+        System.arraycopy(body, 0, result, headerBytes.length, body.length);
+        return result;
     }
 }
