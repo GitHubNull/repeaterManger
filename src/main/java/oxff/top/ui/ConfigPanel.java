@@ -1228,6 +1228,7 @@ public class ConfigPanel extends JPanel {
             if (id > 0) {
                 ApiRuleManager.getInstance().refreshCache();
                 refreshApiRuleTable();
+                reExtractAllApisSilently();
             } else {
                 JOptionPane.showMessageDialog(this, "保存规则失败", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -1252,6 +1253,7 @@ public class ConfigPanel extends JPanel {
             if (dao.updateRule(rule)) {
                 ApiRuleManager.getInstance().refreshCache();
                 refreshApiRuleTable();
+                reExtractAllApisSilently();
             } else {
                 JOptionPane.showMessageDialog(this, "更新规则失败", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -1282,6 +1284,7 @@ public class ConfigPanel extends JPanel {
             if (dao.deleteRule(rule.getId())) {
                 ApiRuleManager.getInstance().refreshCache();
                 refreshApiRuleTable();
+                reExtractAllApisSilently();
             } else {
                 JOptionPane.showMessageDialog(this, "删除规则失败", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -1530,6 +1533,163 @@ public class ConfigPanel extends JPanel {
         String result = ApiExtractionEngine.extractApi(path, query.isEmpty() ? null : query, headerList, body, contentType, rules);
 
         testResultField.setText(result);
+    }
+
+    /**
+     * 静默地在后台重新提取所有请求和历史记录的API值
+     * 规则增删改时自动触发，无需用户确认，不阻塞UI
+     */
+    private void reExtractAllApisSilently() {
+        Thread worker = new Thread(() -> {
+            try {
+                BurpExtender.printOutput("[*] 规则变更，自动重新提取所有API值...");
+                ApiExtractionRuleDAO ruleDAO = new ApiExtractionRuleDAO();
+                List<ApiExtractionRule> rules = ruleDAO.getAllRules();
+                oxff.top.db.pool.PoolManager poolMgr = new oxff.top.db.pool.PoolManager();
+                ContentSplitter splitter = new ContentSplitter();
+
+                int reqUpdated = 0;
+                int histUpdated = 0;
+
+                // ===== 1. 重新提取 requests 表的API =====
+                RequestDAO requestDAO = new RequestDAO();
+                List<java.util.Map<String, Object>> allRequests = requestDAO.getAllRequests();
+
+                for (java.util.Map<String, Object> req : allRequests) {
+                    try {
+                        String path = (String) req.get("path");
+                        String reqQuery = (String) req.get("query");
+                        byte[] requestData = (byte[]) req.get("request_data");
+                        int reqId = (Integer) req.get("id");
+
+                        List<String> headerList = new ArrayList<>();
+                        String contentType = null;
+                        byte[] body = null;
+
+                        if (requestData != null && requestData.length > 0) {
+                            SplitResult split = splitter.splitRequest(requestData);
+                            if (split.getHeaders() != null) {
+                                String headersStr = new String(split.getHeaders(), StandardCharsets.UTF_8);
+                                for (String line : headersStr.split("\r\n")) {
+                                    if (!line.isEmpty()) headerList.add(line);
+                                    if (line.toLowerCase().startsWith("content-type:")) {
+                                        contentType = line.substring("content-type:".length()).trim();
+                                    }
+                                }
+                            }
+                            body = split.hasBody() ? split.getBody() : null;
+                        }
+
+                        String apiValue = ApiExtractionEngine.extractApi(path, reqQuery, headerList, body, contentType, rules);
+
+                        try (java.sql.Connection conn = DatabaseManager.getInstance().getConnection()) {
+                            conn.setAutoCommit(false);
+                            try {
+                                String oldApiHash = null;
+                                try (java.sql.PreparedStatement pstmt = conn.prepareStatement(
+                                        "SELECT api_hash FROM requests WHERE id = ?")) {
+                                    pstmt.setInt(1, reqId);
+                                    try (java.sql.ResultSet rs = pstmt.executeQuery()) {
+                                        if (rs.next()) oldApiHash = rs.getString("api_hash");
+                                    }
+                                }
+                                String newApiHash = (apiValue != null && !apiValue.isEmpty())
+                                        ? poolMgr.ensureString(conn, apiValue) : null;
+                                try (java.sql.PreparedStatement pstmt = conn.prepareStatement(
+                                        "UPDATE requests SET api_hash = ? WHERE id = ?")) {
+                                    pstmt.setString(1, newApiHash);
+                                    pstmt.setInt(2, reqId);
+                                    pstmt.executeUpdate();
+                                }
+                                if (oldApiHash != null) poolMgr.releaseString(conn, oldApiHash);
+                                conn.commit();
+                                reqUpdated++;
+                            } catch (java.sql.SQLException ex) {
+                                conn.rollback();
+                                BurpExtender.printError("[!] 自动重提取API失败(reqId=" + reqId + "): " + ex.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        BurpExtender.printError("[!] 自动重提取请求API出错: " + e.getMessage());
+                    }
+                }
+
+                // ===== 2. 重新提取 history 表的API =====
+                oxff.top.db.HistoryDAO historyDAO = new oxff.top.db.HistoryDAO();
+                List<oxff.top.http.RequestResponseRecord> allHistory = historyDAO.getAllHistory();
+
+                for (oxff.top.http.RequestResponseRecord record : allHistory) {
+                    try {
+                        String path = record.getPath();
+                        byte[] requestData = record.getRequestData();
+                        int histId = record.getId();
+
+                        List<String> headerList = new ArrayList<>();
+                        String contentType = null;
+                        byte[] body = null;
+
+                        if (requestData != null && requestData.length > 0) {
+                            SplitResult split = splitter.splitRequest(requestData);
+                            if (split.getHeaders() != null) {
+                                String headersStr = new String(split.getHeaders(), StandardCharsets.UTF_8);
+                                for (String line : headersStr.split("\r\n")) {
+                                    if (!line.isEmpty()) headerList.add(line);
+                                    if (line.toLowerCase().startsWith("content-type:")) {
+                                        contentType = line.substring("content-type:".length()).trim();
+                                    }
+                                }
+                            }
+                            body = split.hasBody() ? split.getBody() : null;
+                        }
+
+                        String apiValue = ApiExtractionEngine.extractApi(path, record.getQueryParameters(), headerList, body, contentType, rules);
+
+                        try (java.sql.Connection conn = DatabaseManager.getInstance().getConnection()) {
+                            conn.setAutoCommit(false);
+                            try {
+                                String oldApiHash = null;
+                                try (java.sql.PreparedStatement pstmt = conn.prepareStatement(
+                                        "SELECT api_hash FROM history WHERE id = ?")) {
+                                    pstmt.setInt(1, histId);
+                                    try (java.sql.ResultSet rs = pstmt.executeQuery()) {
+                                        if (rs.next()) oldApiHash = rs.getString("api_hash");
+                                    }
+                                }
+                                String newApiHash = (apiValue != null && !apiValue.isEmpty())
+                                        ? poolMgr.ensureString(conn, apiValue) : null;
+                                try (java.sql.PreparedStatement pstmt = conn.prepareStatement(
+                                        "UPDATE history SET api_hash = ? WHERE id = ?")) {
+                                    pstmt.setString(1, newApiHash);
+                                    pstmt.setInt(2, histId);
+                                    pstmt.executeUpdate();
+                                }
+                                if (oldApiHash != null) poolMgr.releaseString(conn, oldApiHash);
+                                conn.commit();
+                                histUpdated++;
+                            } catch (java.sql.SQLException ex) {
+                                conn.rollback();
+                                BurpExtender.printError("[!] 自动重提取历史API失败(histId=" + histId + "): " + ex.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        BurpExtender.printError("[!] 自动重提取历史API出错: " + e.getMessage());
+                    }
+                }
+
+                final int finalReqUpdated = reqUpdated;
+                final int finalHistUpdated = histUpdated;
+                BurpExtender.printOutput("[+] 自动重新提取API完成：请求 " + finalReqUpdated + " 条，历史 " + finalHistUpdated + " 条");
+                SwingUtilities.invokeLater(() -> {
+                    if (onDataChanged != null) {
+                        onDataChanged.run();
+                    }
+                });
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 自动重新提取API异常: " + e.getMessage());
+            }
+        }, "api-reextract-auto");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     /**
@@ -1826,6 +1986,7 @@ public class ConfigPanel extends JPanel {
                 dao.updateRule(rule);
                 ApiRuleManager.getInstance().refreshCache();
                 fireTableCellUpdated(rowIndex, columnIndex);
+                ConfigPanel.this.reExtractAllApisSilently();
             }
         }
     }

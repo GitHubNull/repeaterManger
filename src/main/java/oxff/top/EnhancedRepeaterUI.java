@@ -12,6 +12,9 @@ import oxff.top.ui.LogPanel;
 import oxff.top.ui.StatusPanel;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
+import oxff.top.api.ApiExtractionEngine;
+import oxff.top.api.ApiExtractionRule;
+import oxff.top.api.ApiRuleManager;
 import oxff.top.db.HistoryDAO;
 import oxff.top.db.RequestDAO;
 
@@ -598,9 +601,10 @@ public class EnhancedRepeaterUI implements ITab {
                         }
                     }
                     
-                    requestListPanel.updateRequest(currentRequestId, path, protocol, host, path, query, method);
+                    String reqApiValue = computeApiFromRequest(path, query, requestBytes);
+                    requestListPanel.updateRequest(currentRequestId, reqApiValue, protocol, host, path, query, method);
                 }
-                
+
                 // 创建历史记录用于UI显示（数据库保存已由HistoryRecordingService完成）
                 RequestResponseRecord record;
                 try {
@@ -664,8 +668,10 @@ public class EnhancedRepeaterUI implements ITab {
                 
                 // 添加到当前请求的历史记录（仅内存）
                 addHistoryRecord(currentRequestId, record);
-                
-                // 更新历史面板显示
+
+                // 设置API值后更新历史面板显示
+                record.setApi(computeApiFromRequest(record.getPath(),
+                        record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
                 historyPanel.addHistoryRecord(record);
                 
                 // 记录日志
@@ -748,7 +754,8 @@ public class EnhancedRepeaterUI implements ITab {
             
             // 更新请求列表中的当前请求
             if (currentRequestId >= 0) {
-                requestListPanel.updateRequest(currentRequestId, path, protocol, host, path, query, method);
+                String reqApiValue = computeApiFromRequest(path, query, requestBytes);
+                requestListPanel.updateRequest(currentRequestId, reqApiValue, protocol, host, path, query, method);
             }
             
             // 创建历史记录用于UI显示（数据库保存已由HistoryRecordingService完成）
@@ -771,10 +778,12 @@ public class EnhancedRepeaterUI implements ITab {
             
             // 添加到当前请求的历史记录（仅内存）
             addHistoryRecord(currentRequestId, record);
-            
-            // 更新历史面板显示
+
+            // 设置API值后更新历史面板显示
+            record.setApi(computeApiFromRequest(record.getPath(),
+                    record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
             historyPanel.addHistoryRecord(record);
-            
+
             BurpExtender.printOutput(String.format(
                 "[+] 请求失败已记录: %s %s → 错误: %s", 
                 method, url, errorMessage));
@@ -942,8 +951,11 @@ public class EnhancedRepeaterUI implements ITab {
                     return;
                 }
                 
+                // 提取API值用于列表显示
+                String apiValue = computeApiFromRequest(path, query, request);
+
                 // 添加到请求列表，使用数据库ID
-                requestListPanel.addRequest(dbId, path, method, protocol, domain, path, query, request);
+                requestListPanel.addRequest(dbId, apiValue, method, protocol, domain, path, query, request);
                 currentRequestId = dbId;
                 
                 // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
@@ -1064,6 +1076,37 @@ public class EnhancedRepeaterUI implements ITab {
         }
     }
     
+    /**
+     * 从请求数据中计算API值
+     * 使用当前配置的提取规则，无规则时返回 path 作为默认值
+     */
+    private String computeApiFromRequest(String path, String query, byte[] requestBytes) {
+        try {
+            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(requestBytes);
+            List<String> headerList = new ArrayList<>(reqInfo.getHeaders());
+            String contentType = null;
+            for (String header : headerList) {
+                if (header.toLowerCase().startsWith("content-type:")) {
+                    contentType = header.substring("content-type:".length()).trim();
+                    break;
+                }
+            }
+            int bodyOffset = reqInfo.getBodyOffset();
+            byte[] body = null;
+            if (bodyOffset < requestBytes.length) {
+                body = java.util.Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
+                if (body.length == 0) body = null;
+            }
+            List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
+            return ApiExtractionEngine.extractApi(
+                    path, (query == null || query.isEmpty()) ? null : query,
+                    headerList, body, contentType, activeRules);
+        } catch (Exception e) {
+            BurpExtender.printOutput("[*] 计算API值失败，使用路径作为默认值: " + e.getMessage());
+            return path != null ? path : "/";
+        }
+    }
+
     /**
      * 刷新所有数据
      * 在数据库导入后调用，用于重新加载UI中显示的数据
