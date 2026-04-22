@@ -94,3 +94,6 @@ Icon
 
 # Qoder相关文件
 .qoder
+
+# tmp目录
+tmp/
