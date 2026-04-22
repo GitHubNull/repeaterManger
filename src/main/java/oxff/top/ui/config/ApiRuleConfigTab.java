@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.config;
 
 import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiExtractionRule;

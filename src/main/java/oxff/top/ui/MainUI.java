@@ -8,6 +8,10 @@ import oxff.top.db.RequestDAO;
 import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.service.AutoSaveService;
+import oxff.top.ui.config.ConfigPanel;
+import oxff.top.ui.editor.BurpRequestPanel;
+import oxff.top.ui.editor.BurpResponsePanel;
+import oxff.top.ui.history.HistoryPanel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -141,8 +145,8 @@ public class MainUI extends JPanel {
      * @param burpResponsePanel Burp响应面板
      * @param historyPanel 历史记录面板
      */
-    public MainUI(RequestListPanel requestListPanel, oxff.top.ui.BurpRequestPanel burpRequestPanel,
-                  oxff.top.ui.BurpResponsePanel burpResponsePanel, HistoryPanel historyPanel) {
+    public MainUI(RequestListPanel requestListPanel, BurpRequestPanel burpRequestPanel,
+                  BurpResponsePanel burpResponsePanel, HistoryPanel historyPanel) {
         this.requestListPanel = requestListPanel;
         
         // 由于类型不匹配，但这里只是用于数据刷新，我们可以使用null值

@@ -4,9 +4,9 @@ import burp.*;
 import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
-import oxff.top.ui.BurpRequestPanel;
-import oxff.top.ui.BurpResponsePanel;
-import oxff.top.ui.HistoryPanel;
+import oxff.top.ui.editor.BurpRequestPanel;
+import oxff.top.ui.editor.BurpResponsePanel;
+import oxff.top.ui.history.HistoryPanel;
 import oxff.top.ui.RequestListPanel;
 import oxff.top.ui.StatusPanel;
 

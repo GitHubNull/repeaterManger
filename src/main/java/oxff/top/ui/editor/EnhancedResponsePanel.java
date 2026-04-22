@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.editor;
 
 import oxff.top.ui.viewer.HttpViewerPanel;
 

@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.history;
 
 import burp.BurpExtender;
 import burp.IHttpRequestResponse;

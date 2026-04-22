@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.config;
 
 import burp.BurpExtender;
 import oxff.top.api.ApiExtractionEngine;

@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.config;
 
 import oxff.top.config.DatabaseConfig;
 import oxff.top.config.SessionDirectory;

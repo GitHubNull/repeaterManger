@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.history;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;

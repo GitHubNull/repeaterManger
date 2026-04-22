@@ -1,4 +1,4 @@
-package oxff.top.ui;
+package oxff.top.ui.editor;
 
 import burp.BurpExtender;
 import burp.IMessageEditor;
