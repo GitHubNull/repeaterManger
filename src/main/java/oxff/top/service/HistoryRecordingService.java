@@ -3,7 +3,7 @@ package oxff.top.service;
 import burp.BurpExtender;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
-import oxff.top.db.HistoryDAO;
+import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.RequestResponseRecord;
 import java.util.Date;
 import java.util.List;
@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class HistoryRecordingService {
     private static HistoryRecordingService instance;
-    private final HistoryDAO historyDAO;
+    private final HistoryWriteDAO historyWriteDAO;
     private final ExecutorService executor;
     private final BlockingQueue<RecordingTask> pendingTasks;
     private final AtomicBoolean isRunning;
@@ -43,7 +43,7 @@ public class HistoryRecordingService {
     }
     
     private HistoryRecordingService() {
-        this.historyDAO = new HistoryDAO();
+        this.historyWriteDAO = new HistoryWriteDAO();
         this.pendingTasks = new LinkedBlockingQueue<>();
         this.isRunning = new AtomicBoolean(true);
         
@@ -96,7 +96,7 @@ public class HistoryRecordingService {
         try {
             // 直接保存历史记录，跳过连接有效性检查（SQLite本地文件，连接几乎不会失效）
             // 保存历史记录
-            int historyId = historyDAO.saveHistory(task.record);
+            int historyId = historyWriteDAO.saveHistory(task.record);
             
             if (historyId > 0) {
                 if (task.callback != null) {

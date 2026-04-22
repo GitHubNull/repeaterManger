@@ -5,7 +5,7 @@ import oxff.top.config.DatabaseConfig;
 import oxff.top.db.DatabaseManager;
 import oxff.top.ui.MainUI;
 import oxff.top.db.RequestDAO;
-import oxff.top.db.HistoryDAO;
+import oxff.top.db.history.HistoryReadDAO;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -34,7 +34,7 @@ public class AutoSaveService {
      * 创建自动保存服务（指定DAO对象）
      * 用于刷新数据时创建临时实例
      */
-    public AutoSaveService(RequestDAO requestDAO, HistoryDAO historyDAO) {
+    public AutoSaveService(RequestDAO requestDAO, HistoryReadDAO historyReadDAO) {
         this.dbManager = DatabaseManager.getInstance();
         // DAO对象只在performSave方法中使用，因此此构造函数仅用于创建不会执行保存操作的临时实例
     }

@@ -6,7 +6,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import oxff.top.db.DatabaseManager;
-import oxff.top.db.HistoryDAO;
+import oxff.top.db.history.HistoryWriteDAO;
+import oxff.top.db.history.HistoryUpdateDAO;
 import oxff.top.db.RequestDAO;
 import oxff.top.http.RequestResponseRecord;
 
@@ -37,13 +38,15 @@ public class PostmanImporter {
     @SuppressWarnings("unused")
     private final DatabaseManager dbManager;
     private final RequestDAO requestDAO;
-    private final HistoryDAO historyDAO;
+    private final HistoryWriteDAO historyWriteDAO;
+    private final HistoryUpdateDAO historyUpdateDAO;
     private final AtomicBoolean isImporting = new AtomicBoolean(false);
 
     public PostmanImporter() {
         this.dbManager = DatabaseManager.getInstance();
         this.requestDAO = new RequestDAO();
-        this.historyDAO = new HistoryDAO();
+        this.historyWriteDAO = new HistoryWriteDAO();
+        this.historyUpdateDAO = new HistoryUpdateDAO();
     }
 
     /**
@@ -114,7 +117,7 @@ public class PostmanImporter {
     private void doImport(File jsonFile, boolean replace) throws IOException, SQLException {
         if (replace) {
             requestDAO.clearAllRequests();
-            historyDAO.clearAllHistory();
+            historyUpdateDAO.clearAllHistory();
             BurpExtender.printOutput("[+] 已清空现有数据，准备导入Postman Collection");
         }
 
@@ -189,7 +192,7 @@ public class PostmanImporter {
                             }
                         }
 
-                        historyDAO.saveHistory(record);
+                        historyWriteDAO.saveHistory(record);
                         historyCount++;
                     }
                 } else {

@@ -1,12 +1,9 @@
 package oxff.top.ui;
 
 import burp.BurpExtender;
-import burp.IHttpRequestResponse;
-import burp.IHttpService;
 import burp.IRequestInfo;
-import oxff.top.db.HistoryDAO;
-import oxff.top.db.RequestDAO;
 import burp.ITextEditor;
+import oxff.top.http.RequestDataHelper;
 import oxff.top.utils.TextLineNumber;
 
 import javax.swing.*;
@@ -14,7 +11,6 @@ import javax.swing.text.BadLocationException;
 import java.awt.*;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -42,6 +38,9 @@ public class RequestPanel extends JPanel {
     private JTextField contentTypeField; // 内容类型
     
     private final MainUI mainUI;
+
+    // 请求发送处理器
+    private RequestPanelSender sender;
     
     /**
      * 创建请求面板
@@ -128,7 +127,7 @@ public class RequestPanel extends JPanel {
         // 发送按钮
         sendButton = new JButton("发送请求");
         sendButton.setToolTipText("发送请求 (Ctrl+Enter)");
-        sendButton.addActionListener(e -> sendRequest());
+        sendButton.addActionListener(e -> sender.sendRequest());
         controlPanel.add(sendButton);
         
         // 将HTTP参数面板添加到主面板
@@ -142,6 +141,9 @@ public class RequestPanel extends JPanel {
         
         // 初始化Burp编辑器
         initBurpEditor();
+
+        // 初始化请求发送处理器
+        sender = new RequestPanelSender(this, mainUI, sendButton);
     }
     
     /**
@@ -298,7 +300,7 @@ public class RequestPanel extends JPanel {
                 // 尝试UTF-8解码
                 try {
                     requestText = new String(request, java.nio.charset.StandardCharsets.UTF_8);
-                    if (!isValidHttpRequest(requestText)) {
+                    if (!RequestDataHelper.isValidHttpRequest(requestText)) {
                         // 如果UTF-8解码后不是有效的HTTP请求，尝试ISO-8859-1
                         requestText = new String(request, java.nio.charset.StandardCharsets.ISO_8859_1);
                     }
@@ -309,9 +311,9 @@ public class RequestPanel extends JPanel {
             }
             
             // 验证请求格式
-            if (!isValidHttpRequest(requestText)) {
+            if (!RequestDataHelper.isValidHttpRequest(requestText)) {
                 BurpExtender.printError("[!] 请求格式无效，尝试修复...");
-                requestText = repairBinaryData(request);
+                requestText = RequestDataHelper.repairBinaryData(request);
             }
             
             // 设置文本到UI
@@ -321,160 +323,10 @@ public class RequestPanel extends JPanel {
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置请求文本时出错: " + e.getMessage());
             // 创建基本请求作为后备方案
-            setRequestText(createBasicRequest());
+            setRequestText(RequestDataHelper.createBasicRequest());
         }
     }
-    
-    /**
-     * 检查文本是否为有效的HTTP请求
-     */
-    private boolean isValidHttpRequest(String text) {
-        if (text == null || text.isEmpty()) {
-            return false;
-        }
-        
-        try {
-            // 简单检查是否包含HTTP方法和HTTP版本
-            String[] firstLines = text.split("\r\n|\n", 2);
-            if (firstLines.length == 0) {
-                return false;
-            }
-            
-            String firstLine = firstLines[0].trim();
-            boolean isValidMethod = firstLine.matches("(?i)(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE)\\s+.+\\s+HTTP/.+");
-            boolean isValidResponse = firstLine.matches("HTTP/.+\\s+\\d+\\s+.*");
-            
-            if (!isValidMethod && !isValidResponse) {
-                return false;
-            }
-            
-            // 检查是否包含必要的头部
-            boolean hasHost = false;
-            boolean hasContentLength = false;
-            String[] lines = text.split("\r\n|\n");
-            
-            for (String line : lines) {
-                if (line.toLowerCase().startsWith("host:")) {
-                    hasHost = true;
-                }
-                if (line.toLowerCase().startsWith("content-length:")) {
-                    hasContentLength = true;
-                }
-                // 如果同时找到Host和Content-Length，可以提前返回
-                if (hasHost && hasContentLength) {
-                    return true;
-                }
-            }
-            
-            // 对于GET请求，不需要Content-Length
-            if (firstLine.toUpperCase().startsWith("GET") && hasHost) {
-                return true;
-            }
-            
-            // 对于其他请求，需要Content-Length
-            return hasHost && hasContentLength;
-            
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 验证HTTP请求时出错: " + e.getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * 尝试修复损坏的二进制数据
-     */
-    private String repairBinaryData(byte[] data) {
-        if (data == null || data.length == 0) {
-            return "";
-        }
-        
-        // 记录原始数据用于调试
-        BurpExtender.printOutput("[*] 尝试修复请求数据，大小: " + data.length + " 字节");
-        
-        StringBuilder sb = new StringBuilder();
-        
-        // 尝试识别HTTP头部和正文的分隔符
-        int bodyStart = -1;
-        for (int i = 0; i < data.length - 3; i++) {
-            // 查找\r\n\r\n序列，这通常用于分隔HTTP头部和正文
-            if (data[i] == '\r' && data[i+1] == '\n' && data[i+2] == '\r' && data[i+3] == '\n') {
-                bodyStart = i + 4;
-                break;
-            }
-        }
-        
-        // 如果找到了分隔符
-        if (bodyStart > 0) {
-            // 分别处理头部和正文
-            String headers = new String(Arrays.copyOfRange(data, 0, bodyStart), 
-                                      java.nio.charset.StandardCharsets.ISO_8859_1);
-            sb.append(headers);
-            
-            // 检查是否为多部分表单数据
-            if (headers.toLowerCase().contains("content-type: multipart/form-data")) {
-                // 对于多部分表单数据，使用ISO-8859-1编码处理整个请求
-                return new String(data, java.nio.charset.StandardCharsets.ISO_8859_1);
-            }
-            
-            // 对于正文部分，尝试智能选择编码
-            if (bodyStart < data.length) {
-                byte[] body = Arrays.copyOfRange(data, bodyStart, data.length);
-                
-                // 尝试检测正文是否包含二进制数据
-                boolean isBinary = false;
-                for (byte b : body) {
-                    if (b == 0 || (b < 32 && b != '\r' && b != '\n' && b != '\t')) {
-                        isBinary = true;
-                        break;
-                    }
-                }
-                
-                if (isBinary) {
-                    // 对于二进制数据，使用Base64编码显示
-                    sb.append("[二进制数据，长度: ").append(body.length).append(" 字节]\n");
-                    sb.append(java.util.Base64.getEncoder().encodeToString(body));
-                } else {
-                    // 对于文本数据，尝试使用UTF-8解码
-                    try {
-                        sb.append(new String(body, java.nio.charset.StandardCharsets.UTF_8));
-                    } catch (Exception e) {
-                        // 如果UTF-8解码失败，回退到ISO-8859-1
-                        sb.append(new String(body, java.nio.charset.StandardCharsets.ISO_8859_1));
-                    }
-                }
-            }
-            
-            return sb.toString();
-        } else {
-            // 如果找不到分隔符，尝试检测数据是否为纯二进制
-            boolean isBinary = false;
-            for (byte b : data) {
-                if (b == 0 || (b < 32 && b != '\r' && b != '\n' && b != '\t')) {
-                    isBinary = true;
-                    break;
-                }
-            }
-            
-            if (isBinary) {
-                // 对于二进制数据，以可读形式展示
-                sb.append("HTTP/1.1 自动生成的请求头\r\n");
-                sb.append("Content-Type: application/octet-stream\r\n");
-                sb.append("Content-Length: ").append(data.length).append("\r\n\r\n");
-                sb.append("[二进制数据，长度: ").append(data.length).append(" 字节]\n");
-                sb.append(java.util.Base64.getEncoder().encodeToString(data));
-            } else {
-                // 对于可能的文本数据，尝试UTF-8和ISO-8859-1
-                try {
-                    return new String(data, java.nio.charset.StandardCharsets.UTF_8);
-                } catch (Exception e) {
-                    return new String(data, java.nio.charset.StandardCharsets.ISO_8859_1);
-                }
-            }
-            
-            return sb.toString();
-        }
-    }
-    
+
     /**
      * 获取超时设置(秒)
      */
@@ -487,6 +339,13 @@ public class RequestPanel extends JPanel {
      */
     public JTextArea getRequestTextArea() {
         return requestTextArea;
+    }
+
+    /**
+     * 获取响应编辑器
+     */
+    public ITextEditor getResponseEditor() {
+        return responseEditor;
     }
     
     /**
@@ -639,19 +498,6 @@ public class RequestPanel extends JPanel {
         contentTypeField.setText("application/x-www-form-urlencoded");
     }
 
-    /**
-     * 创建基本请求
-     */
-    private String createBasicRequest() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("GET / HTTP/1.1\r\n");
-        sb.append("Host: example.com\r\n");
-        sb.append("User-Agent: Mozilla/5.0\r\n");
-        sb.append("Accept: */*\r\n");
-        sb.append("Connection: close\r\n");
-        sb.append("\r\n");
-        return sb.toString();
-    }
 
     /**
      * 获取请求数据
@@ -669,7 +515,7 @@ public class RequestPanel extends JPanel {
             // 验证请求数据
             if (request == null || request.length == 0) {
                 BurpExtender.printError("[!] 请求数据为空，使用默认请求");
-                return createBasicRequest().getBytes();
+                return RequestDataHelper.createBasicRequest().getBytes();
             }
             
             // 如果需要修改主机、端口或协议
@@ -746,7 +592,7 @@ public class RequestPanel extends JPanel {
                     request = BurpExtender.helpers.buildHttpMessage(headers, body);
                     
                     // 验证重建后的请求
-                    if (!isValidHttpRequest(new String(request))) {
+                    if (!RequestDataHelper.isValidHttpRequest(new String(request))) {
                         BurpExtender.printError("[!] 重建的请求格式无效，使用原始请求");
                         return request;
                     }
@@ -766,265 +612,9 @@ public class RequestPanel extends JPanel {
             
         } catch (Exception e) {
             BurpExtender.printError("[!] 获取请求时出错: " + e.getMessage());
-            return createBasicRequest().getBytes();
+            return RequestDataHelper.createBasicRequest().getBytes();
         }
     }
 
-    /**
-     * 发送请求并处理响应（异步方式，不阻塞UI线程）
-     */
-    private void sendRequest() {
-        byte[] request = null;
-        IRequestInfo requestInfo = null;
-        String url = null;
-        
-        try {
-            // 获取请求数据
-            request = getRequest();
-            if (request == null || request.length == 0) {
-                BurpExtender.printError("[!] 请求数据为空");
-                return;
-            }
-            
-            // 解析请求信息
-            requestInfo = BurpExtender.helpers.analyzeRequest(request);
-            url = requestInfo.getUrl().toString();
-            
-            BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (超时时间: " + getTimeout() + "秒)");
-            
-            // 禁用发送按钮，防止重复点击
-            sendButton.setEnabled(false);
-            sendButton.setText("发送中...");
-            
-            // 在后台线程中发送请求，避免阻塞UI
-            final byte[] finalRequest = request;
-            final IRequestInfo finalRequestInfo = requestInfo;
-            final String finalUrl = url;
-            final long requestStartTime = System.currentTimeMillis();
-            
-            new Thread(() -> {
-                IHttpRequestResponse response = null;
-                try {
-                    // 创建HTTP服务
-                    URL urlObj = new URL(finalUrl);
-                    String host = urlObj.getHost();
-                    int port = urlObj.getPort() == -1 ? urlObj.getDefaultPort() : urlObj.getPort();
-                    boolean useHttps = urlObj.getProtocol().equalsIgnoreCase("https");
-                    
-                    // 发送请求
-                    IHttpService httpService = BurpExtender.helpers.buildHttpService(host, port, useHttps);
-                    
-                    // 修正 Content-Length，确保与实际 body 一致
-                    // 对于 POST/PUT/PATCH 请求，即使 body 为空也要显式设置 Content-Length: 0
-                    // 否则服务器会等待 body 数据直到超时（表现为请求耗时 10+ 秒）
-                    byte[] fixedRequest = fixContentLength(finalRequest, httpService);
-                    
-                    response = BurpExtender.callbacks.makeHttpRequest(httpService, fixedRequest);
-                    
-                    final IHttpRequestResponse finalResponse = response;
-                    final long elapsedMs = System.currentTimeMillis() - requestStartTime;
-                    
-                    if (finalResponse != null && finalResponse.getResponse() != null) {
-                        SwingUtilities.invokeLater(() -> {
-                            try {
-                                handleSuccessfulResponse(finalRequest, finalRequestInfo, finalResponse, finalUrl, elapsedMs);
-                            } catch (Exception e) {
-                                BurpExtender.printError("[!] 处理响应时出错: " + e.getMessage());
-                            }
-                        });
-                    } else {
-                        SwingUtilities.invokeLater(() -> {
-                            BurpExtender.printError("[!] 请求发送失败");
-                            JOptionPane.showMessageDialog(RequestPanel.this,
-                                "请求发送失败，未收到响应",
-                                "错误",
-                                JOptionPane.ERROR_MESSAGE);
-                        });
-                    }
-                } catch (Exception e) {
-                    SwingUtilities.invokeLater(() -> {
-                        BurpExtender.printError("[!] 发送请求时出错: " + e.getMessage());
-                        JOptionPane.showMessageDialog(RequestPanel.this,
-                            "发送请求失败: " + e.getMessage(),
-                            "错误",
-                            JOptionPane.ERROR_MESSAGE);
-                    });
-                } finally {
-                    // 无论成功与否，都在后台线程保存历史记录
-                    long elapsedMs = System.currentTimeMillis() - requestStartTime;
-                    saveHistoryRecord(finalRequest, finalRequestInfo, response, finalUrl, elapsedMs);
-                    // 恢复发送按钮状态
-                    SwingUtilities.invokeLater(() -> {
-                        sendButton.setEnabled(true);
-                        sendButton.setText("发送请求");
-                    });
-                }
-            }, "EnhancedRepeater-SendRequest").start();
-            
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 准备请求时出错: " + e.getMessage());
-            sendButton.setEnabled(true);
-            sendButton.setText("发送请求");
-            // 显示错误对话框
-            SwingUtilities.invokeLater(() -> {
-                JOptionPane.showMessageDialog(
-                    this,
-                    "准备请求失败: " + e.getMessage(),
-                    "错误",
-                    JOptionPane.ERROR_MESSAGE
-                );
-            });
-        }
-    }
-    
-    /**
-     * 处理成功响应（在EDT中调用）
-     */
-    private void handleSuccessfulResponse(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url, long elapsedMs) {
-        try {
-            // 解析URL组件
-            URL parsedUrl = requestInfo.getUrl();
-            String protocol = parsedUrl.getProtocol();
-            String domain = parsedUrl.getHost();
-            String path = parsedUrl.getPath();
-            String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-            String method = requestInfo.getMethod();
-            
-            // 更新响应编辑器
-            if (responseEditor != null) {
-                responseEditor.setText(response.getResponse());
-            }
-            
-            // 保存请求到数据库
-            RequestDAO requestDAO = new RequestDAO();
-            int requestId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
-            
-            if (requestId > 0) {
-                // 保存响应到数据库
-                HistoryDAO historyDAO = new HistoryDAO();
-                int historyId = historyDAO.saveHistory(requestId, requestInfo, request, response.getResponse(), elapsedMs);
-                
-                if (historyId > 0) {
-                    // 更新历史记录面板
-                    if (mainUI != null && mainUI.getHistoryPanel() != null) {
-                        mainUI.getHistoryPanel().addHistoryRecord(requestId, response);
-                    }
-                    
-                    BurpExtender.printOutput("[+] 请求和响应已保存到数据库，请求ID: " + requestId + ", 历史ID: " + historyId);
-                } else {
-                    BurpExtender.printError("[!] 保存响应到数据库失败");
-                }
-            } else {
-                BurpExtender.printError("[!] 保存请求到数据库失败");
-            }
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 处理响应数据时出错: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * 保存历史记录
-     */
-    private void saveHistoryRecord(byte[] request, IRequestInfo requestInfo, IHttpRequestResponse response, String url, long responseTime) {
-        try {
-            // 确保必要的参数不为空
-            if (request == null || requestInfo == null) {
-                BurpExtender.printError("[!] 无法保存历史记录：请求数据为空");
-                return;
-            }
-            
-            // 解析URL组件
-            URL parsedUrl = requestInfo.getUrl();
-            String protocol = parsedUrl.getProtocol();
-            String domain = parsedUrl.getHost();
-            String path = parsedUrl.getPath();
-            String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-            String method = requestInfo.getMethod();
-            
-            // 生成请求ID（使用时间戳和随机数）
-            int requestId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
-            
-            // 创建请求记录对象
-            oxff.top.http.RequestResponseRecord record = new oxff.top.http.RequestResponseRecord();
-            record.setRequestId(requestId);
-            record.setMethod(method);
-            record.setProtocol(protocol);
-            record.setDomain(domain);
-            record.setPath(path);
-            record.setQueryParameters(query);
-            record.setRequestData(request);
-            record.setResponseTime((int) responseTime);
-            record.setTimestamp(new java.util.Date());
-            
-            // 设置响应相关数据
-            if (response != null && response.getResponse() != null) {
-                byte[] responseData = response.getResponse();
-                record.setResponseData(responseData);
-                
-                // 解析响应信息
-                try {
-                    burp.IResponseInfo responseInfo = BurpExtender.helpers.analyzeResponse(responseData);
-                    record.setStatusCode(responseInfo.getStatusCode());
-                    record.setResponseLength(responseData.length);
-                } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析响应信息失败: " + e.getMessage());
-                    record.setStatusCode(0);
-                    record.setResponseLength(0);
-                }
-            } else {
-                // 请求失败的情况
-                record.setResponseData(new byte[0]);
-                record.setStatusCode(0);
-                record.setResponseLength(0);
-                record.setComment("请求失败");
-            }
-            
-            // 保存到数据库
-            HistoryDAO historyDAO = new HistoryDAO();
-            int historyId = historyDAO.saveHistory(record);
-            
-            if (historyId > 0) {
-                BurpExtender.printOutput("[+] 历史记录已保存到数据库，历史ID: " + historyId);
-                
-                // 更新历史记录面板
-                if (mainUI != null && mainUI.getHistoryPanel() != null) {
-                    mainUI.getHistoryPanel().addHistoryRecord(record);
-                }
-            } else {
-                BurpExtender.printError("[!] 保存历史记录到数据库失败");
-            }
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 保存历史记录时出错: " + e.getMessage());
-        }
-    }
 
-    /**
-     * 修正请求的 Content-Length 头，确保与实际 body 大小一致。
-     * 对于 POST/PUT/PATCH 请求，即使 body 为空也显式设置 Content-Length: 0，
-     * 防止服务器等待 body 数据导致超时（表现为请求耗时 10+ 秒）。
-     */
-    private byte[] fixContentLength(byte[] requestBytes, IHttpService service) {
-        try {
-            IRequestInfo reqInfo = BurpExtender.helpers.analyzeRequest(service, requestBytes);
-            int bodyOffset = reqInfo.getBodyOffset();
-            byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
-            List<String> headers = new ArrayList<>(reqInfo.getHeaders());
-            String method = reqInfo.getMethod().toUpperCase();
-
-            // 移除现有的 Content-Length
-            headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
-
-            // 添加正确的 Content-Length
-            if (body.length > 0) {
-                headers.add("Content-Length: " + body.length);
-            } else if ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) {
-                headers.add("Content-Length: 0");
-            }
-
-            return BurpExtender.helpers.buildHttpMessage(headers, body);
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 修正 Content-Length 失败: " + e.getMessage());
-            return requestBytes;
-        }
-    }
 }

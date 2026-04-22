@@ -6,7 +6,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import oxff.top.db.DatabaseManager;
-import oxff.top.db.HistoryDAO;
+import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.db.RequestDAO;
 import oxff.top.http.RequestResponseRecord;
 
@@ -30,12 +30,12 @@ import java.util.UUID;
 public class PostmanExporter {
     private final DatabaseManager dbManager;
     private final RequestDAO requestDAO;
-    private final HistoryDAO historyDAO;
+    private final HistoryReadDAO historyReadDAO;
 
     public PostmanExporter() {
         this.dbManager = DatabaseManager.getInstance();
         this.requestDAO = new RequestDAO();
-        this.historyDAO = new HistoryDAO();
+        this.historyReadDAO = new HistoryReadDAO();
     }
 
     /**
@@ -85,7 +85,7 @@ public class PostmanExporter {
         dbManager.checkDatabaseStatus();
 
         List<Map<String, Object>> requests = requestDAO.getAllRequests();
-        List<RequestResponseRecord> history = historyDAO.getAllHistory();
+        List<RequestResponseRecord> history = historyReadDAO.getAllHistory();
 
         BurpExtender.printOutput("[*] 从数据库获取到 " + requests.size() + " 条请求记录和 " +
                               history.size() + " 条历史记录");

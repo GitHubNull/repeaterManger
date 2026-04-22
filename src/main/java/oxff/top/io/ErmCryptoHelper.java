@@ -1,7 +1,5 @@
 package oxff.top.io;
 
-import burp.BurpExtender;
-
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;

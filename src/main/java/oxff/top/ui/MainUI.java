@@ -5,7 +5,7 @@ import burp.IBurpExtenderCallbacks;
 import burp.IExtensionHelpers;
 import oxff.top.db.DatabaseManager;
 import oxff.top.db.RequestDAO;
-import oxff.top.db.HistoryDAO;
+import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.service.AutoSaveService;
 
@@ -32,7 +32,7 @@ public class MainUI extends JPanel {
     private ConfigPanel configPanel;
     private final DatabaseManager dbManager;
     private final RequestDAO requestDAO;
-    private final HistoryDAO historyDAO;
+    private final HistoryReadDAO historyReadDAO;
     private final AutoSaveService autoSaveService;
     
     /**
@@ -56,7 +56,7 @@ public class MainUI extends JPanel {
         
         // 创建数据访问对象
         this.requestDAO = new RequestDAO();
-        this.historyDAO = new HistoryDAO();
+        this.historyReadDAO = new HistoryReadDAO();
         
         // 创建自动保存服务
         this.autoSaveService = new AutoSaveService();
@@ -126,10 +126,10 @@ public class MainUI extends JPanel {
         // 初始化数据库和DAO
         this.dbManager = DatabaseManager.getInstance();
         this.requestDAO = new RequestDAO();
-        this.historyDAO = new HistoryDAO();
+        this.historyReadDAO = new HistoryReadDAO();
         
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
-        this.autoSaveService = new AutoSaveService(requestDAO, historyDAO);
+        this.autoSaveService = new AutoSaveService(requestDAO, historyReadDAO);
     }
     
     /**
@@ -159,10 +159,10 @@ public class MainUI extends JPanel {
         // 初始化数据库和DAO
         this.dbManager = DatabaseManager.getInstance();
         this.requestDAO = new RequestDAO();
-        this.historyDAO = new HistoryDAO();
+        this.historyReadDAO = new HistoryReadDAO();
         
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
-        this.autoSaveService = new AutoSaveService(requestDAO, historyDAO);
+        this.autoSaveService = new AutoSaveService(requestDAO, historyReadDAO);
         
         BurpExtender.printOutput("[*] 使用增强型Repeater面板创建临时MainUI实例，用于数据刷新");
     }
@@ -207,7 +207,7 @@ public class MainUI extends JPanel {
             historyPanel.clearHistory();
             
             // 加载请求相关的历史记录
-            List<RequestResponseRecord> records = historyDAO.getHistoryByRequestId(requestId);
+            List<RequestResponseRecord> records = historyReadDAO.getHistoryByRequestId(requestId);
             for (RequestResponseRecord record : records) {
                 historyPanel.addHistoryRecord(record);
             }
