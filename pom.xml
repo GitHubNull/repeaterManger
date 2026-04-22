@@ -6,7 +6,7 @@
 
     <groupId>org.oxff</groupId>
     <artifactId>repeaterManger</artifactId>
-    <version>1.7.2</version>
+    <version>1.7.3</version>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>

@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v4）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4')");
+        // 初始化元数据（v5）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '5')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表

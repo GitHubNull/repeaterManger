@@ -670,7 +670,7 @@ public class ErmArchiveWriter {
                 return Integer.parseInt(rs.getString("value"));
             }
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] 无法读取schema_version，使用默认值2");
+            BurpExtender.printOutput("[*] 无法读取schema_version，使用默认值" + ErmFormatConstants.CURRENT_SCHEMA_VERSION);
         }
         return ErmFormatConstants.CURRENT_SCHEMA_VERSION;
     }

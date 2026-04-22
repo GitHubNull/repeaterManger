@@ -102,5 +102,5 @@ public final class ErmFormatConstants {
     // ========== 数据库 Schema ==========
 
     /** 当前数据库 Schema 版本 */
-    public static final int CURRENT_SCHEMA_VERSION = 2;
+    public static final int CURRENT_SCHEMA_VERSION = 5;
 }
