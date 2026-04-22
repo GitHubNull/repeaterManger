@@ -40,6 +40,9 @@ public class DatabaseConfig {
     public static final String KEY_PROXY_HOST = "proxy.host";
     public static final String KEY_PROXY_PORT = "proxy.port";
 
+    // API提取规则配置键
+    public static final String KEY_API_EXTRACTION_RULES = "api.extraction.rules";
+
     // 旧版配置键（用于迁移）
     private static final String OLD_KEY_DB_PATH = "db.path";
     private static final String OLD_KEY_DB_FILENAME = "db.filename";

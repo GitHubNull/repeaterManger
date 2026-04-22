@@ -130,7 +130,7 @@ public class HistoryPanel extends JPanel {
     private void createTable() {
         // 定义表格列名
         String[] columnNames = {
-            "#", "时间", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "备注"
+            "#", "时间", "API", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "备注"
         };
         
         // 创建表格模型(不允许直接编辑)
@@ -142,7 +142,7 @@ public class HistoryPanel extends JPanel {
             
             @Override
             public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 0 || columnIndex == 7 || columnIndex == 8 || columnIndex == 9) {
+                if (columnIndex == 0 || columnIndex == 8 || columnIndex == 9 || columnIndex == 10) {
                     return Integer.class;
                 }
                 return String.class;
@@ -157,23 +157,25 @@ public class HistoryPanel extends JPanel {
         
         // 设置列宽度
         historyTable.getColumnModel().getColumn(0).setPreferredWidth(40);   // 序号列
-        historyTable.getColumnModel().getColumn(0).setMaxWidth(50);         // 限制最大宽度
+        historyTable.getColumnModel().getColumn(0).setMaxWidth(50);
         historyTable.getColumnModel().getColumn(1).setPreferredWidth(150);  // 时间列
-        historyTable.getColumnModel().getColumn(1).setMaxWidth(180);        // 限制最大宽度
-        historyTable.getColumnModel().getColumn(2).setPreferredWidth(60);   // 方法列
-        historyTable.getColumnModel().getColumn(2).setMaxWidth(80);         // 限制最大宽度
-        historyTable.getColumnModel().getColumn(3).setPreferredWidth(60);   // 协议列
-        historyTable.getColumnModel().getColumn(3).setMaxWidth(80);         // 限制最大宽度
-        historyTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // 域名列
-        historyTable.getColumnModel().getColumn(5).setPreferredWidth(120);  // 路径列
-        historyTable.getColumnModel().getColumn(6).setPreferredWidth(100);  // 查询参数列
-        historyTable.getColumnModel().getColumn(7).setPreferredWidth(70);   // 状态码列
-        historyTable.getColumnModel().getColumn(7).setMaxWidth(90);         // 限制最大宽度
-        historyTable.getColumnModel().getColumn(8).setPreferredWidth(90);   // 响应长度列
-        historyTable.getColumnModel().getColumn(8).setMaxWidth(110);        // 限制最大宽度
-        historyTable.getColumnModel().getColumn(9).setPreferredWidth(70);   // 耗时列
-        historyTable.getColumnModel().getColumn(9).setMaxWidth(90);         // 限制最大宽度
-        historyTable.getColumnModel().getColumn(10).setPreferredWidth(100); // 备注列
+        historyTable.getColumnModel().getColumn(1).setMaxWidth(180);
+        historyTable.getColumnModel().getColumn(2).setPreferredWidth(200);  // API列
+        historyTable.getColumnModel().getColumn(2).setMaxWidth(400);
+        historyTable.getColumnModel().getColumn(3).setPreferredWidth(60);   // 方法列
+        historyTable.getColumnModel().getColumn(3).setMaxWidth(80);
+        historyTable.getColumnModel().getColumn(4).setPreferredWidth(60);   // 协议列
+        historyTable.getColumnModel().getColumn(4).setMaxWidth(80);
+        historyTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // 域名列
+        historyTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // 路径列
+        historyTable.getColumnModel().getColumn(7).setPreferredWidth(100);  // 查询参数列
+        historyTable.getColumnModel().getColumn(8).setPreferredWidth(70);   // 状态码列
+        historyTable.getColumnModel().getColumn(8).setMaxWidth(90);
+        historyTable.getColumnModel().getColumn(9).setPreferredWidth(90);   // 响应长度列
+        historyTable.getColumnModel().getColumn(9).setMaxWidth(110);
+        historyTable.getColumnModel().getColumn(10).setPreferredWidth(70);  // 耗时列
+        historyTable.getColumnModel().getColumn(10).setMaxWidth(90);
+        historyTable.getColumnModel().getColumn(11).setPreferredWidth(100); // 备注列
         
         // 创建排序器
         tableRowSorter = new TableRowSorter<>(historyTableModel);
@@ -197,7 +199,7 @@ public class HistoryPanel extends JPanel {
         });
         
         // 设置状态码列的颜色渲染器
-        historyTable.getColumnModel().getColumn(7).setCellRenderer(new DefaultTableCellRenderer() {
+        historyTable.getColumnModel().getColumn(8).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, 
                     boolean isSelected, boolean hasFocus, int row, int column) {
@@ -426,7 +428,7 @@ public class HistoryPanel extends JPanel {
                 record.setComment(newComment.trim());
                 
                 // 更新表格显示
-                int commentColumn = 10; // 备注列索引
+                int commentColumn = 11; // 备注列索引
                 historyTableModel.setValueAt(record.getTruncatedComment(16), modelRow, commentColumn);
             }
         }
@@ -444,9 +446,14 @@ public class HistoryPanel extends JPanel {
         historyRecords.add(record);
         
         // 添加到表格
+        String apiValue = record.getApi();
+        if (apiValue == null || apiValue.isEmpty()) {
+            apiValue = record.getPath();
+        }
         Object[] rowData = new Object[] {
             historyRecords.size(),                    // 序号
             new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(record.getTimestamp()),  // 时间
+            apiValue,                                 // API
             record.getMethod(),                       // 方法
             record.getProtocol(),                     // 协议
             record.getDomain(),                       // 域名
@@ -782,27 +789,27 @@ public class HistoryPanel extends JPanel {
         
         // 方法过滤
         if (method != null && !"所有方法".equals(method)) {
-            filters.add(RowFilter.regexFilter("^" + method + "$", 2));
+            filters.add(RowFilter.regexFilter("^" + method + "$", 3));
         }
         
         // 协议过滤
         if (protocol != null && !"所有协议".equals(protocol)) {
-            filters.add(RowFilter.regexFilter("^" + protocol + "$", 3));
+            filters.add(RowFilter.regexFilter("^" + protocol + "$", 4));
         }
         
         // 域名过滤
         if (host != null && !host.isEmpty()) {
-            filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(host), 4));
+            filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(host), 5));
         }
         
         // 路径过滤
         if (path != null && !path.isEmpty()) {
-            filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(path), 5));
+            filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(path), 6));
         }
         
         // 查询参数过滤
         if (query != null && !query.isEmpty()) {
-            filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(query), 6));
+            filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(query), 7));
         }
         
         // 状态码过滤
@@ -814,8 +821,8 @@ public class HistoryPanel extends JPanel {
                 filters.add(new RowFilter<DefaultTableModel, Object>() {
                     @Override
                     public boolean include(Entry<? extends DefaultTableModel, ? extends Object> entry) {
-                        // 获取状态码（第7列）
-                        Object statusObj = entry.getValue(7);
+                        // 获取状态码（第8列）
+                        Object statusObj = entry.getValue(8);
                         if (!(statusObj instanceof Integer)) {
                             return true;
                         }
@@ -838,8 +845,8 @@ public class HistoryPanel extends JPanel {
                 filters.add(new RowFilter<DefaultTableModel, Object>() {
                     @Override
                     public boolean include(Entry<? extends DefaultTableModel, ? extends Object> entry) {
-                        // 获取响应长度（第8列）
-                        Object lengthObj = entry.getValue(8);
+                        // 获取响应长度（第9列）
+                        Object lengthObj = entry.getValue(9);
                         if (!(lengthObj instanceof Integer)) {
                             return true;
                         }
@@ -855,7 +862,7 @@ public class HistoryPanel extends JPanel {
         
         // 备注过滤
         if (comment != null && !comment.isEmpty()) {
-            filters.add(RowFilter.regexFilter("(?i)" + comment, 10)); // 备注在第10列
+            filters.add(RowFilter.regexFilter("(?i)" + comment, 11)); // 备注在第11列
         }
         
         // 应用过滤器
@@ -889,8 +896,8 @@ public class HistoryPanel extends JPanel {
         JCheckBox[] checkBoxes = new JCheckBox[columnCount];
         boolean[] initialVisibility = new boolean[columnCount];
         
-        // 必须显示的列索引（序号、方法、协议、域名、路径）
-        Set<Integer> mandatoryColumns = new HashSet<>(Arrays.asList(0, 2, 3, 4, 5));
+        // 必须显示的列索引（序号、API、方法、协议、域名、路径）
+        Set<Integer> mandatoryColumns = new HashSet<>(Arrays.asList(0, 2, 3, 4, 5, 6));
         
         for (int i = 0; i < columnCount; i++) {
             TableColumn column = columnModel.getColumn(i);
@@ -992,36 +999,40 @@ public class HistoryPanel extends JPanel {
                 column.setPreferredWidth(150);  
                 column.setMaxWidth(180);        
                 break;
-            case 2: // 方法列
+            case 2: // API列
+                column.setPreferredWidth(200);  
+                column.setMaxWidth(400);        
+                break;
+            case 3: // 方法列
                 column.setPreferredWidth(60);   
                 column.setMaxWidth(80);         
                 break;
-            case 3: // 协议列
+            case 4: // 协议列
                 column.setPreferredWidth(60);   
                 column.setMaxWidth(80);         
                 break;
-            case 4: // 域名列
+            case 5: // 域名列
                 column.setPreferredWidth(150);  
                 break;
-            case 5: // 路径列
+            case 6: // 路径列
                 column.setPreferredWidth(180);  
                 break;
-            case 6: // 查询参数列
+            case 7: // 查询参数列
                 column.setPreferredWidth(150);  
                 break;
-            case 7: // 状态码列
+            case 8: // 状态码列
                 column.setPreferredWidth(70);   
                 column.setMaxWidth(90);         
                 break;
-            case 8: // 响应长度列
+            case 9: // 响应长度列
                 column.setPreferredWidth(90);   
                 column.setMaxWidth(110);        
                 break;
-            case 9: // 耗时列
+            case 10: // 耗时列
                 column.setPreferredWidth(70);   
                 column.setMaxWidth(90);         
                 break;
-            case 10: // 备注列
+            case 11: // 备注列
                 column.setPreferredWidth(150); 
                 break;
         }

@@ -2,6 +2,9 @@ package oxff.top.db;
 
 import burp.BurpExtender;
 import burp.IRequestInfo;
+import oxff.top.api.ApiExtractionEngine;
+import oxff.top.api.ApiRuleManager;
+import oxff.top.api.ApiExtractionRule;
 import oxff.top.db.pool.*;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.service.GarbageCollectorService;
@@ -85,16 +88,35 @@ public class HistoryDAO {
         String reqHeaderHash = null;
         String reqBodyHash = null;
         String reqBodyStorage = BodyStorageRoute.NONE.getDbValue();
+        SplitResult reqSplit = null;
 
         if (requestData != null && requestData.length > 0) {
-            SplitResult split = poolManager.getSplitter().splitRequest(requestData);
-            reqHeaderHash = poolManager.ensureHeader(conn, split.getHeaders());
-            if (split.hasBody()) {
-                String[] bodyResult = poolManager.ensureBody(conn, split.getBody());
+            reqSplit = poolManager.getSplitter().splitRequest(requestData);
+            reqHeaderHash = poolManager.ensureHeader(conn, reqSplit.getHeaders());
+            if (reqSplit.hasBody()) {
+                String[] bodyResult = poolManager.ensureBody(conn, reqSplit.getBody());
                 reqBodyHash = bodyResult[0];
                 reqBodyStorage = bodyResult[1];
             }
         }
+
+        // Extract headers for API extraction
+        java.util.List<String> headerList = new java.util.ArrayList<>();
+        String contentType = null;
+        if (reqSplit != null) {
+            String headersStr = new String(reqSplit.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : headersStr.split("\r\n")) {
+                if (!line.isEmpty()) headerList.add(line);
+                if (line.toLowerCase().startsWith("content-type:")) {
+                    contentType = line.substring("content-type:".length()).trim();
+                }
+            }
+        }
+
+        // Compute API value
+        java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
+        String apiValue = ApiExtractionEngine.extractApi(path, query, headerList, reqSplit != null ? reqSplit.getBody() : null, contentType, activeRules);
+        String apiHash = (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
 
         // 分割响应数据
         String respHeaderHash = null;
@@ -115,8 +137,8 @@ public class HistoryDAO {
         String sql = "INSERT INTO history (request_id, method, protocol, domain_hash, path_hash, query_hash, " +
                 "status_code, response_length, response_time, timestamp, comment, color, " +
                 "req_header_hash, req_body_hash, req_body_storage, " +
-                "resp_header_hash, resp_body_hash, resp_body_storage) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "resp_header_hash, resp_body_hash, resp_body_storage, api_hash) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (requestId <= 0) {
@@ -142,6 +164,7 @@ public class HistoryDAO {
             pstmt.setString(16, respHeaderHash);
             pstmt.setString(17, respBodyHash);
             pstmt.setString(18, respBodyStorage);
+            pstmt.setString(19, apiHash);
 
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {
@@ -268,17 +291,37 @@ public class HistoryDAO {
         String reqHeaderHash = null;
         String reqBodyHash = null;
         String reqBodyStorage = BodyStorageRoute.NONE.getDbValue();
+        SplitResult reqSplit = null;
 
         byte[] requestData = record.getRequestData();
         if (requestData != null && requestData.length > 0) {
-            SplitResult split = poolManager.getSplitter().splitRequest(requestData);
-            reqHeaderHash = poolManager.ensureHeader(conn, split.getHeaders());
-            if (split.hasBody()) {
-                String[] bodyResult = poolManager.ensureBody(conn, split.getBody());
+            reqSplit = poolManager.getSplitter().splitRequest(requestData);
+            reqHeaderHash = poolManager.ensureHeader(conn, reqSplit.getHeaders());
+            if (reqSplit.hasBody()) {
+                String[] bodyResult = poolManager.ensureBody(conn, reqSplit.getBody());
                 reqBodyHash = bodyResult[0];
                 reqBodyStorage = bodyResult[1];
             }
         }
+
+        // Extract headers for API extraction
+        java.util.List<String> headerList = new java.util.ArrayList<>();
+        String contentType = null;
+        if (reqSplit != null) {
+            String headersStr = new String(reqSplit.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : headersStr.split("\r\n")) {
+                if (!line.isEmpty()) headerList.add(line);
+                if (line.toLowerCase().startsWith("content-type:")) {
+                    contentType = line.substring("content-type:".length()).trim();
+                }
+            }
+        }
+
+        // Compute API value
+        String recordQuery = record.getQueryParameters();
+        java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
+        String apiValue = ApiExtractionEngine.extractApi(record.getPath(), recordQuery, headerList, reqSplit != null ? reqSplit.getBody() : null, contentType, activeRules);
+        String apiHash = (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
 
         // 分割响应数据
         String respHeaderHash = null;
@@ -300,8 +343,8 @@ public class HistoryDAO {
         String sql = "INSERT INTO history (request_id, method, protocol, domain_hash, path_hash, query_hash, " +
                 "status_code, response_length, response_time, timestamp, comment, color, " +
                 "req_header_hash, req_body_hash, req_body_storage, " +
-                "resp_header_hash, resp_body_hash, resp_body_storage) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "resp_header_hash, resp_body_hash, resp_body_storage, api_hash) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             if (requestId <= 0) {
@@ -344,6 +387,7 @@ public class HistoryDAO {
             pstmt.setString(16, respHeaderHash);
             pstmt.setString(17, respBodyHash);
             pstmt.setString(18, respBodyStorage);
+            pstmt.setString(19, apiHash);
 
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {
@@ -436,11 +480,12 @@ public class HistoryDAO {
                 "h.comment, h.color, " +
                 "h.req_header_hash, h.req_body_hash, h.req_body_storage, " +
                 "h.resp_header_hash, h.resp_body_hash, h.resp_body_storage, " +
-                "sd.value as domain, sp.value as path, sq.value as query " +
+                "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM history h " +
                 "LEFT JOIN string_pool sd ON h.domain_hash = sd.hash " +
                 "LEFT JOIN string_pool sp ON h.path_hash = sp.hash " +
                 "LEFT JOIN string_pool sq ON h.query_hash = sq.hash " +
+                "LEFT JOIN string_pool sa ON h.api_hash = sa.hash " +
                 "ORDER BY h.id DESC";
 
         List<RequestResponseRecord> records = new ArrayList<>();
@@ -473,11 +518,12 @@ public class HistoryDAO {
                 "h.comment, h.color, " +
                 "h.req_header_hash, h.req_body_hash, h.req_body_storage, " +
                 "h.resp_header_hash, h.resp_body_hash, h.resp_body_storage, " +
-                "sd.value as domain, sp.value as path, sq.value as query " +
+                "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM history h " +
                 "LEFT JOIN string_pool sd ON h.domain_hash = sd.hash " +
                 "LEFT JOIN string_pool sp ON h.path_hash = sp.hash " +
                 "LEFT JOIN string_pool sq ON h.query_hash = sq.hash " +
+                "LEFT JOIN string_pool sa ON h.api_hash = sa.hash " +
                 "WHERE h.id = ?";
 
         try (Connection conn = dbManager.getConnection();
@@ -606,11 +652,12 @@ public class HistoryDAO {
                 "h.comment, h.color, " +
                 "h.req_header_hash, h.req_body_hash, h.req_body_storage, " +
                 "h.resp_header_hash, h.resp_body_hash, h.resp_body_storage, " +
-                "sd.value as domain, sp.value as path, sq.value as query " +
+                "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM history h " +
                 "LEFT JOIN string_pool sd ON h.domain_hash = sd.hash " +
                 "LEFT JOIN string_pool sp ON h.path_hash = sp.hash " +
                 "LEFT JOIN string_pool sq ON h.query_hash = sq.hash " +
+                "LEFT JOIN string_pool sa ON h.api_hash = sa.hash " +
                 "WHERE h.request_id = ? ORDER BY h.id DESC";
 
         List<RequestResponseRecord> records = new ArrayList<>();
@@ -646,11 +693,12 @@ public class HistoryDAO {
                 "h.comment, h.color, " +
                 "h.req_header_hash, h.req_body_hash, h.req_body_storage, " +
                 "h.resp_header_hash, h.resp_body_hash, h.resp_body_storage, " +
-                "sd.value as domain, sp.value as path, sq.value as query " +
+                "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM history h " +
                 "LEFT JOIN string_pool sd ON h.domain_hash = sd.hash " +
                 "LEFT JOIN string_pool sp ON h.path_hash = sp.hash " +
                 "LEFT JOIN string_pool sq ON h.query_hash = sq.hash " +
+                "LEFT JOIN string_pool sa ON h.api_hash = sa.hash " +
                 "WHERE h.request_id = ? ORDER BY h.id DESC LIMIT ?";
 
         List<RequestResponseRecord> records = new ArrayList<>();
@@ -735,6 +783,13 @@ public class HistoryDAO {
             byte[] responseData = reconstructor.reconstructResponse(conn, respHeaderHash, respBodyHash, respBodyStorage);
             record.setResponseData(responseData);
 
+            // Set API value
+            String api = rs.getString("api");
+            if (api == null || api.isEmpty()) {
+                api = record.getPath(); // Default to path
+            }
+            record.setApi(api);
+
             return record;
         } catch (Exception e) {
             BurpExtender.printError("[!] 映射历史记录时出错: " + e.getMessage());
@@ -751,12 +806,14 @@ public class HistoryDAO {
      * 读取历史记录的 hash 引用
      * 返回 [domainHash, pathHash, queryHash,
      *        reqHeaderHash, reqBodyHash, reqBodyStorage,
-     *        respHeaderHash, respBodyHash, respBodyStorage]
+     *        respHeaderHash, respBodyHash, respBodyStorage,
+     *        apiHash]
      */
     private String[] readHistoryHashRefs(Connection conn, int historyId) throws SQLException {
         String sql = "SELECT domain_hash, path_hash, query_hash, " +
                 "req_header_hash, req_body_hash, req_body_storage, " +
-                "resp_header_hash, resp_body_hash, resp_body_storage " +
+                "resp_header_hash, resp_body_hash, resp_body_storage, " +
+                "api_hash " +
                 "FROM history WHERE id = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, historyId);
@@ -771,19 +828,21 @@ public class HistoryDAO {
                             rs.getString("req_body_storage"),
                             rs.getString("resp_header_hash"),
                             rs.getString("resp_body_hash"),
-                            rs.getString("resp_body_storage")
+                            rs.getString("resp_body_storage"),
+                            rs.getString("api_hash")
                     };
                 }
             }
         }
-        return new String[9];
+        return new String[10];
     }
 
     /**
      * 释放旧引用
      * 索引对应：[0]=domainHash, [1]=pathHash, [2]=queryHash,
      *          [3]=reqHeaderHash, [4]=reqBodyHash, [5]=reqBodyStorage,
-     *          [6]=respHeaderHash, [7]=respBodyHash, [8]=respBodyStorage
+     *          [6]=respHeaderHash, [7]=respBodyHash, [8]=respBodyStorage,
+     *          [9]=apiHash
      */
     private void releaseOldRefs(Connection conn, String[] refs) throws SQLException {
         if (refs == null) return;
@@ -804,5 +863,8 @@ public class HistoryDAO {
 
         // 释放响应 Body 引用
         poolManager.releaseBody(conn, refs[7], refs[8]);
+
+        // 释放 API 字符串引用
+        poolManager.releaseString(conn, refs[9]); // api_hash
     }
 }

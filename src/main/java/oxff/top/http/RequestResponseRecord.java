@@ -24,6 +24,7 @@ public class RequestResponseRecord {
     private Color color;               // 标记颜色
     private byte[] requestData;        // 原始请求数据
     private byte[] responseData;       // 原始响应数据
+    private String api;                // API标识符（由提取规则计算）
 
     // ---- 去重存储引用字段（DAO 层使用，上层代码无需感知） ----
     private String domainHash;          // → string_pool.hash
@@ -280,6 +281,14 @@ public class RequestResponseRecord {
     
     public void setResponseData(byte[] responseData) {
         this.responseData = responseData;
+    }
+
+    public String getApi() {
+        return api;
+    }
+
+    public void setApi(String api) {
+        this.api = api;
     }
 
     // ---- 去重存储字段 Getters/Setters ----

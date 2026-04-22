@@ -139,6 +139,7 @@ public class EnhancedRepeaterUI implements ITab {
         
         // 创建配置面板
         configPanel = new ConfigPanel();
+        configPanel.setOnDataChanged(() -> SwingUtilities.invokeLater(() -> refreshAllData()));
 
         // 创建日志面板
         logPanel = new LogPanel();
@@ -231,7 +232,7 @@ public class EnhancedRepeaterUI implements ITab {
             return;
         }
         
-        requestListPanel.addRequest(dbId, "http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
+        requestListPanel.addRequest(dbId, "/", "GET", "http", "example.com", "/", "", newRequestTemplate.getBytes());
         currentRequestId = dbId;
         
         // 更新历史面板标题
@@ -597,7 +598,7 @@ public class EnhancedRepeaterUI implements ITab {
                         }
                     }
                     
-                    requestListPanel.updateRequest(currentRequestId, protocol, host, path, query, method);
+                    requestListPanel.updateRequest(currentRequestId, path, protocol, host, path, query, method);
                 }
                 
                 // 创建历史记录用于UI显示（数据库保存已由HistoryRecordingService完成）
@@ -747,7 +748,7 @@ public class EnhancedRepeaterUI implements ITab {
             
             // 更新请求列表中的当前请求
             if (currentRequestId >= 0) {
-                requestListPanel.updateRequest(currentRequestId, protocol, host, path, query, method);
+                requestListPanel.updateRequest(currentRequestId, path, protocol, host, path, query, method);
             }
             
             // 创建历史记录用于UI显示（数据库保存已由HistoryRecordingService完成）
@@ -942,7 +943,7 @@ public class EnhancedRepeaterUI implements ITab {
                 }
                 
                 // 添加到请求列表，使用数据库ID
-                requestListPanel.addRequest(dbId, protocol, domain, path, query, method, request);
+                requestListPanel.addRequest(dbId, path, method, protocol, domain, path, query, request);
                 currentRequestId = dbId;
                 
                 // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
@@ -1089,6 +1090,7 @@ public class EnhancedRepeaterUI implements ITab {
 
                 for (java.util.Map<String, Object> request : requests) {
                     int dbId = (Integer) request.get("id");
+                    String api = (String) request.get("api");
                     String protocol = (String) request.get("protocol");
                     String domain = (String) request.get("domain");
                     String path = (String) request.get("path");
@@ -1096,7 +1098,7 @@ public class EnhancedRepeaterUI implements ITab {
                     String method = (String) request.get("method");
                     byte[] requestData = (byte[]) request.get("request_data");
 
-                    requestListPanel.addRequest(dbId, protocol, domain, path, query, method, requestData);
+                    requestListPanel.addRequest(dbId, api, method, protocol, domain, path, query, requestData);
 
                     java.awt.Color color = (java.awt.Color) request.get("color");
                     String comment = (String) request.get("comment");

@@ -23,7 +23,7 @@ public class RequestListPanel extends JPanel {
     
     // 请求列表数据
     private final DefaultTableModel tableModel = new DefaultTableModel(
-        new Object[]{"ID", "Protocol", "Domain", "Path", "Query", "Method", "Date"}, 0
+        new Object[]{"ID", "API", "Method", "Protocol", "Domain", "Path", "Query", "Date"}, 0
     ) {
         @Override
         public boolean isCellEditable(int row, int column) {
@@ -195,15 +195,16 @@ public class RequestListPanel extends JPanel {
     /**
      * 更新请求
      */
-    public void updateRequest(int requestId, String protocol, String domain, String path, String query, String method) {
+    public void updateRequest(int requestId, String api, String protocol, String domain, String path, String query, String method) {
         for (int i = 0; i < tableModel.getRowCount(); i++) {
             int rowId = (int) tableModel.getValueAt(i, 0);
             if (rowId == requestId) {
-                tableModel.setValueAt(protocol, i, 1);
-                tableModel.setValueAt(domain, i, 2);
-                tableModel.setValueAt(path, i, 3);
-                tableModel.setValueAt(query, i, 4);
-                tableModel.setValueAt(method, i, 5);
+                tableModel.setValueAt(api, i, 1);
+                tableModel.setValueAt(method, i, 2);
+                tableModel.setValueAt(protocol, i, 3);
+                tableModel.setValueAt(domain, i, 4);
+                tableModel.setValueAt(path, i, 5);
+                tableModel.setValueAt(query, i, 6);
                 break;
             }
         }
@@ -277,15 +278,16 @@ public class RequestListPanel extends JPanel {
     /**
      * 添加请求
      */
-    public void addRequest(int id, String protocol, String domain, String path, String query, String method, byte[] requestData) {
+    public void addRequest(int id, String api, String method, String protocol, String domain, String path, String query, byte[] requestData) {
         // 添加到表格模型
         tableModel.addRow(new Object[]{
             id,
+            api != null ? api : path,
+            method,
             protocol,
             domain,
             path,
             query,
-            method,
             new Date()
         });
         
@@ -309,11 +311,12 @@ public class RequestListPanel extends JPanel {
     public void addRequestRecord(RequestRecord record) {
         tableModel.addRow(new Object[]{
             record.getId(),
+            record.getApi() != null ? record.getApi() : record.getPath(),
+            record.getMethod(),
             record.getProtocol(),
             record.getDomain(),
             record.getPath(),
             record.getQuery(),
-            record.getMethod(),
             new Date()
         });
         

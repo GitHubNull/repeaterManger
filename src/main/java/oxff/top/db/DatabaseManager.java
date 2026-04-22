@@ -387,19 +387,22 @@ public class DatabaseManager {
 
     /**
      * 使用现有连接初始化表结构
-     * 直接确保 v2 Schema 完整存在
+     * 直接确保 v3 Schema 完整存在
      */
     private void initializeTablesWithConnection(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            initializeV2Schema(stmt);
+            initializeV3Schema(stmt);
+            // 检查是否需要从旧版本迁移
+            migrateIfNeeded(conn);
             BurpExtender.printOutput("[+] 数据库表结构初始化成功");
         }
     }
 
     /**
-     * 初始化 v2 Schema（新数据库）
+     * 初始化 v3 Schema（新数据库）
+     * 包含 v2 基础结构 + v3 新增的 api_hash 列和规则表
      */
-    private void initializeV2Schema(Statement stmt) throws SQLException {
+    private void initializeV3Schema(Statement stmt) throws SQLException {
         // 元数据表
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS schema_meta (" +
@@ -408,8 +411,8 @@ public class DatabaseManager {
             ")"
         );
 
-        // 初始化元数据
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '2')");
+        // 初始化元数据（v4）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -426,7 +429,7 @@ public class DatabaseManager {
         );
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_gc_queue_pool ON gc_queue(pool_type, hash)");
 
-        // 请求表（v2 结构：使用枚举和 hash 引用）
+        // 请求表（v3 结构：v2 + api_hash）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS requests (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -440,11 +443,12 @@ public class DatabaseManager {
             "color TEXT, " +
             "req_header_hash TEXT, " +
             "req_body_hash TEXT, " +
-            "req_body_storage TEXT DEFAULT 'inline'" +
+            "req_body_storage TEXT DEFAULT 'inline', " +
+            "api_hash TEXT" +
             ")"
         );
 
-        // 历史记录表（v2 结构）
+        // 历史记录表（v3 结构：v2 + api_hash）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS history (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -466,14 +470,154 @@ public class DatabaseManager {
             "resp_header_hash TEXT, " +
             "resp_body_hash TEXT, " +
             "resp_body_storage TEXT DEFAULT 'inline', " +
+            "api_hash TEXT, " +
             "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
             ")"
         );
 
-        // 创建索引
-        createV2Indexes(stmt);
+        // API提取规则表（v4 结构：v3 + name + remark）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS api_extraction_rules (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "name TEXT NOT NULL DEFAULT '', " +
+            "source TEXT NOT NULL, " +
+            "method TEXT NOT NULL, " +
+            "expression TEXT NOT NULL, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "priority INTEGER NOT NULL DEFAULT 1, " +
+            "remark TEXT NOT NULL DEFAULT '', " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
 
-        BurpExtender.printOutput("[+] v2 Schema 初始化完成");
+        // 创建索引
+        createV3Indexes(stmt);
+
+        BurpExtender.printOutput("[+] v4 Schema 初始化完成");
+    }
+
+    /**
+     * 执行所有必要的数据库迁移
+     */
+    private void migrateIfNeeded(Connection conn) throws SQLException {
+        // 获取当前schema版本
+        int currentVersion = getCurrentSchemaVersion(conn);
+
+        // v2→v3 迁移
+        if (currentVersion < 3) {
+            migrateV2ToV3(conn);
+        }
+
+        // v3→v4 迁移
+        if (currentVersion < 4) {
+            migrateV3ToV4(conn);
+        }
+    }
+
+    /**
+     * 获取当前schema版本
+     */
+    private int getCurrentSchemaVersion(Connection conn) {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT value FROM schema_meta WHERE key = 'schema_version'")) {
+            if (rs.next()) {
+                try {
+                    return Integer.parseInt(rs.getString("value"));
+                } catch (NumberFormatException e) {
+                    return 2;
+                }
+            }
+        } catch (SQLException e) {
+            // schema_meta 表可能不存在（极旧版本），忽略
+        }
+        return 2;
+    }
+
+    /**
+     * v2→v3 迁移：为旧数据库添加 api_hash 列和 api_extraction_rules 表
+     */
+    private void migrateV2ToV3(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v2→v3迁移...");
+
+            // 为 requests 表添加 api_hash 列
+            try {
+                stmt.execute("ALTER TABLE requests ADD COLUMN api_hash TEXT");
+                BurpExtender.printOutput("[+] requests表添加api_hash列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] requests表添加api_hash列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 history 表添加 api_hash 列
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN api_hash TEXT");
+                BurpExtender.printOutput("[+] history表添加api_hash列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加api_hash列失败: " + e.getMessage());
+                }
+            }
+
+            // 创建 api_extraction_rules 表（v3结构，不含name/remark，v4迁移会添加）
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS api_extraction_rules (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "source TEXT NOT NULL, " +
+                "method TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "priority INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建v3新增索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_api_hash ON requests(api_hash)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_api_hash ON history(api_hash)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '3')");
+
+            BurpExtender.printOutput("[+] v2→v3 迁移完成");
+        }
+    }
+
+    /**
+     * v3→v4 迁移：为 api_extraction_rules 表添加 name 和 remark 列
+     */
+    private void migrateV3ToV4(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v3→v4迁移...");
+
+            // 为 api_extraction_rules 表添加 name 列
+            try {
+                stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+                BurpExtender.printOutput("[+] api_extraction_rules表添加name列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] api_extraction_rules表添加name列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 api_extraction_rules 表添加 remark 列
+            try {
+                stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN remark TEXT NOT NULL DEFAULT ''");
+                BurpExtender.printOutput("[+] api_extraction_rules表添加remark列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] api_extraction_rules表添加remark列失败: " + e.getMessage());
+                }
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '4' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4')");
+
+            BurpExtender.printOutput("[+] v3→v4 迁移完成");
+        }
     }
 
     /**
@@ -531,9 +675,10 @@ public class DatabaseManager {
     }
 
     /**
-     * 创建 v2 索引
+     * 创建 v3 索引
      */
-    private void createV2Indexes(Statement stmt) throws SQLException {
+    private void createV3Indexes(Statement stmt) throws SQLException {
+        // v2 索引
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_domain_hash ON requests(domain_hash)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_method ON requests(method)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_req_header ON requests(req_header_hash)");
@@ -545,6 +690,9 @@ public class DatabaseManager {
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_resp_header ON history(resp_header_hash)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_req_body ON history(req_body_hash)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_resp_body ON history(resp_body_hash)");
+        // v3 新增索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_api_hash ON requests(api_hash)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_api_hash ON history(api_hash)");
     }
 
 

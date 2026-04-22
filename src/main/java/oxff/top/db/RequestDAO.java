@@ -2,6 +2,9 @@ package oxff.top.db;
 
 import burp.BurpExtender;
 import burp.IRequestInfo;
+import oxff.top.api.ApiExtractionEngine;
+import oxff.top.api.ApiRuleManager;
+import oxff.top.api.ApiExtractionRule;
 import oxff.top.db.pool.*;
 import oxff.top.service.GarbageCollectorService;
 
@@ -92,6 +95,7 @@ public class RequestDAO {
                 String reqHeaderHash = null;
                 String reqBodyHash = null;
                 String reqBodyStorage = BodyStorageRoute.NONE.getDbValue();
+                String apiHash = null;
 
                 if (requestData != null && requestData.length > 0) {
                     SplitResult split = poolManager.getSplitter().splitRequest(requestData);
@@ -102,12 +106,32 @@ public class RequestDAO {
                         reqBodyHash = bodyResult[0];
                         reqBodyStorage = bodyResult[1];
                     }
+
+                    // Extract headers for API extraction
+                    java.util.List<String> headerList = new java.util.ArrayList<>();
+                    String contentType = null;
+                    if (split.getHeaders() != null) {
+                        String headersStr = new String(split.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
+                        for (String line : headersStr.split("\r\n")) {
+                            if (!line.isEmpty()) headerList.add(line);
+                            if (line.toLowerCase().startsWith("content-type:")) {
+                                contentType = line.substring("content-type:".length()).trim();
+                            }
+                        }
+                    }
+
+                    // Compute API value
+                    java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
+                    String apiValue = ApiExtractionEngine.extractApi(path, query, headerList,
+                            (split.hasBody() ? split.getBody() : null),
+                            contentType, activeRules);
+                    apiHash = (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
                 }
 
                 // 插入记录
                 String sql = "INSERT INTO requests (protocol, domain_hash, path_hash, query_hash, method, " +
-                        "add_time, req_header_hash, req_body_hash, req_body_storage) " +
-                        "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)";
+                        "add_time, req_header_hash, req_body_hash, req_body_storage, api_hash) " +
+                        "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)";
 
                 try (PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
                     pstmt.setInt(1, protocolInt);
@@ -118,6 +142,7 @@ public class RequestDAO {
                     pstmt.setString(6, reqHeaderHash);
                     pstmt.setString(7, reqBodyHash);
                     pstmt.setString(8, reqBodyStorage);
+                    pstmt.setString(9, apiHash);
 
                     int affectedRows = pstmt.executeUpdate();
                     if (affectedRows > 0) {
@@ -167,6 +192,7 @@ public class RequestDAO {
                 String reqHeaderHash = null;
                 String reqBodyHash = null;
                 String reqBodyStorage = BodyStorageRoute.NONE.getDbValue();
+                String apiHash = null;
 
                 if (requestData != null && requestData.length > 0) {
                     SplitResult split = poolManager.getSplitter().splitRequest(requestData);
@@ -176,11 +202,31 @@ public class RequestDAO {
                         reqBodyHash = bodyResult[0];
                         reqBodyStorage = bodyResult[1];
                     }
+
+                    // Extract headers for API extraction
+                    java.util.List<String> headerList = new java.util.ArrayList<>();
+                    String contentType = null;
+                    if (split.getHeaders() != null) {
+                        String headersStr = new String(split.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
+                        for (String line : headersStr.split("\r\n")) {
+                            if (!line.isEmpty()) headerList.add(line);
+                            if (line.toLowerCase().startsWith("content-type:")) {
+                                contentType = line.substring("content-type:".length()).trim();
+                            }
+                        }
+                    }
+
+                    // Compute API value
+                    java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
+                    String apiValue = ApiExtractionEngine.extractApi(path, query, headerList,
+                            (split.hasBody() ? split.getBody() : null),
+                            contentType, activeRules);
+                    apiHash = (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
                 }
 
                 // 更新记录
                 String sql = "UPDATE requests SET protocol=?, domain_hash=?, path_hash=?, " +
-                        "query_hash=?, method=?, req_header_hash=?, req_body_hash=?, req_body_storage=? WHERE id=?";
+                        "query_hash=?, method=?, req_header_hash=?, req_body_hash=?, req_body_storage=?, api_hash=? WHERE id=?";
                 try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                     pstmt.setInt(1, protocolInt);
                     pstmt.setString(2, domainHash);
@@ -190,7 +236,8 @@ public class RequestDAO {
                     pstmt.setString(6, reqHeaderHash);
                     pstmt.setString(7, reqBodyHash);
                     pstmt.setString(8, reqBodyStorage);
-                    pstmt.setInt(9, requestId);
+                    pstmt.setString(9, apiHash);
+                    pstmt.setInt(10, requestId);
 
                     int affectedRows = pstmt.executeUpdate();
                     if (affectedRows > 0) {
@@ -252,15 +299,16 @@ public class RequestDAO {
      * 获取所有请求
      */
     public List<Map<String, Object>> getAllRequests() {
-        // 使用 JOIN string_pool 展开 domain/path/query
+        // 使用 JOIN string_pool 展开 domain/path/query/api
         String sql = "SELECT r.id, r.protocol, r.domain_hash, r.path_hash, r.query_hash, r.method, " +
                 "r.add_time, r.comment, r.color, " +
                 "r.req_header_hash, r.req_body_hash, r.req_body_storage, " +
-                "sd.value as domain, sp.value as path, sq.value as query " +
+                "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM requests r " +
                 "LEFT JOIN string_pool sd ON r.domain_hash = sd.hash " +
                 "LEFT JOIN string_pool sp ON r.path_hash = sp.hash " +
                 "LEFT JOIN string_pool sq ON r.query_hash = sq.hash " +
+                "LEFT JOIN string_pool sa ON r.api_hash = sa.hash " +
                 "ORDER BY r.id DESC";
 
         List<Map<String, Object>> requests = new ArrayList<>();
@@ -281,6 +329,10 @@ public class RequestDAO {
                     request.put("method", HttpEnum.intToMethod(rs.getInt("method")));
                     request.put("add_time", getStringWithDefault(rs, "add_time", ""));
                     request.put("comment", getStringWithDefault(rs, "comment", ""));
+
+                    // 处理API值（如果api为null，使用path作为默认值）
+                    String apiValue = rs.getString("api");
+                    request.put("api", (apiValue != null) ? apiValue : getStringWithDefault(rs, "path", "/"));
 
                     // 处理颜色
                     String colorStr = rs.getString("color");
@@ -333,11 +385,12 @@ public class RequestDAO {
         String sql = "SELECT r.id, r.protocol, r.domain_hash, r.path_hash, r.query_hash, r.method, " +
                 "r.add_time, r.comment, r.color, " +
                 "r.req_header_hash, r.req_body_hash, r.req_body_storage, " +
-                "sd.value as domain, sp.value as path, sq.value as query " +
+                "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM requests r " +
                 "LEFT JOIN string_pool sd ON r.domain_hash = sd.hash " +
                 "LEFT JOIN string_pool sp ON r.path_hash = sp.hash " +
                 "LEFT JOIN string_pool sq ON r.query_hash = sq.hash " +
+                "LEFT JOIN string_pool sa ON r.api_hash = sa.hash " +
                 "WHERE r.id = ?";
 
         try (Connection conn = dbManager.getConnection();
@@ -357,6 +410,10 @@ public class RequestDAO {
                         request.put("method", HttpEnum.intToMethod(rs.getInt("method")));
                         request.put("add_time", getStringWithDefault(rs, "add_time", ""));
                         request.put("comment", getStringWithDefault(rs, "comment", ""));
+
+                        // 处理API值（如果api为null，使用path作为默认值）
+                        String apiValue = rs.getString("api");
+                        request.put("api", (apiValue != null) ? apiValue : getStringWithDefault(rs, "path", "/"));
 
                         String colorStr = rs.getString("color");
                         if (colorStr != null && !colorStr.isEmpty()) {
@@ -537,10 +594,10 @@ public class RequestDAO {
 
     /**
      * 读取请求记录的 hash 引用
-     * 返回 [domainHash, pathHash, queryHash, reqHeaderHash, reqBodyHash, reqBodyStorage]
+     * 返回 [domainHash, pathHash, queryHash, reqHeaderHash, reqBodyHash, reqBodyStorage, apiHash]
      */
     private String[] readRequestHashRefs(Connection conn, int requestId) throws SQLException {
-        String sql = "SELECT domain_hash, path_hash, query_hash, req_header_hash, req_body_hash, req_body_storage FROM requests WHERE id = ?";
+        String sql = "SELECT domain_hash, path_hash, query_hash, req_header_hash, req_body_hash, req_body_storage, api_hash FROM requests WHERE id = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, requestId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -551,12 +608,13 @@ public class RequestDAO {
                             rs.getString("query_hash"),
                             rs.getString("req_header_hash"),
                             rs.getString("req_body_hash"),
-                            rs.getString("req_body_storage")
+                            rs.getString("req_body_storage"),
+                            rs.getString("api_hash")
                     };
                 }
             }
         }
-        return new String[6];
+        return new String[7];
     }
 
     /**
@@ -575,5 +633,8 @@ public class RequestDAO {
 
         // 释放 Body 引用
         poolManager.releaseBody(conn, refs[4], refs[5]);
+
+        // 释放 API 引用
+        poolManager.releaseString(conn, refs[6]); // api_hash
     }
 }

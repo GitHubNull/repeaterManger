@@ -11,7 +11,8 @@ public class RequestRecord {
     private final String query;
     private final String method;
     private final byte[] requestData;
-    
+    private String api;
+
     public RequestRecord(int id, String protocol, String domain, String path, String query, String method, byte[] requestData) {
         this.id = id;
         this.protocol = protocol;
@@ -20,6 +21,18 @@ public class RequestRecord {
         this.query = query;
         this.method = method;
         this.requestData = requestData;
+        this.api = path; // 默认值为路径
+    }
+
+    public RequestRecord(int id, String protocol, String domain, String path, String query, String method, byte[] requestData, String api) {
+        this.id = id;
+        this.protocol = protocol;
+        this.domain = domain;
+        this.path = path;
+        this.query = query;
+        this.method = method;
+        this.requestData = requestData;
+        this.api = (api != null && !api.isEmpty()) ? api : path;
     }
     
     public int getId() {
@@ -48,6 +61,14 @@ public class RequestRecord {
     
     public byte[] getRequestData() {
         return requestData;
+    }
+
+    public String getApi() {
+        return api;
+    }
+
+    public void setApi(String api) {
+        this.api = api;
     }
     
     /**

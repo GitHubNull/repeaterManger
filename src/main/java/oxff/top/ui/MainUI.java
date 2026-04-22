@@ -227,6 +227,7 @@ public class MainUI extends JPanel {
                 for (Map<String, Object> request : requests) {
                     // 获取数据库ID（用于保持与历史记录的关联一致性）
                     int dbId = (Integer) request.get("id");
+                    String api = (String) request.get("api");
                     String protocol = (String) request.get("protocol");
                     String domain = (String) request.get("domain");
                     String path = (String) request.get("path");
@@ -235,7 +236,7 @@ public class MainUI extends JPanel {
                     byte[] requestData = (byte[]) request.get("request_data");
 
                     // 使用addRequest直接添加到UI，避免addNewRequest重复插入数据库导致ID不一致
-                    requestListPanel.addRequest(dbId, protocol, domain, path, query, method, requestData);
+                    requestListPanel.addRequest(dbId, api, method, protocol, domain, path, query, requestData);
 
                     // 设置颜色和备注
                     java.awt.Color color = (java.awt.Color) request.get("color");
