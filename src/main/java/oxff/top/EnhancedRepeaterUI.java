@@ -5,7 +5,6 @@ import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
-import burp.api.montoya.http.message.responses.HttpResponse;
 import burp.api.montoya.http.HttpService;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
@@ -273,7 +272,14 @@ public class EnhancedRepeaterUI {
             BurpExtender.printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
 
             // 从请求列表的表格数据中获取协议、主机、端口信息，重建HttpService
-            dispatchHandler.setCurrentHttpService(HttpRequestHelper.rebuildHttpService(requestId, requestData));
+            // 优先使用已保存的原始HttpService（包含正确的非标准端口如9527）
+            HttpService savedService = dispatchHandler.getSavedHttpService(requestId);
+            if (savedService != null) {
+                dispatchHandler.setCurrentHttpService(savedService);
+            } else {
+                // 没有保存的HttpService（如从数据库恢复的旧数据），从请求数据重建
+                dispatchHandler.setCurrentHttpService(HttpRequestHelper.rebuildHttpService(requestId, requestData));
+            }
 
             // 获取请求信息，更新历史面板标题
             HttpRequest httpRequest = HttpRequest.httpRequest(ByteArray.byteArray(requestData));
@@ -399,7 +405,13 @@ public class EnhancedRepeaterUI {
                     // 解析URL组件
                     URL parsedUrl = new URL(url);
                     protocol = parsedUrl.getProtocol();
+                    // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
+                    // 否则数据库存储的domain丢失端口，导致重建HttpService时端口错误
                     domain = parsedUrl.getHost();
+                    int urlPort = parsedUrl.getPort();
+                    if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                        domain = domain + ":" + urlPort;
+                    }
                     path = parsedUrl.getPath();
                     query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                 } catch (Exception e) {
@@ -426,6 +438,9 @@ public class EnhancedRepeaterUI {
 
                 // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
                 dispatchHandler.setCurrentHttpService(requestResponse.httpService());
+
+                // 将HttpService保存到持久化映射，避免切换请求时丢失端口信息
+                dispatchHandler.saveHttpService(dbId, requestResponse.httpService());
 
                 // 设置请求内容
                 requestPanel.setRequest(request);

@@ -12,13 +12,18 @@ import oxff.top.logging.LogManager;
 import javax.swing.SwingUtilities;
 
 /**
- * Burp扩展入口点 - 使用Montoya SDK
- * 负责注册插件并初始化所需组件
+ * Burp扩展入口点 - 负责注册插件并初始化所需组件
+ * 使用 Montoya SDK 的 BurpExtension 接口
  */
 public class BurpExtender implements BurpExtension {
 
     // MontoyaApi 实例
     private static MontoyaApi api;
+
+    // 日志输出流（保留用于兼容，实际日志通过LogManager）
+    @SuppressWarnings("unused")
+    private static java.io.PrintWriter stdout;
+    private static java.io.PrintWriter stderr;
 
     // 主UI组件
     private static EnhancedRepeaterUI repeaterUI;
@@ -28,17 +33,18 @@ public class BurpExtender implements BurpExtension {
 
     @Override
     public void initialize(MontoyaApi api) {
-        // 保存API实例
+        // 保存 MontoyaApi 实例
         BurpExtender.api = api;
-
-        // 注册到静态持有器，供遗留代码访问
         MontoyaApiHolder.setApi(api);
 
         // 设置插件名称
         api.extension().setName("增强型Repeater");
 
         try {
-            // 阶段1：初始化日志管理器
+            // 初始化带有正确编码的输出流
+            initializeOutputStreams();
+
+            // 阶段1：初始化日志管理器（仅 BurpConsoleHandler）
             logManager.initialize(api);
 
             // 阶段2：加载早期配置（日志级别、UI、控制台、代理，不含文件 Handler）
@@ -72,25 +78,27 @@ public class BurpExtender implements BurpExtension {
                 logManager.error("[!] 全局API提取规则加载失败: " + e.getMessage());
             }
 
-            // 创建UI和功能组件（传入MontoyaApi用于编辑器创建等）
+            // 创建UI和功能组件
             repeaterUI = new EnhancedRepeaterUI(api);
 
-            // 将UI组件注册到Burp的界面
+            // 将UI组件注册到Burp的选项卡
             api.userInterface().registerSuiteTab("增强型Repeater", repeaterUI.getUiComponent());
 
-            // 注册上下文菜单提供者
+            // 注册上下文菜单
             api.userInterface().registerContextMenuItemsProvider(new PopMenu());
 
-            // 注册扩展卸载处理器
+            // 注册扩展卸载监听器
             api.extension().registerUnloadingHandler(() -> {
                 logManager.info("[*] 插件正在卸载，关闭日志系统...");
                 logManager.shutdown();
             });
 
+            // 使用编码后的输出流打印信息
             logManager.success("[+] 增强型Repeater 插件加载成功");
         } catch (Exception e) {
+            // 使用 Montoya API 输出异常
             api.logging().logToError("[!] 插件加载失败: " + e.getMessage());
-            e.printStackTrace();
+            e.printStackTrace(api.logging().output());
         }
     }
 
@@ -166,6 +174,24 @@ public class BurpExtender implements BurpExtension {
     }
 
     /**
+     * 初始化带有正确字符编码的输出流
+     */
+    private void initializeOutputStreams() {
+        try {
+            java.io.OutputStreamWriter outWriter = new java.io.OutputStreamWriter(api.logging().output(), "UTF-8");
+            java.io.OutputStreamWriter errWriter = new java.io.OutputStreamWriter(api.logging().error(), "UTF-8");
+
+            stdout = new java.io.PrintWriter(outWriter, true);
+            stderr = new java.io.PrintWriter(errWriter, true);
+        } catch (java.io.UnsupportedEncodingException e) {
+            api.logging().logToError("初始化自定义输出流失败: " + e.getMessage());
+
+            stdout = new java.io.PrintWriter(api.logging().output(), true);
+            stderr = new java.io.PrintWriter(api.logging().error(), true);
+        }
+    }
+
+    /**
      * 输出日志到标准输出 - 委托给LogManager
      *
      * @param message 日志消息
@@ -213,11 +239,6 @@ public class BurpExtender implements BurpExtension {
         return false;
     }
 
-    /**
-     * 将请求设置到Repeater UI（从上下文菜单调用）
-     *
-     * @param requestResponse Montoya HttpRequestResponse 对象
-     */
     public static void setRepeaterUIRequest(HttpRequestResponse requestResponse) {
         if (repeaterUI != null) {
             SwingUtilities.invokeLater(() -> {

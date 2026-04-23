@@ -134,25 +134,44 @@ public class RequestManager {
                 HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
                 HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
 
-                byte[] response = requestResponse.response().toByteArray().getBytes();
                 long responseTime = System.currentTimeMillis() - startTime;
+
+                // 检查响应是否为null（连接失败、超时等情况）
+                if (requestResponse == null || requestResponse.response() == null) {
+                    BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
+                    recordingService.recordFailure(requestId, fixedBytes, httpRequest,
+                                                 "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    return null;
+                }
+
+                byte[] response = requestResponse.response().toByteArray().getBytes();
 
                 if (response != null && response.length > 0) {
                     HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
+                    // 检测 Burp 内部错误响应（如 HTTP/0.9 1337 表示未收到有效响应头）
+                    int statusCode = httpResponse.statusCode();
+                    if (isBurpErrorResponse(statusCode, response)) {
+                        String errorMsg = String.format(
+                            "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
+                        BurpExtender.printError("[!] " + errorMsg);
+                        recordingService.recordFailure(requestId, fixedBytes, httpRequest,
+                                                     errorMsg, responseTime, service);
+                        return null;
+                    }
                     recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                  httpRequest, httpResponse, responseTime);
+                                                  httpRequest, httpResponse, responseTime, service);
                     return response;
                 } else {
                     BurpExtender.printError("[!] 收到空响应");
                     recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                 "收到空响应", responseTime);
+                                                 "收到空响应", responseTime, service);
                     return null;
                 }
             } catch (Exception e) {
                 long responseTime = System.currentTimeMillis() - startTime;
                 BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
                 recordingService.recordFailure(requestId, requestBytes, httpRequest,
-                                             "请求发送失败: " + e.getMessage(), responseTime);
+                                             "请求发送失败: " + e.getMessage(), responseTime, service);
                 return null;
             }
         });
@@ -251,7 +270,7 @@ public class RequestManager {
                     if (proxyResponse != null) {
                         HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
                         recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
-                            requestInfo, httpResponse, responseTime);
+                            requestInfo, httpResponse, responseTime, service);
                         BurpExtender.printOutput(
                             String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
                                 responseTime, proxyResponse.length));
@@ -261,7 +280,7 @@ public class RequestManager {
                     } else {
                         BurpExtender.printError("[!] 代理请求返回空响应");
                         recordingService.recordFailure(requestId, requestBytes, requestInfo,
-                                                     "代理请求返回空响应", responseTime);
+                                                     "代理请求返回空响应", responseTime, service);
                         if (callback != null) {
                             callback.onFailure("代理请求返回空响应", startTime, System.currentTimeMillis(), responseTime);
                         }
@@ -277,12 +296,37 @@ public class RequestManager {
                 HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
 
                 long responseTime = System.currentTimeMillis() - startTime;
+
+                // 检查响应是否为null（连接失败、超时等情况）
+                if (requestResponse == null || requestResponse.response() == null) {
+                    BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
+                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                 "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    if (callback != null) {
+                        callback.onFailure("未收到响应（目标可能不可达或连接被拒绝）", startTime, System.currentTimeMillis(), responseTime);
+                    }
+                    return;
+                }
+
                 byte[] response = requestResponse.response().toByteArray().getBytes();
 
                 if (response != null && response.length > 0) {
                     HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
+                    // 检测 Burp 内部错误响应（如 HTTP/0.9 1337 表示未收到有效响应头）
+                    int statusCode = httpResponse.statusCode();
+                    if (isBurpErrorResponse(statusCode, response)) {
+                        String errorMsg = String.format(
+                            "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
+                        BurpExtender.printError("[!] " + errorMsg);
+                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                     errorMsg, responseTime, service);
+                        if (callback != null) {
+                            callback.onFailure(errorMsg, startTime, System.currentTimeMillis(), responseTime);
+                        }
+                        return;
+                    }
                     recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                  requestInfo, httpResponse, responseTime);
+                                                  requestInfo, httpResponse, responseTime, service);
                     BurpExtender.printOutput(
                         String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
                             responseTime, response.length));
@@ -292,7 +336,7 @@ public class RequestManager {
                 } else {
                     BurpExtender.printError("[!] 收到空响应");
                     recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                 "收到空响应", responseTime);
+                                                 "收到空响应", responseTime, service);
                     if (callback != null) {
                         callback.onFailure("收到空响应", startTime, System.currentTimeMillis(), responseTime);
                     }
@@ -310,7 +354,7 @@ public class RequestManager {
                     HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
                     
                     recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
+                                                 "发送请求时发生异常: " + e.getMessage(), responseTime, service);
                 } catch (Exception ex) {
                     // 如果创建HTTP服务失败，使用基本的请求分析
                     BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
@@ -328,8 +372,8 @@ public class RequestManager {
     
     /**
      * 自动更新请求的 Content-Length 头，确保与实际 body 大小一致。
-     * 与 Burp Repeater 的"Update Content-Length"功能相同，防止因 Content-Length 不匹配
-     * 导致服务器等待更多数据而引发的超时（通常表现为请求耗时 8-11 秒）。
+     * 直接操作原始字节，不通过 SDK 的 headers() 方法重建请求，
+     * 避免请求行被破坏导致服务器收到无效请求（如 HTTP/0.9 1337 错误）。
      *
      * @param requestBytes 原始请求字节数组
      * @param service      HTTP 服务信息（用于解析请求）
@@ -337,29 +381,96 @@ public class RequestManager {
      */
     private byte[] updateContentLength(byte[] requestBytes, HttpService service) {
         try {
-            HttpRequest reqInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-            int bodyOffset = reqInfo.bodyOffset();
-            byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
-            List<String> headers = new ArrayList<>(reqInfo.headers().stream()
-                .map(h -> h.name() + ": " + h.value())
-                .collect(java.util.stream.Collectors.toList()));
-
-            // 获取请求方法
-            String method = reqInfo.method().toUpperCase();
-
-            // 移除所有现有的 Content-Length 头，再按实际 body 长度重新添加
-            headers.removeIf(h -> h.toLowerCase().startsWith("content-length:"));
-
-            // 始终为 POST/PUT/PATCH 添加 Content-Length（即使 body 为空也要设置为 0）
-            // 否则服务器会等待 body 数据直到超时，导致请求耗时 10+ 秒
-            if (body.length > 0) {
-                headers.add("Content-Length: " + body.length);
-            } else if ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) {
-                headers.add("Content-Length: 0");
+            // 查找 header/body 分隔符位置（\r\n\r\n）
+            int separatorPos = -1;
+            int separatorLen = 0;
+            for (int i = 0; i < requestBytes.length - 3; i++) {
+                if (requestBytes[i] == '\r' && requestBytes[i + 1] == '\n'
+                    && requestBytes[i + 2] == '\r' && requestBytes[i + 3] == '\n') {
+                    separatorPos = i;
+                    separatorLen = 4;
+                    break;
+                }
+            }
+            if (separatorPos < 0) {
+                // 尝试 \n\n 分隔符
+                for (int i = 0; i < requestBytes.length - 1; i++) {
+                    if (requestBytes[i] == '\n' && requestBytes[i + 1] == '\n') {
+                        separatorPos = i;
+                        separatorLen = 2;
+                        break;
+                    }
+                }
+            }
+            if (separatorPos < 0) {
+                return requestBytes; // 未找到分隔符，返回原始请求
             }
 
-            // 重建请求：将headers和body拼接
-            return buildRawHttpMessage(headers, body);
+            int bodyOffset = separatorPos + separatorLen;
+            int bodyLength = requestBytes.length - bodyOffset;
+
+            // 解析 header 区域为文本行（不含末尾 \r\n\r\n）
+            String headerSection = new String(requestBytes, 0, separatorPos,
+                    java.nio.charset.StandardCharsets.ISO_8859_1);
+            String lineSep = headerSection.contains("\r\n") ? "\r\n" : "\n";
+            String[] lines = headerSection.split(lineSep);
+
+            if (lines.length == 0) return requestBytes;
+
+            // 从请求行提取 HTTP 方法
+            String firstLine = lines[0];
+            String[] firstLineParts = firstLine.split("\\s+");
+            String method = firstLineParts.length > 0 ? firstLineParts[0].toUpperCase() : "";
+            boolean isBodyMethod = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
+
+            // 查找现有 Content-Length
+            int clLineIndex = -1;
+            int existingCL = -1;
+            for (int i = 1; i < lines.length; i++) {
+                if (lines[i].toLowerCase().startsWith("content-length:")) {
+                    clLineIndex = i;
+                    try {
+                        existingCL = Integer.parseInt(lines[i].substring("content-length:".length()).trim());
+                    } catch (NumberFormatException ignored) {}
+                    break;
+                }
+            }
+
+            // 如果 Content-Length 已经正确，直接返回原始请求（最常见路径，零拷贝）
+            if (clLineIndex >= 0 && existingCL == bodyLength) {
+                return requestBytes;
+            }
+
+            // 无 body、无 Content-Length、非 body 方法 → 无需修改
+            if (bodyLength == 0 && clLineIndex < 0 && !isBodyMethod) {
+                return requestBytes;
+            }
+
+            // 需要修正 Content-Length：重建 header 区域，保留请求行原样不动
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < lines.length; i++) {
+                // 跳过旧的 Content-Length 行
+                if (i > 0 && lines[i].toLowerCase().startsWith("content-length:")) {
+                    continue;
+                }
+                sb.append(lines[i]).append("\r\n");
+            }
+
+            // 添加正确的 Content-Length
+            if (bodyLength > 0) {
+                sb.append("Content-Length: ").append(bodyLength).append("\r\n");
+            } else if (isBodyMethod) {
+                sb.append("Content-Length: 0\r\n");
+            }
+
+            sb.append("\r\n"); // header/body 分隔符
+
+            byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+            byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
+            byte[] result = new byte[headerBytes.length + body.length];
+            System.arraycopy(headerBytes, 0, result, 0, headerBytes.length);
+            System.arraycopy(body, 0, result, headerBytes.length, body.length);
+            return result;
         } catch (Exception e) {
             // 更新失败时使用原始请求，不阻断主流程
             BurpExtender.printError("[!] 更新 Content-Length 失败，使用原始请求: " + e.getMessage());
@@ -369,6 +480,7 @@ public class RequestManager {
 
     /**
      * 从header列表和body构建原始HTTP消息字节数组
+     * 注意：headers列表的第一个元素是请求行（如 "GET / HTTP/1.1"），不包含冒号分隔符
      */
     private byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
         StringBuilder sb = new StringBuilder();
@@ -397,40 +509,29 @@ public class RequestManager {
             return originalService;
         }
         
-        // 没有原始HTTP服务信息，从请求数据中推断
+        // 没有原始HTTP服务信息，优先用 SDK 的 url() 方法解析
         HttpRequest tempRequestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
-        List<String> headerStrings = tempRequestInfo.headers().stream()
-            .map(h -> h.name() + ": " + h.value())
-            .collect(java.util.stream.Collectors.toList());
-        
-        String host = extractHost(headerStrings);
-        int port = extractPort(headerStrings, host);
-        boolean isSecure = determineIsHttps(headerStrings, port);
-        
-        return HttpService.httpService(host, port, isSecure);
+        try {
+            String urlStr = tempRequestInfo.url();
+            java.net.URL url = new java.net.URL(urlStr);
+            String host = url.getHost();
+            int port = url.getPort() == -1 ? url.getDefaultPort() : url.getPort();
+            boolean isSecure = url.getProtocol().equalsIgnoreCase("https");
+            return HttpService.httpService(host, port, isSecure);
+        } catch (Exception e) {
+            // SDK url() 失败，回退到从 Header 中提取
+            List<String> headerStrings = convertHeadersToStringList(tempRequestInfo.headers());
+            String host = extractHostFromHeaders(headerStrings);
+            int port = extractPortFromHeaders(headerStrings);
+            boolean isSecure = determineIsHttpsFromHeaders(headerStrings, port);
+            return HttpService.httpService(host, port, isSecure);
+        }
     }
     
     /**
-     * 从请求头提取主机名
+     * 从 HTTP 头部列表中提取主机名（仅从PHost 头解析，不依赖请求行）
      */
-    private String extractHost(List<String> headers) {
-        // 首先检查第一行的URL
-        String firstLine = headers.get(0);
-        String[] parts = firstLine.split("\\s+");
-        
-        if (parts.length >= 2) {
-            String urlPart = parts[1];
-            if (urlPart.startsWith("http://") || urlPart.startsWith("https://")) {
-                try {
-                    java.net.URL url = new java.net.URL(urlPart);
-                    return url.getHost();
-                } catch (Exception e) {
-                    // 如果URL解析失败，继续尝试Host头
-                }
-            }
-        }
-        
-        // 从Host头中提取
+    private String extractHostFromHeaders(List<String> headers) {
         for (String header : headers) {
             if (header.toLowerCase().startsWith("host:")) {
                 String hostHeader = header.substring(5).trim();
@@ -438,87 +539,43 @@ public class RequestManager {
                 return hostParts[0];
             }
         }
-        
         return "";
     }
     
     /**
-     * 从请求头提取端口号
+     * 从 HTTP 头部列表中提取端口号（仅从 Host 头解析，不依赖请求行）
      */
-    private int extractPort(List<String> headers, String host) {
-        // 默认端口
-        int port = 80;
-        
-        // 首先检查第一行的URL
-        String firstLine = headers.get(0);
-        String[] parts = firstLine.split("\\s+");
-        
-        if (parts.length >= 2) {
-            String urlPart = parts[1];
-            if (urlPart.startsWith("http://") || urlPart.startsWith("https://")) {
-                try {
-                    java.net.URL url = new java.net.URL(urlPart);
-                    if (url.getPort() != -1) {
-                        return url.getPort();
-                    } else {
-                        return url.getDefaultPort();
-                    }
-                } catch (Exception e) {
-                    // 如果URL解析失败，继续尝试Host头
-                }
-            }
-        }
-        
-        // 从Host头中提取端口
+    private int extractPortFromHeaders(List<String> headers) {
         for (String header : headers) {
             if (header.toLowerCase().startsWith("host:")) {
                 String hostHeader = header.substring(5).trim();
                 String[] hostParts = hostHeader.split(":");
-                
                 if (hostParts.length > 1) {
                     try {
-                        port = Integer.parseInt(hostParts[1]);
+                        return Integer.parseInt(hostParts[1]);
                     } catch (NumberFormatException e) {
-                        // 忽略端口解析错误，使用默认端口
+                        // 忽略
                     }
                 }
                 break;
             }
         }
-        
-        // 默认端口根据协议确定
-        boolean isHttps = determineIsHttps(headers, port);
-        if (isHttps && port == 80) {
-            port = 443;
-        }
-
-        return port;
+        return 80;
     }
     
     /**
-     * 判断是否为HTTPS请求
-     * 综合多种方式检测：请求行URL、Host头端口、端口值
+     * 从 HTTP 头部列表判断是否为 HTTPS（仅从 Host 头和端口判断，不依赖请求行）
      */
-    private boolean determineIsHttps(List<String> headers, int port) {
-        // 首先检查第一行是否包含HTTPS
-        String firstLine = headers.get(0);
-        if (firstLine.contains("https://")) {
-            return true;
-        }
-
-        // 检查Host头是否包含443端口
+    private boolean determineIsHttpsFromHeaders(List<String> headers, int port) {
         for (String header : headers) {
             if (header.toLowerCase().startsWith("host:")) {
                 String hostValue = header.substring(5).trim();
-                // Host头显式指定443端口，如 "example.com:443"
                 if (hostValue.endsWith(":443")) {
                     return true;
                 }
                 break;
             }
         }
-
-        // 根据端口判断
         return port == 443;
     }
     
@@ -560,13 +617,11 @@ public class RequestManager {
             conn.setReadTimeout(timeoutSeconds * 1000);
             conn.setInstanceFollowRedirects(false);
 
-            // 解析请求头
+            // 解析请求头（headers() 不含请求行，全部是标准 HTTP 头部）
             HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-            List<String> headers = requestInfo.headers().stream()
-                .map(h -> h.name() + ": " + h.value())
-                .collect(java.util.stream.Collectors.toList());
+            List<String> headers = convertHeadersToStringList(requestInfo.headers());
             boolean hasContentType = false;
-            for (int i = 1; i < headers.size(); i++) {
+            for (int i = 0; i < headers.size(); i++) {
                 String header = headers.get(i);
                 int colonIdx = header.indexOf(':');
                 if (colonIdx > 0) {
@@ -721,6 +776,36 @@ public class RequestManager {
     }
 
     /**
+     * 检测响应是否为 Burp Suite 内部错误响应。
+     * Burp 使用特殊的状态码和协议标识来表示请求/响应层面的异常：
+     * - HTTP/0.9 1337: 未收到有效的响应头（No response headers received）
+     * - 状态码 0 或 超大状态码（>999）: 非标准 HTTP 响应
+     *
+     * @param statusCode 响应状态码
+     * @param responseBytes 响应原始字节
+     * @return true 如果是 Burp 错误响应
+     */
+    private boolean isBurpErrorResponse(int statusCode, byte[] responseBytes) {
+        // 1337 是 Burp 的 "No response headers received" 错误码
+        if (statusCode == 1337) {
+            return true;
+        }
+        // 状态码超出标准 HTTP 范围 (100-599) 或为 0，表示非标准响应
+        if (statusCode == 0 || statusCode > 999) {
+            return true;
+        }
+        // 检查响应是否以 HTTP/0.9 开头（Burp 对无效响应的包装格式）
+        if (responseBytes != null && responseBytes.length > 8) {
+            String start = new String(responseBytes, 0, Math.min(responseBytes.length, 20),
+                    java.nio.charset.StandardCharsets.ISO_8859_1);
+            if (start.startsWith("HTTP/0.9")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 关闭请求管理器，清理资源
      */
     public void shutdown() {
@@ -739,5 +824,24 @@ public class RequestManager {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * 将Montoya API的HttpHeader列表转换为字符串列表
+     * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行
+     * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取
+     */
+    private static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
+        List<String> result = new ArrayList<>();
+        for (burp.api.montoya.http.message.HttpHeader header : rawHeaders) {
+            String name = header.name();
+            String value = header.value();
+            if (name != null && value != null) {
+                result.add(name + ": " + value);
+            } else if (name != null) {
+                result.add(name);
+            }
+        }
+        return result;
     }
 } 

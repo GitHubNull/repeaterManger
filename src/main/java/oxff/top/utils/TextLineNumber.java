@@ -6,6 +6,7 @@ import javax.swing.event.*;
 import javax.swing.text.*;
 import java.awt.*;
 import java.beans.*;
+import java.awt.geom.Rectangle2D;
 import java.util.HashMap;
 
 /**
@@ -168,7 +169,7 @@ public class TextLineNumber extends JPanel implements CaretListener, DocumentLis
         SwingUtilities.invokeLater(() -> {
             try {
                 int endPos = component.getDocument().getLength();
-                Rectangle rect = component.modelToView(endPos);
+                Rectangle2D rect = component.modelToView2D(endPos);
                 
                 if (rect != null && rect.getY() != lastHeight) {
                     setPreferredWidth();
@@ -228,8 +229,8 @@ public class TextLineNumber extends JPanel implements CaretListener, DocumentLis
         
         // 获取当前视图中第一行的位置
         Rectangle clip = g.getClipBounds();
-        int rowStartOffset = component.viewToModel(new Point(0, clip.y));
-        int endOffset = component.viewToModel(new Point(0, clip.y + clip.height));
+        int rowStartOffset = component.viewToModel2D(new Point(0, clip.y));
+        int endOffset = component.viewToModel2D(new Point(0, clip.y + clip.height));
         
         while (rowStartOffset <= endOffset) {
             try {
@@ -277,7 +278,7 @@ public class TextLineNumber extends JPanel implements CaretListener, DocumentLis
      * 计算绘制行号的垂直位置
      */
     private int getOffsetY(int rowStartOffset, FontMetrics fontMetrics) throws BadLocationException {
-        Rectangle r = component.modelToView(rowStartOffset);
+        Rectangle2D r = component.modelToView2D(rowStartOffset);
         int lineHeight = fontMetrics.getHeight();
         int y = (int) (r.getY() + r.getHeight());
         int descent = 0;

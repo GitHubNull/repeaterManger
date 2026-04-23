@@ -392,9 +392,18 @@ public class RequestPanel extends JPanel {
             
             // 使用Montoya API分析请求信息
             HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(request));
-            List<String> headers = requestInfo.headers().stream()
-                .map(h -> h.name() + ": " + h.value())
-                .collect(java.util.stream.Collectors.toList());
+            // 注意：Montoya API headers() 的第一个元素是请求行，不能使用 "name: value" 格式
+            // 请求行使用 name + " " + value 格式（如 "GET /path HTTP/1.1"）
+            // 其他头部使用 name + ": " + value 格式（如 "Host: example.com"）
+            List<String> headers = new ArrayList<>();
+            List<burp.api.montoya.http.message.HttpHeader> rawHeaders = requestInfo.headers();
+            for (int i = 0; i < rawHeaders.size(); i++) {
+                if (i == 0) {
+                    headers.add(rawHeaders.get(i).name() + " " + rawHeaders.get(i).value());
+                } else {
+                    headers.add(rawHeaders.get(i).name() + ": " + rawHeaders.get(i).value());
+                }
+            }
             
             if (headers.isEmpty()) {
                 BurpExtender.printError("[!] 请求头为空，使用默认值");
@@ -519,9 +528,19 @@ public class RequestPanel extends JPanel {
                     HttpRequest reqInfo = HttpRequest.httpRequest(ByteArray.byteArray(request));
                     int bodyOffset = reqInfo.bodyOffset();
                     byte[] body = Arrays.copyOfRange(request, bodyOffset, request.length);
-                    List<String> headers = new ArrayList<>(reqInfo.headers().stream()
-                        .map(h -> h.name() + ": " + h.value())
-                        .collect(java.util.stream.Collectors.toList()));
+
+                    // 从Montoya API获取headers列表（第一个元素是请求行，其余是name:value格式的头）
+                    // 重要：请求行不能使用 "name: value" 格式拼接，必须原样保留
+                    List<String> headers = new ArrayList<>();
+                    List<burp.api.montoya.http.message.HttpHeader> rawHeaders = reqInfo.headers();
+                    for (int i = 0; i < rawHeaders.size(); i++) {
+                        if (i == 0) {
+                            // 第一个header是请求行（如 "GET /path HTTP/1.1"），直接拼接 name + " " + value
+                            headers.add(rawHeaders.get(i).name() + " " + rawHeaders.get(i).value());
+                        } else {
+                            headers.add(rawHeaders.get(i).name() + ": " + rawHeaders.get(i).value());
+                        }
+                    }
                     
                     // 更新Host头
                     String newHost = hostField.getText().trim();

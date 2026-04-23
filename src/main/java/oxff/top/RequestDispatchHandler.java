@@ -47,6 +47,10 @@ public class RequestDispatchHandler {
     // 请求历史记录映射: 请求ID -> 历史记录列表
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
 
+    // 请求ID -> HttpService映射: 保存每个请求的原始HttpService（含正确的协议、主机、端口）
+    // 避免从数据库/Host头重建时丢失非标准端口（如9527）
+    private final Map<Integer, HttpService> httpServiceMap = new HashMap<>();
+
     /**
      * 创建请求调度处理器
      */
@@ -84,6 +88,23 @@ public class RequestDispatchHandler {
 
     public Map<Integer, List<RequestResponseRecord>> getRequestHistoryMap() {
         return requestHistoryMap;
+    }
+
+    /**
+     * 保存请求ID对应的HttpService（含正确端口信息）
+     */
+    public void saveHttpService(int requestId, HttpService httpService) {
+        if (requestId >= 0 && httpService != null) {
+            httpServiceMap.put(requestId, httpService);
+        }
+    }
+
+    /**
+     * 获取请求ID对应的已保存HttpService
+     * @return 已保存的HttpService，如果不存在返回null
+     */
+    public HttpService getSavedHttpService(int requestId) {
+        return httpServiceMap.get(requestId);
     }
 
     /**
@@ -186,7 +207,12 @@ public class RequestDispatchHandler {
                     try {
                         URL parsedUrl = new URL(requestInfo.url());
                         protocol = parsedUrl.getProtocol();
+                        // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
                         host = parsedUrl.getHost();
+                        int urlPort = parsedUrl.getPort();
+                        if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                            host = host + ":" + urlPort;
+                        }
                         path = parsedUrl.getPath();
                         query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                     } catch (Exception e) {
@@ -223,10 +249,16 @@ public class RequestDispatchHandler {
                 RequestResponseRecord record;
                 try {
                     URL parsedUrl = new URL(requestInfo.url());
+                    // 保留非标准端口号
+                    String recordHost = parsedUrl.getHost();
+                    int recordPort = parsedUrl.getPort();
+                    if (recordPort != -1 && recordPort != parsedUrl.getDefaultPort()) {
+                        recordHost = recordHost + ":" + recordPort;
+                    }
                     record = new RequestResponseRecord(
                         currentRequestId,
                         parsedUrl.getProtocol(),
-                        parsedUrl.getHost(),
+                        recordHost,
                         parsedUrl.getPath(),
                         parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "",
                         method
@@ -287,7 +319,8 @@ public class RequestDispatchHandler {
                 historyPanel.addHistoryRecord(record);
 
                 BurpExtender.printOutput(String.format(
-                    "[+] 请求完成: %s %s → HTTP %d (%d 字节)",
+                    "%s 请求完成: %s %s → HTTP %d (%d 字节)",
+                    statusCode > 0 && statusCode < 400 ? "[+]" : "[!]",
                     method, url, statusCode, response.length));
             } catch (Exception ex) {
                 BurpExtender.printError("[!] 处理响应时发生异常: " + ex.getMessage());
@@ -329,7 +362,12 @@ public class RequestDispatchHandler {
             try {
                 URL parsedUrl = new URL(requestInfo.url());
                 protocol = parsedUrl.getProtocol();
+                // 保留非标准端口号
                 host = parsedUrl.getHost();
+                int urlPort = parsedUrl.getPort();
+                if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                    host = host + ":" + urlPort;
+                }
                 path = parsedUrl.getPath();
                 query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
             } catch (Exception e) {
@@ -423,7 +461,8 @@ public class RequestDispatchHandler {
         }
 
         int statusCode = record.getStatusCode();
-        boolean success = statusCode > 0 && statusCode < 400;
+        // 标准 HTTP 成功范围: 1xx-3xx；1337/0/超范围状态码均为失败
+        boolean success = statusCode >= 100 && statusCode < 400;
 
         int responseSize = 0;
         byte[] responseData = record.getResponseData();

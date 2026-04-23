@@ -114,8 +114,12 @@ public class RequestResponseRecord {
             // 设置协议
             this.protocol = parsedUrl.getProtocol();
             
-            // 设置域名
+            // 设置域名（保留非标准端口号）
             this.domain = parsedUrl.getHost();
+            int urlPort = parsedUrl.getPort();
+            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                this.domain = this.domain + ":" + urlPort;
+            }
             
             // 设置路径，如果为空则使用"/"
             this.path = parsedUrl.getPath();

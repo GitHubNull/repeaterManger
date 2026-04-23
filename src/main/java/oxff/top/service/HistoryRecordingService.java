@@ -1,11 +1,13 @@
 package oxff.top.service;
 
 import burp.BurpExtender;
+import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.RequestResponseRecord;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.*;
@@ -123,9 +125,18 @@ public class HistoryRecordingService {
      */
     public void recordSuccess(int requestId, byte[] requestBytes, byte[] responseBytes, 
                              HttpRequest requestInfo, HttpResponse responseInfo, long responseTime) {
+        this.recordSuccess(requestId, requestBytes, responseBytes, requestInfo, responseInfo, responseTime, null);
+    }
+    
+    /**
+     * 记录成功的HTTP请求响应（带HttpService信息）
+     */
+    public void recordSuccess(int requestId, byte[] requestBytes, byte[] responseBytes, 
+                             HttpRequest requestInfo, HttpResponse responseInfo, long responseTime,
+                             HttpService httpService) {
         try {
             // 创建历史记录
-            RequestResponseRecord record = createRecordFromRequest(requestId, requestInfo);
+            RequestResponseRecord record = createRecordFromRequest(requestId, requestInfo, httpService);
             record.setStatusCode(responseInfo.statusCode());
             record.setResponseLength(responseBytes != null ? responseBytes.length : 0);
             record.setResponseTime((int) responseTime);
@@ -163,9 +174,17 @@ public class HistoryRecordingService {
      */
     public void recordFailure(int requestId, byte[] requestBytes, HttpRequest requestInfo, 
                              String errorMessage, long responseTime) {
+        this.recordFailure(requestId, requestBytes, requestInfo, errorMessage, responseTime, null);
+    }
+    
+    /**
+     * 记录失败的HTTP请求（带HttpService信息）
+     */
+    public void recordFailure(int requestId, byte[] requestBytes, HttpRequest requestInfo, 
+                             String errorMessage, long responseTime, HttpService httpService) {
         try {
             // 创建历史记录
-            RequestResponseRecord record = createRecordFromRequest(requestId, requestInfo);
+            RequestResponseRecord record = createRecordFromRequest(requestId, requestInfo, httpService);
             record.setStatusCode(0); // 失败状态码设为0
             record.setResponseLength(0);
             record.setResponseTime((int) responseTime);
@@ -202,7 +221,7 @@ public class HistoryRecordingService {
     /**
      * 从请求信息创建记录
      */
-    private RequestResponseRecord createRecordFromRequest(int requestId, HttpRequest requestInfo) {
+    private RequestResponseRecord createRecordFromRequest(int requestId, HttpRequest requestInfo, HttpService httpService) {
         try {
             // 尝试使用Montoya的URL解析
             String urlStr = requestInfo.url();
@@ -210,7 +229,20 @@ public class HistoryRecordingService {
                 URL url = new URL(urlStr);
                 if (url.getHost() != null && !url.getHost().isEmpty()) {
                     String protocol = url.getProtocol();
+                    // 保留非标准端口号：HTTP非80、HTTPS非443时，host需包含端口
+                    // 优先从HttpService获取端口（url()可能不包含非标准端口）
+                    // 否则历史记录中的domain丢失端口，导致重建HttpService时端口错误
                     String host = url.getHost();
+                    int effectivePort = -1;
+                    if (httpService != null) {
+                        effectivePort = httpService.port();
+                    } else {
+                        effectivePort = url.getPort();
+                    }
+                    int defaultPort = url.getDefaultPort();
+                    if (effectivePort != -1 && effectivePort != defaultPort) {
+                        host = host + ":" + effectivePort;
+                    }
                     String path = url.getPath() != null && !url.getPath().isEmpty() ? url.getPath() : "/";
                     String query = url.getQuery() != null ? url.getQuery() : "";
                     String method = requestInfo.method();
@@ -236,9 +268,7 @@ public class HistoryRecordingService {
      */
     private RequestResponseRecord createRecordFromRequestFallback(int requestId, HttpRequest requestInfo) {
         String method = requestInfo.method();
-        List<String> headers = requestInfo.headers().stream()
-            .map(h -> h.name() + ": " + h.value())
-            .collect(Collectors.toList());
+        List<String> headers = convertHeadersToStringList(requestInfo.headers());
         
         if (headers == null || headers.isEmpty()) {
             BurpExtender.printOutput("[!] 无法获取请求头，使用默认值");
@@ -266,7 +296,12 @@ public class HistoryRecordingService {
             try {
                 URL parsedUrl = new URL(urlPart);
                 protocol = parsedUrl.getProtocol();
+                // 保留非标准端口号
                 host = parsedUrl.getHost();
+                int parsedPort = parsedUrl.getPort();
+                if (parsedPort != -1 && parsedPort != parsedUrl.getDefaultPort()) {
+                    host = host + ":" + parsedPort;
+                }
                 path = parsedUrl.getPath() != null ? parsedUrl.getPath() : "/";
                 query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                 
@@ -326,14 +361,23 @@ public class HistoryRecordingService {
                     continue;
                 }
                 
-                // 移除端口号
+                // 保留非标准端口号（HTTP非80、HTTPS非443），移除标准端口
                 int colonIndex = hostHeader.indexOf(':');
                 if (colonIndex > 0) {
-                    hostHeader = hostHeader.substring(0, colonIndex);
+                    try {
+                        int port = Integer.parseInt(hostHeader.substring(colonIndex + 1));
+                        // 标准端口不需要保留
+                        if (port == 80 || port == 443) {
+                            hostHeader = hostHeader.substring(0, colonIndex);
+                        }
+                        // 非标准端口保留在host中（如127.0.0.1:9527）
+                    } catch (NumberFormatException e) {
+                        hostHeader = hostHeader.substring(0, colonIndex);
+                    }
                 }
                 
-                // 验证主机名格式
-                if (hostHeader.matches("^[a-zA-Z0-9.-]+$")) {
+                // 验证主机名格式（允许包含端口号）
+                if (hostHeader.matches("^[a-zA-Z0-9.-]+(?::\\d+)?$")) {
                     return hostHeader;
                 }
             }
@@ -385,5 +429,24 @@ public class HistoryRecordingService {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * 将Montoya API的HttpHeader列表转换为字符串列表
+     * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行
+     * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取
+     */
+    private static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
+        List<String> result = new ArrayList<>();
+        for (burp.api.montoya.http.message.HttpHeader header : rawHeaders) {
+            String name = header.name();
+            String value = header.value();
+            if (name != null && value != null) {
+                result.add(name + ": " + value);
+            } else if (name != null) {
+                result.add(name);
+            }
+        }
+        return result;
     }
 }

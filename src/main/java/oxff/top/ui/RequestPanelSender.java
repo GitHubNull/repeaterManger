@@ -82,7 +82,27 @@ public class RequestPanelSender {
                     byte[] responseData = response.response().toByteArray().getBytes();
                     final long elapsedMs = System.currentTimeMillis() - requestStartTime;
 
-                    if (responseData != null && responseData.length > 0) {
+                    // 检测 Burp 内部错误响应（如 HTTP/0.9 1337）
+                    int statusCode = response.response().statusCode();
+                    boolean isBurpError = statusCode == 1337 || statusCode == 0 || statusCode > 999;
+                    if (!isBurpError && responseData.length > 8) {
+                        String start = new String(responseData, 0, Math.min(responseData.length, 20),
+                                java.nio.charset.StandardCharsets.ISO_8859_1);
+                        if (start.startsWith("HTTP/0.9")) {
+                            isBurpError = true;
+                        }
+                    }
+
+                    if (isBurpError) {
+                        SwingUtilities.invokeLater(() -> {
+                            BurpExtender.printError(String.format(
+                                "[!] 服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode));
+                            JOptionPane.showMessageDialog(requestPanel,
+                                String.format("服务器返回异常响应 (HTTP %d)，\n可能是请求格式错误或目标服务不支持", statusCode),
+                                "响应错误",
+                                JOptionPane.ERROR_MESSAGE);
+                        });
+                    } else if (responseData != null && responseData.length > 0) {
                         final byte[] finalResponseData = responseData;
                         SwingUtilities.invokeLater(() -> {
                             try {
@@ -140,7 +160,12 @@ public class RequestPanelSender {
         try {
             URL parsedUrl = new URL(url);
             String protocol = parsedUrl.getProtocol();
+            // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
             String domain = parsedUrl.getHost();
+            int urlPort = parsedUrl.getPort();
+            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                domain = domain + ":" + urlPort;
+            }
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
             String method = requestInfo.method();
@@ -202,7 +227,12 @@ public class RequestPanelSender {
             }
 
             String protocol = parsedUrl.getProtocol();
+            // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
             String domain = parsedUrl.getHost();
+            int urlPort = parsedUrl.getPort();
+            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                domain = domain + ":" + urlPort;
+            }
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
 

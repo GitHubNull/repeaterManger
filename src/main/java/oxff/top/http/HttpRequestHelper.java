@@ -8,10 +8,8 @@ import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiExtractionRule;
 import oxff.top.api.ApiRuleManager;
 
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * HTTP请求辅助工具类
@@ -34,9 +32,7 @@ public class HttpRequestHelper {
         } catch (Exception e) {
             // 如果标准方式失败，从请求头中提取
             try {
-                List<String> headers = httpRequest.headers().stream()
-                    .map(h -> h.name() + ": " + h.value())
-                    .collect(Collectors.toList());
+                List<String> headers = convertHeadersToStringList(httpRequest.headers());
                 String firstLine = headers.get(0); // 例如："GET /path HTTP/1.1"
 
                 // 从Host头中提取主机名
@@ -105,9 +101,7 @@ public class HttpRequestHelper {
 
             // 从请求数据中提取host和port
             HttpRequest tempRequest = HttpRequest.httpRequest(ByteArray.byteArray(requestData));
-            List<String> headers = tempRequest.headers().stream()
-                .map(h -> h.name() + ": " + h.value())
-                .collect(Collectors.toList());
+            List<String> headers = convertHeadersToStringList(tempRequest.headers());
 
             // 提取host
             for (String header : headers) {
@@ -127,14 +121,30 @@ public class HttpRequestHelper {
             }
 
             // 从数据库中获取保存的协议信息（按ID单条查询，避免全表扫描）
+            int originalPort = port; // 保存从Host头提取的端口
             try {
                 oxff.top.db.RequestDAO requestDAO = new oxff.top.db.RequestDAO();
                 java.util.Map<String, Object> request = requestDAO.getRequest(requestId);
                 if (request != null) {
-                    protocol = (String) request.get("protocol");
+                    String dbProtocol = (String) request.get("protocol");
+                    if (dbProtocol != null && !dbProtocol.isEmpty()) {
+                        protocol = dbProtocol;
+                    }
                     String dbDomain = (String) request.get("domain");
                     if (dbDomain != null && !dbDomain.isEmpty()) {
+                        // 数据库中的domain可能不含端口号，需要保留从Host头提取的端口
+                        // 只有当数据库domain包含端口时才使用数据库的端口
                         host = dbDomain;
+                        if (dbDomain.contains(":")) {
+                            String[] domainParts = dbDomain.split(":");
+                            host = domainParts[0];
+                            try {
+                                port = Integer.parseInt(domainParts[1]);
+                            } catch (NumberFormatException e) {
+                                // 忽略，保持从Host头提取的端口
+                            }
+                        }
+                        // 如果数据库domain不含端口，保持从Host头提取的端口不变
                     }
                 }
             } catch (Exception e) {
@@ -158,12 +168,13 @@ public class HttpRequestHelper {
                 }
             }
 
-            // 根据协议设置默认端口
+            // 根据协议设置默认端口（仅在未从Host头提取到非标准端口时才使用默认值）
             if (isSecure && port == 80) {
                 port = 443;
             } else if (!isSecure && port == 443) {
                 port = 80;
             }
+            // 如果从Host头提取到了非标准端口（如9527），不要覆盖
 
             if (host.isEmpty()) {
                 host = "unknown";
@@ -184,9 +195,7 @@ public class HttpRequestHelper {
     public static String computeApiFromRequest(String path, String query, byte[] requestBytes) {
         try {
             HttpRequest reqInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
-            List<String> headerList = reqInfo.headers().stream()
-                .map(h -> h.name() + ": " + h.value())
-                .collect(Collectors.toList());
+            List<String> headerList = convertHeadersToStringList(reqInfo.headers());
             String contentType = null;
             for (String header : headerList) {
                 if (header.toLowerCase().startsWith("content-type:")) {
@@ -208,5 +217,24 @@ public class HttpRequestHelper {
             BurpExtender.printOutput("[*] 计算API值失败，使用路径作为默认值: " + e.getMessage());
             return path != null ? path : "/";
         }
+    }
+
+    /**
+     * 将Montoya API的HttpHeader列表转换为字符串列表
+     * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行
+     * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取
+     */
+    private static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
+        List<String> result = new ArrayList<>();
+        for (burp.api.montoya.http.message.HttpHeader header : rawHeaders) {
+            String name = header.name();
+            String value = header.value();
+            if (name != null && value != null) {
+                result.add(name + ": " + value);
+            } else if (name != null) {
+                result.add(name);
+            }
+        }
+        return result;
     }
 }
