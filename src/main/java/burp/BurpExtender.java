@@ -17,9 +17,6 @@ import javax.swing.SwingUtilities;
  */
 public class BurpExtender implements BurpExtension {
 
-    // MontoyaApi 实例
-    private static MontoyaApi api;
-
     // 主UI组件
     private static EnhancedRepeaterUI repeaterUI;
 
@@ -28,8 +25,7 @@ public class BurpExtender implements BurpExtension {
 
     @Override
     public void initialize(MontoyaApi api) {
-        // 保存 MontoyaApi 实例
-        BurpExtender.api = api;
+        // 保存 MontoyaApi 实例到全局持有器
         MontoyaApiHolder.setApi(api);
 
         // 设置插件名称

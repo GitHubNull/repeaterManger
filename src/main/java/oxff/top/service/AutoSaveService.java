@@ -29,14 +29,7 @@ public class AutoSaveService {
         this.dbManager = DatabaseManager.getInstance();
     }
     
-    /**
-     * 创建自动保存服务（临时实例）
-     * 用于刷新数据时创建不会执行保存操作的临时实例
-     */
-    public AutoSaveService(boolean temporary) {
-        this.dbManager = DatabaseManager.getInstance();
-    }
-    
+
     /**
      * 设置主UI引用
      */

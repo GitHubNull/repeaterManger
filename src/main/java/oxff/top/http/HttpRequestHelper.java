@@ -121,7 +121,9 @@ public class HttpRequestHelper {
             }
 
             // 从数据库中获取保存的协议信息（按ID单条查询，避免全表扫描）
-            int originalPort = port; // 保存从Host头提取的端口
+            // 端口优先级：Host头非标准端口 > 数据库domain端口 > 协议默认端口
+            // Host头来自实际请求，最可靠；数据库domain可能过时
+            boolean hasNonStandardPortFromHost = (port != 80 && port != 443);
             try {
                 oxff.top.db.RequestDAO requestDAO = new oxff.top.db.RequestDAO();
                 java.util.Map<String, Object> request = requestDAO.getRequest(requestId);
@@ -132,16 +134,18 @@ public class HttpRequestHelper {
                     }
                     String dbDomain = (String) request.get("domain");
                     if (dbDomain != null && !dbDomain.isEmpty()) {
-                        // 数据库中的domain可能不含端口号，需要保留从Host头提取的端口
-                        // 只有当数据库domain包含端口时才使用数据库的端口
                         host = dbDomain;
                         if (dbDomain.contains(":")) {
                             String[] domainParts = dbDomain.split(":");
                             host = domainParts[0];
-                            try {
-                                port = Integer.parseInt(domainParts[1]);
-                            } catch (NumberFormatException e) {
-                                // 忽略，保持从Host头提取的端口
+                            // 仅当Host头未提取到非标准端口时，才使用数据库的端口
+                            // 避免数据库中过时的端口覆盖Host头中的最新端口
+                            if (!hasNonStandardPortFromHost) {
+                                try {
+                                    port = Integer.parseInt(domainParts[1]);
+                                } catch (NumberFormatException e) {
+                                    // 忽略，保持从Host头提取的端口
+                                }
                             }
                         }
                         // 如果数据库domain不含端口，保持从Host头提取的端口不变

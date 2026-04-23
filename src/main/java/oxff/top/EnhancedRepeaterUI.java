@@ -38,8 +38,6 @@ import java.net.URL;
  */
 public class EnhancedRepeaterUI {
 
-    private final MontoyaApi api;
-
     // 主UI组件
     private final JPanel mainPanel;
     private final JSplitPane mainSplitPane;          // 左右分割
@@ -71,8 +69,7 @@ public class EnhancedRepeaterUI {
      * @param api MontoyaApi实例，用于创建编辑器等
      */
     public EnhancedRepeaterUI(MontoyaApi api) {
-        this.api = api;
-
+        // 不再保存api字段，通过子组件间接使用
         // 初始化功能组件
         requestManager = new RequestManager(api);
 
@@ -395,10 +392,11 @@ public class EnhancedRepeaterUI {
                 String path = "/";
                 String query = "";
 
-                try {
-                    HttpRequest httpRequest = requestResponse.request();
-                    HttpService httpService = requestResponse.httpService();
+                // 提取HttpService（供后续保存使用）
+                HttpService httpService = requestResponse.httpService();
+                HttpRequest httpRequest = requestResponse.request();
 
+                try {
                     url = httpRequest.url();
                     method = httpRequest.method();
 
@@ -437,10 +435,10 @@ public class EnhancedRepeaterUI {
                 dispatchHandler.setCurrentRequestId(dbId);
 
                 // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
-                dispatchHandler.setCurrentHttpService(requestResponse.httpService());
+                dispatchHandler.setCurrentHttpService(httpService);
 
                 // 将HttpService保存到持久化映射，避免切换请求时丢失端口信息
-                dispatchHandler.saveHttpService(dbId, requestResponse.httpService());
+                dispatchHandler.saveHttpService(dbId, httpService);
 
                 // 设置请求内容
                 requestPanel.setRequest(request);
