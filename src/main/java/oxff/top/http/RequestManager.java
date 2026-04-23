@@ -22,7 +22,6 @@ import java.net.Proxy;
 import java.net.URL;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -128,7 +127,7 @@ public class RequestManager {
         Future<byte[]> future = executor.submit(() -> {
             try {
                 // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正）
-                byte[] fixedBytes = updateContentLength(requestBytes, service);
+                byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
 
                 // 单次发送，不重试
                 HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
@@ -289,7 +288,7 @@ public class RequestManager {
                 }
 
                 // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正功能）
-                byte[] fixedBytes = updateContentLength(requestBytes, service);
+                byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
 
                 // 单次发送，不重试，避免请求耗时翻倍
                 HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
@@ -370,131 +369,6 @@ public class RequestManager {
         });
     }
     
-    /**
-     * 自动更新请求的 Content-Length 头，确保与实际 body 大小一致。
-     * 直接操作原始字节，不通过 SDK 的 headers() 方法重建请求，
-     * 避免请求行被破坏导致服务器收到无效请求（如 HTTP/0.9 1337 错误）。
-     *
-     * @param requestBytes 原始请求字节数组
-     * @param service      HTTP 服务信息（用于解析请求）
-     * @return 已修正 Content-Length 的请求字节数组，失败时返回原始数组
-     */
-    private byte[] updateContentLength(byte[] requestBytes, HttpService service) {
-        try {
-            // 查找 header/body 分隔符位置（\r\n\r\n）
-            int separatorPos = -1;
-            int separatorLen = 0;
-            for (int i = 0; i < requestBytes.length - 3; i++) {
-                if (requestBytes[i] == '\r' && requestBytes[i + 1] == '\n'
-                    && requestBytes[i + 2] == '\r' && requestBytes[i + 3] == '\n') {
-                    separatorPos = i;
-                    separatorLen = 4;
-                    break;
-                }
-            }
-            if (separatorPos < 0) {
-                // 尝试 \n\n 分隔符
-                for (int i = 0; i < requestBytes.length - 1; i++) {
-                    if (requestBytes[i] == '\n' && requestBytes[i + 1] == '\n') {
-                        separatorPos = i;
-                        separatorLen = 2;
-                        break;
-                    }
-                }
-            }
-            if (separatorPos < 0) {
-                return requestBytes; // 未找到分隔符，返回原始请求
-            }
-
-            int bodyOffset = separatorPos + separatorLen;
-            int bodyLength = requestBytes.length - bodyOffset;
-
-            // 解析 header 区域为文本行（不含末尾 \r\n\r\n）
-            String headerSection = new String(requestBytes, 0, separatorPos,
-                    java.nio.charset.StandardCharsets.ISO_8859_1);
-            String lineSep = headerSection.contains("\r\n") ? "\r\n" : "\n";
-            String[] lines = headerSection.split(lineSep);
-
-            if (lines.length == 0) return requestBytes;
-
-            // 从请求行提取 HTTP 方法
-            String firstLine = lines[0];
-            String[] firstLineParts = firstLine.split("\\s+");
-            String method = firstLineParts.length > 0 ? firstLineParts[0].toUpperCase() : "";
-            boolean isBodyMethod = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
-
-            // 查找现有 Content-Length
-            int clLineIndex = -1;
-            int existingCL = -1;
-            for (int i = 1; i < lines.length; i++) {
-                if (lines[i].toLowerCase().startsWith("content-length:")) {
-                    clLineIndex = i;
-                    try {
-                        existingCL = Integer.parseInt(lines[i].substring("content-length:".length()).trim());
-                    } catch (NumberFormatException ignored) {}
-                    break;
-                }
-            }
-
-            // 如果 Content-Length 已经正确，直接返回原始请求（最常见路径，零拷贝）
-            if (clLineIndex >= 0 && existingCL == bodyLength) {
-                return requestBytes;
-            }
-
-            // 无 body、无 Content-Length、非 body 方法 → 无需修改
-            if (bodyLength == 0 && clLineIndex < 0 && !isBodyMethod) {
-                return requestBytes;
-            }
-
-            // 需要修正 Content-Length：重建 header 区域，保留请求行原样不动
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < lines.length; i++) {
-                // 跳过旧的 Content-Length 行
-                if (i > 0 && lines[i].toLowerCase().startsWith("content-length:")) {
-                    continue;
-                }
-                sb.append(lines[i]).append("\r\n");
-            }
-
-            // 添加正确的 Content-Length
-            if (bodyLength > 0) {
-                sb.append("Content-Length: ").append(bodyLength).append("\r\n");
-            } else if (isBodyMethod) {
-                sb.append("Content-Length: 0\r\n");
-            }
-
-            sb.append("\r\n"); // header/body 分隔符
-
-            byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
-            byte[] body = Arrays.copyOfRange(requestBytes, bodyOffset, requestBytes.length);
-            byte[] result = new byte[headerBytes.length + body.length];
-            System.arraycopy(headerBytes, 0, result, 0, headerBytes.length);
-            System.arraycopy(body, 0, result, headerBytes.length, body.length);
-            return result;
-        } catch (Exception e) {
-            // 更新失败时使用原始请求，不阻断主流程
-            BurpExtender.printError("[!] 更新 Content-Length 失败，使用原始请求: " + e.getMessage());
-            return requestBytes;
-        }
-    }
-
-    /**
-     * 从header列表和body构建原始HTTP消息字节数组
-     * 注意：headers列表的第一个元素是请求行（如 "GET / HTTP/1.1"），不包含冒号分隔符
-     */
-    private byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
-        StringBuilder sb = new StringBuilder();
-        for (String header : headers) {
-            sb.append(header).append("\r\n");
-        }
-        sb.append("\r\n");
-        byte[] headerBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
-        byte[] result = new byte[headerBytes.length + body.length];
-        System.arraycopy(headerBytes, 0, result, 0, headerBytes.length);
-        System.arraycopy(body, 0, result, headerBytes.length, body.length);
-        return result;
-    }
-
     /**
      * 构建HTTP服务对象
      * 优先使用原始HTTP服务信息（包含正确的协议），否则从请求数据中推断

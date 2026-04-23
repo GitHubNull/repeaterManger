@@ -6,7 +6,6 @@ import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
-import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.api.MontoyaApiHolder;
 import oxff.top.db.RequestDAO;
 import oxff.top.db.history.HistoryWriteDAO;
@@ -103,10 +102,10 @@ public class RequestPanelSender {
                                 JOptionPane.ERROR_MESSAGE);
                         });
                     } else if (responseData != null && responseData.length > 0) {
-                        final byte[] finalResponseData = responseData;
+                        final int finalStatusCode = statusCode;
                         SwingUtilities.invokeLater(() -> {
                             try {
-                                handleSuccessfulResponse(finalRequest, requestToSend, response.response(), finalUrl, elapsedMs);
+                                handleSuccessfulResponse(finalRequest, requestToSend, responseData, finalStatusCode, finalUrl, elapsedMs);
                             } catch (Exception e) {
                                 BurpExtender.printError("[!] 处理响应时出错: " + e.getMessage());
                             }
@@ -155,8 +154,15 @@ public class RequestPanelSender {
 
     /**
      * 处理成功响应（在EDT中调用）
+     *
+     * @param request      原始请求数据
+     * @param requestInfo  请求信息对象
+     * @param responseData 响应数据（已提取，避免重复转换）
+     * @param statusCode   响应状态码
+     * @param url          请求URL
+     * @param elapsedMs    请求耗时（毫秒）
      */
-    private void handleSuccessfulResponse(byte[] request, HttpRequest requestInfo, HttpResponse response, String url, long elapsedMs) {
+    private void handleSuccessfulResponse(byte[] request, HttpRequest requestInfo, byte[] responseData, int statusCode, String url, long elapsedMs) {
         try {
             URL parsedUrl = new URL(url);
             String protocol = parsedUrl.getProtocol();
@@ -174,12 +180,11 @@ public class RequestPanelSender {
             int requestId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
 
             if (requestId > 0) {
-                byte[] responseData = response.toByteArray().getBytes();
                 HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
 
                 oxff.top.http.RequestResponseRecord record = new oxff.top.http.RequestResponseRecord(
                     requestId, protocol, domain, path, query, method);
-                record.setStatusCode(response.statusCode());
+                record.setStatusCode(statusCode);
                 record.setResponseLength(responseData.length);
                 record.setResponseTime((int) elapsedMs);
                 record.setRequestData(request);

@@ -278,8 +278,9 @@ public class RequestDataHelper {
 
     /**
      * 从header列表和body构建原始HTTP消息字节数组
+     * 注意：headers列表的第一个元素是请求行（如 "GET / HTTP/1.1"），不包含冒号分隔符
      */
-    private static byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
+    public static byte[] buildRawHttpMessage(List<String> headers, byte[] body) {
         StringBuilder sb = new StringBuilder();
         for (String header : headers) {
             sb.append(header).append("\r\n");
