@@ -12,7 +12,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 /**
  * 历史记录录制服务 - 统一管理HTTP请求响应的历史记录

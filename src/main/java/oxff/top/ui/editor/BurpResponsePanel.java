@@ -1,6 +1,5 @@
 package oxff.top.ui.editor;
 
-import burp.BurpExtender;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.ui.editor.HttpResponseEditor;

@@ -20,11 +20,6 @@ public class BurpExtender implements BurpExtension {
     // MontoyaApi 实例
     private static MontoyaApi api;
 
-    // 日志输出流（保留用于兼容，实际日志通过LogManager）
-    @SuppressWarnings("unused")
-    private static java.io.PrintWriter stdout;
-    private static java.io.PrintWriter stderr;
-
     // 主UI组件
     private static EnhancedRepeaterUI repeaterUI;
 
@@ -41,9 +36,6 @@ public class BurpExtender implements BurpExtension {
         api.extension().setName("增强型Repeater");
 
         try {
-            // 初始化带有正确编码的输出流
-            initializeOutputStreams();
-
             // 阶段1：初始化日志管理器（仅 BurpConsoleHandler）
             logManager.initialize(api);
 
@@ -98,7 +90,7 @@ public class BurpExtender implements BurpExtension {
         } catch (Exception e) {
             // 使用 Montoya API 输出异常
             api.logging().logToError("[!] 插件加载失败: " + e.getMessage());
-            e.printStackTrace(api.logging().output());
+            api.logging().logToError(e);
         }
     }
 
@@ -170,24 +162,6 @@ public class BurpExtender implements BurpExtension {
         } catch (Exception e) {
             // 文件日志初始化失败不应阻止插件运行
             System.err.println("加载晚期日志配置失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 初始化带有正确字符编码的输出流
-     */
-    private void initializeOutputStreams() {
-        try {
-            java.io.OutputStreamWriter outWriter = new java.io.OutputStreamWriter(api.logging().output(), "UTF-8");
-            java.io.OutputStreamWriter errWriter = new java.io.OutputStreamWriter(api.logging().error(), "UTF-8");
-
-            stdout = new java.io.PrintWriter(outWriter, true);
-            stderr = new java.io.PrintWriter(errWriter, true);
-        } catch (java.io.UnsupportedEncodingException e) {
-            api.logging().logToError("初始化自定义输出流失败: " + e.getMessage());
-
-            stdout = new java.io.PrintWriter(api.logging().output(), true);
-            stderr = new java.io.PrintWriter(api.logging().error(), true);
         }
     }
 

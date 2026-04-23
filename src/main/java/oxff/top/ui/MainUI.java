@@ -118,7 +118,7 @@ public class MainUI extends JPanel {
         this.historyReadDAO = new HistoryReadDAO();
         
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
-        this.autoSaveService = new AutoSaveService(requestDAO, historyReadDAO);
+        this.autoSaveService = new AutoSaveService(true);
     }
     
     /**
@@ -149,7 +149,7 @@ public class MainUI extends JPanel {
         this.historyReadDAO = new HistoryReadDAO();
         
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
-        this.autoSaveService = new AutoSaveService(requestDAO, historyReadDAO);
+        this.autoSaveService = new AutoSaveService(true);
         
         BurpExtender.printOutput("[*] 使用增强型Repeater面板创建临时MainUI实例，用于数据刷新");
     }

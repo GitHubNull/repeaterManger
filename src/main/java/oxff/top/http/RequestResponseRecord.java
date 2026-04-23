@@ -15,6 +15,7 @@ public class RequestResponseRecord {
     private String domain;             // 域名
     private String path;               // 路径
     private String queryParameters;    // 查询参数
+    private String api;               // API路径
     private String method;             // 请求方法
     private int statusCode;            // 响应状态码
     private int responseLength;        // 响应长度
@@ -24,18 +25,6 @@ public class RequestResponseRecord {
     private Color color;               // 标记颜色
     private byte[] requestData;        // 原始请求数据
     private byte[] responseData;       // 原始响应数据
-    private String api;                // API标识符（由提取规则计算）
-
-    // ---- 去重存储引用字段（DAO 层使用，上层代码无需感知） ----
-    private String domainHash;          // → string_pool.hash
-    private String pathHash;            // → string_pool.hash
-    private String queryHash;           // → string_pool.hash
-    private String reqHeaderHash;       // → header_pool.hash
-    private String reqBodyHash;         // → body_pool.hash / file_pool.hash
-    private String reqBodyStorage;      // "inline" | "file" | "none"
-    private String respHeaderHash;      // → header_pool.hash
-    private String respBodyHash;        // → body_pool.hash / file_pool.hash
-    private String respBodyStorage;     // "inline" | "file" | "none"
     
     /**
      * 默认构造函数
@@ -85,7 +74,35 @@ public class RequestResponseRecord {
         this.method = method;
         
         // 解析URL
-        parseUrl(url);
+        try {
+            URL parsedUrl = new URL(url);
+            this.protocol = parsedUrl.getProtocol();
+            this.domain = parsedUrl.getHost();
+            this.path = parsedUrl.getPath();
+            this.queryParameters = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+        } catch (MalformedURLException e) {
+            // 如果URL解析失败，使用简单的字符串处理
+            this.protocol = url.startsWith("https://") ? "https" : "http";
+            String remaining = url.substring(protocol.length() + 3);
+            
+            int pathStart = remaining.indexOf('/');
+            if (pathStart > 0) {
+                this.domain = remaining.substring(0, pathStart);
+                remaining = remaining.substring(pathStart);
+            } else {
+                this.domain = remaining;
+                remaining = "/";
+            }
+            
+            int queryStart = remaining.indexOf('?');
+            if (queryStart > 0) {
+                this.path = remaining.substring(0, queryStart);
+                this.queryParameters = remaining.substring(queryStart + 1);
+            } else {
+                this.path = remaining;
+                this.queryParameters = "";
+            }
+        }
         
         this.statusCode = statusCode;
         this.responseLength = responseLength;
@@ -96,11 +113,11 @@ public class RequestResponseRecord {
     }
     
     /**
-     * 将URL解析为各个组件（协议、域名、路径、查询参数）
-     * 支持带协议和不带协议前缀的URL
+     * 将URL解析为各个组件
      * 
      * @param url 原始URL
      */
+    @SuppressWarnings("unused")
     private void parseUrl(String url) {
         try {
             // 处理没有协议的URL
@@ -114,12 +131,8 @@ public class RequestResponseRecord {
             // 设置协议
             this.protocol = parsedUrl.getProtocol();
             
-            // 设置域名（保留非标准端口号）
+            // 设置域名
             this.domain = parsedUrl.getHost();
-            int urlPort = parsedUrl.getPort();
-            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                this.domain = this.domain + ":" + urlPort;
-            }
             
             // 设置路径，如果为空则使用"/"
             this.path = parsedUrl.getPath();
@@ -214,7 +227,15 @@ public class RequestResponseRecord {
     public void setQueryParameters(String queryParameters) {
         this.queryParameters = queryParameters;
     }
-    
+
+    public String getApi() {
+        return api;
+    }
+
+    public void setApi(String api) {
+        this.api = api;
+    }
+
     public String getMethod() {
         return method;
     }
@@ -286,43 +307,6 @@ public class RequestResponseRecord {
     public void setResponseData(byte[] responseData) {
         this.responseData = responseData;
     }
-
-    public String getApi() {
-        return api;
-    }
-
-    public void setApi(String api) {
-        this.api = api;
-    }
-
-    // ---- 去重存储字段 Getters/Setters ----
-
-    public String getDomainHash() { return domainHash; }
-    public void setDomainHash(String domainHash) { this.domainHash = domainHash; }
-
-    public String getPathHash() { return pathHash; }
-    public void setPathHash(String pathHash) { this.pathHash = pathHash; }
-
-    public String getQueryHash() { return queryHash; }
-    public void setQueryHash(String queryHash) { this.queryHash = queryHash; }
-
-    public String getReqHeaderHash() { return reqHeaderHash; }
-    public void setReqHeaderHash(String reqHeaderHash) { this.reqHeaderHash = reqHeaderHash; }
-
-    public String getReqBodyHash() { return reqBodyHash; }
-    public void setReqBodyHash(String reqBodyHash) { this.reqBodyHash = reqBodyHash; }
-
-    public String getReqBodyStorage() { return reqBodyStorage; }
-    public void setReqBodyStorage(String reqBodyStorage) { this.reqBodyStorage = reqBodyStorage; }
-
-    public String getRespHeaderHash() { return respHeaderHash; }
-    public void setRespHeaderHash(String respHeaderHash) { this.respHeaderHash = respHeaderHash; }
-
-    public String getRespBodyHash() { return respBodyHash; }
-    public void setRespBodyHash(String respBodyHash) { this.respBodyHash = respBodyHash; }
-
-    public String getRespBodyStorage() { return respBodyStorage; }
-    public void setRespBodyStorage(String respBodyStorage) { this.respBodyStorage = respBodyStorage; }
     
     /**
      * 获取截断后的备注文本用于表格显示

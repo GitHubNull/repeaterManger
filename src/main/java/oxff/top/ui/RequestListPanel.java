@@ -144,6 +144,8 @@ public class RequestListPanel extends JPanel {
      * 添加新的请求
      */
     public int addNewRequest(String url, String method, byte[] requestData) {
+        int requestId = nextRequestId++;
+        
         // 解析URL组件
         String protocol = url.startsWith("https://") ? "https" : "http";
         String remaining = url.substring(protocol.length() + 3); // 跳过 "://"
@@ -169,42 +171,43 @@ public class RequestListPanel extends JPanel {
             path = remaining;
         }
         
-        // 保存到数据库获取真实的数据库ID
-        int dbId = -1;
-        try {
-            RequestDAO requestDAO = new RequestDAO();
-            dbId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
-            if (dbId > 0) {
-                BurpExtender.printOutput("[+] 请求已保存到数据库，ID: " + dbId);
-            } else {
-                BurpExtender.printError("[!] 保存请求到数据库失败，使用自增ID");
-                dbId = nextRequestId++;
-            }
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 保存请求到数据库失败: " + e.getMessage());
-            dbId = nextRequestId++;
-        }
-        
-        // 创建记录并添加到表格，使用数据库ID
-        RequestRecord record = new RequestRecord(dbId, protocol, domain, path, query, method, requestData);
+        // 创建记录并添加到表格
+        RequestRecord record = new RequestRecord(requestId, protocol, domain, path, query, method, requestData);
         addRequestRecord(record);
         
-        return dbId;
+        return requestId;
     }
     
     /**
-     * 更新请求
+     * 更新请求（带API值）
      */
     public void updateRequest(int requestId, String api, String protocol, String domain, String path, String query, String method) {
         for (int i = 0; i < tableModel.getRowCount(); i++) {
             int rowId = (int) tableModel.getValueAt(i, 0);
             if (rowId == requestId) {
-                tableModel.setValueAt(api, i, 1);
-                tableModel.setValueAt(method, i, 2);
-                tableModel.setValueAt(protocol, i, 3);
-                tableModel.setValueAt(domain, i, 4);
-                tableModel.setValueAt(path, i, 5);
-                tableModel.setValueAt(query, i, 6);
+                tableModel.setValueAt(api, i, 1);       // API
+                tableModel.setValueAt(method, i, 2);    // Method
+                tableModel.setValueAt(protocol, i, 3);   // Protocol
+                tableModel.setValueAt(domain, i, 4);     // Domain
+                tableModel.setValueAt(path, i, 5);       // Path
+                tableModel.setValueAt(query, i, 6);      // Query
+                break;
+            }
+        }
+    }
+
+    /**
+     * 更新请求
+     */
+    public void updateRequest(int requestId, String protocol, String domain, String path, String query, String method) {
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            int rowId = (int) tableModel.getValueAt(i, 0);
+            if (rowId == requestId) {
+                tableModel.setValueAt(method, i, 2);    // Method
+                tableModel.setValueAt(protocol, i, 3);   // Protocol
+                tableModel.setValueAt(domain, i, 4);     // Domain
+                tableModel.setValueAt(path, i, 5);       // Path
+                tableModel.setValueAt(query, i, 6);      // Query
                 break;
             }
         }
@@ -276,13 +279,13 @@ public class RequestListPanel extends JPanel {
     }
     
     /**
-     * 添加请求
+     * 添加请求（带API值）
      */
     public void addRequest(int id, String api, String method, String protocol, String domain, String path, String query, byte[] requestData) {
         // 添加到表格模型
         tableModel.addRow(new Object[]{
             id,
-            api != null ? api : path,
+            api,
             method,
             protocol,
             domain,
@@ -290,28 +293,48 @@ public class RequestListPanel extends JPanel {
             query,
             new Date()
         });
-        
+
         // 保存请求数据到内存映射
         if (requestData != null) {
             requestDataMap.put(id, requestData);
             BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
         }
-        
-        // 注意：此方法假设调用方已将请求保存到数据库并传入数据库ID
-        // 不在此处再次保存，避免重复保存导致ID不一致
-        
+
+        // 保存到数据库
+        try {
+            RequestDAO requestDAO = new RequestDAO();
+            int savedId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
+
+            if (savedId > 0) {
+                BurpExtender.printOutput("[+] 请求已保存到数据库，ID: " + savedId);
+            } else {
+                BurpExtender.printError("[!] 保存请求到数据库失败");
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 保存请求到数据库失败: " + e.getMessage());
+        }
+
         // 更新颜色和注释映射
         requestColors.put(id, null);
         requestComments.put(id, "");
+    }
+
+    /**
+     * 添加请求
+     */
+    public void addRequest(int id, String protocol, String domain, String path, String query, String method, byte[] requestData) {
+        // 默认使用 path 作为 API 值
+        addRequest(id, path, method, protocol, domain, path, query, requestData);
     }
     
     /**
      * 添加请求记录
      */
     public void addRequestRecord(RequestRecord record) {
+        String apiValue = (record.getApi() != null) ? record.getApi() : record.getPath();
         tableModel.addRow(new Object[]{
             record.getId(),
-            record.getApi() != null ? record.getApi() : record.getPath(),
+            apiValue,
             record.getMethod(),
             record.getProtocol(),
             record.getDomain(),
@@ -330,4 +353,4 @@ public class RequestListPanel extends JPanel {
         requestColors.put(record.getId(), null);
         requestComments.put(record.getId(), "");
     }
-} 
+}
