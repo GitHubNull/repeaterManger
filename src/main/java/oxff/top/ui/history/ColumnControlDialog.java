@@ -195,8 +195,20 @@ public class ColumnControlDialog extends JDialog {
                 column.setPreferredWidth(70);
                 column.setMaxWidth(90);
                 break;
-            case 11: // 备注列
-                column.setPreferredWidth(150);
+            case 11: // 用户列
+                column.setPreferredWidth(80);
+                column.setMaxWidth(120);
+                break;
+            case 12: // 判决列
+                column.setPreferredWidth(60);
+                column.setMaxWidth(80);
+                break;
+            case 13: // 越权测试列
+                column.setPreferredWidth(70);
+                column.setMaxWidth(90);
+                break;
+            case 14: // 备注列
+                column.setPreferredWidth(100);
                 break;
         }
     }

@@ -392,8 +392,9 @@ public class RepeaterManagerUI {
 
     /**
      * 设置请求内容 - 用于从右键菜单接收请求
+     * @return 数据库生成的请求ID，失败返回-1
      */
-    public void setRequest(HttpRequestResponse requestResponse) {
+    public int setRequest(HttpRequestResponse requestResponse) {
         try {
             if (requestResponse != null && requestResponse.request() != null) {
                 byte[] request = requestResponse.request().toByteArray().getBytes();
@@ -438,7 +439,7 @@ public class RepeaterManagerUI {
 
                 if (dbId <= 0) {
                     BurpExtender.printError("[!] 保存请求到数据库失败");
-                    return;
+                    return -1;
                 }
 
                 // 提取API值用于列表显示
@@ -469,11 +470,13 @@ public class RepeaterManagerUI {
                 dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
 
                 BurpExtender.printOutput("[+] 请求已加载到 Repeater Manager: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
+                return dbId;
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置请求失败: " + e.getMessage());
             e.printStackTrace();
         }
+        return -1;
     }
 
     /**
@@ -484,7 +487,13 @@ public class RepeaterManagerUI {
         try {
             if (requestResponse != null && requestResponse.request() != null) {
                 // 先用常规方式加载请求（复用setRequest的逻辑）
-                setRequest(requestResponse);
+                int dbId = setRequest(requestResponse);
+
+                // 标记为越权测试请求
+                if (dbId > 0) {
+                    new RequestDAO().markAsPrivilegeTest(dbId);
+                    requestListPanel.updatePrivilegeTestFlag(dbId, true);
+                }
 
                 // 切换到请求管理标签页
                 tabbedPane.setSelectedIndex(0);
@@ -514,6 +523,9 @@ public class RepeaterManagerUI {
         int requestId = record.getRequestId();
         if (requestId > 0) {
             dispatchHandler.getRequestHistoryMap().computeIfAbsent(requestId, k -> new ArrayList<>()).add(record);
+            // 标记父请求为越权测试
+            new RequestDAO().markAsPrivilegeTest(requestId);
+            requestListPanel.updatePrivilegeTestFlag(requestId, true);
         }
     }
 
@@ -553,8 +565,9 @@ public class RepeaterManagerUI {
                     String query = (String) request.get("query");
                     String method = (String) request.get("method");
                     byte[] requestData = (byte[]) request.get("request_data");
+                    boolean isPrivilegeTest = request.containsKey("is_privilege_test") && (Boolean) request.get("is_privilege_test");
 
-                    requestListPanel.addRequest(dbId, api, method, protocol, domain, path, query, requestData);
+                    requestListPanel.addRequest(dbId, api, method, protocol, domain, path, query, isPrivilegeTest, requestData);
 
                     java.awt.Color color = (java.awt.Color) request.get("color");
                     String comment = (String) request.get("comment");

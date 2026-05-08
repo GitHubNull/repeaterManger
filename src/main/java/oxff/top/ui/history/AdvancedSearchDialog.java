@@ -32,6 +32,7 @@ public class AdvancedSearchDialog extends JDialog {
     private JTextField minLengthField;
     private JTextField maxLengthField;
     private JTextField commentField;
+    private JComboBox<String> privilegeTestCombo;
 
     /**
      * 创建高级搜索对话框
@@ -158,6 +159,15 @@ public class AdvancedSearchDialog extends JDialog {
         commentField = new JTextField(20);
         formPanel.add(commentField, c);
 
+        // 越权测试过滤器
+        c.gridx = 0;
+        c.gridy = 8;
+        formPanel.add(new JLabel("越权测试:"), c);
+
+        c.gridx = 1;
+        privilegeTestCombo = new JComboBox<>(new String[]{"全部", "是", "否"});
+        formPanel.add(privilegeTestCombo, c);
+
         return formPanel;
     }
 
@@ -269,7 +279,13 @@ public class AdvancedSearchDialog extends JDialog {
 
         // 备注过滤
         if (comment != null && !comment.isEmpty()) {
-            filters.add(RowFilter.regexFilter("(?i)" + comment, 11));
+            filters.add(RowFilter.regexFilter("(?i)" + comment, 14));
+        }
+
+        // 越权测试过滤
+        String privilegeTest = (String) privilegeTestCombo.getSelectedItem();
+        if (privilegeTest != null && !"全部".equals(privilegeTest)) {
+            filters.add(RowFilter.regexFilter("^" + Pattern.quote(privilegeTest) + "$", 13));
         }
 
         // 应用过滤器

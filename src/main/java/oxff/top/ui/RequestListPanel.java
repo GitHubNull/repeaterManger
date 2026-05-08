@@ -22,7 +22,7 @@ public class RequestListPanel extends JPanel {
     
     // 请求列表数据
     private final DefaultTableModel tableModel = new DefaultTableModel(
-        new Object[]{"ID", "API", "Method", "Protocol", "Domain", "Path", "Query", "Date"}, 0
+        new Object[]{"ID", "API", "Method", "Protocol", "Domain", "Path", "Query", "越权测试", "Date"}, 0
     ) {
         @Override
         public boolean isCellEditable(int row, int column) {
@@ -82,6 +82,10 @@ public class RequestListPanel extends JPanel {
         
         // 设置搜索功能
         setupSearch();
+
+        // 设置越权测试列宽
+        requestTable.getColumnModel().getColumn(7).setPreferredWidth(70);
+        requestTable.getColumnModel().getColumn(7).setMaxWidth(90);
     }
     
     /**
@@ -278,9 +282,9 @@ public class RequestListPanel extends JPanel {
     }
     
     /**
-     * 添加请求（带API值）
+     * 添加请求（带API值和越权测试标记）
      */
-    public void addRequest(int id, String api, String method, String protocol, String domain, String path, String query, byte[] requestData) {
+    public void addRequest(int id, String api, String method, String protocol, String domain, String path, String query, boolean isPrivilegeTest, byte[] requestData) {
         // 添加到表格模型
         tableModel.addRow(new Object[]{
             id,
@@ -290,6 +294,7 @@ public class RequestListPanel extends JPanel {
             domain,
             path,
             query,
+            isPrivilegeTest ? "是" : "否",
             new Date()
         });
 
@@ -305,6 +310,13 @@ public class RequestListPanel extends JPanel {
         // 更新颜色和注释映射
         requestColors.put(id, null);
         requestComments.put(id, "");
+    }
+
+    /**
+     * 添加请求（带API值，非越权测试）
+     */
+    public void addRequest(int id, String api, String method, String protocol, String domain, String path, String query, byte[] requestData) {
+        addRequest(id, api, method, protocol, domain, path, query, false, requestData);
     }
 
     /**
@@ -328,6 +340,7 @@ public class RequestListPanel extends JPanel {
             record.getDomain(),
             record.getPath(),
             record.getQuery(),
+            record.isPrivilegeTest() ? "是" : "否",
             new Date()
         });
         
@@ -340,5 +353,18 @@ public class RequestListPanel extends JPanel {
         // 更新颜色和注释映射
         requestColors.put(record.getId(), null);
         requestComments.put(record.getId(), "");
+    }
+
+    /**
+     * 更新请求的越权测试标记
+     */
+    public void updatePrivilegeTestFlag(int requestId, boolean isPrivilegeTest) {
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            int rowId = (int) tableModel.getValueAt(i, 0);
+            if (rowId == requestId) {
+                tableModel.setValueAt(isPrivilegeTest ? "是" : "否", i, 7);
+                break;
+            }
+        }
     }
 }

@@ -12,6 +12,7 @@ public class RequestRecord {
     private final String method;
     private final byte[] requestData;
     private String api;
+    private boolean isPrivilegeTest = false;
 
     public RequestRecord(int id, String protocol, String domain, String path, String query, String method, byte[] requestData) {
         this.id = id;
@@ -69,6 +70,14 @@ public class RequestRecord {
 
     public void setApi(String api) {
         this.api = api;
+    }
+
+    public boolean isPrivilegeTest() {
+        return isPrivilegeTest;
+    }
+
+    public void setPrivilegeTest(boolean privilegeTest) {
+        isPrivilegeTest = privilegeTest;
     }
     
     /**

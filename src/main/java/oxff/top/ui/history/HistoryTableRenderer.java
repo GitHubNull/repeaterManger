@@ -50,6 +50,37 @@ public class HistoryTableRenderer {
     }
 
     /**
+     * 创建越权测试列的渲染器（"是"显示绿色，"否"显示默认颜色）
+     */
+    public static DefaultTableCellRenderer createPrivilegeTestRenderer() {
+        return new DefaultTableCellRenderer() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
+
+                if (!isSelected && value instanceof String) {
+                    String text = (String) value;
+                    if ("是".equals(text)) {
+                        c.setForeground(new Color(0, 130, 0)); // 绿色
+                    } else {
+                        c.setForeground(Color.BLACK);
+                    }
+                } else if (isSelected) {
+                    c.setForeground(table.getSelectionForeground());
+                } else {
+                    c.setForeground(Color.BLACK);
+                }
+
+                return c;
+            }
+        };
+    }
+
+    /**
      * 创建行背景颜色渲染器（基于历史记录的颜色标记）
      *
      * @param historyRecords  历史记录列表

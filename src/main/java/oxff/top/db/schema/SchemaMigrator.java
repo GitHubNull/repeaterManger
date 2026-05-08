@@ -44,6 +44,11 @@ public class SchemaMigrator {
         if (currentVersion < 7) {
             migrateV6ToV7(conn);
         }
+
+        // v7→v8 迁移
+        if (currentVersion < 8) {
+            migrateV7ToV8(conn);
+        }
     }
 
     /**
@@ -309,6 +314,48 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '7')");
 
             BurpExtender.printOutput("[+] v6→v7 迁移完成");
+        }
+    }
+
+    /**
+     * v7→v8 迁移：为 requests 表添加 is_privilege_test 列
+     */
+    private static void migrateV7ToV8(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v7→v8迁移...");
+
+            // 为 requests 表添加 is_privilege_test 列
+            try {
+                stmt.execute("ALTER TABLE requests ADD COLUMN is_privilege_test INTEGER NOT NULL DEFAULT 0");
+                BurpExtender.printOutput("[+] requests表添加is_privilege_test列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] requests表添加is_privilege_test列失败: " + e.getMessage());
+                }
+            }
+
+            // 回填：将已有越权测试历史记录对应的请求标记为越权测试
+            try {
+                int updated = stmt.executeUpdate(
+                    "UPDATE requests SET is_privilege_test = 1 " +
+                    "WHERE id IN (" +
+                    "  SELECT DISTINCT request_id FROM history " +
+                    "  WHERE user_session_name IS NOT NULL AND request_id > 0" +
+                    ")"
+                );
+                BurpExtender.printOutput("[+] 回填is_privilege_test完成，更新 " + updated + " 条记录");
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 回填is_privilege_test失败: " + e.getMessage());
+            }
+
+            // 创建索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_is_privilege_test ON requests(is_privilege_test)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '8' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '8')");
+
+            BurpExtender.printOutput("[+] v7→v8 迁移完成");
         }
     }
 }

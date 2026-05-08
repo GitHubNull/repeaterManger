@@ -42,6 +42,13 @@ public class RequestDAO {
      * 保存请求数据
      */
     public int saveRequest(String protocol, String domain, String path, String query, String method, byte[] requestData) {
+        return saveRequest(protocol, domain, path, query, method, requestData, false);
+    }
+
+    /**
+     * 保存请求数据（带越权测试标记）
+     */
+    public int saveRequest(String protocol, String domain, String path, String query, String method, byte[] requestData, boolean isPrivilegeTest) {
         try (Connection conn = DatabaseManager.getInstance().getConnection()) {
             conn.setAutoCommit(false);
 
@@ -94,8 +101,8 @@ public class RequestDAO {
 
                 // 插入记录
                 String sql = "INSERT INTO requests (protocol, domain_hash, path_hash, query_hash, method, " +
-                        "add_time, req_header_hash, req_body_hash, req_body_storage, api_hash) " +
-                        "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)";
+                        "add_time, req_header_hash, req_body_hash, req_body_storage, api_hash, is_privilege_test) " +
+                        "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)";
 
                 try (PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
                     pstmt.setInt(1, protocolInt);
@@ -107,6 +114,7 @@ public class RequestDAO {
                     pstmt.setString(7, reqBodyHash);
                     pstmt.setString(8, reqBodyStorage);
                     pstmt.setString(9, apiHash);
+                    pstmt.setInt(10, isPrivilegeTest ? 1 : 0);
 
                     int affectedRows = pstmt.executeUpdate();
                     if (affectedRows > 0) {
@@ -267,6 +275,7 @@ public class RequestDAO {
         String sql = "SELECT r.id, r.protocol, r.domain_hash, r.path_hash, r.query_hash, r.method, " +
                 "r.add_time, r.comment, r.color, " +
                 "r.req_header_hash, r.req_body_hash, r.req_body_storage, " +
+                "r.is_privilege_test, " +
                 "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM requests r " +
                 "LEFT JOIN string_pool sd ON r.domain_hash = sd.hash " +
@@ -293,6 +302,9 @@ public class RequestDAO {
                     request.put("method", HttpEnum.intToMethod(rs.getInt("method")));
                     request.put("add_time", getStringWithDefault(rs, "add_time", ""));
                     request.put("comment", getStringWithDefault(rs, "comment", ""));
+
+                    // 处理越权测试标记
+                    request.put("is_privilege_test", rs.getInt("is_privilege_test") == 1);
 
                     // 处理API值（如果api为null，使用path作为默认值）
                     String apiValue = rs.getString("api");
@@ -349,6 +361,7 @@ public class RequestDAO {
         String sql = "SELECT r.id, r.protocol, r.domain_hash, r.path_hash, r.query_hash, r.method, " +
                 "r.add_time, r.comment, r.color, " +
                 "r.req_header_hash, r.req_body_hash, r.req_body_storage, " +
+                "r.is_privilege_test, " +
                 "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM requests r " +
                 "LEFT JOIN string_pool sd ON r.domain_hash = sd.hash " +
@@ -454,6 +467,21 @@ public class RequestDAO {
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             BurpExtender.printError("[!] 更新请求颜色失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 标记请求为越权测试
+     */
+    public boolean markAsPrivilegeTest(int requestId) {
+        String sql = "UPDATE requests SET is_privilege_test = 1 WHERE id = ? AND is_privilege_test = 0";
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, requestId);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 标记越权测试失败: " + e.getMessage());
             return false;
         }
     }

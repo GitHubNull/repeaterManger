@@ -116,9 +116,9 @@ public class HistoryPanel extends JPanel {
      * 创建表格
      */
     private void createTable() {
-        // 定义表格列名（v6新增"用户"和"判决"列）
+        // 定义表格列名（v8新增"越权测试"列）
         String[] columnNames = {
-            "#", "时间", "API", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "用户", "判决", "备注"
+            "#", "时间", "API", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "用户", "判决", "越权测试", "备注"
         };
 
         // 创建表格模型(不允许直接编辑)
@@ -167,7 +167,9 @@ public class HistoryPanel extends JPanel {
         historyTable.getColumnModel().getColumn(11).setMaxWidth(120);
         historyTable.getColumnModel().getColumn(12).setPreferredWidth(60);  // 判决列
         historyTable.getColumnModel().getColumn(12).setMaxWidth(80);
-        historyTable.getColumnModel().getColumn(13).setPreferredWidth(100); // 备注列
+        historyTable.getColumnModel().getColumn(13).setPreferredWidth(70);  // 越权测试列
+        historyTable.getColumnModel().getColumn(13).setMaxWidth(90);
+        historyTable.getColumnModel().getColumn(14).setPreferredWidth(100); // 备注列
 
         // 创建排序器
         tableRowSorter = new TableRowSorter<>(historyTableModel);
@@ -193,6 +195,10 @@ public class HistoryPanel extends JPanel {
         // 设置状态码列的颜色渲染器
         historyTable.getColumnModel().getColumn(8).setCellRenderer(
             HistoryTableRenderer.createStatusCodeRenderer());
+
+        // 设置越权测试列的渲染器
+        historyTable.getColumnModel().getColumn(13).setCellRenderer(
+            HistoryTableRenderer.createPrivilegeTestRenderer());
 
         // 设置表格行背景颜色的渲染器（基于历史记录的颜色标记）
         historyTable.setDefaultRenderer(Object.class,
@@ -229,6 +235,7 @@ public class HistoryPanel extends JPanel {
             record.getResponseTime(),                 // 响应时间
             record.getUserSessionName() != null ? record.getUserSessionName() : "",  // 用户
             record.getJudgment() != null ? record.getJudgment() : "",                // 判决
+            record.getUserSessionName() != null ? "是" : "否",                         // 越权测试
             record.getComment()                       // 备注
         };
 

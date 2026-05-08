@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v7）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '7')");
+        // 初始化元数据（v8）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '8')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -56,7 +56,7 @@ public class SchemaInitializer {
         );
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_gc_queue_pool ON gc_queue(pool_type, hash)");
 
-        // 请求表（v3 结构：v2 + api_hash）
+        // 请求表（v8 结构：v3 + is_privilege_test）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS requests (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -71,7 +71,8 @@ public class SchemaInitializer {
             "req_header_hash TEXT, " +
             "req_body_hash TEXT, " +
             "req_body_storage TEXT DEFAULT 'inline', " +
-            "api_hash TEXT" +
+            "api_hash TEXT, " +
+            "is_privilege_test INTEGER NOT NULL DEFAULT 0" +
             ")"
         );
 
@@ -130,7 +131,7 @@ public class SchemaInitializer {
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        BurpExtender.printOutput("[+] v7 Schema 初始化完成");
+        BurpExtender.printOutput("[+] v8 Schema 初始化完成");
     }
 
     /**
@@ -206,6 +207,8 @@ public class SchemaInitializer {
         // v3 新增索引
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_api_hash ON requests(api_hash)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_api_hash ON history(api_hash)");
+        // v8 新增索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_is_privilege_test ON requests(is_privilege_test)");
     }
 
     /**

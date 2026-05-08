@@ -187,7 +187,7 @@ public class HistoryContextMenu {
             if (newComment != null) {
                 record.setComment(newComment.trim());
 
-                int commentColumn = 11; // 备注列索引
+                int commentColumn = 14; // 备注列索引
                 historyTableModel.setValueAt(record.getTruncatedComment(16), modelRow, commentColumn);
             }
         }
