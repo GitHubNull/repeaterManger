@@ -213,10 +213,16 @@ public class HistoryReadDAO {
             byte[] responseData = reconstructor.reconstructResponse(conn, respHeaderHash, respBodyHash, respBodyStorage);
             record.setResponseData(responseData);
 
+            // 从重构的请求数据中回退补充缺失的元数据字段
+            // 当 LEFT JOIN 返回 NULL（hash 不匹配或 GC 误删）时，从原始请求中恢复
+            if (requestData != null && requestData.length > 0) {
+                supplementFromRequestData(record, requestData);
+            }
+
             // Set API value
             String api = rs.getString("api");
             if (api == null || api.isEmpty()) {
-                api = record.getPath(); // Default to path
+                api = record.getPath() != null ? record.getPath() : "/";
             }
             record.setApi(api);
 
@@ -246,6 +252,60 @@ public class HistoryReadDAO {
         } catch (Exception e) {
             BurpExtender.printError("[!] 映射历史记录时出错: " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 从重构的请求数据中补充缺失的元数据字段
+     * 当 LEFT JOIN 返回 NULL（hash 不匹配或 GC 误删）时，从原始请求字节中恢复 method/protocol/domain/path/query
+     */
+    private void supplementFromRequestData(RequestResponseRecord record, byte[] requestData) {
+        try {
+            burp.api.montoya.http.message.requests.HttpRequest httpRequest =
+                    burp.api.montoya.http.message.requests.HttpRequest.httpRequest(
+                            burp.api.montoya.core.ByteArray.byteArray(requestData));
+
+            // 补充 method（仅当当前值为 null 或 "OTHER" 回退值时）
+            if (record.getMethod() == null || record.getMethod().isEmpty()) {
+                record.setMethod(httpRequest.method());
+            }
+
+            // 尝试从 URL 解析补充 protocol/domain/path/query
+            String urlStr = httpRequest.url();
+            if (urlStr != null && !urlStr.isEmpty()) {
+                try {
+                    java.net.URL url = new java.net.URL(urlStr);
+
+                    if (record.getProtocol() == null || record.getProtocol().isEmpty()) {
+                        record.setProtocol(url.getProtocol());
+                    }
+
+                    if (record.getDomain() == null || record.getDomain().isEmpty()) {
+                        String host = url.getHost();
+                        int port = url.getPort();
+                        if (port != -1 && port != url.getDefaultPort()) {
+                            host = host + ":" + port;
+                        }
+                        record.setDomain(host);
+                    }
+
+                    if (record.getPath() == null || record.getPath().isEmpty() || "/".equals(record.getPath())) {
+                        String urlPath = url.getPath();
+                        if (urlPath != null && !urlPath.isEmpty()) {
+                            record.setPath(urlPath);
+                        }
+                    }
+
+                    if (record.getQueryParameters() == null || record.getQueryParameters().isEmpty()) {
+                        String query = url.getQuery();
+                        record.setQueryParameters(query != null ? query : "");
+                    }
+                } catch (Exception e) {
+                    BurpExtender.printOutput("[*] 从请求数据解析URL失败，跳过补充: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            BurpExtender.printOutput("[*] 从请求数据补充元数据失败: " + e.getMessage());
         }
     }
 

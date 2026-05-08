@@ -1,7 +1,6 @@
 package oxff.top.ui;
 
 import oxff.top.model.RequestRecord;
-import oxff.top.db.RequestDAO;
 import burp.BurpExtender;
 
 import javax.swing.*;
@@ -300,19 +299,8 @@ public class RequestListPanel extends JPanel {
             BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
         }
 
-        // 保存到数据库
-        try {
-            RequestDAO requestDAO = new RequestDAO();
-            int savedId = requestDAO.saveRequest(protocol, domain, path, query, method, requestData);
-
-            if (savedId > 0) {
-                BurpExtender.printOutput("[+] 请求已保存到数据库，ID: " + savedId);
-            } else {
-                BurpExtender.printError("[!] 保存请求到数据库失败");
-            }
-        } catch (Exception e) {
-            BurpExtender.printError("[!] 保存请求到数据库失败: " + e.getMessage());
-        }
+        // 注意：数据库保存由调用方负责（setRequest/createNewRequest/refreshAllData），
+        // 此处不再重复保存，避免产生重复记录消耗AUTOINCREMENT ID
 
         // 更新颜色和注释映射
         requestColors.put(id, null);

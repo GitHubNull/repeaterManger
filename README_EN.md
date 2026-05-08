@@ -1,7 +1,7 @@
 # Repeater Manager - Burp Suite Repeater Manager Plugin
 
 <p align="center">
-  <strong>Advanced HTTP request replay management plugin for Burp Suite, designed for security testers</strong>
+  <strong>Advanced HTTP request replay management and privilege escalation testing plugin for Burp Suite, designed for security testers</strong>
 </p>
 
 <p align="center">
@@ -12,9 +12,9 @@
 
 ## Introduction
 
-Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. It provides more powerful features than the native Repeater, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
+Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. Compared to the native Repeater, it provides more powerful features, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, API rule extraction, automated privilege escalation testing, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
-> **Current Version**: v1.5.1 | **Requirements**: Burp Suite Professional + Java 8+
+> **Current Version**: v2.2.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
 
 ## Core Features
 
@@ -23,13 +23,15 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Request Management | Organize and categorize HTTP requests with color marking and comments |
 | History Tracking | Automatically record response history for each request, easy to compare results from different times |
 | Data Persistence | All requests and history saved to SQLite database, surviving Burp Suite restarts |
-| Content Deduplication | Pool architecture (string pool/header pool/body pool/file pool) for automatic deduplication |
+| Content Deduplication | Pool architecture (string pool/header pool/body pool/file pool) with SHA-256 automatic deduplication |
 | Advanced Search | Multi-condition composite filtering to quickly locate specific requests/responses |
 | Column Display Control | Customizable table columns for better information density and readability |
-| Data Import/Export | Support ERM encrypted archives, Postman Collection v2.1, and more formats |
+| API Rule Extraction | Configurable API extraction rule engine, supporting 4 extraction sources × 4 extraction methods, auto-extracting API paths from irregular requests |
+| Privilege Testing | Automated privilege escalation vulnerability testing framework with user session token replacement and response comparison |
+| Data Import/Export | Support ERM encrypted archives (AES-256-CBC + HMAC-SHA256), Postman Collection v2.1, and more formats |
 | Auto-save | Periodic synchronization of in-memory data to disk, preventing data loss |
-| Garbage Collection | Background automatic cleanup of zero-reference pool data, reclaiming storage space |
-| Logging System | Multi-channel log output (Burp console/rolling file/UI panel) with level filtering |
+| Garbage Collection | Background automatic cleanup of zero-reference pool data, reclaiming storage space (10min interval) |
+| Logging System | Multi-channel log output (Burp console/rolling file/UI panel) with level filtering (DEBUG/INFO/SUCCESS/WARN/ERROR) |
 | Proxy Debugging | Support HTTP proxy configuration for request debugging |
 | Layout Switching | Request/Response panel supports horizontal/vertical/request-only/response-only layouts |
 
@@ -37,7 +39,7 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 
 ```
 Repeater Manager
-├── Plugin Integration (Burp Extender API)
+├── Plugin Integration (Montoya SDK)
 ├── Request Management
 │   ├── Request List (search/filter/color marking/comments)
 │   ├── Request Editing (syntax highlighting)
@@ -48,49 +50,65 @@ Repeater Manager
 ├── History Tracking
 │   ├── Successful Request Recording
 │   ├── Failed Request Recording
-│   └── History Replay and Comparison
+│   ├── History Replay and Comparison
+│   └── Advanced Search (multi-condition filtering)
+├── API Extraction Engine
+│   ├── Sources: URL_PATH / URL_QUERY / HEADER / BODY
+│   ├── Methods: REGEX / SUBSTR / JSON_PATH / XPATH
+│   ├── Global Rules (YAML shared configuration)
+│   └── Project Rules (SQLite independent storage)
+├── Privilege Testing Module
+│   ├── Multi-user Session Management
+│   ├── Token Location Configuration (Header/Cookie/Body/URL Param)
+│   ├── Automated Token Replacement Engine
+│   ├── Judgment Rule Configuration (Status Code/Body/Header/Response Time)
+│   ├── Automated Testing Engine (intercept proxy traffic → replay → judge)
+│   └── Result Display with Color Coding
 ├── Data Persistence
-│   ├── SQLite Storage
+│   ├── SQLite Storage (custom connection pool)
 │   ├── Content Splitting (Pool deduplication architecture)
 │   ├── File Storage (large body externalization)
-│   └── Hash Verification
+│   └── SHA-256 Hash Verification
 ├── Import/Export
-│   ├── ERM Archive (AES-256 encryption supported)
+│   ├── ERM Archive (AES-256-CBC + HMAC-SHA256 encryption)
 │   ├── Postman Collection v2.1
 │   └── Smart Format Detection
 ├── Background Services
 │   ├── Auto-save Service
 │   ├── Garbage Collection Service
-│   └── History Recording Service
+│   └── History Recording Service (async queue)
 ├── Logging System
 │   ├── Burp Console Output
 │   ├── Rolling File Log
 │   └── UI Log Panel
 └── Configuration Management
     ├── Storage Config (auto/specified directory/specified file)
-    ├── Logging Config
-    └── Proxy Config
+    ├── Logging Config (level/channel toggles)
+    ├── Proxy Config
+    └── API Rule Config (global + project-level)
 ```
 
 ## Installation
 
 ### Prerequisites
 
-- Burp Suite Professional
-- Java 8 or higher
+- Burp Suite Professional 2024.1 or higher
+- Java 17 or higher
 
 ### Installation Steps
 
 1. Download the latest JAR file from the [Releases](../../releases) page
 2. Open Burp Suite Professional
-3. Navigate to `Extender` → `Extensions` tab
+3. Navigate to `Extensions` → `Installed` tab
 4. Click the `Add` button
 5. Select the downloaded JAR file in `Extension file`
 6. Click `Next` to complete installation
 
-> After the first load, the plugin automatically creates a session directory under `~/.burp/` (named with a timestamp), containing the database file, body data directory, and log directory.
+> After the first load, the plugin automatically creates a session directory under `~/.burp/` (named with a timestamp), containing the database file, body data directory, and log directory. Global API extraction rules are stored in `~/.burp/repeater_manager/api_extraction_rules.yaml`.
 
 ## Quick Start
+
+### Basic Usage
 
 1. Right-click on any request in Burp Suite (e.g., Proxy, Intruder)
 2. Select **"Send to Repeater Manager"**
@@ -98,9 +116,23 @@ Repeater Manager
 4. Edit the request content and click **"Send"** to replay
 5. View each replay's response in the history panel at the bottom left
 
+### API Rule Extraction
+
+1. Navigate to **"Configuration"** → **"API Rule Config"** tab
+2. Add global rules (shared) or project rules (independent), configure extraction source and method
+3. Use right-click menu or auto-trigger to extract standardized API paths from irregular requests
+4. View and manage extraction results in the request list
+
+### Privilege Testing
+
+1. Configure user sessions (with credentials/tokens) and token locations in the configuration panel
+2. Set up judgment rules (how to detect successful privilege escalation)
+3. Define request scope (which URLs to test)
+4. Enable auto-testing: the plugin intercepts scope-matched proxy traffic, auto-replaces tokens and replays
+5. View results in the Privilege Test panel
+
 For detailed usage instructions, please refer to:
 - [Quick Start Tutorial](doc/usage_quick_en.md)
-- [Detailed Usage Tutorial](doc/usage_detailed_en.md)
 
 ## Technical Architecture
 
@@ -108,50 +140,70 @@ For detailed usage instructions, please refer to:
 +---------------------+
 |      UI Layer       |  Java Swing + RSyntaxTextArea
 +---------------------+
-|   Service Layer     |  AutoSave / GC / HistoryRecording
+|   Service Layer     |  AutoSave / GC / HistoryRecording / ApiExtraction / PrivilegeTest
 +---------------------+
-|   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager
+|   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager / ApiExtractionRuleDAO
 +---------------------+
-|   Data Storage      |  SQLite + File Blobs
+|   Data Storage      |  SQLite + File Blobs (Pool Dedup) + YAML (Global Rules)
 +---------------------+
 ```
 
 **Core Tech Stack**:
 
-- **Frontend**: Java Swing (with RSyntaxTextArea syntax highlighting component)
-- **Data Storage**: SQLite (JDBC v3.42.0.0) + HikariCP connection pool (v5.0.1)
-- **Serialization**: Gson (v2.10.1)
-- **Core Patterns**: MVC architecture, Singleton pattern, Observer pattern, Pool deduplication pattern
+- **Burp Integration**: Montoya SDK (`burp.api.montoya.*`) v2025.12 — modern Burp Suite extension interface
+- **Frontend**: Java Swing + RSyntaxTextArea syntax highlighting component (v3.3.3)
+- **Data Storage**: SQLite (JDBC v3.42.0.0) + custom connection pool (BlockingQueue + JDK Proxy)
+- **Serialization**: Gson (v2.10.1) + SnakeYAML (v2.2)
+- **Utilities**: Apache Commons IO (v2.11.0) + Commons Lang3 (v3.12.0)
+- **Core Patterns**: MVC architecture, Singleton pattern, connection pool proxy pattern, Pool deduplication pattern, rule engine pattern
 
 ## Project Structure
 
 ```
 src/main/java/
 ├── burp/
-│   └── BurpExtender.java              # Burp extension entry point
+│   └── BurpExtender.java              # Burp extension entry point (Montoya BurpExtension)
 └── oxff/top/
     ├── RepeaterManagerUI.java          # Main UI controller
+    ├── api/                            # API extraction subsystem
+    │   ├── MontoyaApiHolder.java       # MontoyaApi static holder
+    │   ├── ApiExtractionEngine.java    # Stateless rule-based extraction engine
+    │   ├── ApiExtractionRule.java      # Extraction rule model
+    │   ├── ApiExtractionRuleDAO.java   # Project-level rule CRUD (SQLite)
+    │   ├── ApiRuleManager.java         # Project-level rule manager
+    │   ├── GlobalRuleManager.java      # Global rule manager (YAML)
+    │   ├── ApiRuleYamlIO.java          # Rule YAML serialization
+    │   ├── ApiRuleSource.java          # Enum: URL_PATH/URL_QUERY/HEADER/BODY
+    │   └── ApiRuleMethod.java          # Enum: REGEX/SUBSTR/JSON_PATH/XPATH
     ├── config/
     │   ├── DatabaseConfig.java         # Database config (storage mode/logging/proxy)
     │   └── SessionDirectory.java       # Session directory management
     ├── controller/
-    │   └── PopMenu.java               # Context menu ("Send to Repeater Manager")
+    │   └── PopMenu.java               # Context menu (ContextMenuItemsProvider)
     ├── db/
-    │   ├── DatabaseManager.java        # Database connection management (pool/Schema init)
-    │   ├── HistoryDAO.java             # History data access object
+    │   ├── DatabaseManager.java        # Database connection management (pool/schema)
     │   ├── RequestDAO.java             # Request data access object
+    │   ├── schema/                     # Schema management
+    │   │   ├── SchemaInitializer.java  # Schema creation
+    │   │   └── SchemaMigrator.java     # Schema versioning & migration
+    │   ├── history/                    # History DAOs (read/write/update separation)
+    │   │   ├── HistoryReadDAO.java     # History read operations
+    │   │   ├── HistoryWriteDAO.java    # History write operations
+    │   │   └── HistoryUpdateDAO.java   # History update operations
     │   └── pool/
     │       ├── PoolManager.java        # Pool deduplication manager
     │       ├── BodyStorageRoute.java   # Body storage routing (inline/file)
-    │       ├── ContentHasher.java      # Content hash calculation
+    │       ├── ContentHasher.java      # Content hash calculation (SHA-256)
     │       ├── ContentSplitter.java    # Request/Response content splitting
     │       ├── ContentReconstructor.java # Content reconstruction
     │       ├── FileStorageManager.java # File-based body storage
     │       ├── HttpEnum.java           # HTTP enum types
     │       └── SplitResult.java        # Split result
     ├── http/
-    │   ├── ProxyConfig.java            # HTTP proxy configuration
-    │   ├── RequestManager.java         # HTTP request management (async sending)
+    │   ├── ProxyConfig.java            # HTTP proxy configuration (singleton)
+    │   ├── RequestManager.java         # HTTP request management (Montoya API async)
+    │   ├── HttpRequestHelper.java      # HTTP request parsing utilities (Montoya types)
+    │   ├── RequestDataHelper.java      # Request data validation/repair utilities
     │   └── RequestResponseRecord.java  # Request-response record model
     ├── io/
     │   ├── DataExporter.java           # Export dispatcher
@@ -161,8 +213,8 @@ src/main/java/
     │   ├── ErmCryptoHelper.java        # ERM crypto helper (PBKDF2/AES-CBC/HMAC)
     │   ├── ErmFormatConstants.java     # ERM format constants
     │   ├── FormatDetector.java         # Automatic format detection
-    │   ├── PostmanExporter.java        # Postman Collection export
-    │   └── PostmanImporter.java        # Postman Collection import
+    │   ├── PostmanExporter.java        # Postman Collection v2.1 export
+    │   └── PostmanImporter.java        # Postman Collection v2.1 import
     ├── logging/
     │   ├── LogManager.java             # Log manager (multi-channel/level filtering)
     │   ├── LogEntry.java               # Log entry
@@ -175,46 +227,91 @@ src/main/java/
     │   ├── HistoryRecord.java          # History record model
     │   ├── RequestRecord.java          # Request record model
     │   └── RequestResponseRecord.java  # Request-response record model
+    ├── privilege/                      # Privilege escalation testing subsystem
+    │   ├── AutoTestEngine.java         # Automated testing engine (intercept → replay → judge)
+    │   ├── ReplayEngine.java           # Request replay engine
+    │   ├── JudgmentEngine.java         # Response judgment engine
+    │   ├── TokenReplacementEngine.java # Token replacement engine
+    │   ├── LevenshteinCalculator.java  # String similarity calculation
+    │   ├── SessionManager.java         # User session manager
+    │   ├── JudgmentRuleManager.java    # Judgment rule manager
+    │   ├── ScopeManager.java           # Request scope manager
+    │   ├── JudgmentRuleYamlIO.java     # Judgment rule YAML serialization
+    │   ├── model/                      # Privilege test models
+    │   │   ├── UserSession.java        # User session (credentials/tokens)
+    │   │   ├── JudgmentRule.java       # Judgment rule
+    │   │   ├── JudgmentResult.java     # Test result
+    │   │   ├── TokenLocation.java      # Token location
+    │   │   ├── TokenLocationType.java  # Enum: HEADER/COOKIE/BODY/URL_PARAM
+    │   │   ├── RuleTarget.java         # Enum: STATUS_CODE/RESPONSE_BODY/etc.
+    │   │   ├── RuleMethod.java         # Enum: CONTAINS/NOT_CONTAINS/REGEX/LENGTH_DIFF
+    │   │   └── ScopeEntry.java         # Scope configuration
+    │   └── dao/
+    │       ├── SessionDAO.java         # User session CRUD
+    │       ├── JudgmentRuleDAO.java    # Judgment rule CRUD
+    │       └── ScopeDAO.java           # Scope CRUD
     ├── service/
     │   ├── AutoSaveService.java        # Auto-save service
     │   ├── GarbageCollectorService.java # Garbage collection service (Pool zero-ref cleanup)
     │   └── HistoryRecordingService.java # History recording service (async queue)
     ├── ui/
-    │   ├── BurpRequestPanel.java       # Burp-style request editing panel
-    │   ├── BurpResponsePanel.java      # Burp-style response display panel
-    │   ├── ConfigPanel.java            # Configuration panel (storage/logging/proxy/IO)
-    │   ├── EnhancedRequestPanel.java   # Enhanced request panel
-    │   ├── EnhancedResponsePanel.java  # Enhanced response panel
-    │   ├── HistoryPanel.java           # History panel
-    │   ├── HttpEditorPanel.java        # HTTP editor panel base
-    │   ├── HttpViewerPanel.java        # HTTP viewer panel
-    │   ├── LogPanel.java               # Log panel
     │   ├── MainUI.java                 # Main UI
-    │   ├── RequestListPanel.java       # Request list panel
+    │   ├── RequestListPanel.java       # Request list panel (search/filter/color)
     │   ├── RequestPanel.java           # Request detail panel
+    │   ├── RequestPanelSender.java     # Request send handler (Montoya API)
     │   ├── ResponsePanel.java          # Response panel
+    │   ├── LogPanel.java               # Log panel
     │   ├── StatusPanel.java            # Bottom status bar
+    │   ├── editor/
+    │   │   ├── BurpRequestPanel.java   # Montoya HttpRequestEditor wrapper
+    │   │   ├── BurpResponsePanel.java  # Montoya HttpResponseEditor wrapper
+    │   │   ├── HttpEditorPanel.java    # HTTP editor base panel
+    │   │   ├── EnhancedRequestPanel.java  # Enhanced request panel
+    │   │   ├── EnhancedResponsePanel.java # Enhanced response panel
+    │   │   └── HttpViewerPanel.java    # HTTP viewer panel
     │   ├── viewer/
     │   │   ├── HttpViewer.java         # HTTP viewer
     │   │   ├── HttpViewerPanel.java    # HTTP viewer panel
     │   │   └── ViewMode.java           # View mode enum
-    │   └── layout/
-    │       └── LayoutManager.java      # Layout manager (horizontal/vertical/request-only/response-only)
+    │   ├── config/
+    │   │   ├── ConfigPanel.java        # Multi-tab config panel
+    │   │   ├── StorageConfigTab.java   # Storage config tab
+    │   │   ├── ApiRuleConfigTab.java   # API extraction rule config tab
+    │   │   ├── ApiRuleEditDialog.java  # Rule editor dialog
+    │   │   ├── ApiRuleTableModel.java  # Rule table model
+    │   │   └── ApiReExtractWorker.java # Background rule re-extraction worker
+    │   ├── history/
+    │   │   ├── HistoryPanel.java       # History panel (search/filter)
+    │   │   ├── HistoryContextMenu.java # History context menu
+    │   │   ├── HistoryTableRenderer.java # History table cell renderer
+    │   │   ├── AdvancedSearchDialog.java # Advanced search dialog
+    │   │   └── ColumnControlDialog.java  # Column control dialog
+    │   ├── layout/
+    │   │   └── LayoutManager.java      # Layout manager
+    │   └── privilege/
+    │       ├── PrivilegeTestPanel.java # Privilege test main panel
+    │       ├── UserSessionTableModel.java
+    │       ├── JudgmentRuleTableModel.java
+    │       ├── UserSessionEditDialog.java
+    │       ├── JudgmentRuleEditDialog.java
+    │       ├── TokenLocationEditDialog.java
+    │       └── ScopeConfigTab.java     # Scope config tab
     └── utils/
         └── TextLineNumber.java         # Text line number utility
 ```
 
 ## Dependencies
 
-| Dependency | Version | Description |
-|------------|---------|-------------|
-| burp-extender-api | 2.1 | Burp Suite Extension API |
-| rsyntaxtextarea | 3.3.3 | Syntax highlighting editor component |
-| sqlite-jdbc | 3.42.0.0 | SQLite JDBC driver |
-| HikariCP | 5.0.1 | High-performance database connection pool |
-| gson | 2.10.1 | JSON serialization/deserialization |
-| commons-io | 2.11.0 | Apache file I/O utilities |
-| commons-lang3 | 3.12.0 | Apache common utilities |
+| Dependency | Version | Maven Coordinate | Description |
+|------------|---------|-----------------|-------------|
+| Montoya API | 2025.12 | `net.portswigger.burp.extensions:montoya-api` | Modern Burp Suite extension interface (provided scope) |
+| RSyntaxTextArea | 3.3.3 | `com.fifesoft:rsyntaxtextarea` | Syntax highlighting editor component |
+| SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` | SQLite JDBC driver |
+| HikariCP | 5.0.1 | `com.zaxxer:HikariCP` | Connection pool (declared, custom pool used instead) |
+| Gson | 2.10.1 | `com.google.code.gson:gson` | JSON serialization/deserialization |
+| SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML serialization (API extraction rules, judgment rules) |
+| Commons IO | 2.11.0 | `commons-io:commons-io` | Apache file I/O utilities |
+| Commons Lang3 | 3.12.0 | `org.apache.commons:commons-lang3` | Apache common utilities |
 
 ## Build
 
@@ -230,17 +327,18 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/repeater-manager-1.5.1.jar`
-- Timestamped release version: `target/releases/repeater-manager-1.5.1-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.2.0.jar`
+- Timestamped release version: `target/releases/repeater-manager-2.2.0-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 
 1. **API Security Testing**: Continuously test the same API with different parameter combinations and save all test results
-2. **Vulnerability Reproduction**: Record all requests and responses during vulnerability exploitation for later reproduction
-3. **Security Assessment**: Organize API collections of large applications for systematic security testing
-4. **Team Collaboration**: Export test data via ERM archives to share with team members
-5. **Penetration Testing Documentation**: Record key requests during penetration testing for report writing
-6. **Report Integration**: Export to Postman Collection format for integration with reporting tools
+2. **API Path Organization**: Use the API extraction engine to automatically extract standardized API paths from numerous irregular requests
+3. **Privilege Escalation Detection**: Configure multi-user sessions to automatically detect horizontal/vertical privilege escalation vulnerabilities
+4. **Vulnerability Reproduction**: Record all requests and responses during vulnerability exploitation for later reproduction
+5. **Security Assessment**: Organize API collections of large applications for systematic security testing
+6. **Team Collaboration**: Share data and rules via ERM archives and global YAML rule files
+7. **Penetration Testing Documentation**: Record key requests during penetration testing for report writing
 
 ## Data Persistence
 
@@ -256,37 +354,47 @@ Build artifacts:
 
 ```
 ~/.burp/
-└── session_20240101_120000/     # Session directory (timestamp-named)
-    ├── repeater_manager.sqlite3 # SQLite database file
-    ├── blobs/                   # External body data directory
-    └── logs/                    # Log file directory
+├── repeater_manager_config.properties     # Plugin configuration file
+├── repeater_manager/
+│   └── api_extraction_rules.yaml          # Global API extraction rules (cross-session shared)
+└── session_20240101_120000/               # Session directory (timestamp-named)
+    ├── repeater_manager.sqlite3           # SQLite database file
+    ├── blobs/                             # External body data directory
+    └── logs/                              # Log file directory
 ```
 
 ### Pool Deduplication Architecture
 
-The database uses a Pool architecture for content deduplication:
+The database uses a Pool architecture for content deduplication via SHA-256 hash + reference counting:
 
 - **string_pool**: Deduplication of domain/path/query strings
 - **header_pool**: Deduplication of HTTP request/response headers
-- **body_pool**: Deduplication of small body data (inline storage)
-- **file_pool**: Deduplication of large body data (file external storage)
+- **body_pool**: Deduplication of small body data (inline storage, SQLite BLOB)
+- **file_pool**: Deduplication of large body data (file external storage, blobs/ directory)
 - **gc_queue**: Garbage collection queue, automatically cleans up zero-reference data
+
+### API Extraction Rule Storage
+
+- **Global Rules**: Stored in `~/.burp/repeater_manager/api_extraction_rules.yaml`, shared across sessions, using negative IDs
+- **Project Rules**: Stored in session SQLite database's `api_extraction_rules` table, using positive IDs
+- Rule priority: Global and project rules sorted by priority, first-match-wins strategy
 
 ## Roadmap
 
-- [ ] Add team sharing functionality for multi-user collaboration
-- [ ] Integrate automated testing script support
-- [ ] Provide request templates for quickly creating similar requests
-- [ ] Support more data formats for import/export
 - [ ] Add request sequence functionality for multi-step request workflows
+- [ ] Add request templates for quickly creating similar requests
+- [ ] Support more data formats for import/export
+- [ ] Add cloud sync for team rule sharing
+- [ ] Integrate with external vulnerability scanner result comparison
 
 ## Contributing
 
 Issues and Pull Requests are welcome. Please ensure:
 
-1. Code style is consistent with existing code
+1. Code style is consistent with existing code (follow Java 17 conventions)
 2. New features should include documentation
-3. Run `mvn clean package` before submitting to ensure the build succeeds
+3. Use Montoya SDK API (do not use legacy Burp Extender API)
+4. Run `mvn clean package` before submitting to ensure the build succeeds
 
 ## License
 

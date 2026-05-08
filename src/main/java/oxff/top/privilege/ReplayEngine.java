@@ -1,7 +1,9 @@
 package oxff.top.privilege;
 
 import burp.BurpExtender;
+import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
+import burp.api.montoya.http.message.requests.HttpRequest;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.privilege.model.JudgmentResult;
@@ -10,6 +12,7 @@ import oxff.top.privilege.model.UserSession;
 
 import javax.swing.SwingUtilities;
 import java.awt.Color;
+import java.net.URL;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -141,6 +144,8 @@ public class ReplayEngine {
                     // 创建历史记录
                     RequestResponseRecord record = new RequestResponseRecord();
                     record.setRequestId(requestId);
+                    // 解析HTTP元数据（方法、协议、域名、路径、查询参数）
+                    populateRecordFromRequest(record, modifiedRequest, httpService);
                     record.setStatusCode(holder.statusCode);
                     record.setResponseLength(holder.response != null ? holder.response.length : 0);
                     record.setResponseTime((int) holder.durationMs);
@@ -173,6 +178,8 @@ public class ReplayEngine {
                     // 创建错误记录
                     RequestResponseRecord errorRecord = new RequestResponseRecord();
                     errorRecord.setRequestId(requestId);
+                    // 解析HTTP元数据（方法、协议、域名、路径、查询参数）
+                    populateRecordFromRequest(errorRecord, originalRequest, httpService);
                     errorRecord.setStatusCode(0);
                     errorRecord.setResponseTime(0);
                     errorRecord.setRequestData(originalRequest);
@@ -279,6 +286,39 @@ public class ReplayEngine {
      */
     public boolean isApiProcessed(String api) {
         return processedApis.contains(api);
+    }
+
+    /**
+     * 从请求字节和HttpService中提取HTTP元数据，填充到记录中
+     */
+    private void populateRecordFromRequest(RequestResponseRecord record, byte[] requestBytes, HttpService httpService) {
+        try {
+            HttpRequest requestInfo = HttpRequest.httpRequest(httpService, ByteArray.byteArray(requestBytes));
+            String method = requestInfo.method();
+            URL parsedUrl = new URL(requestInfo.url());
+
+            String protocol = parsedUrl.getProtocol();
+            String domain = parsedUrl.getHost();
+            int port = parsedUrl.getPort();
+            if (port != -1 && port != parsedUrl.getDefaultPort()) {
+                domain = domain + ":" + port;
+            }
+            String path = parsedUrl.getPath();
+            String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+
+            record.setMethod(method);
+            record.setProtocol(protocol);
+            record.setDomain(domain);
+            record.setPath(path);
+            record.setQueryParameters(query);
+        } catch (Exception e) {
+            BurpExtender.printOutput("[*] ReplayEngine: 解析请求URL失败，使用fallback: " + e.getMessage());
+            record.setMethod("UNKNOWN");
+            record.setProtocol(httpService.secure() ? "https" : "http");
+            record.setDomain(httpService.host());
+            record.setPath("/");
+            record.setQueryParameters("");
+        }
     }
 
     /**

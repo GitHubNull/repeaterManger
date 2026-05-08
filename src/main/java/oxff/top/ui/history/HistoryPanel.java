@@ -210,20 +210,20 @@ public class HistoryPanel extends JPanel {
         // 添加到记录列表
         historyRecords.add(record);
 
-        // 添加到表格
+        // 添加到表格（对null字段提供默认值，避免表格显示空白）
         String apiValue = record.getApi();
         if (apiValue == null || apiValue.isEmpty()) {
-            apiValue = record.getPath();
+            apiValue = record.getPath() != null ? record.getPath() : "/";
         }
         Object[] rowData = new Object[] {
             historyRecords.size(),                    // 序号
             new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(record.getTimestamp()),  // 时间
             apiValue,                                 // API
-            record.getMethod(),                       // 方法
-            record.getProtocol(),                     // 协议
-            record.getDomain(),                       // 域名
-            record.getPath(),                         // 路径
-            record.getQueryParameters(),              // 查询参数
+            record.getMethod() != null ? record.getMethod() : "",                       // 方法
+            record.getProtocol() != null ? record.getProtocol() : "",                   // 协议
+            record.getDomain() != null ? record.getDomain() : "",                       // 域名
+            record.getPath() != null ? record.getPath() : "/",                          // 路径
+            record.getQueryParameters() != null ? record.getQueryParameters() : "",     // 查询参数
             record.getStatusCode(),                   // 状态码
             record.getResponseLength(),               // 响应长度
             record.getResponseTime(),                 // 响应时间

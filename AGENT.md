@@ -4,10 +4,10 @@
 
 ## 项目概述
 
-**Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理功能。项目使用 Java 8 编写，基于 Burp Extender API，采用 MVC 架构。
+**Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理、API 规则提取和自动化越权测试功能。项目使用 Java 17 编写，基于 Montoya SDK（`burp.api.montoya.*`），采用 MVC 架构。
 
-- **版本**: 1.5.1
-- **Java 版本**: 8（source/target 兼容）
+- **版本**: 2.2.0
+- **Java 版本**: 17（source/target 兼容）
 - **构建工具**: Maven
 - **许可证**: Apache License 2.0
 
@@ -17,11 +17,11 @@
 +---------------------+
 |      UI Layer       |  Java Swing + RSyntaxTextArea
 +---------------------+
-|   Service Layer     |  AutoSave / GC / HistoryRecording
+|   Service Layer     |  AutoSave / GC / HistoryRecording / ApiExtraction / PrivilegeTest
 +---------------------+
-|   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager
+|   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager / ApiExtractionRuleDAO
 +---------------------+
-|   Data Storage      |  SQLite + File Blobs (Pool 去重架构)
+|   Data Storage      |  SQLite + File Blobs (Pool 去重架构) + YAML (全局规则)
 +---------------------+
 ```
 
@@ -29,20 +29,37 @@
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
-| 扩展入口 | `burp/BurpExtender.java` | 实现 IBurpExtender 接口，初始化所有组件 |
+| 扩展入口 | `burp/BurpExtender.java` | 实现 Montoya `BurpExtension` 接口，初始化所有组件 |
+| API 持有者 | `oxff/top/api/MontoyaApiHolder.java` | MontoyaApi 静态持有者 |
 | 主 UI 控制器 | `oxff/top/RepeaterManagerUI.java` | 协调所有 UI 面板和功能组件 |
 | 数据库管理 | `oxff/top/db/DatabaseManager.java` | SQLite 连接池、Schema 初始化、会话管理 |
-| Pool 去重 | `oxff/top/db/pool/PoolManager.java` | 字符串/头部/Body 内容去重存储 |
-| 请求管理 | `oxff/top/http/RequestManager.java` | 异步 HTTP 请求发送 |
+| Schema 迁移 | `oxff/top/db/schema/SchemaMigrator.java` | 数据库 Schema 版本化迁移 |
+| Pool 去重 | `oxff/top/db/pool/PoolManager.java` | 字符串/头部/Body 内容 SHA-256 去重存储 |
+| 请求管理 | `oxff/top/http/RequestManager.java` | 异步 HTTP 请求发送（Montoya API） |
 | 历史录制 | `oxff/top/service/HistoryRecordingService.java` | 异步队列化历史记录保存 |
-| 垃圾回收 | `oxff/top/service/GarbageCollectorService.java` | 自动清理零引用 Pool 数据 |
+| 垃圾回收 | `oxff/top/service/GarbageCollectorService.java` | 自动清理零引用 Pool 数据（10分钟间隔） |
 | 自动保存 | `oxff/top/service/AutoSaveService.java` | 定时数据库检查点 |
 | 日志管理 | `oxff/top/logging/LogManager.java` | 多通道日志分发和级别过滤 |
-| ERM 存档 | `oxff/top/io/ErmArchiveWriter.java` / `ErmArchiveReader.java` | 加密存档导入导出 |
+| ERM 存档 | `oxff/top/io/ErmArchiveWriter.java` / `ErmArchiveReader.java` | 加密存档导入导出（AES-256-CBC + HMAC-SHA256） |
 | 数据导入导出 | `oxff/top/io/DataExporter.java` / `DataImporter.java` | 统一导入导出调度 |
+| API 提取引擎 | `oxff/top/api/ApiExtractionEngine.java` | 无状态规则引擎（4种源 × 4种方法） |
+| 全局规则管理 | `oxff/top/api/GlobalRuleManager.java` | 全局 API 提取规则管理（YAML 文件） |
+| 项目规则管理 | `oxff/top/api/ApiRuleManager.java` | 项目级 API 提取规则管理（SQLite） |
+| 越权测试引擎 | `oxff/top/privilege/AutoTestEngine.java` | 自动化越权测试（拦截代理 → 重放 → 判断） |
+| Token 替换 | `oxff/top/privilege/TokenReplacementEngine.java` | 请求中 Token 自动替换 |
+| 判断引擎 | `oxff/top/privilege/JudgmentEngine.java` | 响应判断引擎 |
 | 配置管理 | `oxff/top/config/DatabaseConfig.java` | 存储模式/日志/代理配置 |
 
 ## 关键设计决策
+
+### Montoya SDK 集成
+
+项目使用 Montoya SDK（`burp.api.montoya.*` v2025.12）而非旧的 Burp Extender API：
+- 入口类实现 `BurpExtension` 接口（非 `IBurpExtender`）
+- 使用 `MontoyaApi` 替代 `IBurpExtenderCallbacks`
+- HTTP 请求/响应使用 `HttpRequest`/`HttpResponse` 工厂方法
+- UI 编辑器使用 `HttpRequestEditor`/`HttpResponseEditor`
+- 右键菜单实现 `ContextMenuItemsProvider`
 
 ### Pool 去重架构
 
@@ -59,6 +76,24 @@
 ### 连接池
 
 `DatabaseManager` 使用 `BlockingQueue<Connection>` 实现简易连接池，通过 JDK 动态代理拦截 `close()` 调用将连接归还池中，使现有 `try-with-resources` 代码无需修改。
+
+### API 提取引擎
+
+`ApiExtractionEngine` 采用无状态设计，支持 first-match-wins 策略：
+- **提取源**（`ApiRuleSource`）：`URL_PATH`、`URL_QUERY`、`HEADER`、`BODY`
+- **提取方法**（`ApiRuleMethod`）：`REGEX`、`SUBSTR`、`JSON_PATH`、`XPATH`
+- **规则存储**：全局规则（`~/.burp/repeater_manager/api_extraction_rules.yaml`，负数 ID）+ 项目规则（SQLite，正数 ID）
+
+### 越权测试模块
+
+自动化越权测试工作流：
+1. 定义用户会话（凭证/Token + Token 位置）
+2. 配置判断规则（如何检测越权成功）
+3. 设置请求范围（URL 匹配模式）
+4. `AutoTestEngine` 拦截匹配范围的代理流量
+5. `TokenReplacementEngine` 注入不同用户 Token
+6. `JudgmentEngine` 根据规则评估响应
+7. 结果在越权测试面板展示（颜色标记）
 
 ### 会话目录
 
@@ -78,7 +113,7 @@
 ### 日志系统
 
 `LogManager` 单例统一管理三个输出通道：
-- `BurpConsoleHandler` → Burp Suite 输出面板
+- `BurpConsoleHandler` → Burp Suite 输出面板（Montoya Logging API）
 - `RollingFileHandler` → 滚动文件日志
 - `UIHandler` → 插件日志面板
 
@@ -91,12 +126,12 @@ mvn clean package
 ```
 
 构建产物：
-- `target/repeater-manager-1.5.1.jar` — 开发版本
-- `target/releases/repeater-manager-1.5.1-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-2.2.0.jar` — 开发版本
+- `target/releases/repeater-manager-2.2.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 
-两个主表 + 四个 Pool 表 + GC 队列表：
+两个主表 + 四个 Pool 表 + 功能表 + GC 队列表 + 元数据表：
 
 ```sql
 -- 主表
@@ -109,6 +144,14 @@ header_pool (hash, data, size, ref_count)
 body_pool   (hash, data, size, ref_count, is_binary)
 file_pool   (hash, relative_path, size, ref_count, is_binary)
 
+-- API 提取规则表
+api_extraction_rules (id, name, source, method, expression, enabled, priority, persistent, is_global)
+
+-- 越权测试表
+user_sessions (id, name, ...)
+judgment_rules (id, name, target, method, threshold, ...)
+scopes (id, pattern, ...)
+
 -- GC 队列
 gc_queue (id, pool_type, hash, enqueued_at)
 
@@ -120,39 +163,46 @@ schema_meta (key, value)
 
 | 依赖 | 版本 | Maven 坐标 |
 |------|------|-----------|
-| Burp Extender API | 2.1 | net.portswigger.burp.extender:burp-extender-api |
-| RSyntaxTextArea | 3.3.3 | com.fifesoft:rsyntaxtextarea |
-| SQLite JDBC | 3.42.0.0 | org.xerial:sqlite-jdbc |
-| HikariCP | 5.0.1 | com.zaxxer:HikariCP |
-| Gson | 2.10.1 | com.google.code.gson:gson |
-| Commons IO | 2.11.0 | commons-io:commons-io |
-| Commons Lang | 3.12.0 | org.apache.commons:commons-lang3 |
+| Montoya API | 2025.12 | `net.portswigger.burp.extensions:montoya-api` (provided scope) |
+| RSyntaxTextArea | 3.3.3 | `com.fifesoft:rsyntaxtextarea` |
+| SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` |
+| HikariCP | 5.0.1 | `com.zaxxer:HikariCP` (declared, not actively used) |
+| Gson | 2.10.1 | `com.google.code.gson:gson` |
+| SnakeYAML | 2.2 | `org.yaml:snakeyaml` |
+| Commons IO | 2.11.0 | `commons-io:commons-io` |
+| Commons Lang | 3.12.0 | `org.apache.commons:commons-lang3` |
 
 ## 编码约定
 
-- **语言**: Java 8（不使用 Lambda 之外的 Java 9+ 特性）
+- **语言**: Java 17（可使用 Lambda、文本块、密封类、记录类等特性）
+- **API**: 使用 `burp.api.montoya.*` Montoya SDK，不使用旧的 `burp.I*` 接口
 - **包结构**: `burp` 包仅含入口点，业务代码在 `oxff.top` 下
 - **日志**: 使用 `BurpExtender.printOutput()` / `printError()` 或 `LogManager` 方法
-- **数据库访问**: 通过 DAO 类（RequestDAO / HistoryDAO），使用 `try-with-resources` 管理连接
+- **数据库访问**: 通过 DAO 类（RequestDAO / HistoryDAO / ApiExtractionRuleDAO），使用 `try-with-resources` 管理连接
 - **UI 线程**: Swing UI 操作必须在 EDT 中执行（`SwingUtilities.invokeLater`）
-- **单例模式**: DatabaseManager / LogManager / HistoryRecordingService 等使用单例
-- **异步操作**: HTTP 请求发送、数据加载、历史记录保存均在后台线程执行
+- **单例模式**: DatabaseManager / LogManager / HistoryRecordingService / ProxyConfig / GlobalRuleManager 等使用单例
+- **异步操作**: HTTP 请求发送、数据加载、历史记录保存、API 提取、越权测试均在后台线程执行
+- **MontoyaApi 访问**: 优先使用构造函数注入；静态上下文中使用 `MontoyaApiHolder.getApi()`（位于 `oxff.top.api` 包）
+- **ByteArray 封装**: Montoya API 方法需要 `ByteArray.byteArray(bytes)` 而非原始 `byte[]`
+- **API 规则 ID**: 全局规则使用负数 ID，项目规则使用正数 ID
 
 ## 注意事项
 
 1. **不要修改 `burp` 包路径**：Burp Suite 要求入口类在 `burp` 包下
 2. **SQLite 限制**：SQLite 不支持真正的并发写入，写操作需串行化
 3. **内存管理**：Body 数据可能很大，使用 Pool 去重和文件外置减少内存占用
-4. **Burp API 兼容性**：使用 `IBurpExtenderCallbacks` 和 `IExtensionHelpers` 进行 HTTP 操作
-5. **HTTPS 协议保留**：发送请求时需通过 `IHttpService` 保留 HTTPS 协议信息
+4. **Burp API 兼容性**：使用 Montoya SDK（`burp.api.montoya.*`），不要混用旧 API
+5. **HTTPS 协议保留**：发送请求时需通过 `HttpService` 保留 HTTPS 协议信息
 6. **错误过滤**：`BurpExtender.shouldFilterError()` 过滤 IntelliJ 相关的无害 ClassNotFoundException
 7. **GC 依赖**：删除请求后需触发 GC 清理关联的 Pool 数据
+8. **YAML 文件**：全局 API 规则和判断规则使用 SnakeYAML 序列化，注意 YAML 格式正确性
+9. **Schema 迁移**：数据库结构变更需通过 SchemaMigrator 进行版本化迁移
 
 ## CI/CD
 
 项目使用 GitHub Actions（`.github/workflows/release.yml`）：
 
-- **触发条件**: 推送 `v*` 格式标签（如 `v1.0.0`）或手动触发
-- **构建**: JDK 8 + Maven
+- **触发条件**: 推送 `v*` 格式标签（如 `v2.2.0`）或手动触发
+- **构建**: JDK 17 + Maven
 - **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
-- **预发布**: 标签包含 `-` 后缀（如 `v1.0.0-beta`）时标记为预发布
+- **预发布**: 标签包含 `-` 后缀（如 `v2.2.0-beta`）时标记为预发布

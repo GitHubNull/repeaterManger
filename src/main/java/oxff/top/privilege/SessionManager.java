@@ -151,7 +151,11 @@ public class SessionManager {
     }
 
     public boolean saveTokenValues(int userSessionId, Map<Integer, String> tokenValues) {
-        return sessionDAO.saveTokenValues(userSessionId, tokenValues);
+        boolean result = sessionDAO.saveTokenValues(userSessionId, tokenValues);
+        if (result) {
+            refreshCache();
+        }
+        return result;
     }
 
     // ==================== 重放配置 ====================
