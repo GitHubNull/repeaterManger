@@ -116,9 +116,9 @@ public class HistoryPanel extends JPanel {
      * 创建表格
      */
     private void createTable() {
-        // 定义表格列名
+        // 定义表格列名（v6新增"用户"和"判决"列）
         String[] columnNames = {
-            "#", "时间", "API", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "备注"
+            "#", "时间", "API", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "用户", "判决", "备注"
         };
 
         // 创建表格模型(不允许直接编辑)
@@ -163,7 +163,11 @@ public class HistoryPanel extends JPanel {
         historyTable.getColumnModel().getColumn(9).setMaxWidth(110);
         historyTable.getColumnModel().getColumn(10).setPreferredWidth(70);  // 耗时列
         historyTable.getColumnModel().getColumn(10).setMaxWidth(90);
-        historyTable.getColumnModel().getColumn(11).setPreferredWidth(100); // 备注列
+        historyTable.getColumnModel().getColumn(11).setPreferredWidth(80);  // 用户列
+        historyTable.getColumnModel().getColumn(11).setMaxWidth(120);
+        historyTable.getColumnModel().getColumn(12).setPreferredWidth(60);  // 判决列
+        historyTable.getColumnModel().getColumn(12).setMaxWidth(80);
+        historyTable.getColumnModel().getColumn(13).setPreferredWidth(100); // 备注列
 
         // 创建排序器
         tableRowSorter = new TableRowSorter<>(historyTableModel);
@@ -223,6 +227,8 @@ public class HistoryPanel extends JPanel {
             record.getStatusCode(),                   // 状态码
             record.getResponseLength(),               // 响应长度
             record.getResponseTime(),                 // 响应时间
+            record.getUserSessionName() != null ? record.getUserSessionName() : "",  // 用户
+            record.getJudgment() != null ? record.getJudgment() : "",                // 判决
             record.getComment()                       // 备注
         };
 

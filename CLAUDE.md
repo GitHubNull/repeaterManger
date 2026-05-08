@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Enhanced Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
+Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
 
 - **Version**: 2.0.0
 - **Java**: 17 (source/target compatibility)
@@ -29,7 +29,7 @@ The project follows a layered architecture:
 Key components:
 - **BurpExtender.java**: Entry point implementing Montoya SDK's `BurpExtension` interface, initialized via `initialize(MontoyaApi)`
 - **MontoyaApiHolder.java**: Static holder for `MontoyaApi` instance, bridges legacy static access pattern to constructor injection
-- **EnhancedRepeaterUI.java**: Main UI controller that orchestrates all components
+- **RepeaterManagerUI.java**: Main UI controller that orchestrates all components
 - **DatabaseManager.java**: Singleton managing SQLite connections (connection pool via `BlockingQueue` + JDK dynamic proxy), Schema initialization, session management
 - **PoolManager.java**: Content deduplication manager using SHA-256 hash-based pools
 - **RequestManager.java**: Async HTTP request sender using `MontoyaApi.http().sendRequest()`
@@ -69,8 +69,8 @@ mvn clean package
 ```
 
 The build process creates two JAR files:
-- Development version: `target/enhanced-repeater-2.0.0.jar`
-- Timestamped release: `target/releases/enhanced-repeater-2.0.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.0.0.jar`
+- Timestamped release: `target/releases/repeater-manager-2.0.0-YYYYMMDD-HHMMSS.jar`
 
 ## Source Code Organization
 
@@ -79,13 +79,13 @@ src/main/java/
 ├── burp/
 │   └── BurpExtender.java              # Extension entry point (must be in burp package)
 └── oxff/top/
-    ├── EnhancedRepeaterUI.java         # Main UI controller
+    ├── RepeaterManagerUI.java          # Main UI controller
     ├── MontoyaApiHolder.java           # Static bridge for MontoyaApi access
     ├── config/                        # Configuration management
     │   ├── DatabaseConfig.java         # Storage mode / logging / proxy config
     │   └── SessionDirectory.java       # Session directory (timestamp-named)
     ├── controller/                    # Context menu handlers
-    │   └── PopMenu.java               # "Send to Enhanced Repeater" context menu (ContextMenuItemsProvider)
+    │   └── PopMenu.java               # "Send to Repeater Manager" context menu (ContextMenuItemsProvider)
     ├── db/                            # Database access layer
     │   ├── DatabaseManager.java        # Singleton: connection pool + Schema init
     │   ├── HistoryDAO.java             # History CRUD operations

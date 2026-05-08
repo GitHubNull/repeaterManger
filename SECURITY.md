@@ -4,7 +4,7 @@
 
 ### Intended Use
 
-Enhanced Repeater Manager ("the Software") is a Burp Suite extension designed for **legitimate security testing, vulnerability assessment, and penetration testing** purposes only. The Software is intended to be used by security professionals, researchers, and authorized penetration testers who have proper authorization to test the target systems.
+Repeater Manager ("the Software") is a Burp Suite extension designed for **legitimate security testing, vulnerability assessment, and penetration testing** purposes only. The Software is intended to be used by security professionals, researchers, and authorized penetration testers who have proper authorization to test the target systems.
 
 ### Legal Compliance
 
@@ -40,7 +40,7 @@ If you discover a security vulnerability in the Software itself, please report i
 
 ### 预期用途
 
-Enhanced Repeater Manager（"本软件"）是一个 Burp Suite 扩展插件，**仅用于合法的安全测试、漏洞评估和渗透测试**目的。本软件面向安全专业人员、研究人员和经授权的渗透测试人员使用，且使用者必须已获得对目标系统进行测试的适当授权。
+Repeater Manager（"本软件"）是一个 Burp Suite 扩展插件，**仅用于合法的安全测试、漏洞评估和渗透测试**目的。本软件面向安全专业人员、研究人员和经授权的渗透测试人员使用，且使用者必须已获得对目标系统进行测试的适当授权。
 
 ### 法律合规
 

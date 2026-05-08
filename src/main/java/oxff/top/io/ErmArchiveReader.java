@@ -627,8 +627,8 @@ public class ErmArchiveReader {
             java.lang.reflect.Field repeaterUIField = burp.BurpExtender.class.getDeclaredField("repeaterUI");
             repeaterUIField.setAccessible(true);
             Object repeaterUIObj = repeaterUIField.get(null);
-            if (repeaterUIObj != null && repeaterUIObj instanceof oxff.top.EnhancedRepeaterUI) {
-                ((oxff.top.EnhancedRepeaterUI) repeaterUIObj).refreshAllData();
+            if (repeaterUIObj != null && repeaterUIObj instanceof oxff.top.RepeaterManagerUI) {
+                ((oxff.top.RepeaterManagerUI) repeaterUIObj).refreshAllData();
                 BurpExtender.printOutput("[+] 界面数据刷新成功");
             }
         } catch (Exception e) {

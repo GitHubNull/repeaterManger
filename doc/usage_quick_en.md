@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-> Get started with Enhanced Repeater Manager in 5 minutes
+> Get started with Repeater Manager in 5 minutes
 
 ## 1. Install the Plugin
 
@@ -8,14 +8,14 @@
 2. Open Burp Suite Professional
 3. Navigate to `Extender` → `Extensions` → Click `Add`
 4. Select the downloaded JAR file → Click `Next`
-5. You'll see **"增强型Repeater 插件加载成功"** confirming successful installation
+5. You'll see **"Repeater Manager 插件加载成功"** confirming successful installation
 
 ## 2. Send a Request
 
 Right-click on any HTTP request in Burp Suite:
 
-- Select **"Send to Enhanced Repeater"** (发送到增强型Repeater)
-- Switch to the **"增强型Repeater"** tab at the top
+- Select **"Send to Repeater Manager"** (发送到 Repeater Manager)
+- Switch to the **"Repeater Manager"** tab at the top
 
 ## 3. Edit and Replay
 

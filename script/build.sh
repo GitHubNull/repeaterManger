@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "开始构建增强型Repeater插件..."
+echo "开始构建 Repeater Manager 插件..."
 
 # 检查Maven是否安装
 if ! command -v mvn &> /dev/null; then
@@ -19,7 +19,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "构建成功！"
-echo "插件文件位于: $(pwd)/target/repeaterManger-1.0-SNAPSHOT-jar-with-dependencies.jar"
+echo "插件文件位于: $(pwd)/target/repeater-manager-2.0.0.jar"
 
 # 显示安装指南
 echo ""

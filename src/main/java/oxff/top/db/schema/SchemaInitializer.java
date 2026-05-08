@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v5）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '5')");
+        // 初始化元数据（v7）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '7')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -98,6 +98,9 @@ public class SchemaInitializer {
             "resp_body_hash TEXT, " +
             "resp_body_storage TEXT DEFAULT 'inline', " +
             "api_hash TEXT, " +
+            "user_session_name TEXT DEFAULT NULL, " +
+            "judgment TEXT DEFAULT NULL, " +
+            "similarity REAL DEFAULT -1, " +
             "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
             ")"
         );
@@ -121,7 +124,13 @@ public class SchemaInitializer {
         // 创建索引
         createV3Indexes(stmt);
 
-        BurpExtender.printOutput("[+] v5 Schema 初始化完成");
+        // 创建v6权限测试相关表
+        createV6PrivilegeTables(stmt);
+
+        // 创建v7 Scope表
+        createV7ScopeTables(stmt);
+
+        BurpExtender.printOutput("[+] v7 Schema 初始化完成");
     }
 
     /**
@@ -197,5 +206,92 @@ public class SchemaInitializer {
         // v3 新增索引
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_api_hash ON requests(api_hash)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_api_hash ON history(api_hash)");
+    }
+
+    /**
+     * 创建 v6 权限测试相关表
+     */
+    private static void createV6PrivilegeTables(Statement stmt) throws SQLException {
+        // 令牌位置定义表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS token_locations (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "type TEXT NOT NULL, " +
+            "expression TEXT NOT NULL, " +
+            "description TEXT DEFAULT '', " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // 用户会话表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS user_sessions (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "name TEXT NOT NULL, " +
+            "color TEXT, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // 令牌值关联表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS token_values (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "token_location_id INTEGER NOT NULL, " +
+            "user_session_id INTEGER NOT NULL, " +
+            "value TEXT NOT NULL, " +
+            "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+            "FOREIGN KEY (user_session_id) REFERENCES user_sessions(id) ON DELETE CASCADE, " +
+            "UNIQUE (token_location_id, user_session_id)" +
+            ")"
+        );
+
+        // 判决规则表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS judgment_rules (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "name TEXT NOT NULL DEFAULT '', " +
+            "target TEXT NOT NULL, " +
+            "method TEXT NOT NULL, " +
+            "expression TEXT NOT NULL, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "priority INTEGER NOT NULL DEFAULT 1, " +
+            "success_color TEXT DEFAULT '#FF0000', " +
+            "failure_color TEXT DEFAULT '#00FF00', " +
+            "success_note TEXT DEFAULT '', " +
+            "failure_note TEXT DEFAULT '', " +
+            "remark TEXT DEFAULT '', " +
+            "global INTEGER NOT NULL DEFAULT 1, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // v6 新增索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_location ON token_values(token_location_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_session ON token_values(user_session_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_judgment ON history(judgment)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_session ON history(user_session_name)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_judgment_rules_enabled ON judgment_rules(enabled, priority)");
+    }
+
+    /**
+     * 创建 v7 Scope相关表
+     */
+    private static void createV7ScopeTables(Statement stmt) throws SQLException {
+        // Scope条目表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS scope_entries (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "name TEXT NOT NULL DEFAULT '', " +
+            "url_pattern TEXT NOT NULL, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "description TEXT DEFAULT '', " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // v7 新增索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scope_entries_enabled ON scope_entries(enabled)");
     }
 }

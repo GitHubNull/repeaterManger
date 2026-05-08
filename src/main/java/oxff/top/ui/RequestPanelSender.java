@@ -135,7 +135,7 @@ public class RequestPanelSender {
                         sendButton.setText("发送请求");
                     });
                 }
-            }, "EnhancedRepeater-SendRequest").start();
+            }, "RepeaterManager-SendRequest").start();
 
         } catch (Exception e) {
             BurpExtender.printError("[!] 准备请求时出错: " + e.getMessage());

@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-**Enhanced Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理功能。项目使用 Java 8 编写，基于 Burp Extender API，采用 MVC 架构。
+**Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理功能。项目使用 Java 8 编写，基于 Burp Extender API，采用 MVC 架构。
 
 - **版本**: 1.5.1
 - **Java 版本**: 8（source/target 兼容）
@@ -30,7 +30,7 @@
 | 组件 | 文件 | 职责 |
 |------|------|------|
 | 扩展入口 | `burp/BurpExtender.java` | 实现 IBurpExtender 接口，初始化所有组件 |
-| 主 UI 控制器 | `oxff/top/EnhancedRepeaterUI.java` | 协调所有 UI 面板和功能组件 |
+| 主 UI 控制器 | `oxff/top/RepeaterManagerUI.java` | 协调所有 UI 面板和功能组件 |
 | 数据库管理 | `oxff/top/db/DatabaseManager.java` | SQLite 连接池、Schema 初始化、会话管理 |
 | Pool 去重 | `oxff/top/db/pool/PoolManager.java` | 字符串/头部/Body 内容去重存储 |
 | 请求管理 | `oxff/top/http/RequestManager.java` | 异步 HTTP 请求发送 |
@@ -91,8 +91,8 @@ mvn clean package
 ```
 
 构建产物：
-- `target/enhanced-repeater-1.5.1.jar` — 开发版本
-- `target/releases/enhanced-repeater-1.5.1-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-1.5.1.jar` — 开发版本
+- `target/releases/repeater-manager-1.5.1-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 

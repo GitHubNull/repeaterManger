@@ -59,7 +59,7 @@ public class RequestManager {
 
         // 创建线程池执行器，避免阻塞UI线程
         executor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "EnhancedRepeater-RequestThread");
+            Thread t = new Thread(r, "RepeaterManager-RequestThread");
             t.setDaemon(true);
             return t;
         });

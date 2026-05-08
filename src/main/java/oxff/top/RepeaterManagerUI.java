@@ -18,6 +18,7 @@ import oxff.top.ui.LogPanel;
 import oxff.top.ui.StatusPanel;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
+import oxff.top.ui.privilege.PrivilegeTestPanel;
 import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.db.RequestDAO;
 
@@ -28,7 +29,7 @@ import java.util.List;
 import java.net.URL;
 
 /**
- * 增强型Repeater主界面 - 组装和协调所有组件
+ * Repeater Manager 主界面 - 组装和协调所有组件
  *
  * 总体布局：
  * 1. 左侧（上下结构）：
@@ -36,7 +37,7 @@ import java.net.URL;
  *    - 下部：当前选中请求的历史重放记录列表
  * 2. 右侧：请求和响应编辑/展示区域（可切换布局）
  */
-public class EnhancedRepeaterUI {
+public class RepeaterManagerUI {
 
     // 主UI组件
     private final JPanel mainPanel;
@@ -53,6 +54,7 @@ public class EnhancedRepeaterUI {
     private final ConfigPanel configPanel;            // 配置面板
     private final LogPanel logPanel;                  // 日志面板
     private final StatusPanel statusPanel;            // 底部状态栏
+    private final PrivilegeTestPanel privilegeTestPanel; // 权限测试配置面板
 
     // 布局管理器
     private final LayoutManager layoutManager;
@@ -64,11 +66,11 @@ public class EnhancedRepeaterUI {
     private final RequestDispatchHandler dispatchHandler;
 
     /**
-     * 创建增强型Repeater界面
+     * 创建 Repeater Manager 界面
      *
      * @param api MontoyaApi实例，用于创建编辑器等
      */
-    public EnhancedRepeaterUI(MontoyaApi api) {
+    public RepeaterManagerUI(MontoyaApi api) {
         // 不再保存api字段，通过子组件间接使用
         // 初始化功能组件
         requestManager = new RequestManager(api);
@@ -144,11 +146,23 @@ public class EnhancedRepeaterUI {
         // 创建日志面板
         logPanel = new LogPanel();
 
+        // 创建权限测试配置面板
+        privilegeTestPanel = new PrivilegeTestPanel();
+
         // 创建选项卡面板
         tabbedPane = new JTabbedPane();
         tabbedPane.addTab("请求管理", mainSplitPane);
+        tabbedPane.addTab("权限测试", privilegeTestPanel);
         tabbedPane.addTab("配置", configPanel);
         tabbedPane.addTab("日志", logPanel);
+
+        // 监听标签页切换，自动开启/关闭权限测试模式
+        tabbedPane.addChangeListener(e -> {
+            int selectedIndex = tabbedPane.getSelectedIndex();
+            String selectedTitle = tabbedPane.getTitleAt(selectedIndex);
+            dispatchHandler.setPrivilegeTestMode("权限测试".equals(selectedTitle));
+            BurpExtender.printOutput("[*] 权限测试模式: " + (dispatchHandler.isPrivilegeTestMode() ? "已开启" : "已关闭"));
+        });
 
         // 注册LogPanel到LogManager
         oxff.top.logging.LogManager.getInstance().setLogPanel(logPanel);
@@ -454,11 +468,52 @@ public class EnhancedRepeaterUI {
                 historyPanel.clearHistory();
                 dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
 
-                BurpExtender.printOutput("[+] 请求已加载到增强型Repeater: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
+                BurpExtender.printOutput("[+] 请求已加载到 Repeater Manager: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置请求失败: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * 设置请求内容并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收请求
+     * 自动加载请求、切换到请求管理标签页、开启权限测试模式、触发重放
+     */
+    public void setPrivilegeTestRequest(HttpRequestResponse requestResponse) {
+        try {
+            if (requestResponse != null && requestResponse.request() != null) {
+                // 先用常规方式加载请求（复用setRequest的逻辑）
+                setRequest(requestResponse);
+
+                // 切换到请求管理标签页
+                tabbedPane.setSelectedIndex(0);
+
+                // 开启权限测试模式
+                dispatchHandler.setPrivilegeTestMode(true);
+                BurpExtender.printOutput("[*] 权限测试模式已开启，准备重放请求...");
+
+                // 自动触发权限测试重放
+                SwingUtilities.invokeLater(() -> dispatchHandler.sendRequest());
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 设置权限测试请求失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 添加自动化测试的权限测试历史记录
+     * 供 AutoTestEngine 通过 BurpExtender 调用
+     */
+    public void addPrivilegeTestHistoryRecord(RequestResponseRecord record) {
+        if (record == null) return;
+        // 添加到历史面板
+        historyPanel.addHistoryRecord(record);
+        // 添加到内存映射
+        int requestId = record.getRequestId();
+        if (requestId > 0) {
+            dispatchHandler.getRequestHistoryMap().computeIfAbsent(requestId, k -> new ArrayList<>()).add(record);
         }
     }
 

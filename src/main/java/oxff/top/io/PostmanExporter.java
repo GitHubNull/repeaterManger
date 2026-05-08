@@ -96,8 +96,8 @@ public class PostmanExporter {
         // info对象
         JsonObject info = new JsonObject();
         info.addProperty("_postman_id", UUID.randomUUID().toString());
-        info.addProperty("name", "Enhanced Repeater Export - " + new Date().toString());
-        info.addProperty("description", "Exported from Enhanced Repeater Manager");
+        info.addProperty("name", "Repeater Manager Export - " + new Date().toString());
+        info.addProperty("description", "Exported from Repeater Manager");
         info.addProperty("schema", "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
         collection.add("info", info);
 

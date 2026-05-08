@@ -1,4 +1,4 @@
-# Enhanced Repeater Manager - Burp Suite 增强重放插件
+# Repeater Manager - Burp Suite 请求重放管理插件
 
 <p align="center">
   <strong>面向安全测试人员的 Burp Suite 高级请求重放管理插件</strong>
@@ -12,7 +12,7 @@
 
 ## 项目介绍
 
-Enhanced Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请求重放管理插件。它提供了比原生 Repeater 更强大的功能，包括请求的分类管理、响应历史自动记录与比对、SQLite 本地持久化、内容去重存储、多条件高级搜索、多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。本插件特别适合安全测试人员和渗透测试专家使用，可有效提高 HTTP/HTTPS 请求测试的效率和组织性。
+Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请求重放管理插件。它提供了比原生 Repeater 更强大的功能，包括请求的分类管理、响应历史自动记录与比对、SQLite 本地持久化、内容去重存储、多条件高级搜索、多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。本插件特别适合安全测试人员和渗透测试专家使用，可有效提高 HTTP/HTTPS 请求测试的效率和组织性。
 
 > **当前版本**: v1.5.1 | **最低要求**: Burp Suite Professional + Java 8+
 
@@ -36,7 +36,7 @@ Enhanced Repeater Manager 是一个为 Burp Suite Professional 设计的高级 H
 ## 功能架构
 
 ```
-Enhanced Repeater Manager
+Repeater Manager
 ├── 插件集成（Burp Extender API）
 ├── 请求管理
 │   ├── 请求列表（搜索/过滤/颜色标记/备注）
@@ -93,8 +93,8 @@ Enhanced Repeater Manager
 ## 快速开始
 
 1. 在 Burp Suite 的任何位置（如 Proxy、Intruder），右键点击请求
-2. 选择 **"发送到增强型Repeater"**
-3. 切换到 **"增强型Repeater"** 标签页查看和管理请求
+2. 选择 **"发送到 Repeater Manager"**
+3. 切换到 **"Repeater Manager"** 标签页查看和管理请求
 4. 编辑请求内容，点击 **"发送"** 按钮重放
 5. 在左侧下方的历史记录面板查看每次重放的响应
 
@@ -130,12 +130,12 @@ src/main/java/
 ├── burp/
 │   └── BurpExtender.java              # Burp 扩展入口点
 └── oxff/top/
-    ├── EnhancedRepeaterUI.java         # 主 UI 控制器
+    ├── RepeaterManagerUI.java          # 主 UI 控制器
     ├── config/
     │   ├── DatabaseConfig.java         # 数据库配置（存储模式/日志/代理）
     │   └── SessionDirectory.java       # 会话目录管理
     ├── controller/
-    │   └── PopMenu.java               # 右键菜单（"发送到增强型Repeater"）
+    │   └── PopMenu.java               # 右键菜单（"Send to Repeater Manager"）
     ├── db/
     │   ├── DatabaseManager.java        # 数据库连接管理（连接池/Schema初始化）
     │   ├── HistoryDAO.java             # 历史记录数据访问对象
@@ -230,8 +230,8 @@ mvn clean package
 ```
 
 构建产物：
-- 开发版本: `target/enhanced-repeater-1.5.1.jar`
-- 带时间戳发布版本: `target/releases/enhanced-repeater-1.5.1-YYYYMMDD-HHMMSS.jar`
+- 开发版本: `target/repeater-manager-1.5.1.jar`
+- 带时间戳发布版本: `target/releases/repeater-manager-1.5.1-YYYYMMDD-HHMMSS.jar`
 
 ## 使用场景
 

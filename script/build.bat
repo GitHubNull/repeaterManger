@@ -1,6 +1,6 @@
 @echo off
 chcp 65001
-echo 开始构建增强型Repeater插件...
+echo 开始构建 Repeater Manager 插件...
 
 :: 检查Maven是否安装
 where mvn >nul 2>nul
@@ -20,13 +20,13 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 检查目标文件是否存在
-if not exist "target\enhanced-repeater-2.0.0.jar" (
+if not exist "target\repeater-manager-2.0.0.jar" (
     echo 构建失败：未找到目标JAR文件
     exit /b 1
 )
 
 echo 构建成功！
-echo 插件文件位于: %CD%\target\enhanced-repeater-2.0.0.jar
+echo 插件文件位于: %CD%\target\repeater-manager-2.0.0.jar
 
 :: 显示安装指南
 echo.

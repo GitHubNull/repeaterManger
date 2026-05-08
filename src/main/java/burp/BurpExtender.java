@@ -3,11 +3,13 @@ package burp;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.message.HttpRequestResponse;
-import oxff.top.EnhancedRepeaterUI;
+import oxff.top.RepeaterManagerUI;
 import oxff.top.api.MontoyaApiHolder;
 import oxff.top.controller.PopMenu;
 import oxff.top.logging.LogLevel;
 import oxff.top.logging.LogManager;
+
+import oxff.top.http.RequestResponseRecord;
 
 import javax.swing.SwingUtilities;
 
@@ -18,7 +20,7 @@ import javax.swing.SwingUtilities;
 public class BurpExtender implements BurpExtension {
 
     // 主UI组件
-    private static EnhancedRepeaterUI repeaterUI;
+    private static RepeaterManagerUI repeaterUI;
 
     // 日志管理器
     private static final LogManager logManager = LogManager.getInstance();
@@ -29,7 +31,7 @@ public class BurpExtender implements BurpExtension {
         MontoyaApiHolder.setApi(api);
 
         // 设置插件名称
-        api.extension().setName("增强型Repeater");
+        api.extension().setName("repeaterManger");
 
         try {
             // 阶段1：初始化日志管理器（仅 BurpConsoleHandler）
@@ -67,10 +69,10 @@ public class BurpExtender implements BurpExtension {
             }
 
             // 创建UI和功能组件
-            repeaterUI = new EnhancedRepeaterUI(api);
+            repeaterUI = new RepeaterManagerUI(api);
 
             // 将UI组件注册到Burp的选项卡
-            api.userInterface().registerSuiteTab("增强型Repeater", repeaterUI.getUiComponent());
+            api.userInterface().registerSuiteTab("Repeater Manager", repeaterUI.getUiComponent());
 
             // 注册上下文菜单
             api.userInterface().registerContextMenuItemsProvider(new PopMenu());
@@ -82,7 +84,7 @@ public class BurpExtender implements BurpExtension {
             });
 
             // 使用编码后的输出流打印信息
-            logManager.success("[+] 增强型Repeater 插件加载成功");
+            logManager.success("[+] Repeater Manager 插件加载成功");
         } catch (Exception e) {
             // 使用 Montoya API 输出异常
             api.logging().logToError("[!] 插件加载失败: " + e.getMessage());
@@ -213,7 +215,32 @@ public class BurpExtender implements BurpExtension {
         if (repeaterUI != null) {
             SwingUtilities.invokeLater(() -> {
                 repeaterUI.setRequest(requestResponse);
-                logManager.success("[+] 已将请求发送到增强型Repeater，请切换到相应标签页查看");
+                logManager.success("[+] 已将请求发送到 Repeater Manager，请切换到相应标签页查看");
+            });
+        }
+    }
+
+    /**
+     * 将请求发送到权限测试模式
+     * 加载请求后自动切换到请求管理标签页并启动权限测试重放
+     */
+    public static void setPrivilegeTestRequest(HttpRequestResponse requestResponse) {
+        if (repeaterUI != null) {
+            SwingUtilities.invokeLater(() -> {
+                repeaterUI.setPrivilegeTestRequest(requestResponse);
+                logManager.success("[+] 已将请求发送到权限测试，重放结果将在请求管理标签页中显示");
+            });
+        }
+    }
+
+    /**
+     * 添加自动化测试的权限测试记录到请求管理Tab
+     * 供 AutoTestEngine 调用
+     */
+    public static void addPrivilegeTestRecord(RequestResponseRecord record) {
+        if (repeaterUI != null) {
+            SwingUtilities.invokeLater(() -> {
+                repeaterUI.addPrivilegeTestHistoryRecord(record);
             });
         }
     }

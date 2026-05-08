@@ -1,7 +1,7 @@
 package oxff.top.io;
 
 /**
- * ERM (Enhanced Repeater Manager) 存档格式常量定义
+ * ERM (Repeater Manager) 存档格式常量定义
  *
  * ERM 文件布局：
  * [FILE HEADER  32 bytes] - 魔法数字 + 版本 + 偏移量

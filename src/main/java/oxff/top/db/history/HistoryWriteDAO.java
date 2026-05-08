@@ -177,8 +177,9 @@ public class HistoryWriteDAO {
         String sql = "INSERT INTO history (request_id, method, protocol, domain_hash, path_hash, query_hash, " +
                 "status_code, response_length, response_time, timestamp, comment, color, " +
                 "req_header_hash, req_body_hash, req_body_storage, " +
-                "resp_header_hash, resp_body_hash, resp_body_storage, api_hash) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "resp_header_hash, resp_body_hash, resp_body_storage, api_hash, " +
+                "user_session_name, judgment, similarity) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             if (requestId <= 0) {
@@ -228,6 +229,21 @@ public class HistoryWriteDAO {
             pstmt.setString(17, respBodyHash);
             pstmt.setString(18, respBodyStorage);
             pstmt.setString(19, apiHash);
+
+            // 权限测试相关字段
+            if (record.getUserSessionName() != null) {
+                pstmt.setString(20, record.getUserSessionName());
+            } else {
+                pstmt.setNull(20, java.sql.Types.VARCHAR);
+            }
+
+            if (record.getJudgment() != null) {
+                pstmt.setString(21, record.getJudgment());
+            } else {
+                pstmt.setNull(21, java.sql.Types.VARCHAR);
+            }
+
+            pstmt.setDouble(22, record.getSimilarity());
 
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {

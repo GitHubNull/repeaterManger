@@ -8,6 +8,9 @@ import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
+import oxff.top.privilege.ReplayEngine;
+import oxff.top.privilege.SessionManager;
+import oxff.top.privilege.model.JudgmentResult;
 import oxff.top.ui.editor.BurpRequestPanel;
 import oxff.top.ui.editor.BurpResponsePanel;
 import oxff.top.ui.history.HistoryPanel;
@@ -25,7 +28,7 @@ import java.util.Map;
 
 /**
  * 请求调度处理器 - 管理HTTP请求发送、响应处理和历史记录更新
- * 从EnhancedRepeaterUI中提取的请求处理逻辑
+ * 从 RepeaterManagerUI 中提取的请求处理逻辑
  */
 public class RequestDispatchHandler {
 
@@ -43,6 +46,9 @@ public class RequestDispatchHandler {
     // 当前请求状态
     private int currentRequestId = -1;
     private HttpService currentHttpService = null;
+
+    // 权限测试模式状态
+    private boolean privilegeTestMode = false;
 
     // 请求历史记录映射: 请求ID -> 历史记录列表
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
@@ -86,6 +92,14 @@ public class RequestDispatchHandler {
         return currentHttpService;
     }
 
+    public void setPrivilegeTestMode(boolean enabled) {
+        this.privilegeTestMode = enabled;
+    }
+
+    public boolean isPrivilegeTestMode() {
+        return privilegeTestMode;
+    }
+
     public Map<Integer, List<RequestResponseRecord>> getRequestHistoryMap() {
         return requestHistoryMap;
     }
@@ -109,6 +123,7 @@ public class RequestDispatchHandler {
 
     /**
      * 发送当前请求
+     * 如果处于权限测试模式，调用ReplayEngine进行多用户重放
      */
     public void sendRequest() {
         try {
@@ -118,6 +133,12 @@ public class RequestDispatchHandler {
                     JOptionPane.showMessageDialog(mainPanel,
                         "请求不能为空", "错误", JOptionPane.ERROR_MESSAGE);
                 });
+                return;
+            }
+
+            // 权限测试模式：调用ReplayEngine
+            if (privilegeTestMode) {
+                sendPrivilegeTestRequest(requestBytes);
                 return;
             }
 
@@ -484,6 +505,70 @@ public class RequestDispatchHandler {
         responsePanel.setCursor(cursor);
         historyPanel.setCursor(cursor);
         requestListPanel.setCursor(cursor);
+    }
+
+    /**
+     * 权限测试模式发送请求
+     * 使用ReplayEngine遍历所有已启用用户会话，替换令牌后重放
+     */
+    private void sendPrivilegeTestRequest(byte[] requestBytes) {
+        SessionManager sessionManager = SessionManager.getInstance();
+
+        if (!sessionManager.hasEnabledSessions()) {
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(mainPanel,
+                    "没有已启用的用户会话，请先在\"权限测试\"标签页中配置用户会话",
+                    "权限测试配置缺失",
+                    JOptionPane.WARNING_MESSAGE);
+            });
+            return;
+        }
+
+        BurpExtender.printOutput("[*] 权限测试模式：开始重放请求...");
+        responsePanel.clear();
+
+        SwingUtilities.invokeLater(() -> {
+            setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        });
+
+        ReplayEngine replayEngine = ReplayEngine.getInstance();
+        replayEngine.replay(requestBytes, currentHttpService, currentRequestId, requestManager,
+                new ReplayEngine.ReplayCallback() {
+                    @Override
+                    public void onReplayComplete(RequestResponseRecord record, boolean isFirst) {
+                        // 添加到历史记录映射
+                        addHistoryRecord(record.getRequestId(), record);
+
+                        // 设置API值并添加到历史面板
+                        record.setApi(HttpRequestHelper.computeApiFromRequest(
+                                record.getPath(),
+                                record.getQueryParameters() != null ? record.getQueryParameters() : "",
+                                record.getRequestData()));
+                        historyPanel.addHistoryRecord(record);
+
+                        // 基准用户的响应显示在响应面板
+                        if (isFirst && record.getResponseData() != null && record.getResponseData().length > 0) {
+                            responsePanel.setResponse(record.getResponseData());
+                            updateStatusFromRecord(record);
+                        }
+
+                        // 打印判决结果日志
+                        JudgmentResult judgment = JudgmentResult.fromString(record.getJudgment());
+                        BurpExtender.printOutput(String.format(
+                                "[*] 权限测试重放完成: 用户=%s, 判决=%s, 相似度=%.2f",
+                                record.getUserSessionName(),
+                                judgment.getDisplayName(),
+                                record.getSimilarity()));
+                    }
+
+                    @Override
+                    public void onAllComplete() {
+                        SwingUtilities.invokeLater(() -> {
+                            setCursor(Cursor.getDefaultCursor());
+                        });
+                        BurpExtender.printOutput("[+] 权限测试重放全部完成");
+                    }
+                });
     }
 
     public void loadHistoryRecord(RequestResponseRecord record) {

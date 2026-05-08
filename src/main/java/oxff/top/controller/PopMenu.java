@@ -22,13 +22,21 @@ public class PopMenu implements ContextMenuItemsProvider {
 
             if (requestResponse != null && requestResponse.request() != null) {
                 // 创建菜单项
-                JMenuItem sendToEnhancedRepeater = new JMenuItem("发送到增强型Repeater");
-                sendToEnhancedRepeater.addActionListener(e -> {
-                    // 调用EnhancedRepeaterUI的方法处理所选请求
+                JMenuItem sendToRepeater = new JMenuItem("发送到 Repeater Manager");
+                sendToRepeater.addActionListener(e -> {
+                    // 调用 RepeaterManagerUI 的方法处理所选请求
                     BurpExtender.setRepeaterUIRequest(requestResponse);
                 });
 
-                menuItems.add(sendToEnhancedRepeater);
+                // 创建权限测试菜单项
+                JMenuItem sendToPrivilegeTest = new JMenuItem("发送到权限测试");
+                sendToPrivilegeTest.addActionListener(e -> {
+                    // 调用权限测试方法，自动加载请求并启动重放
+                    BurpExtender.setPrivilegeTestRequest(requestResponse);
+                });
+
+                menuItems.add(sendToRepeater);
+                menuItems.add(sendToPrivilegeTest);
             }
         }
 

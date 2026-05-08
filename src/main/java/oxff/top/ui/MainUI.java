@@ -123,7 +123,7 @@ public class MainUI extends JPanel {
     
     /**
      * 使用Burp面板组件创建主UI
-     * 用于从EnhancedRepeaterUI中调用，处理不同类型的请求和响应面板
+     * 用于从 RepeaterManagerUI 中调用，处理不同类型的请求和响应面板
      * 
      * @param requestListPanel 请求列表面板
      * @param burpRequestPanel Burp请求面板
@@ -151,7 +151,7 @@ public class MainUI extends JPanel {
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
         this.autoSaveService = new AutoSaveService();
         
-        BurpExtender.printOutput("[*] 使用增强型Repeater面板创建临时MainUI实例，用于数据刷新");
+        BurpExtender.printOutput("[*] 使用 Repeater Manager 面板创建临时MainUI实例，用于数据刷新");
     }
     
     /**

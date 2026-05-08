@@ -6,7 +6,7 @@
 
     <groupId>org.oxff</groupId>
     <artifactId>repeaterManger</artifactId>
-    <version>2.0.0</version>
+    <version>2.2.0</version>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -123,7 +123,7 @@
                             <Build-Timestamp>${timestamp}</Build-Timestamp>
                         </manifestEntries>
                     </archive>
-                    <finalName>enhanced-repeater-${project.version}</finalName>
+                    <finalName>repeater-manager-${project.version}</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                 </configuration>
                 <executions>
@@ -155,7 +155,7 @@
                                 <resource>
                                     <directory>${project.build.directory}</directory>
                                     <includes>
-                                        <include>enhanced-repeater-${project.version}.jar</include>
+                                        <include>repeater-manager-${project.version}.jar</include>
                                     </includes>
                                 </resource>
                             </resources>
@@ -183,13 +183,13 @@
                                 <mkdir dir="${release.dir}"/>
 
                                 <!-- 使用简单的copy任务复制并重命名文件 -->
-                                <copy file="${project.build.directory}/enhanced-repeater-${project.version}.jar"
-                                      tofile="${release.dir}/enhanced-repeater-${project.version}-${timestamp}.jar"
+                                <copy file="${project.build.directory}/repeater-manager-${project.version}.jar"
+                                      tofile="${release.dir}/repeater-manager-${project.version}-${timestamp}.jar"
                                       overwrite="true"/>
 
                                 <!-- 输出日志信息 -->
-                                <echo message="开发测试版本JAR: ${project.build.directory}/enhanced-repeater-${project.version}.jar"/>
-                                <echo message="带时间戳发布版本JAR: ${release.dir}/enhanced-repeater-${project.version}-${timestamp}.jar"/>
+                                <echo message="开发测试版本JAR: ${project.build.directory}/repeater-manager-${project.version}.jar"/>
+                                <echo message="带时间戳发布版本JAR: ${release.dir}/repeater-manager-${project.version}-${timestamp}.jar"/>
                             </tasks>
                         </configuration>
                     </execution>

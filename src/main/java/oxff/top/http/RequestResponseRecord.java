@@ -25,6 +25,11 @@ public class RequestResponseRecord {
     private Color color;               // 标记颜色
     private byte[] requestData;        // 原始请求数据
     private byte[] responseData;       // 原始响应数据
+
+    // 权限测试相关字段（null表示普通模式）
+    private String userSessionName;    // 权限测试时对应的用户会话名称
+    private String judgment;           // 判决结果：PENDING/ESCALATED/NOT_ESCALATED/ERROR
+    private double similarity = -1;    // Levenshtein相似度（-1表示不适用）
     
     /**
      * 默认构造函数
@@ -322,6 +327,30 @@ public class RequestResponseRecord {
         }
         
         return trimmed.substring(0, maxLength) + "...";
+    }
+
+    public String getUserSessionName() {
+        return userSessionName;
+    }
+
+    public void setUserSessionName(String userSessionName) {
+        this.userSessionName = userSessionName;
+    }
+
+    public String getJudgment() {
+        return judgment;
+    }
+
+    public void setJudgment(String judgment) {
+        this.judgment = judgment;
+    }
+
+    public double getSimilarity() {
+        return similarity;
+    }
+
+    public void setSimilarity(double similarity) {
+        this.similarity = similarity;
     }
     
     /**

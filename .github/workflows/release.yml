@@ -1,4 +1,4 @@
-name: 发布增强重放插件
+name: 发布 Repeater Manager 插件
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
           fi
           
           # 找到生成的 jar 文件（Maven resources plugin 已复制到 target/releases/）
-          JAR_PATH=$(find target/releases/ -name "enhanced-repeater-*.jar" ! -name "*-*-*-*.jar" | head -n 1)
+          JAR_PATH=$(find target/releases/ -name "repeater-manager-*.jar" ! -name "*-*-*-*.jar" | head -n 1)
           if [ -z "$JAR_PATH" ]; then
             echo "找不到构建后的 jar 文件"
             exit 1
@@ -93,11 +93,11 @@ jobs:
           # 检查是否有变更记录
           if [ -z "$CHANGELOG" ]; then
             echo "未找到有效的提交信息，使用默认发布说明"
-            CHANGELOG="Enhanced Repeater Manager 版本 ${{ steps.check-tag.outputs.version }}"
+            CHANGELOG="Repeater Manager 版本 ${{ steps.check-tag.outputs.version }}"
           fi
           
           # 将标题和说明写入文件
-          echo "# Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}" > release_notes.md
+          echo "# Repeater Manager ${{ steps.check-tag.outputs.version }}" > release_notes.md
           echo "" >> release_notes.md
           echo "## 变更记录" >> release_notes.md
           echo "" >> release_notes.md
@@ -113,7 +113,7 @@ jobs:
           echo "" >> release_notes.md
           echo "## 文件说明" >> release_notes.md
           echo "" >> release_notes.md
-          echo "- \`enhanced-repeater-${{ steps.check-tag.outputs.version }}.jar\` - 主版本，可直接安装使用" >> release_notes.md
+          echo "- \`repeater-manager-${{ steps.check-tag.outputs.version }}.jar\` - 主版本，可直接安装使用" >> release_notes.md
           
           echo "发布说明已保存到 release_notes.md"
           cat release_notes.md
@@ -143,7 +143,7 @@ jobs:
           # 使用GitHub CLI创建发布
           echo "正在创建GitHub Release..."
           RELEASE_URL=$(gh release create ${{ steps.check-tag.outputs.tag }} \
-            --title "Enhanced Repeater Manager ${{ steps.check-tag.outputs.version }}" \
+            --title "Repeater Manager ${{ steps.check-tag.outputs.version }}" \
             --notes-file release_notes.md \
             $PRERELEASE \
             "${{ steps.build.outputs.jar_path }}")
@@ -179,7 +179,7 @@ jobs:
 #        uses: softprops/action-gh-release@v1
 #        with:
 #          tag_name: ${{ needs.build-and-release.outputs.tag }}
-#          name: Enhanced Repeater Manager ${{ needs.build-and-release.outputs.version }}
+#          name: Repeater Manager ${{ needs.build-and-release.outputs.version }}
 #          body_path: release_notes.md
 #          draft: false
 #          prerelease: ${{ contains(needs.build-and-release.outputs.tag, '-') }}

@@ -1,6 +1,6 @@
 # 快速入门教程
 
-> 5 分钟上手 Enhanced Repeater Manager
+> 5 分钟上手 Repeater Manager
 
 ## 1. 安装插件
 
@@ -8,14 +8,14 @@
 2. 打开 Burp Suite Professional
 3. 进入 `Extender` → `Extensions` → 点击 `Add`
 4. 选择下载的 JAR 文件 → 点击 `Next`
-5. 看到 **"增强型Repeater 插件加载成功"** 即安装完成
+5. 看到 **"Repeater Manager 插件加载成功"** 即安装完成
 
 ## 2. 发送请求
 
 在 Burp Suite 任意位置，右键点击 HTTP 请求：
 
-- 选择 **"发送到增强型Repeater"**
-- 切换到顶部 **"增强型Repeater"** 标签页
+- 选择 **"发送到 Repeater Manager"**
+- 切换到顶部 **"Repeater Manager"** 标签页
 
 ## 3. 编辑和重放
 

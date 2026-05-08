@@ -1,6 +1,6 @@
 # Detailed Usage Tutorial
 
-This document provides detailed instructions for all features of Enhanced Repeater Manager.
+This document provides detailed instructions for all features of Repeater Manager.
 
 ---
 
@@ -30,7 +30,7 @@ This document provides detailed instructions for all features of Enhanced Repeat
 4. Click the `Add` button
 5. Select the downloaded JAR file in `Extension file`
 6. Click `Next` to complete installation
-7. You'll see **"增强型Repeater 插件加载成功"** in the Burp Suite output panel, confirming successful installation
+7. You'll see **"Repeater Manager 插件加载成功"** in the Burp Suite output panel, confirming successful installation
 
 ### 1.2 Uninstallation
 
@@ -44,7 +44,7 @@ Unload the old version and reload the new JAR file. It's recommended to export a
 
 ## 2. Interface Overview
 
-After loading, a **"增强型Repeater"** tab appears at the top of Burp Suite, containing three sub-tabs:
+After loading, a **"Repeater Manager"** tab appears at the top of Burp Suite, containing three sub-tabs:
 
 ### 2.1 Request Management Tab
 
@@ -87,7 +87,7 @@ Displays plugin runtime logs with level filtering support.
 
 ### 3.1 Sending Requests to the Plugin
 
-Right-click on any HTTP request in Burp Suite and select **"Send to Enhanced Repeater"** (发送到增强型Repeater). Supported locations include:
+Right-click on any HTTP request in Burp Suite and select **"Send to Repeater Manager"** (发送到 Repeater Manager). Supported locations include:
 
 - Proxy → HTTP History
 - Proxy → Intercept
@@ -236,7 +236,7 @@ All history records are automatically saved to the SQLite database and survive B
 
 ### 7.1 ERM Archive Format
 
-ERM (Enhanced Repeater Manager) is the plugin's native archive format, containing the complete database and body data.
+ERM (Repeater Manager) is the plugin's native archive format, containing the complete database and body data.
 
 **Export**:
 1. Navigate to Configuration → Data Import/Export
@@ -377,7 +377,7 @@ Use the ERM archive format for cross-session data migration:
 
 ## 11. FAQ
 
-### Q: I can't see the "增强型Repeater" tab after loading the plugin?
+### Q: I can't see the "Repeater Manager" tab after loading the plugin?
 
 A: Check if the plugin loaded successfully in the Extender → Extensions list, and review any error output. Ensure you're using Burp Suite Professional.
 

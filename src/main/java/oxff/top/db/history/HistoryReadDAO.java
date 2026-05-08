@@ -148,6 +148,7 @@ public class HistoryReadDAO {
                 "h.comment, h.color, " +
                 "h.req_header_hash, h.req_body_hash, h.req_body_storage, " +
                 "h.resp_header_hash, h.resp_body_hash, h.resp_body_storage, " +
+                "h.user_session_name, h.judgment, h.similarity, " +
                 "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM history h " +
                 "LEFT JOIN string_pool sd ON h.domain_hash = sd.hash " +
@@ -218,6 +219,28 @@ public class HistoryReadDAO {
                 api = record.getPath(); // Default to path
             }
             record.setApi(api);
+
+            // 权限测试相关字段（兼容v5旧数据库，列可能不存在）
+            try {
+                record.setUserSessionName(rs.getString("user_session_name"));
+            } catch (SQLException e) {
+                record.setUserSessionName(null);
+            }
+
+            try {
+                record.setJudgment(rs.getString("judgment"));
+            } catch (SQLException e) {
+                record.setJudgment(null);
+            }
+
+            try {
+                record.setSimilarity(rs.getDouble("similarity"));
+                if (rs.wasNull()) {
+                    record.setSimilarity(-1);
+                }
+            } catch (SQLException e) {
+                record.setSimilarity(-1);
+            }
 
             return record;
         } catch (Exception e) {

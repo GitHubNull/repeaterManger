@@ -1,0 +1,162 @@
+package oxff.top.privilege.model;
+
+import java.awt.Color;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * 用户会话模型
+ * 代表权限测试中的一个用户身份
+ * 每个用户为所有令牌位置提供不同的值
+ */
+public class UserSession {
+    private int id;
+    private String name;
+    private Color color;
+    private boolean enabled;
+    /** 令牌值映射：tokenLocationId -> value */
+    private Map<Integer, String> tokenValues;
+    private long createdAt;
+
+    public UserSession() {
+        this.name = "";
+        this.enabled = true;
+        this.tokenValues = new LinkedHashMap<>();
+        this.createdAt = System.currentTimeMillis();
+    }
+
+    public UserSession(String name, Color color, boolean enabled) {
+        this.name = name;
+        this.color = color;
+        this.enabled = enabled;
+        this.tokenValues = new LinkedHashMap<>();
+        this.createdAt = System.currentTimeMillis();
+    }
+
+    public UserSession(int id, String name, Color color, boolean enabled) {
+        this.id = id;
+        this.name = name;
+        this.color = color;
+        this.enabled = enabled;
+        this.tokenValues = new LinkedHashMap<>();
+        this.createdAt = System.currentTimeMillis();
+    }
+
+    // Getters and Setters
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Color getColor() {
+        return color;
+    }
+
+    public void setColor(Color color) {
+        this.color = color;
+    }
+
+    /**
+     * 获取颜色的十六进制表示
+     */
+    public String getColorHex() {
+        if (color == null) {
+            return null;
+        }
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    /**
+     * 从十六进制字符串设置颜色
+     */
+    public void setColorHex(String hex) {
+        if (hex != null && !hex.isEmpty()) {
+            try {
+                this.color = Color.decode(hex);
+            } catch (NumberFormatException e) {
+                this.color = null;
+            }
+        } else {
+            this.color = null;
+        }
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public Map<Integer, String> getTokenValues() {
+        return tokenValues;
+    }
+
+    public void setTokenValues(Map<Integer, String> tokenValues) {
+        this.tokenValues = tokenValues != null ? tokenValues : new LinkedHashMap<>();
+    }
+
+    /**
+     * 设置指定令牌位置的值
+     */
+    public void setTokenValue(int tokenLocationId, String value) {
+        tokenValues.put(tokenLocationId, value);
+    }
+
+    /**
+     * 获取指定令牌位置的值
+     */
+    public String getTokenValue(int tokenLocationId) {
+        return tokenValues.get(tokenLocationId);
+    }
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(long createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    /**
+     * 获取令牌值的摘要文本，用于表格展示
+     */
+    public String getTokenValuesSummary() {
+        if (tokenValues.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<Integer, String> entry : tokenValues.entrySet()) {
+            if (!first) {
+                sb.append(" | ");
+            }
+            String value = entry.getValue();
+            if (value != null && value.length() > 20) {
+                value = value.substring(0, 17) + "...";
+            }
+            sb.append(value != null ? value : "");
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    @Override
+    public String toString() {
+        return String.format("UserSession{id=%d, name='%s', enabled=%s, tokenCount=%d}",
+                id, name, enabled, tokenValues.size());
+    }
+}

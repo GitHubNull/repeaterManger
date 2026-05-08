@@ -1,4 +1,4 @@
-# Enhanced Repeater Manager - Burp Suite Enhanced Repeater Plugin
+# Repeater Manager - Burp Suite Repeater Manager Plugin
 
 <p align="center">
   <strong>Advanced HTTP request replay management plugin for Burp Suite, designed for security testers</strong>
@@ -12,7 +12,7 @@
 
 ## Introduction
 
-Enhanced Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. It provides more powerful features than the native Repeater, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
+Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. It provides more powerful features than the native Repeater, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
 > **Current Version**: v1.5.1 | **Requirements**: Burp Suite Professional + Java 8+
 
@@ -36,7 +36,7 @@ Enhanced Repeater Manager is an advanced HTTP request replay management plugin d
 ## Feature Architecture
 
 ```
-Enhanced Repeater Manager
+Repeater Manager
 ├── Plugin Integration (Burp Extender API)
 ├── Request Management
 │   ├── Request List (search/filter/color marking/comments)
@@ -93,8 +93,8 @@ Enhanced Repeater Manager
 ## Quick Start
 
 1. Right-click on any request in Burp Suite (e.g., Proxy, Intruder)
-2. Select **"Send to Enhanced Repeater"**
-3. Switch to the **"Enhanced Repeater"** tab to view and manage the request
+2. Select **"Send to Repeater Manager"**
+3. Switch to the **"Repeater Manager"** tab to view and manage the request
 4. Edit the request content and click **"Send"** to replay
 5. View each replay's response in the history panel at the bottom left
 
@@ -130,12 +130,12 @@ src/main/java/
 ├── burp/
 │   └── BurpExtender.java              # Burp extension entry point
 └── oxff/top/
-    ├── EnhancedRepeaterUI.java         # Main UI controller
+    ├── RepeaterManagerUI.java          # Main UI controller
     ├── config/
     │   ├── DatabaseConfig.java         # Database config (storage mode/logging/proxy)
     │   └── SessionDirectory.java       # Session directory management
     ├── controller/
-    │   └── PopMenu.java               # Context menu ("Send to Enhanced Repeater")
+    │   └── PopMenu.java               # Context menu ("Send to Repeater Manager")
     ├── db/
     │   ├── DatabaseManager.java        # Database connection management (pool/Schema init)
     │   ├── HistoryDAO.java             # History data access object
@@ -230,8 +230,8 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/enhanced-repeater-1.5.1.jar`
-- Timestamped release version: `target/releases/enhanced-repeater-1.5.1-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-1.5.1.jar`
+- Timestamped release version: `target/releases/repeater-manager-1.5.1-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 

@@ -34,6 +34,16 @@ public class SchemaMigrator {
         if (currentVersion < 5) {
             migrateV4ToV5(conn);
         }
+
+        // v5→v6 迁移
+        if (currentVersion < 6) {
+            migrateV5ToV6(conn);
+        }
+
+        // v6→v7 迁移
+        if (currentVersion < 7) {
+            migrateV6ToV7(conn);
+        }
     }
 
     /**
@@ -164,6 +174,141 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '5')");
 
             BurpExtender.printOutput("[+] v4→v5 迁移完成");
+        }
+    }
+
+    /**
+     * v5→v6 迁移：新增权限测试相关表和history表扩展列
+     */
+    private static void migrateV5ToV6(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v5→v6迁移...");
+
+            // 创建令牌位置表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS token_locations (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "type TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "description TEXT DEFAULT '', " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建用户会话表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS user_sessions (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL, " +
+                "color TEXT, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建令牌值关联表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS token_values (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "token_location_id INTEGER NOT NULL, " +
+                "user_session_id INTEGER NOT NULL, " +
+                "value TEXT NOT NULL, " +
+                "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (user_session_id) REFERENCES user_sessions(id) ON DELETE CASCADE, " +
+                "UNIQUE (token_location_id, user_session_id)" +
+                ")"
+            );
+
+            // 创建判决规则表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS judgment_rules (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL DEFAULT '', " +
+                "target TEXT NOT NULL, " +
+                "method TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "priority INTEGER NOT NULL DEFAULT 1, " +
+                "success_color TEXT DEFAULT '#FF0000', " +
+                "failure_color TEXT DEFAULT '#00FF00', " +
+                "success_note TEXT DEFAULT '', " +
+                "failure_note TEXT DEFAULT '', " +
+                "remark TEXT DEFAULT '', " +
+                "global INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // history表新增3列
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN user_session_name TEXT DEFAULT NULL");
+                BurpExtender.printOutput("[+] history表添加user_session_name列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加user_session_name列失败: " + e.getMessage());
+                }
+            }
+
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN judgment TEXT DEFAULT NULL");
+                BurpExtender.printOutput("[+] history表添加judgment列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加judgment列失败: " + e.getMessage());
+                }
+            }
+
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN similarity REAL DEFAULT -1");
+                BurpExtender.printOutput("[+] history表添加similarity列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加similarity列失败: " + e.getMessage());
+                }
+            }
+
+            // 创建v6新增索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_location ON token_values(token_location_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_session ON token_values(user_session_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_judgment ON history(judgment)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_session ON history(user_session_name)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_judgment_rules_enabled ON judgment_rules(enabled, priority)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '6' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '6')");
+
+            BurpExtender.printOutput("[+] v5→v6 迁移完成");
+        }
+    }
+
+    /**
+     * v6→v7 迁移：新增 scope_entries 表
+     */
+    private static void migrateV6ToV7(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v6→v7迁移...");
+
+            // 创建Scope条目表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS scope_entries (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL DEFAULT '', " +
+                "url_pattern TEXT NOT NULL, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "description TEXT DEFAULT '', " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_scope_entries_enabled ON scope_entries(enabled)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '7' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '7')");
+
+            BurpExtender.printOutput("[+] v6→v7 迁移完成");
         }
     }
 }
