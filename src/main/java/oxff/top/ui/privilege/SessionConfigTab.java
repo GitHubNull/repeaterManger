@@ -1,6 +1,7 @@
 package oxff.top.ui.privilege;
 
 import oxff.top.privilege.SessionManager;
+import oxff.top.privilege.UserSessionYamlIO;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.TokenLocationType;
 import oxff.top.privilege.model.UserSession;
@@ -56,19 +57,36 @@ public class SessionConfigTab extends JPanel {
         tokenLocationTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // 持久化到全局
         tokenLocationTable.getColumnModel().getColumn(4).setPreferredWidth(50);   // 启用
 
-        // 双击编辑令牌位置
+        // 令牌位置表格：双击编辑 + 右键行选择 + 右键菜单
         tokenLocationTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
-                    // 确保点击在数据行上而非表头
                     int row = tokenLocationTable.rowAtPoint(e.getPoint());
                     if (row >= 0) {
                         editTokenLocation();
                     }
                 }
             }
+            @Override
+            public void mousePressed(MouseEvent e) {
+                selectRowOnRightClick(e, tokenLocationTable);
+            }
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                selectRowOnRightClick(e, tokenLocationTable);
+            }
         });
+
+        // 令牌位置右键菜单
+        JPopupMenu tokenLocationPopupMenu = new JPopupMenu();
+        JMenuItem editTokenLocItem = new JMenuItem("编辑");
+        editTokenLocItem.addActionListener(e -> editTokenLocation());
+        JMenuItem deleteTokenLocItem = new JMenuItem("删除");
+        deleteTokenLocItem.addActionListener(e -> deleteTokenLocation());
+        tokenLocationPopupMenu.add(editTokenLocItem);
+        tokenLocationPopupMenu.add(deleteTokenLocItem);
+        tokenLocationTable.setComponentPopupMenu(tokenLocationPopupMenu);
 
         JScrollPane tokenScroll = new JScrollPane(tokenLocationTable);
         tokenScroll.setPreferredSize(new Dimension(0, 120));
@@ -107,6 +125,37 @@ public class SessionConfigTab extends JPanel {
         userSessionTable.getColumnModel().getColumn(2).setPreferredWidth(50);   // 启用
         userSessionTable.getColumnModel().getColumn(3).setPreferredWidth(300);  // 令牌值摘要
 
+        // 用户会话表格：双击编辑 + 右键行选择 + 右键菜单
+        userSessionTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
+                    int row = userSessionTable.rowAtPoint(e.getPoint());
+                    if (row >= 0) {
+                        editUserSession();
+                    }
+                }
+            }
+            @Override
+            public void mousePressed(MouseEvent e) {
+                selectRowOnRightClick(e, userSessionTable);
+            }
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                selectRowOnRightClick(e, userSessionTable);
+            }
+        });
+
+        // 用户会话右键菜单
+        JPopupMenu userSessionPopupMenu = new JPopupMenu();
+        JMenuItem editSessionItem = new JMenuItem("编辑");
+        editSessionItem.addActionListener(e -> editUserSession());
+        JMenuItem deleteSessionItem = new JMenuItem("删除");
+        deleteSessionItem.addActionListener(e -> deleteUserSession());
+        userSessionPopupMenu.add(editSessionItem);
+        userSessionPopupMenu.add(deleteSessionItem);
+        userSessionTable.setComponentPopupMenu(userSessionPopupMenu);
+
         JScrollPane sessionScroll = new JScrollPane(userSessionTable);
         sessionScroll.setPreferredSize(new Dimension(0, 150));
 
@@ -115,16 +164,22 @@ public class SessionConfigTab extends JPanel {
         JButton editSessionBtn = new JButton("编辑用户");
         JButton deleteSessionBtn = new JButton("删除用户");
         JButton toggleEnableBtn = new JButton("启用/禁用");
+        JButton importSessionBtn = new JButton("导入");
+        JButton exportSessionBtn = new JButton("导出");
 
         addSessionBtn.addActionListener(e -> addUserSession());
         editSessionBtn.addActionListener(e -> editUserSession());
         deleteSessionBtn.addActionListener(e -> deleteUserSession());
         toggleEnableBtn.addActionListener(e -> toggleUserSessionEnabled());
+        importSessionBtn.addActionListener(e -> importUserSessions());
+        exportSessionBtn.addActionListener(e -> exportUserSessions());
 
         sessionButtonPanel.add(addSessionBtn);
         sessionButtonPanel.add(editSessionBtn);
         sessionButtonPanel.add(deleteSessionBtn);
         sessionButtonPanel.add(toggleEnableBtn);
+        sessionButtonPanel.add(importSessionBtn);
+        sessionButtonPanel.add(exportSessionBtn);
 
         userSessionPanel.add(sessionScroll, BorderLayout.CENTER);
         userSessionPanel.add(sessionButtonPanel, BorderLayout.SOUTH);
@@ -167,6 +222,18 @@ public class SessionConfigTab extends JPanel {
 
         // 初始加载数据
         refreshData();
+    }
+
+    /**
+     * 右键点击时选中光标所在行
+     */
+    private void selectRowOnRightClick(MouseEvent e, JTable table) {
+        if (SwingUtilities.isRightMouseButton(e)) {
+            int row = table.rowAtPoint(e.getPoint());
+            if (row >= 0) {
+                table.setRowSelectionInterval(row, row);
+            }
+        }
     }
 
     /**
@@ -412,6 +479,105 @@ public class SessionConfigTab extends JPanel {
             }
         }
     }
+
+    // ========== 用户会话导入导出 ==========
+
+    /**
+     * 导出用户会话到YAML文件
+     */
+    private void exportUserSessions() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("导出用户会话");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+        fileChooser.setSelectedFile(new File("user_sessions.yaml"));
+
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
+                file = new File(file.getAbsolutePath() + ".yaml");
+            }
+
+            try {
+                SessionManager sm = SessionManager.getInstance();
+                List<UserSession> sessions = sm.getUserSessions();
+                List<TokenLocation> locations = sm.getTokenLocations();
+
+                boolean success = UserSessionYamlIO.writeToFile(sessions, locations, file.getAbsolutePath());
+                if (success) {
+                    JOptionPane.showMessageDialog(this,
+                        "成功导出 " + sessions.size() + " 个用户会话到:\n" + file.getAbsolutePath(),
+                        "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                        "导出失败", "导出错误", JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this,
+                    "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    /**
+     * 从YAML文件导入用户会话
+     */
+    private void importUserSessions() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("导入用户会话");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+
+            try {
+                SessionManager sm = SessionManager.getInstance();
+                List<TokenLocation> locations = sm.getTokenLocations();
+                List<UserSession> importedSessions = UserSessionYamlIO.readFromFile(file.getAbsolutePath(), locations);
+
+                if (importedSessions.isEmpty()) {
+                    JOptionPane.showMessageDialog(this,
+                        "文件中没有找到用户会话数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+
+                // 选择导入模式：合并或替换
+                String[] options = {"合并导入", "替换导入", "取消"};
+                int choice = JOptionPane.showOptionDialog(this,
+                    "发现 " + importedSessions.size() + " 个用户会话，请选择导入方式：\n" +
+                    "合并导入：保留现有数据，仅添加不重名的会话\n" +
+                    "替换导入：清空所有现有会话后导入",
+                    "导入方式",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                    null, options, options[0]);
+
+                if (choice == 0) {
+                    // 合并导入
+                    int count = sm.importUserSessionsMerge(importedSessions);
+                    refreshData();
+                    JOptionPane.showMessageDialog(this,
+                        "合并导入完成，新增 " + count + " 个用户会话",
+                        "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                } else if (choice == 1) {
+                    // 替换导入
+                    int confirm = JOptionPane.showConfirmDialog(this,
+                        "替换导入将删除所有现有用户会话，是否继续？",
+                        "替换确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    if (confirm == JOptionPane.YES_OPTION) {
+                        int count = sm.importUserSessionsReplace(importedSessions);
+                        refreshData();
+                        JOptionPane.showMessageDialog(this,
+                            "替换导入完成，共导入 " + count + " 个用户会话",
+                            "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this,
+                    "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // ========== 辅助方法 ==========
 
     private static Map<String, Object> castToMap(Map<?, ?> map) {
         Map<String, Object> result = new LinkedHashMap<>();

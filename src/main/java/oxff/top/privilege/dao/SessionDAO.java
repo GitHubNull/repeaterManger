@@ -233,6 +233,21 @@ public class SessionDAO {
         return false;
     }
 
+    /**
+     * 删除所有用户会话（级联删除关联的token_values）
+     */
+    public boolean deleteAllUserSessions() {
+        String sql = "DELETE FROM user_sessions";
+        try (Connection conn = DatabaseManager.getInstance().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 删除所有用户会话失败: " + e.getMessage());
+        }
+        return false;
+    }
+
     // ==================== TokenValue CRUD ====================
 
     /**

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-05-09
+
+### Added
+- 新增 UserSessionYamlIO 工具类，支持用户会话的 YAML 序列化/反序列化与原子文件写入
+- 新增用户会话导出功能：将用户会话及令牌值导出为 YAML 文件
+- 新增用户会话导入功能：支持合并导入（按名称去重）和替换导入两种模式
+- SessionManager 新增 `importUserSessionsMerge()` 和 `importUserSessionsReplace()` 方法
+- SessionConfigTab 新增导入/导出按钮，集成文件选择器和导入模式选择对话框
+- SessionConfigTab 新增鼠标右键点击时自动选中行的交互优化
+
 ## [2.7.0] - 2026-05-09
 
 ### Added

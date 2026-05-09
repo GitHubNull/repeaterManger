@@ -202,6 +202,63 @@ public class SessionManager {
         return result;
     }
 
+    /**
+     * 合并导入用户会话（按name去重，同名跳过）
+     *
+     * @param newSessions 要导入的用户会话列表
+     * @return 实际导入的数量
+     */
+    public int importUserSessionsMerge(List<UserSession> newSessions) {
+        // 收集已有会话名称
+        Set<String> existingNames = new java.util.HashSet<>();
+        for (UserSession existing : getUserSessions()) {
+            existingNames.add(existing.getName());
+        }
+
+        int imported = 0;
+        for (UserSession session : newSessions) {
+            if (existingNames.contains(session.getName())) {
+                continue;
+            }
+            int id = sessionDAO.addUserSession(session.getName(), session.getColorHex(), session.isEnabled());
+            if (id > 0) {
+                if (!session.getTokenValues().isEmpty()) {
+                    sessionDAO.saveTokenValues(id, session.getTokenValues());
+                }
+                imported++;
+            }
+        }
+
+        if (imported > 0) {
+            refreshCache();
+        }
+        return imported;
+    }
+
+    /**
+     * 替换导入用户会话（清空所有现有会话后导入）
+     *
+     * @param newSessions 要导入的用户会话列表
+     * @return 实际导入的数量
+     */
+    public int importUserSessionsReplace(List<UserSession> newSessions) {
+        sessionDAO.deleteAllUserSessions();
+
+        int imported = 0;
+        for (UserSession session : newSessions) {
+            int id = sessionDAO.addUserSession(session.getName(), session.getColorHex(), session.isEnabled());
+            if (id > 0) {
+                if (!session.getTokenValues().isEmpty()) {
+                    sessionDAO.saveTokenValues(id, session.getTokenValues());
+                }
+                imported++;
+            }
+        }
+
+        refreshCache();
+        return imported;
+    }
+
     // ==================== 全局令牌位置加载 ====================
 
     /**
