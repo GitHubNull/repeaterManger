@@ -23,6 +23,7 @@ import oxff.top.ui.privilege.PrivilegeTestPanel;
 import oxff.top.ui.UsageTutorialPanel;
 import oxff.top.ui.AboutPanel;
 import oxff.top.db.history.HistoryReadDAO;
+import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.db.RequestDAO;
 
 import javax.swing.*;
@@ -69,6 +70,9 @@ public class RepeaterManagerUI {
     // 请求调度处理器
     private final RequestDispatchHandler dispatchHandler;
 
+    // 模式切换按钮
+    private JToggleButton modeToggleButton;
+
     /**
      * 创建 Repeater Manager 界面
      *
@@ -109,6 +113,29 @@ public class RepeaterManagerUI {
 
         // 初始化请求调度处理器
         dispatchHandler = new RequestDispatchHandler(mainPanel, requestPanel, responsePanel, historyPanel, requestListPanel, statusPanel, requestManager);
+
+        // 注册模式变更监听器：同步状态栏指示
+        dispatchHandler.addModeChangeListener(mode -> {
+            SwingUtilities.invokeLater(() -> statusPanel.setModeIndicator(mode));
+        });
+
+        // 注册模式变更监听器：同步切换按钮状态
+        dispatchHandler.addModeChangeListener(mode -> {
+            SwingUtilities.invokeLater(() -> {
+                if (modeToggleButton != null) {
+                    modeToggleButton.setSelected(mode);
+                    if (mode) {
+                        modeToggleButton.setText("权限测试");
+                        modeToggleButton.setForeground(new Color(200, 80, 0));
+                        modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.BOLD));
+                    } else {
+                        modeToggleButton.setText("普通模式");
+                        modeToggleButton.setForeground(UIManager.getColor("Button.foreground"));
+                        modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.PLAIN));
+                    }
+                }
+            });
+        });
 
         // 设置发送请求按钮动作
         requestPanel.setSendButtonListener(e -> dispatchHandler.sendRequest());
@@ -173,12 +200,9 @@ public class RepeaterManagerUI {
         tabbedPane.addTab("使用教程", usageTutorialPanel);
         tabbedPane.addTab("关于", aboutPanel);
 
-        // 监听标签页切换，自动开启/关闭权限测试模式
+        // 监听标签页切换（不再绑定权限测试模式，模式通过工具栏按钮独立控制）
         tabbedPane.addChangeListener(e -> {
-            int selectedIndex = tabbedPane.getSelectedIndex();
-            String selectedTitle = tabbedPane.getTitleAt(selectedIndex);
-            dispatchHandler.setPrivilegeTestMode("权限测试".equals(selectedTitle));
-            BurpExtender.printOutput("[*] 权限测试模式: " + (dispatchHandler.isPrivilegeTestMode() ? "已开启" : "已关闭"));
+            // Tab切换不再自动改变权限测试模式
         });
 
         // 注册LogPanel到LogManager
@@ -218,6 +242,28 @@ public class RepeaterManagerUI {
 
         leftToolPanel.add(newRequestButton);
         leftToolPanel.add(clearButton);
+
+        // 分隔符
+        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
+        // 模式切换按钮
+        modeToggleButton = new JToggleButton("普通模式");
+        modeToggleButton.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
+        modeToggleButton.addActionListener(e -> {
+            boolean selected = modeToggleButton.isSelected();
+            if (selected) {
+                modeToggleButton.setText("权限测试");
+                modeToggleButton.setForeground(new Color(200, 80, 0));
+                modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.BOLD));
+            } else {
+                modeToggleButton.setText("普通模式");
+                modeToggleButton.setForeground(UIManager.getColor("Button.foreground"));
+                modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.PLAIN));
+            }
+            dispatchHandler.setPrivilegeTestMode(selected);
+            BurpExtender.printOutput("[*] 权限测试模式: " + (selected ? "已开启" : "已关闭"));
+        });
+        leftToolPanel.add(modeToggleButton);
 
         // 右侧布局控制区
         JPanel rightToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -487,6 +533,15 @@ public class RepeaterManagerUI {
                 dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
 
                 BurpExtender.printOutput("[+] 请求已加载到 Repeater Manager: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
+
+                // 越权测试模式下自动触发越权重放
+                if (dispatchHandler.isPrivilegeTestMode()) {
+                    new RequestDAO().markAsPrivilegeTest(dbId);
+                    requestListPanel.updatePrivilegeTestFlag(dbId, true);
+                    BurpExtender.printOutput("[*] 权限测试模式已开启，自动触发越权重放...");
+                    SwingUtilities.invokeLater(() -> dispatchHandler.sendRequest());
+                }
+
                 return dbId;
             }
         } catch (Exception e) {
@@ -534,6 +589,17 @@ public class RepeaterManagerUI {
      */
     public void addPrivilegeTestHistoryRecord(RequestResponseRecord record) {
         if (record == null) return;
+
+        // 持久化到数据库（与 HistoryPanel.addHistoryRecord(int, HttpRequestResponse) 保持一致）
+        HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
+        int historyId = historyWriteDAO.saveHistory(record);
+        if (historyId > 0) {
+            record.setId(historyId);
+            BurpExtender.printOutput("[+] 越权测试记录已保存到数据库，ID: " + historyId);
+        } else {
+            BurpExtender.printError("[!] 越权测试记录保存到数据库失败");
+        }
+
         // 添加到历史面板
         historyPanel.addHistoryRecord(record);
         // 添加到内存映射

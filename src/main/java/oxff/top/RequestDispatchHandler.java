@@ -5,6 +5,7 @@ import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
+import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
@@ -50,6 +51,16 @@ public class RequestDispatchHandler {
     // 权限测试模式状态
     private boolean privilegeTestMode = false;
 
+    // 模式变更监听器列表
+    private final List<ModeChangeListener> modeListeners = new ArrayList<>();
+
+    /**
+     * 模式变更监听器接口
+     */
+    public interface ModeChangeListener {
+        void onModeChanged(boolean privilegeTestMode);
+    }
+
     // 请求历史记录映射: 请求ID -> 历史记录列表
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
 
@@ -93,11 +104,35 @@ public class RequestDispatchHandler {
     }
 
     public void setPrivilegeTestMode(boolean enabled) {
+        if (this.privilegeTestMode == enabled) {
+            return; // no-op guard
+        }
         this.privilegeTestMode = enabled;
+        fireModeChanged(enabled);
     }
 
     public boolean isPrivilegeTestMode() {
         return privilegeTestMode;
+    }
+
+    public void addModeChangeListener(ModeChangeListener listener) {
+        if (listener != null) {
+            modeListeners.add(listener);
+        }
+    }
+
+    public void removeModeChangeListener(ModeChangeListener listener) {
+        modeListeners.remove(listener);
+    }
+
+    private void fireModeChanged(boolean newMode) {
+        for (ModeChangeListener listener : modeListeners) {
+            try {
+                listener.onModeChanged(newMode);
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 模式变更监听器异常: " + e.getMessage());
+            }
+        }
     }
 
     public Map<Integer, List<RequestResponseRecord>> getRequestHistoryMap() {
@@ -539,11 +574,26 @@ public class RequestDispatchHandler {
                         // 添加到历史记录映射
                         addHistoryRecord(record.getRequestId(), record);
 
-                        // 设置API值并添加到历史面板
+                        // 设置API值
                         record.setApi(HttpRequestHelper.computeApiFromRequest(
                                 record.getPath(),
                                 record.getQueryParameters() != null ? record.getQueryParameters() : "",
                                 record.getRequestData()));
+
+                        // 持久化到数据库（关键：供越权测试报告查询使用）
+                        try {
+                            HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
+                            int historyId = historyWriteDAO.saveHistory(record);
+                            if (historyId > 0) {
+                                record.setId(historyId);
+                            } else {
+                                BurpExtender.printError("[!] 越权测试记录保存到数据库失败，报告将无法统计该条记录");
+                            }
+                        } catch (Exception ex) {
+                            BurpExtender.printError("[!] 保存越权测试记录异常: " + ex.getMessage());
+                        }
+
+                        // 添加到历史面板
                         historyPanel.addHistoryRecord(record);
 
                         // 基准用户的响应显示在响应面板

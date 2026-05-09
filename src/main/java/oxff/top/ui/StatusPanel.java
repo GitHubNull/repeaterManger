@@ -14,6 +14,7 @@ public class StatusPanel extends JPanel {
     private static final String PLACEHOLDER = "--";
     private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 
+    private final JLabel modeLabel;
     private final JLabel statusLabel;
     private final JLabel responseSizeLabel;
     private final JLabel requestTimeLabel;
@@ -23,6 +24,12 @@ public class StatusPanel extends JPanel {
     public StatusPanel() {
         setLayout(new FlowLayout(FlowLayout.LEFT, 12, 2));
         setBorder(BorderFactory.createEtchedBorder());
+
+        // 模式指示
+        add(new JLabel("模式:"));
+        modeLabel = new JLabel("普通模式");
+        modeLabel.setForeground(new Color(0, 100, 200));
+        add(modeLabel);
 
         // 状态
         add(createSeparator());
@@ -81,6 +88,25 @@ public class StatusPanel extends JPanel {
     }
 
     /**
+     * 设置模式指示器
+     *
+     * @param privilegeTestMode true=权限测试模式, false=普通模式
+     */
+    public void setModeIndicator(boolean privilegeTestMode) {
+        SwingUtilities.invokeLater(() -> {
+            if (privilegeTestMode) {
+                modeLabel.setText("权限测试");
+                modeLabel.setForeground(new Color(200, 80, 0));
+                modeLabel.setFont(modeLabel.getFont().deriveFont(Font.BOLD));
+            } else {
+                modeLabel.setText("普通模式");
+                modeLabel.setForeground(new Color(0, 100, 200));
+                modeLabel.setFont(modeLabel.getFont().deriveFont(Font.PLAIN));
+            }
+        });
+    }
+
+    /**
      * 清空状态栏，恢复初始状态
      */
     public void clear() {
@@ -90,6 +116,8 @@ public class StatusPanel extends JPanel {
         requestTimeLabel.setText(PLACEHOLDER);
         responseTimeLabel.setText(PLACEHOLDER);
         durationLabel.setText(PLACEHOLDER);
+        // 重置模式指示为普通模式
+        setModeIndicator(false);
     }
 
     private JLabel createSeparator() {

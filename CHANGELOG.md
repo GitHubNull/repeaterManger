@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-05-09
+
+### Added
+- 新增权限测试报告生成系统，支持 HTML、Markdown、PDF 三种格式导出
+- 新增 ReportGenerator 报告生成器接口及多格式实现（HtmlReportGenerator、MarkdownReportGenerator、PdfReportGenerator）
+- 新增 ReportData 数据模型，封装报告元数据、摘要、端点统计和会话分析
+- 新增 ReportExporter 统一导出入口，自动根据文件扩展名选择格式
+- 新增 CurlBuilder，生成 curl 命令片段用于报告中的请求复现
+- 新增 PostmanSnippetBuilder，生成 Postman 代码片段用于报告中的请求复现
+- 新增 PDFBox 依赖，支持原生 PDF 报告生成
+- 历史记录 DAO（HistoryReadDAO）新增按请求 ID 批量查询方法
+- 请求分发处理器新增权限测试模式支持
+- 主界面和状态面板新增权限测试相关 UI 集成
+- PrivilegeTestPanel 新增报告导出交互入口
+
 ## [2.5.1] - 2026-05-09
 
 ### Changed

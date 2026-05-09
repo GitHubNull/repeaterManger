@@ -12,7 +12,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 历史记录读取DAO
@@ -312,5 +314,90 @@ public class HistoryReadDAO {
     String getStringWithDefault(ResultSet rs, String columnName, String defaultValue) throws SQLException {
         String value = rs.getString(columnName);
         return (value != null) ? value : defaultValue;
+    }
+
+    // ========== 权限测试报告查询方法 ==========
+
+    /**
+     * 获取所有越权测试结果记录
+     */
+    public List<RequestResponseRecord> getPrivilegeTestResults() {
+        String sql = buildHistorySelectQuery()
+                + " WHERE h.user_session_name IS NOT NULL AND h.judgment IS NOT NULL"
+                + " ORDER BY h.domain_hash, h.path_hash, h.user_session_name, h.id DESC";
+
+        List<RequestResponseRecord> records = new ArrayList<>();
+
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                RequestResponseRecord record = mapResultSetToRecord(conn, rs);
+                if (record != null) {
+                    records.add(record);
+                }
+            }
+
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取越权测试结果失败: " + e.getMessage());
+        }
+
+        return records;
+    }
+
+    /**
+     * 获取越权测试统计（按判决结果分组）
+     */
+    public Map<String, Integer> getPrivilegeTestStats() {
+        String sql = "SELECT judgment, COUNT(*) as cnt FROM history"
+                + " WHERE user_session_name IS NOT NULL AND judgment IS NOT NULL"
+                + " GROUP BY judgment";
+
+        Map<String, Integer> stats = new HashMap<>();
+
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                stats.put(rs.getString("judgment"), rs.getInt("cnt"));
+            }
+
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取越权测试统计失败: " + e.getMessage());
+        }
+
+        return stats;
+    }
+
+    /**
+     * 获取越权测试按会话分布统计
+     */
+    public List<Map<String, Object>> getPrivilegeTestStatsBySession() {
+        String sql = "SELECT user_session_name, judgment, COUNT(*) as cnt FROM history"
+                + " WHERE user_session_name IS NOT NULL AND judgment IS NOT NULL"
+                + " GROUP BY user_session_name, judgment"
+                + " ORDER BY user_session_name, judgment";
+
+        List<Map<String, Object>> stats = new ArrayList<>();
+
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("user_session_name", rs.getString("user_session_name"));
+                row.put("judgment", rs.getString("judgment"));
+                row.put("cnt", rs.getInt("cnt"));
+                stats.add(row);
+            }
+
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取越权测试会话统计失败: " + e.getMessage());
+        }
+
+        return stats;
     }
 }
