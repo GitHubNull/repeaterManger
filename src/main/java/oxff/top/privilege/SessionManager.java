@@ -9,6 +9,7 @@ import oxff.top.privilege.model.UserSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 会话管理器（单例）
@@ -81,23 +82,64 @@ public class SessionManager {
         int id = sessionDAO.addTokenLocation(type, expression, description, persistToGlobal, enabled);
         if (id > 0) {
             refreshCache();
+            // 同步到全局YAML
+            if (persistToGlobal) {
+                TokenLocation loc = new TokenLocation(type, expression, description, true, enabled);
+                GlobalTokenLocationManager.getInstance().addLocation(loc);
+            }
         }
         return id;
     }
 
     public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description,
                                        boolean persistToGlobal, boolean enabled) {
+        // 先获取旧的令牌位置（用于全局YAML更新时的旧键匹配）
+        TokenLocation oldLocation = null;
+        for (TokenLocation loc : cachedTokenLocations) {
+            if (loc.getId() == id) {
+                oldLocation = loc;
+                break;
+            }
+        }
+
         boolean result = sessionDAO.updateTokenLocation(id, type, expression, description, persistToGlobal, enabled);
         if (result) {
             refreshCache();
+            // 同步到全局YAML
+            TokenLocation newLocation = new TokenLocation(type, expression, description, persistToGlobal, enabled);
+            GlobalTokenLocationManager globalMgr = GlobalTokenLocationManager.getInstance();
+            if (oldLocation != null) {
+                if (persistToGlobal) {
+                    globalMgr.updateLocation(oldLocation.getType().name(), oldLocation.getExpression(), newLocation);
+                } else {
+                    // 取消持久化：从全局中移除旧记录
+                    globalMgr.removeLocation(oldLocation.getType().name(), oldLocation.getExpression());
+                }
+            } else {
+                globalMgr.syncLocation(newLocation, persistToGlobal);
+            }
         }
         return result;
     }
 
     public boolean deleteTokenLocation(int id) {
+        // 先获取被删除的令牌位置（用于全局YAML同步）
+        TokenLocation toDelete = null;
+        for (TokenLocation loc : cachedTokenLocations) {
+            if (loc.getId() == id) {
+                toDelete = loc;
+                break;
+            }
+        }
+
         boolean result = sessionDAO.deleteTokenLocation(id);
         if (result) {
             refreshCache();
+            // 从全局YAML中移除
+            if (toDelete != null && toDelete.isPersistToGlobal()) {
+                GlobalTokenLocationManager.getInstance().removeLocation(
+                        toDelete.getType().name(), toDelete.getExpression());
+            }
         }
         return result;
     }
@@ -158,6 +200,45 @@ public class SessionManager {
             refreshCache();
         }
         return result;
+    }
+
+    // ==================== 全局令牌位置加载 ====================
+
+    /**
+     * 从全局YAML加载令牌位置到项目数据库
+     * 启动时调用，自动去重（按 type+expression）
+     */
+    public void loadGlobalTokenLocations() {
+        GlobalTokenLocationManager globalMgr = GlobalTokenLocationManager.getInstance();
+        List<TokenLocation> globalLocations = globalMgr.getAllLocations();
+        if (globalLocations.isEmpty()) {
+            return;
+        }
+
+        // 获取当前项目数据库中已有的令牌位置，用于去重
+        List<TokenLocation> existingLocations = getTokenLocations();
+        Set<String> existingKeys = new java.util.HashSet<>();
+        for (TokenLocation loc : existingLocations) {
+            existingKeys.add(loc.getType().name() + "|" + loc.getExpression());
+        }
+
+        // 插入不存在于项目数据库的全局令牌位置
+        int added = 0;
+        for (TokenLocation globalLoc : globalLocations) {
+            String key = globalLoc.getType().name() + "|" + globalLoc.getExpression();
+            if (!existingKeys.contains(key)) {
+                int id = sessionDAO.addTokenLocation(globalLoc.getType(), globalLoc.getExpression(),
+                        globalLoc.getDescription(), true, globalLoc.isEnabled());
+                if (id > 0) {
+                    added++;
+                }
+            }
+        }
+
+        if (added > 0) {
+            refreshCache();
+            BurpExtender.printOutput("[+] 从全局加载了 " + added + " 条令牌位置到项目数据库");
+        }
     }
 
     // ==================== 重放配置 ====================

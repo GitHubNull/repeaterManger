@@ -10,6 +10,8 @@ import org.yaml.snakeyaml.Yaml;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
@@ -53,6 +55,20 @@ public class SessionConfigTab extends JPanel {
         tokenLocationTable.getColumnModel().getColumn(2).setPreferredWidth(150);  // 描述
         tokenLocationTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // 持久化到全局
         tokenLocationTable.getColumnModel().getColumn(4).setPreferredWidth(50);   // 启用
+
+        // 双击编辑令牌位置
+        tokenLocationTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
+                    // 确保点击在数据行上而非表头
+                    int row = tokenLocationTable.rowAtPoint(e.getPoint());
+                    if (row >= 0) {
+                        editTokenLocation();
+                    }
+                }
+            }
+        });
 
         JScrollPane tokenScroll = new JScrollPane(tokenLocationTable);
         tokenScroll.setPreferredSize(new Dimension(0, 120));

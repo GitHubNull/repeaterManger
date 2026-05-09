@@ -68,6 +68,15 @@ public class BurpExtender implements BurpExtension {
                 logManager.error("[!] 全局API提取规则加载失败: " + e.getMessage());
             }
 
+            // 阶段4.6：加载全局令牌位置
+            try {
+                oxff.top.privilege.GlobalTokenLocationManager.getInstance().loadLocations();
+                oxff.top.privilege.SessionManager.getInstance().loadGlobalTokenLocations();
+                logManager.success("[+] 全局令牌位置加载完成");
+            } catch (Exception e) {
+                logManager.error("[!] 全局令牌位置加载失败: " + e.getMessage());
+            }
+
             // 创建UI和功能组件
             repeaterUI = new RepeaterManagerUI(api);
 

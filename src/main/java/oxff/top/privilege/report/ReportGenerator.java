@@ -85,8 +85,6 @@ public abstract class ReportGenerator {
         data.setSummary(summary);
         data.setEndpoints(new ArrayList<>(endpointMap.values()));
 
-        // 按会话分布
-        List<ReportData.SessionBreakdown> sessionBreakdowns = new ArrayList<>();
         Map<String, ReportData.SessionBreakdown> sessionMap = new LinkedHashMap<>();
         for (Map<String, Object> row : sessionStats) {
             String sessionName = (String) row.get("user_session_name");

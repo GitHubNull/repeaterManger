@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-05-09
+
+### Added
+- 新增全局令牌位置管理器（GlobalTokenLocationManager），支持令牌位置跨项目持久化到 ~/.burp/repeater_manager/token_locations.yaml
+- 新增 TokenLocationYamlIO 工具类，实现令牌位置的 YAML 序列化/反序列化与原子文件写入
+- SessionManager 新增全局YAML同步逻辑：增删改令牌位置时自动同步到全局配置
+- 启动时自动加载全局令牌位置到项目数据库（自动按 type+expression 去重）
+- SessionConfigTab 令牌位置表格新增双击编辑功能
+
+### Fixed
+- 移除 ReportGenerator 中未使用的 sessionBreakdowns 变量
+
 ## [2.6.0] - 2026-05-09
 
 ### Added
