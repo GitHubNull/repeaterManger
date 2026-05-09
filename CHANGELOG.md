@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-05-09
+
+### Changed
+- 优化 AutoTestEngine：内联 sendSync 替代反射调用 ReplayEngine 私有方法
+
+### Fixed
+- 自动化测试请求失败时增强错误信息捕获与日志输出
+
 ## [2.5.0] - 2026-05-09
 
 ### Added

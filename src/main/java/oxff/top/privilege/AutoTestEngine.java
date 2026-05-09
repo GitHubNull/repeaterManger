@@ -108,16 +108,7 @@ public class AutoTestEngine {
                         byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
                                 requestBytes, locations, session);
 
-                        // 同步发送
-                        ReplayEngine replayEngine = ReplayEngine.getInstance();
-                        java.lang.reflect.Method sendSyncMethod = ReplayEngine.class.getDeclaredMethod(
-                                "sendSync", byte[].class, HttpService.class, RequestManager.class);
-                        sendSyncMethod.setAccessible(true);
-
-                        // 使用 ReplayEngine 的内部同步发送方式
-                        Object holderObj = sendSyncMethod.invoke(replayEngine, modifiedRequest, httpService, requestManager);
-
-                        // 由于 sendSync 是 private，这里直接内联发送逻辑
+                        // 同步发送（内联实现，避免对 ReplayEngine 私有方法的反射依赖）
                         ReplayResultHolder holder = sendSyncRequest(modifiedRequest, httpService, requestManager);
 
                         // 判决
@@ -144,6 +135,11 @@ public class AutoTestEngine {
                             }
                         } else {
                             judgment = JudgmentResult.ERROR.name();
+                            if (holder.errorMessage != null && !holder.errorMessage.isEmpty()) {
+                                judgmentNote = "请求失败: " + holder.errorMessage;
+                                BurpExtender.printError("[!] 自动化测试请求失败 (user=" + session.getName()
+                                        + "): " + holder.errorMessage);
+                            }
                         }
 
                         RequestResponseRecord record = new RequestResponseRecord();
