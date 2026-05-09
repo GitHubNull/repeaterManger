@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1] - 2026-05-09
+
+### Fixed
+- 修正越权测试报告统计逻辑，基准（baseline）记录不再计入测试统计数据
+- 修正非基准记录未关联基准信息的问题
+
+### Changed
+- 重构 ReportGenerator 统计逻辑，按阶段分组处理（端点分组→基准识别关联→修正计数）
+- 增强 HtmlReportGenerator/MarkdownReportGenerator/PdfReportGenerator，支持基准记录的视觉标识与基准信息展示
+
 ## [2.10.0] - 2026-05-09
 
 ### Added

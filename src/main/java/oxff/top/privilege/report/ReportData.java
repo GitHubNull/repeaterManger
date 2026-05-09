@@ -75,6 +75,7 @@ public class ReportData {
         private int escalatedCount;
         private int safeCount;
         private int errorCount;
+        private int baselineCount;
         private int endpointsTested;
 
         public int getTotalTests() {
@@ -109,6 +110,14 @@ public class ReportData {
             this.errorCount = errorCount;
         }
 
+        public int getBaselineCount() {
+            return baselineCount;
+        }
+
+        public void setBaselineCount(int baselineCount) {
+            this.baselineCount = baselineCount;
+        }
+
         public int getEndpointsTested() {
             return endpointsTested;
         }
@@ -127,6 +136,7 @@ public class ReportData {
         private int escalatedCount;
         private int safeCount;
         private int errorCount;
+        private int baselineCount;
         private List<Finding> findings = new ArrayList<>();
 
         public String getMethod() {
@@ -169,6 +179,14 @@ public class ReportData {
             this.errorCount = errorCount;
         }
 
+        public int getBaselineCount() {
+            return baselineCount;
+        }
+
+        public void setBaselineCount(int baselineCount) {
+            this.baselineCount = baselineCount;
+        }
+
         public int getTotalTests() {
             return escalatedCount + safeCount + errorCount;
         }
@@ -193,6 +211,9 @@ public class ReportData {
         private RequestResponseRecord record;
         private String curlCommand;
         private String postmanSnippet;
+        private boolean baseline;
+        private RequestResponseRecord baselineRecord;
+        private String baselineSessionName;
 
         public String getUserSessionName() {
             return userSessionName;
@@ -248,6 +269,30 @@ public class ReportData {
 
         public void setPostmanSnippet(String postmanSnippet) {
             this.postmanSnippet = postmanSnippet;
+        }
+
+        public boolean isBaseline() {
+            return baseline;
+        }
+
+        public void setBaseline(boolean baseline) {
+            this.baseline = baseline;
+        }
+
+        public RequestResponseRecord getBaselineRecord() {
+            return baselineRecord;
+        }
+
+        public void setBaselineRecord(RequestResponseRecord baselineRecord) {
+            this.baselineRecord = baselineRecord;
+        }
+
+        public String getBaselineSessionName() {
+            return baselineSessionName;
+        }
+
+        public void setBaselineSessionName(String baselineSessionName) {
+            this.baselineSessionName = baselineSessionName;
         }
     }
 

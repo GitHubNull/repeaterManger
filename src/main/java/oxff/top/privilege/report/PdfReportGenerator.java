@@ -1,5 +1,7 @@
 package oxff.top.privilege.report;
 
+import oxff.top.http.RequestResponseRecord;
+
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -85,6 +87,7 @@ public class PdfReportGenerator extends ReportGenerator {
         rows.add(new String[]{"Escalated", String.valueOf(s.getEscalatedCount())});
         rows.add(new String[]{"Safe", String.valueOf(s.getSafeCount())});
         rows.add(new String[]{"Errors", String.valueOf(s.getErrorCount())});
+        rows.add(new String[]{"Baseline", String.valueOf(s.getBaselineCount())});
         rows.add(new String[]{"Unique Endpoints", String.valueOf(s.getEndpointsTested())});
         writer.drawTable(headers, rows, widths);
         writer.drawLine();
@@ -112,10 +115,15 @@ public class PdfReportGenerator extends ReportGenerator {
 
     private void buildEndpoint(InnerWriter writer, ReportData.EndpointSummary endpoint) throws Exception {
         writer.drawTitle(endpoint.getMethod() + " " + endpoint.getUrl(), 11);
-        writer.drawText("Tests: " + endpoint.getTotalTests()
-                + " | Escalated: " + endpoint.getEscalatedCount()
-                + " | Safe: " + endpoint.getSafeCount()
-                + " | Errors: " + endpoint.getErrorCount(), 9, MARGIN + 15);
+        StringBuilder stats = new StringBuilder();
+        if (endpoint.getBaselineCount() > 0) {
+            stats.append("Baseline: ").append(endpoint.getBaselineCount()).append(" | ");
+        }
+        stats.append("Tests: ").append(endpoint.getTotalTests())
+                .append(" | Escalated: ").append(endpoint.getEscalatedCount())
+                .append(" | Safe: ").append(endpoint.getSafeCount())
+                .append(" | Errors: ").append(endpoint.getErrorCount());
+        writer.drawText(stats.toString(), 9, MARGIN + 15);
         writer.drawLine();
 
         for (ReportData.Finding finding : endpoint.getFindings()) {
@@ -124,15 +132,27 @@ public class PdfReportGenerator extends ReportGenerator {
     }
 
     private void buildFinding(InnerWriter writer, ReportData.Finding finding) throws Exception {
-        String judgmentLabel = "ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "ESCALATED"
-                : "NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "SAFE" : "ERROR";
+        String judgmentLabel;
+        if (finding.isBaseline()) {
+            judgmentLabel = "BASELINE";
+        } else if ("ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
+            judgmentLabel = "ESCALATED";
+        } else if ("NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
+            judgmentLabel = "SAFE";
+        } else {
+            judgmentLabel = "ERROR";
+        }
 
         // Finding header
         writer.drawTitle("Session: " + finding.getUserSessionName() + "  |  " + judgmentLabel, 10);
 
         // Metadata
         StringBuilder meta = new StringBuilder();
-        meta.append("Similarity: ").append(String.format("%.2f", finding.getSimilarity()));
+        if (finding.isBaseline()) {
+            meta.append("Similarity: N/A (baseline)");
+        } else {
+            meta.append("Similarity: ").append(String.format("%.2f", finding.getSimilarity()));
+        }
         meta.append("  |  HTTP ").append(finding.getRecord().getStatusCode());
         meta.append("  |  ").append(finding.getRecord().getResponseLength()).append(" bytes");
         meta.append("  |  ").append(finding.getRecord().getResponseTime()).append("ms");
@@ -143,6 +163,21 @@ public class PdfReportGenerator extends ReportGenerator {
         }
 
         writer.drawLine();
+
+        // 非基准 Finding：在当前报文前展示基准报文
+        if (!finding.isBaseline() && finding.getBaselineRecord() != null) {
+            RequestResponseRecord baselineRec = finding.getBaselineRecord();
+
+            writer.drawSectionTitle("Baseline Request  -  Session: " + finding.getBaselineSessionName());
+            renderBodyPdf(writer, baselineRec.getRequestData(),
+                    extractRequestContentType(baselineRec.getRequestData()));
+
+            writer.drawSectionTitle("Baseline Response  -  HTTP " + baselineRec.getStatusCode()
+                    + " (" + baselineRec.getResponseLength() + " bytes, "
+                    + baselineRec.getResponseTime() + "ms)  -  Session: " + finding.getBaselineSessionName());
+            renderBodyPdf(writer, baselineRec.getResponseData(),
+                    extractResponseContentType(baselineRec.getResponseData()));
+        }
 
         // Request — 智能渲染
         writer.drawSectionTitle("Request:");

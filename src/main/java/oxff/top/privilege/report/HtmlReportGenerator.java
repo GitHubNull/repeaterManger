@@ -1,5 +1,7 @@
 package oxff.top.privilege.report;
 
+import oxff.top.http.RequestResponseRecord;
+
 import java.text.SimpleDateFormat;
 import java.util.List;
 
@@ -80,6 +82,7 @@ public class HtmlReportGenerator extends ReportGenerator {
                 "  .badge.escalated { background: #d32f2f; }\n" +
                 "  .badge.safe { background: #2e7d32; }\n" +
                 "  .badge.error { background: #f57c00; }\n" +
+                "  .badge.baseline { background: #1565C0; }\n" +
                 "  .endpoint-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; " +
                 "    box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n" +
                 "  .endpoint-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }\n" +
@@ -89,6 +92,8 @@ public class HtmlReportGenerator extends ReportGenerator {
                 "    display: flex; justify-content: space-between; align-items: center; }\n" +
                 "  .finding-content { padding: 14px; }\n" +
                 "  .finding-content .section-title { font-weight: 600; color: #555; margin: 10px 0 6px; font-size: 13px; }\n" +
+                "  .finding-content .section-title.baseline-title { color: #1565C0; border-bottom: 1px dashed #90CAF9; padding-bottom: 2px; }\n" +
+                "  .baseline-block { border: 1px dashed #90CAF9; border-radius: 4px; padding: 8px 10px; margin: 4px 0; background: #E3F2FD; }\n" +
                 "  pre { background: #263238; color: #eeffff; padding: 12px 16px; border-radius: 4px; overflow-x: auto; " +
                 "    font-size: 12px; line-height: 1.5; max-height: 400px; overflow-y: auto; margin: 6px 0; }\n" +
                 "  .curl-block { background: #1e1e1e; color: #d4d4d4; }\n" +
@@ -126,6 +131,8 @@ public class HtmlReportGenerator extends ReportGenerator {
                 .append("</div><div class=\"label\">&#10004; Safe</div></div>\n");
         sb.append("  <div class=\"card error\"><div class=\"number\">").append(s.getErrorCount())
                 .append("</div><div class=\"label\">&#10007; Errors</div></div>\n");
+        sb.append("  <div class=\"card\" style=\"border-top:4px solid #1565C0\"><div class=\"number\" style=\"color:#1565C0\">")
+                .append(s.getBaselineCount()).append("</div><div class=\"label\">Baseline</div></div>\n");
         sb.append("</div>\n");
         return sb.toString();
     }
@@ -153,7 +160,10 @@ public class HtmlReportGenerator extends ReportGenerator {
         sb.append("    <div><span class=\"method\">").append(escapeHtml(endpoint.getMethod()))
                 .append("</span> ").append(escapeHtml(endpoint.getUrl())).append("</div>\n");
         sb.append("    <div class=\"meta-info\">\n");
-        sb.append("      Tests: ").append(endpoint.getTotalTests());
+        if (endpoint.getBaselineCount() > 0) {
+            sb.append("      Baseline: ").append(endpoint.getBaselineCount()).append(" | ");
+        }
+        sb.append("Tests: ").append(endpoint.getTotalTests());
         if (endpoint.getEscalatedCount() > 0) {
             sb.append(" | <span style=\"color:#d32f2f;font-weight:600\">&#9888; ")
                     .append(endpoint.getEscalatedCount()).append(" Escalated</span>");
@@ -171,10 +181,23 @@ public class HtmlReportGenerator extends ReportGenerator {
 
     private String buildFinding(ReportData.Finding finding) {
         StringBuilder sb = new StringBuilder();
-        String badgeClass = "ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "escalated"
-                : "NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "safe" : "error";
-        String judgmentLabel = "ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "ESCALATED"
-                : "NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "SAFE" : "ERROR";
+
+        // Badge 和标签逻辑：基准 Finding 显示 BASELINE
+        String badgeClass;
+        String judgmentLabel;
+        if (finding.isBaseline()) {
+            badgeClass = "baseline";
+            judgmentLabel = "BASELINE";
+        } else if ("ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
+            badgeClass = "escalated";
+            judgmentLabel = "ESCALATED";
+        } else if ("NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
+            badgeClass = "safe";
+            judgmentLabel = "SAFE";
+        } else {
+            badgeClass = "error";
+            judgmentLabel = "ERROR";
+        }
 
         sb.append("<details class=\"finding\">\n");
         sb.append("  <summary>\n");
@@ -188,8 +211,33 @@ public class HtmlReportGenerator extends ReportGenerator {
             sb.append("    <div>Rule: <strong>").append(escapeHtml(finding.getMatchedRuleName()))
                     .append("</strong></div>\n");
         }
-        sb.append("    <div class=\"meta-info\">Similarity: ")
-                .append(String.format("%.2f", finding.getSimilarity())).append("</div>\n");
+        if (finding.isBaseline()) {
+            sb.append("    <div class=\"meta-info\">Similarity: N/A (baseline)</div>\n");
+        } else {
+            sb.append("    <div class=\"meta-info\">Similarity: ")
+                    .append(String.format("%.2f", finding.getSimilarity())).append("</div>\n");
+        }
+
+        // 非基准 Finding：在当前报文前展示基准报文（折叠）
+        if (!finding.isBaseline() && finding.getBaselineRecord() != null) {
+            RequestResponseRecord baselineRec = finding.getBaselineRecord();
+            sb.append("    <div class=\"section-title baseline-title\">Baseline Request — Session: ")
+                    .append(escapeHtml(finding.getBaselineSessionName())).append("</div>\n");
+            sb.append("    <details class=\"baseline-block\"><summary>Show baseline request</summary>\n");
+            sb.append(renderBodyHtml(baselineRec.getRequestData(),
+                    extractRequestContentType(baselineRec.getRequestData())));
+            sb.append("    </details>\n");
+
+            sb.append("    <div class=\"section-title baseline-title\">Baseline Response — HTTP ")
+                    .append(baselineRec.getStatusCode()).append(" (")
+                    .append(baselineRec.getResponseLength()).append(" bytes, ")
+                    .append(baselineRec.getResponseTime()).append("ms) — Session: ")
+                    .append(escapeHtml(finding.getBaselineSessionName())).append("</div>\n");
+            sb.append("    <details class=\"baseline-block\"><summary>Show baseline response</summary>\n");
+            sb.append(renderBodyHtml(baselineRec.getResponseData(),
+                    extractResponseContentType(baselineRec.getResponseData())));
+            sb.append("    </details>\n");
+        }
 
         // Request — 智能渲染
         sb.append("    <div class=\"section-title\">Request</div>\n");

@@ -1,5 +1,7 @@
 package oxff.top.privilege.report;
 
+import oxff.top.http.RequestResponseRecord;
+
 import java.text.SimpleDateFormat;
 import java.util.List;
 
@@ -49,6 +51,7 @@ public class MarkdownReportGenerator extends ReportGenerator {
         sb.append("| Escalated (&#9888;) | ").append(s.getEscalatedCount()).append(" |\n");
         sb.append("| Safe (&#10004;) | ").append(s.getSafeCount()).append(" |\n");
         sb.append("| Errors (&#10007;) | ").append(s.getErrorCount()).append(" |\n");
+        sb.append("| Baseline | ").append(s.getBaselineCount()).append(" |\n");
         sb.append("| Unique Endpoints | ").append(s.getEndpointsTested()).append(" |\n\n");
         return sb.toString();
     }
@@ -73,7 +76,11 @@ public class MarkdownReportGenerator extends ReportGenerator {
     private String buildEndpointSection(ReportData.EndpointSummary endpoint) {
         StringBuilder sb = new StringBuilder();
         sb.append("### ").append(endpoint.getMethod()).append(" ").append(endpoint.getUrl()).append("\n\n");
-        sb.append("**Tests: ").append(endpoint.getTotalTests()).append(" | ");
+        sb.append("**");
+        if (endpoint.getBaselineCount() > 0) {
+            sb.append("Baseline: ").append(endpoint.getBaselineCount()).append(" | ");
+        }
+        sb.append("Tests: ").append(endpoint.getTotalTests()).append(" | ");
         sb.append("Escalated: ").append(endpoint.getEscalatedCount()).append(" | ");
         sb.append("Safe: ").append(endpoint.getSafeCount()).append("**\n\n");
 
@@ -85,19 +92,48 @@ public class MarkdownReportGenerator extends ReportGenerator {
 
     private String buildFinding(ReportData.Finding finding) {
         StringBuilder sb = new StringBuilder();
-        String judgmentIcon = "ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "&#9888; ESCALATED"
-                : "NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment()) ? "&#10004; SAFE"
-                : "&#10007; ERROR";
+        String judgmentIcon;
+        if (finding.isBaseline()) {
+            judgmentIcon = "BASELINE";
+        } else if ("ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
+            judgmentIcon = "&#9888; ESCALATED";
+        } else if ("NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
+            judgmentIcon = "&#10004; SAFE";
+        } else {
+            judgmentIcon = "&#10007; ERROR";
+        }
 
         sb.append("#### Finding: ").append(judgmentIcon).append(" — Session \"").append(escapeMd(finding.getUserSessionName())).append("\"\n\n");
 
         if (finding.getMatchedRuleName() != null) {
             sb.append("- **Rule**: ").append(escapeMd(finding.getMatchedRuleName())).append("\n");
         }
-        sb.append("- **Similarity**: ").append(String.format("%.2f", finding.getSimilarity())).append("\n");
+        if (finding.isBaseline()) {
+            sb.append("- **Similarity**: N/A (baseline)\n");
+        } else {
+            sb.append("- **Similarity**: ").append(String.format("%.2f", finding.getSimilarity())).append("\n");
+        }
         sb.append("- **Status**: HTTP ").append(finding.getRecord().getStatusCode())
                 .append(" | ").append(finding.getRecord().getResponseLength()).append(" bytes | ")
                 .append(finding.getRecord().getResponseTime()).append("ms\n\n");
+
+        // 非基准 Finding：在当前报文前展示基准报文（折叠）
+        if (!finding.isBaseline() && finding.getBaselineRecord() != null) {
+            RequestResponseRecord baselineRec = finding.getBaselineRecord();
+            sb.append("<details><summary>Baseline Request — Session: ")
+                    .append(escapeMd(finding.getBaselineSessionName())).append("</summary>\n\n");
+            sb.append(renderBodyMd(baselineRec.getRequestData(),
+                    extractRequestContentType(baselineRec.getRequestData())));
+            sb.append("</details>\n\n");
+
+            sb.append("<details><summary>Baseline Response — HTTP ").append(baselineRec.getStatusCode())
+                    .append(" (").append(baselineRec.getResponseLength()).append(" bytes, ")
+                    .append(baselineRec.getResponseTime()).append("ms) — Session: ")
+                    .append(escapeMd(finding.getBaselineSessionName())).append("</summary>\n\n");
+            sb.append(renderBodyMd(baselineRec.getResponseData(),
+                    extractResponseContentType(baselineRec.getResponseData())));
+            sb.append("</details>\n\n");
+        }
 
         // Request — 智能渲染
         sb.append("**Request:**\n\n");

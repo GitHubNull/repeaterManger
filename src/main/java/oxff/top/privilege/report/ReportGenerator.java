@@ -27,21 +27,7 @@ public abstract class ReportGenerator {
         // 获取所有越权测试结果
         List<RequestResponseRecord> records = historyReadDAO.getPrivilegeTestResults();
 
-        // 获取统计
-        Map<String, Integer> stats = historyReadDAO.getPrivilegeTestStats();
-        List<Map<String, Object>> sessionStats = historyReadDAO.getPrivilegeTestStatsBySession();
-
-        // 汇总统计
-        ReportData.ReportSummary summary = new ReportData.ReportSummary();
-        int escalated = stats.getOrDefault("ESCALATED", 0);
-        int safe = stats.getOrDefault("NOT_ESCALATED", 0);
-        int errors = stats.getOrDefault("ERROR", 0);
-        summary.setTotalTests(escalated + safe + errors);
-        summary.setEscalatedCount(escalated);
-        summary.setSafeCount(safe);
-        summary.setErrorCount(errors);
-
-        // 按端点分组
+        // ===== 阶段 A：按端点分组 =====
         Map<String, ReportData.EndpointSummary> endpointMap = new LinkedHashMap<>();
         Set<String> uniqueEndpoints = new HashSet<>();
         for (RequestResponseRecord record : records) {
@@ -70,42 +56,87 @@ public abstract class ReportGenerator {
             }
 
             es.getFindings().add(finding);
+        }
 
-            // 统计
-            String judgment = record.getJudgment();
-            if ("ESCALATED".equalsIgnoreCase(judgment)) {
-                es.setEscalatedCount(es.getEscalatedCount() + 1);
-            } else if ("NOT_ESCALATED".equalsIgnoreCase(judgment)) {
-                es.setSafeCount(es.getSafeCount() + 1);
-            } else {
-                es.setErrorCount(es.getErrorCount() + 1);
+        // ===== 阶段 B：识别并关联基准 =====
+        for (ReportData.EndpointSummary es : endpointMap.values()) {
+            ReportData.Finding baselineFinding = null;
+            for (ReportData.Finding f : es.getFindings()) {
+                if (f.getSimilarity() == -1 && "NOT_ESCALATED".equalsIgnoreCase(f.getJudgment())) {
+                    baselineFinding = f;
+                    break;
+                }
+            }
+
+            if (baselineFinding != null) {
+                baselineFinding.setBaseline(true);
+                for (ReportData.Finding f : es.getFindings()) {
+                    if (f != baselineFinding) {
+                        f.setBaselineRecord(baselineFinding.getRecord());
+                        f.setBaselineSessionName(baselineFinding.getUserSessionName());
+                    }
+                }
             }
         }
 
-        summary.setEndpointsTested(uniqueEndpoints.size());
-        data.setSummary(summary);
-        data.setEndpoints(new ArrayList<>(endpointMap.values()));
+        // ===== 阶段 C：修正计数（排除基准记录） =====
+        ReportData.ReportSummary summary = new ReportData.ReportSummary();
+        int escalated = 0, safe = 0, errors = 0, baselineTotal = 0;
 
         Map<String, ReportData.SessionBreakdown> sessionMap = new LinkedHashMap<>();
-        for (Map<String, Object> row : sessionStats) {
-            String sessionName = (String) row.get("user_session_name");
-            String judgment = (String) row.get("judgment");
-            int cnt = (Integer) row.get("cnt");
+        for (ReportData.EndpointSummary es : endpointMap.values()) {
+            int epEscalated = 0, epSafe = 0, epError = 0, epBaseline = 0;
 
-            ReportData.SessionBreakdown sb = sessionMap.computeIfAbsent(sessionName, k -> {
-                ReportData.SessionBreakdown b = new ReportData.SessionBreakdown();
-                b.setSessionName(sessionName);
-                return b;
-            });
+            for (ReportData.Finding f : es.getFindings()) {
+                if (f.isBaseline()) {
+                    epBaseline++;
+                    baselineTotal++;
+                    continue; // 基准不计入测试统计
+                }
 
-            if ("ESCALATED".equalsIgnoreCase(judgment)) {
-                sb.setEscalatedCount(cnt);
-            } else if ("NOT_ESCALATED".equalsIgnoreCase(judgment)) {
-                sb.setSafeCount(cnt);
-            } else if ("ERROR".equalsIgnoreCase(judgment)) {
-                sb.setErrorCount(cnt);
+                String judgment = f.getJudgment();
+                if ("ESCALATED".equalsIgnoreCase(judgment)) {
+                    epEscalated++;
+                    escalated++;
+                } else if ("NOT_ESCALATED".equalsIgnoreCase(judgment)) {
+                    epSafe++;
+                    safe++;
+                } else {
+                    epError++;
+                    errors++;
+                }
+
+                // 按会话统计（排除基准）
+                ReportData.SessionBreakdown sb = sessionMap.computeIfAbsent(
+                        f.getUserSessionName(), k -> {
+                            ReportData.SessionBreakdown b = new ReportData.SessionBreakdown();
+                            b.setSessionName(k);
+                            return b;
+                        });
+                if ("ESCALATED".equalsIgnoreCase(judgment)) {
+                    sb.setEscalatedCount(sb.getEscalatedCount() + 1);
+                } else if ("NOT_ESCALATED".equalsIgnoreCase(judgment)) {
+                    sb.setSafeCount(sb.getSafeCount() + 1);
+                } else {
+                    sb.setErrorCount(sb.getErrorCount() + 1);
+                }
             }
+
+            es.setEscalatedCount(epEscalated);
+            es.setSafeCount(epSafe);
+            es.setErrorCount(epError);
+            es.setBaselineCount(epBaseline);
         }
+
+        summary.setTotalTests(escalated + safe + errors);
+        summary.setEscalatedCount(escalated);
+        summary.setSafeCount(safe);
+        summary.setErrorCount(errors);
+        summary.setBaselineCount(baselineTotal);
+        summary.setEndpointsTested(uniqueEndpoints.size());
+
+        data.setSummary(summary);
+        data.setEndpoints(new ArrayList<>(endpointMap.values()));
         data.setSessionBreakdown(new ArrayList<>(sessionMap.values()));
 
         return data;
