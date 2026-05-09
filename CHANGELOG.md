@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-05-09
+
+### Added
+- 令牌位置表格和用户会话表格新增搜索/筛选功能，支持正则表达式和大小写匹配
+- 表格列头排序功能，通过 TableRowSorter 实现点击列头排序
+
+### Fixed
+- 修复表格启用排序/筛选后，编辑、删除、启用切换等操作的视图行索引未转换为模型行索引的问题
+
 ## [2.8.0] - 2026-05-09
 
 ### Added

@@ -10,6 +10,8 @@ import org.yaml.snakeyaml.Yaml;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.table.TableRowSorter;
+import javax.swing.RowFilter;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -20,6 +22,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * 会话配置子Tab
@@ -31,9 +35,15 @@ public class SessionConfigTab extends JPanel {
 
     private final JTable tokenLocationTable;
     private final TokenLocationTableModel tokenLocationModel;
+    private TableRowSorter<TokenLocationTableModel> tokenLocationSorter;
+    private JTextField tokenSearchField;
+    private JCheckBox tokenCaseSensitiveCheckbox;
+    private JCheckBox tokenRegexCheckbox;
 
     private final JTable userSessionTable;
     private final UserSessionTableModel userSessionModel;
+    private TableRowSorter<UserSessionTableModel> userSessionSorter;
+    private JTextField sessionSearchField;
 
     // 重放配置控件
     private JRadioButton realtimeRadio;
@@ -56,6 +66,43 @@ public class SessionConfigTab extends JPanel {
         tokenLocationTable.getColumnModel().getColumn(2).setPreferredWidth(150);  // 描述
         tokenLocationTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // 持久化到全局
         tokenLocationTable.getColumnModel().getColumn(4).setPreferredWidth(50);   // 启用
+
+        // 设置 TableRowSorter 启用列头排序
+        tokenLocationSorter = new TableRowSorter<>(tokenLocationModel);
+        tokenLocationTable.setRowSorter(tokenLocationSorter);
+
+        // 令牌位置搜索面板
+        JPanel tokenSearchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        tokenSearchPanel.add(new JLabel("搜索:"));
+        tokenSearchField = new JTextField(15);
+        tokenSearchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { applyTokenLocationFilter(); }
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { applyTokenLocationFilter(); }
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { applyTokenLocationFilter(); }
+        });
+        tokenSearchPanel.add(tokenSearchField);
+
+        tokenCaseSensitiveCheckbox = new JCheckBox("Aa");
+        tokenCaseSensitiveCheckbox.setToolTipText("区分大小写");
+        tokenCaseSensitiveCheckbox.addActionListener(e -> applyTokenLocationFilter());
+        tokenSearchPanel.add(tokenCaseSensitiveCheckbox);
+
+        tokenRegexCheckbox = new JCheckBox(".*");
+        tokenRegexCheckbox.setToolTipText("启用正则表达式匹配");
+        tokenRegexCheckbox.addActionListener(e -> applyTokenLocationFilter());
+        tokenSearchPanel.add(tokenRegexCheckbox);
+
+        JButton clearTokenSearchBtn = new JButton("清除");
+        clearTokenSearchBtn.addActionListener(e -> {
+            tokenSearchField.setText("");
+            applyTokenLocationFilter();
+        });
+        tokenSearchPanel.add(clearTokenSearchBtn);
+
+        tokenLocationPanel.add(tokenSearchPanel, BorderLayout.NORTH);
 
         // 令牌位置表格：双击编辑 + 右键行选择 + 右键菜单
         tokenLocationTable.addMouseListener(new MouseAdapter() {
@@ -90,6 +137,7 @@ public class SessionConfigTab extends JPanel {
 
         JScrollPane tokenScroll = new JScrollPane(tokenLocationTable);
         tokenScroll.setPreferredSize(new Dimension(0, 120));
+        tokenScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
         JPanel tokenButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton addTokenBtn = new JButton("添加位置");
@@ -125,6 +173,33 @@ public class SessionConfigTab extends JPanel {
         userSessionTable.getColumnModel().getColumn(2).setPreferredWidth(50);   // 启用
         userSessionTable.getColumnModel().getColumn(3).setPreferredWidth(300);  // 令牌值摘要
 
+        // 设置 TableRowSorter 启用列头排序
+        userSessionSorter = new TableRowSorter<>(userSessionModel);
+        userSessionTable.setRowSorter(userSessionSorter);
+
+        // 用户会话搜索面板
+        JPanel sessionSearchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
+        sessionSearchPanel.add(new JLabel("搜索:"));
+        sessionSearchField = new JTextField(15);
+        sessionSearchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { applyUserSessionFilter(); }
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { applyUserSessionFilter(); }
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { applyUserSessionFilter(); }
+        });
+        sessionSearchPanel.add(sessionSearchField);
+
+        JButton clearSessionSearchBtn = new JButton("清除");
+        clearSessionSearchBtn.addActionListener(e -> {
+            sessionSearchField.setText("");
+            applyUserSessionFilter();
+        });
+        sessionSearchPanel.add(clearSessionSearchBtn);
+
+        userSessionPanel.add(sessionSearchPanel, BorderLayout.NORTH);
+
         // 用户会话表格：双击编辑 + 右键行选择 + 右键菜单
         userSessionTable.addMouseListener(new MouseAdapter() {
             @Override
@@ -158,6 +233,7 @@ public class SessionConfigTab extends JPanel {
 
         JScrollPane sessionScroll = new JScrollPane(userSessionTable);
         sessionScroll.setPreferredSize(new Dimension(0, 150));
+        sessionScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
         JPanel sessionButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton addSessionBtn = new JButton("添加用户");
@@ -251,6 +327,50 @@ public class SessionConfigTab extends JPanel {
         thresholdSpinner.setValue(sessionManager.getSimilarityThreshold());
     }
 
+    /**
+     * 应用令牌位置表格过滤器
+     */
+    private void applyTokenLocationFilter() {
+        String text = tokenSearchField.getText().trim();
+        if (text.isEmpty()) {
+            tokenLocationSorter.setRowFilter(null);
+            return;
+        }
+
+        boolean caseSensitive = tokenCaseSensitiveCheckbox.isSelected();
+        boolean regexMode = tokenRegexCheckbox.isSelected();
+
+        String pattern;
+        if (regexMode) {
+            pattern = caseSensitive ? text : "(?i)" + text;
+        } else {
+            pattern = caseSensitive ? Pattern.quote(text) : "(?i)" + Pattern.quote(text);
+        }
+
+        try {
+            tokenLocationSorter.setRowFilter(RowFilter.regexFilter(pattern));
+        } catch (PatternSyntaxException e) {
+            // 正则表达式无效时静默忽略，保持上一次过滤结果
+        }
+    }
+
+    /**
+     * 应用用户会话表格过滤器
+     */
+    private void applyUserSessionFilter() {
+        String text = sessionSearchField.getText().trim();
+        if (text.isEmpty()) {
+            userSessionSorter.setRowFilter(null);
+            return;
+        }
+
+        try {
+            userSessionSorter.setRowFilter(RowFilter.regexFilter("(?i)" + text));
+        } catch (PatternSyntaxException e) {
+            // 忽略无效的正则匹配文本
+        }
+    }
+
     private void addTokenLocation() {
         TokenLocationEditDialog dialog = new TokenLocationEditDialog(
                 (Frame) SwingUtilities.getWindowAncestor(this), "添加令牌位置", null);
@@ -264,12 +384,17 @@ public class SessionConfigTab extends JPanel {
     }
 
     private void editTokenLocation() {
-        int row = tokenLocationTable.getSelectedRow();
-        if (row < 0) {
+        int viewRow = tokenLocationTable.getSelectedRow();
+        if (viewRow < 0) {
             JOptionPane.showMessageDialog(this, "请先选择一个令牌位置", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        TokenLocation selected = tokenLocationModel.getTokenLocation(row);
+        int modelRow = tokenLocationTable.convertRowIndexToModel(viewRow);
+        if (modelRow < 0) {
+            JOptionPane.showMessageDialog(this, "请先选择一个令牌位置", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        TokenLocation selected = tokenLocationModel.getTokenLocation(modelRow);
         TokenLocationEditDialog dialog = new TokenLocationEditDialog(
                 (Frame) SwingUtilities.getWindowAncestor(this), "编辑令牌位置", selected);
         dialog.setVisible(true);
@@ -282,12 +407,17 @@ public class SessionConfigTab extends JPanel {
     }
 
     private void deleteTokenLocation() {
-        int row = tokenLocationTable.getSelectedRow();
-        if (row < 0) {
+        int viewRow = tokenLocationTable.getSelectedRow();
+        if (viewRow < 0) {
             JOptionPane.showMessageDialog(this, "请先选择一个令牌位置", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        TokenLocation selected = tokenLocationModel.getTokenLocation(row);
+        int modelRow = tokenLocationTable.convertRowIndexToModel(viewRow);
+        if (modelRow < 0) {
+            JOptionPane.showMessageDialog(this, "请先选择一个令牌位置", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        TokenLocation selected = tokenLocationModel.getTokenLocation(modelRow);
         int confirm = JOptionPane.showConfirmDialog(this,
                 "确认删除令牌位置: " + selected.getExpression() + "?\n关联的所有用户令牌值也会被删除。",
                 "删除确认", JOptionPane.YES_NO_OPTION);
@@ -312,12 +442,17 @@ public class SessionConfigTab extends JPanel {
     }
 
     private void editUserSession() {
-        int row = userSessionTable.getSelectedRow();
-        if (row < 0) {
+        int viewRow = userSessionTable.getSelectedRow();
+        if (viewRow < 0) {
             JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        UserSession selected = userSessionModel.getUserSession(row);
+        int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
+        if (modelRow < 0) {
+            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        UserSession selected = userSessionModel.getUserSession(modelRow);
         UserSessionEditDialog dialog = new UserSessionEditDialog(
                 (Frame) SwingUtilities.getWindowAncestor(this), "编辑用户会话", selected);
         dialog.setVisible(true);
@@ -330,12 +465,17 @@ public class SessionConfigTab extends JPanel {
     }
 
     private void deleteUserSession() {
-        int row = userSessionTable.getSelectedRow();
-        if (row < 0) {
+        int viewRow = userSessionTable.getSelectedRow();
+        if (viewRow < 0) {
             JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        UserSession selected = userSessionModel.getUserSession(row);
+        int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
+        if (modelRow < 0) {
+            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        UserSession selected = userSessionModel.getUserSession(modelRow);
         int confirm = JOptionPane.showConfirmDialog(this,
                 "确认删除用户会话: " + selected.getName() + "?",
                 "删除确认", JOptionPane.YES_NO_OPTION);
@@ -346,12 +486,17 @@ public class SessionConfigTab extends JPanel {
     }
 
     private void toggleUserSessionEnabled() {
-        int row = userSessionTable.getSelectedRow();
-        if (row < 0) {
+        int viewRow = userSessionTable.getSelectedRow();
+        if (viewRow < 0) {
             JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        UserSession selected = userSessionModel.getUserSession(row);
+        int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
+        if (modelRow < 0) {
+            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        UserSession selected = userSessionModel.getUserSession(modelRow);
         SessionManager sm = SessionManager.getInstance();
         sm.updateUserSession(selected.getId(), selected.getName(),
                 selected.getColorHex(), !selected.isEnabled());

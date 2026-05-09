@@ -44,6 +44,11 @@ public class UserSessionTableModel extends DefaultTableModel {
     }
 
     @Override
+    public Class<?> getColumnClass(int columnIndex) {
+        return String.class;
+    }
+
+    @Override
     public boolean isCellEditable(int row, int column) {
         return false;
     }
