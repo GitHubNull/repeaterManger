@@ -6,7 +6,7 @@
 
     <groupId>org.oxff</groupId>
     <artifactId>repeaterManger</artifactId>
-    <version>2.4.1</version>
+    <version>2.5.0</version>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -88,9 +88,33 @@
             <artifactId>snakeyaml</artifactId>
             <version>2.2</version>
         </dependency>
+
+        <!-- CommonMark - Markdown转HTML（使用教程渲染） -->
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark</artifactId>
+            <version>0.22.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark-ext-gfm-tables</artifactId>
+            <version>0.22.0</version>
+        </dependency>
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>doc</directory>
+                <targetPath>doc</targetPath>
+                <includes>
+                    <include>*.md</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <!-- 跳过默认的JAR插件生成过程 -->
             <plugin>

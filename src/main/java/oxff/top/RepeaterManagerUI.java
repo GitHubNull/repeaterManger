@@ -20,6 +20,8 @@ import oxff.top.ui.StatusPanel;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
 import oxff.top.ui.privilege.PrivilegeTestPanel;
+import oxff.top.ui.UsageTutorialPanel;
+import oxff.top.ui.AboutPanel;
 import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.db.RequestDAO;
 
@@ -155,6 +157,12 @@ public class RepeaterManagerUI {
         // 创建权限测试配置面板
         privilegeTestPanel = new PrivilegeTestPanel();
 
+        // 创建使用教程面板
+        UsageTutorialPanel usageTutorialPanel = new UsageTutorialPanel();
+
+        // 创建关于面板
+        AboutPanel aboutPanel = new AboutPanel();
+
         // 创建选项卡面板
         tabbedPane = new JTabbedPane();
         tabbedPane.addTab("请求管理", mainSplitPane);
@@ -162,6 +170,8 @@ public class RepeaterManagerUI {
         tabbedPane.addTab("数据", dataPanel);
         tabbedPane.addTab("配置", configPanel);
         tabbedPane.addTab("日志", logPanel);
+        tabbedPane.addTab("使用教程", usageTutorialPanel);
+        tabbedPane.addTab("关于", aboutPanel);
 
         // 监听标签页切换，自动开启/关闭权限测试模式
         tabbedPane.addChangeListener(e -> {
