@@ -76,16 +76,18 @@ public class SessionManager {
         return cachedTokenLocations;
     }
 
-    public int addTokenLocation(TokenLocationType type, String expression, String description) {
-        int id = sessionDAO.addTokenLocation(type, expression, description);
+    public int addTokenLocation(TokenLocationType type, String expression, String description,
+                                boolean persistToGlobal, boolean enabled) {
+        int id = sessionDAO.addTokenLocation(type, expression, description, persistToGlobal, enabled);
         if (id > 0) {
             refreshCache();
         }
         return id;
     }
 
-    public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description) {
-        boolean result = sessionDAO.updateTokenLocation(id, type, expression, description);
+    public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description,
+                                       boolean persistToGlobal, boolean enabled) {
+        boolean result = sessionDAO.updateTokenLocation(id, type, expression, description, persistToGlobal, enabled);
         if (result) {
             refreshCache();
         }

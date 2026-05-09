@@ -10,7 +10,7 @@ import java.util.List;
  */
 public class TokenLocationTableModel extends DefaultTableModel {
 
-    private static final String[] COLUMN_NAMES = {"类型", "表达式", "描述"};
+    private static final String[] COLUMN_NAMES = {"类型", "表达式", "描述", "持久化到全局", "启用"};
 
     private final List<TokenLocation> locations = new ArrayList<>();
 
@@ -27,7 +27,9 @@ public class TokenLocationTableModel extends DefaultTableModel {
                 addRow(new Object[]{
                         loc.getType().getDisplayName(),
                         loc.getExpression(),
-                        loc.getDescription()
+                        loc.getDescription(),
+                        loc.isPersistToGlobal() ? "是" : "否",
+                        loc.isEnabled() ? "是" : "否"
                 });
             }
         }

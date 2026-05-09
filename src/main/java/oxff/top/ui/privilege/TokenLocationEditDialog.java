@@ -16,10 +16,12 @@ public class TokenLocationEditDialog extends JDialog {
     private final JComboBox<TokenLocationType> typeCombo;
     private final JTextField expressionField;
     private final JTextField descriptionField;
+    private final JCheckBox persistToGlobalCheckbox;
+    private final JCheckBox enabledCheckbox;
 
     public TokenLocationEditDialog(Frame owner, String title, TokenLocation existing) {
         super(owner, title, true);
-        setSize(450, 200);
+        setSize(500, 280);
         setLocationRelativeTo(owner);
         setResizable(true);
 
@@ -49,6 +51,20 @@ public class TokenLocationEditDialog extends JDialog {
         descriptionField = new JTextField(25);
         mainPanel.add(descriptionField, gbc);
 
+        // 持久化到全局
+        gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
+        mainPanel.add(new JLabel("持久化到全局:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1.0;
+        persistToGlobalCheckbox = new JCheckBox("是", true);
+        mainPanel.add(persistToGlobalCheckbox, gbc);
+
+        // 是否启用
+        gbc.gridx = 0; gbc.gridy = 4; gbc.weightx = 0;
+        mainPanel.add(new JLabel("启用:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1.0;
+        enabledCheckbox = new JCheckBox("是", true);
+        mainPanel.add(enabledCheckbox, gbc);
+
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton okBtn = new JButton("确定");
@@ -70,6 +86,8 @@ public class TokenLocationEditDialog extends JDialog {
             typeCombo.setSelectedItem(existing.getType());
             expressionField.setText(existing.getExpression());
             descriptionField.setText(existing.getDescription());
+            persistToGlobalCheckbox.setSelected(existing.isPersistToGlobal());
+            enabledCheckbox.setSelected(existing.isEnabled());
         }
 
         getContentPane().setLayout(new BorderLayout());
@@ -91,5 +109,13 @@ public class TokenLocationEditDialog extends JDialog {
 
     public String getDescription() {
         return descriptionField.getText().trim();
+    }
+
+    public boolean isPersistToGlobal() {
+        return persistToGlobalCheckbox.isSelected();
+    }
+
+    public boolean isEnabled() {
+        return enabledCheckbox.isSelected();
     }
 }

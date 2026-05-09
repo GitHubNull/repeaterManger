@@ -49,6 +49,11 @@ public class SchemaMigrator {
         if (currentVersion < 8) {
             migrateV7ToV8(conn);
         }
+
+        // v8→v9 迁移
+        if (currentVersion < 9) {
+            migrateV8ToV9(conn);
+        }
     }
 
     /**
@@ -356,6 +361,41 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '8')");
 
             BurpExtender.printOutput("[+] v7→v8 迁移完成");
+        }
+    }
+
+    /**
+     * v8→v9 迁移：为 token_locations 表添加 persist_to_global 和 enabled 列
+     */
+    private static void migrateV8ToV9(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v8→v9迁移...");
+
+            // 为 token_locations 表添加 persist_to_global 列
+            try {
+                stmt.execute("ALTER TABLE token_locations ADD COLUMN persist_to_global INTEGER NOT NULL DEFAULT 1");
+                BurpExtender.printOutput("[+] token_locations表添加persist_to_global列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] token_locations表添加persist_to_global列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 token_locations 表添加 enabled 列
+            try {
+                stmt.execute("ALTER TABLE token_locations ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
+                BurpExtender.printOutput("[+] token_locations表添加enabled列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] token_locations表添加enabled列失败: " + e.getMessage());
+                }
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '9' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '9')");
+
+            BurpExtender.printOutput("[+] v8→v9 迁移完成");
         }
     }
 }

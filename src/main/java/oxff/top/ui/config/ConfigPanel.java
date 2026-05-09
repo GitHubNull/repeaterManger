@@ -2,8 +2,6 @@ package oxff.top.ui.config;
 
 import oxff.top.config.DatabaseConfig;
 import oxff.top.db.DatabaseManager;
-import oxff.top.io.DataExporter;
-import oxff.top.io.DataImporter;
 import oxff.top.logging.LogLevel;
 import oxff.top.logging.LogManager;
 import oxff.top.http.ProxyConfig;
@@ -63,10 +61,6 @@ public class ConfigPanel extends JPanel {
         // ----- 代理调试标签页 -----
         JPanel proxyTab = createProxyTab();
         configTabbedPane.addTab("代理调试", proxyTab);
-
-        // ----- 数据导入导出标签页 -----
-        JPanel ioTab = createDataIOTab();
-        configTabbedPane.addTab("数据导入导出", ioTab);
 
         // ----- API提取规则标签页 -----
         JPanel apiRuleTab = new ApiRuleConfigTab(onDataChanged);
@@ -250,56 +244,6 @@ public class ConfigPanel extends JPanel {
     }
 
     /**
-     * 创建数据导入导出标签页
-     */
-    private JPanel createDataIOTab() {
-        JPanel tab = new JPanel(new BorderLayout());
-
-        JPanel ioPanel = new JPanel(new BorderLayout());
-        ioPanel.setBorder(BorderFactory.createTitledBorder("数据导入导出"));
-
-        JPanel rowsPanel = new JPanel();
-        rowsPanel.setLayout(new BoxLayout(rowsPanel, BoxLayout.Y_AXIS));
-
-        // ERM存档行
-        JPanel ermRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        ermRow.add(new JLabel("ERM存档 (.erm):"));
-        JCheckBox encryptCheckbox = new JCheckBox("加密");
-        JButton exportErmButton = new JButton("导出");
-        exportErmButton.addActionListener(e -> exportErm(encryptCheckbox.isSelected()));
-        ermRow.add(exportErmButton);
-        ermRow.add(encryptCheckbox);
-        JButton importErmButton = new JButton("导入");
-        importErmButton.addActionListener(e -> importErm());
-        ermRow.add(importErmButton);
-        rowsPanel.add(ermRow);
-
-        // Postman行
-        JPanel postmanRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        postmanRow.add(new JLabel("Postman v2.1 (.json):"));
-        JButton exportPostmanButton = new JButton("导出");
-        exportPostmanButton.addActionListener(e -> exportToPostman());
-        postmanRow.add(exportPostmanButton);
-        JButton importPostmanButton = new JButton("导入");
-        importPostmanButton.addActionListener(e -> importFromPostman());
-        postmanRow.add(importPostmanButton);
-        rowsPanel.add(postmanRow);
-
-        // 智能导入行
-        JPanel smartRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        JButton smartImportButton = new JButton("智能导入 (自动检测格式)");
-        smartImportButton.addActionListener(e -> smartImport());
-        smartRow.add(smartImportButton);
-        rowsPanel.add(smartRow);
-
-        ioPanel.add(rowsPanel, BorderLayout.CENTER);
-
-        tab.add(ioPanel, BorderLayout.NORTH);
-
-        return tab;
-    }
-
-    /**
      * 刷新存储配置标签页中的信息
      */
     public void refreshStorageInfo() {
@@ -416,71 +360,6 @@ public class ConfigPanel extends JPanel {
             logManager.error("[!] 保存代理配置失败");
             JOptionPane.showMessageDialog(this,
                 "保存配置失败，请检查权限或路径。", "保存失败", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    // ========== 数据导入导出方法 ==========
-
-    private void exportErm(boolean encrypted) {
-        try {
-            BurpExtender.printOutput("[*] 正在启动ERM存档导出...");
-            DataExporter exporter = new DataExporter();
-            exporter.exportToErm(this, encrypted);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导出操作发生错误: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
-        }
-    }
-
-    private void importErm() {
-        try {
-            BurpExtender.printOutput("[*] 正在启动ERM存档导入...");
-            DataImporter importer = new DataImporter();
-            importer.importFromErm(this);
-            refreshStorageInfo();
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
-        }
-    }
-
-    private void exportToPostman() {
-        try {
-            BurpExtender.printOutput("[*] 正在启动Postman Collection导出...");
-            DataExporter exporter = new DataExporter();
-            exporter.exportToPostman(this);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导出操作发生错误: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
-        }
-    }
-
-    private void importFromPostman() {
-        try {
-            BurpExtender.printOutput("[*] 正在启动Postman Collection导入...");
-            DataImporter importer = new DataImporter();
-            importer.importFromPostman(this);
-            refreshStorageInfo();
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
-        }
-    }
-
-    private void smartImport() {
-        try {
-            BurpExtender.printOutput("[*] 正在启动智能导入...");
-            DataImporter importer = new DataImporter();
-            importer.smartImport(this);
-            refreshStorageInfo();
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
         }
     }
 

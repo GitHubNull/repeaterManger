@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v8）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '8')");
+        // 初始化元数据（v9）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '9')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -131,7 +131,7 @@ public class SchemaInitializer {
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        BurpExtender.printOutput("[+] v8 Schema 初始化完成");
+        BurpExtender.printOutput("[+] v9 Schema 初始化完成");
     }
 
     /**
@@ -215,13 +215,15 @@ public class SchemaInitializer {
      * 创建 v6 权限测试相关表
      */
     private static void createV6PrivilegeTables(Statement stmt) throws SQLException {
-        // 令牌位置定义表
+        // 令牌位置定义表（v9 结构：v6 + persist_to_global + enabled）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS token_locations (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "type TEXT NOT NULL, " +
             "expression TEXT NOT NULL, " +
             "description TEXT DEFAULT '', " +
+            "persist_to_global INTEGER NOT NULL DEFAULT 1, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
             ")"
         );

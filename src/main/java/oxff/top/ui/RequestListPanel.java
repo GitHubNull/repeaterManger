@@ -9,6 +9,7 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,6 +20,7 @@ import java.util.regex.PatternSyntaxException;
  */
 public class RequestListPanel extends JPanel {
     private static final long serialVersionUID = 1L;
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     
     // 请求列表数据
     private final DefaultTableModel tableModel = new DefaultTableModel(
@@ -295,7 +297,7 @@ public class RequestListPanel extends JPanel {
             path,
             query,
             isPrivilegeTest ? "是" : "否",
-            new Date()
+            DATE_FORMAT.format(new Date())
         });
 
         // 保存请求数据到内存映射
@@ -341,7 +343,7 @@ public class RequestListPanel extends JPanel {
             record.getPath(),
             record.getQuery(),
             record.isPrivilegeTest() ? "是" : "否",
-            new Date()
+            DATE_FORMAT.format(new Date())
         });
         
         // 保存请求数据到内存映射

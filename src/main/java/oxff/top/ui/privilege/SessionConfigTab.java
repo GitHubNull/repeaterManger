@@ -2,10 +2,21 @@ package oxff.top.ui.privilege;
 
 import oxff.top.privilege.SessionManager;
 import oxff.top.privilege.model.TokenLocation;
+import oxff.top.privilege.model.TokenLocationType;
 import oxff.top.privilege.model.UserSession;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileWriter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 会话配置子Tab
@@ -38,8 +49,10 @@ public class SessionConfigTab extends JPanel {
         tokenLocationTable = new JTable(tokenLocationModel);
         tokenLocationTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tokenLocationTable.getColumnModel().getColumn(0).setPreferredWidth(60);   // 类型
-        tokenLocationTable.getColumnModel().getColumn(1).setPreferredWidth(200);  // 表达式
-        tokenLocationTable.getColumnModel().getColumn(2).setPreferredWidth(200);  // 描述
+        tokenLocationTable.getColumnModel().getColumn(1).setPreferredWidth(150);  // 表达式
+        tokenLocationTable.getColumnModel().getColumn(2).setPreferredWidth(150);  // 描述
+        tokenLocationTable.getColumnModel().getColumn(3).setPreferredWidth(80);   // 持久化到全局
+        tokenLocationTable.getColumnModel().getColumn(4).setPreferredWidth(50);   // 启用
 
         JScrollPane tokenScroll = new JScrollPane(tokenLocationTable);
         tokenScroll.setPreferredSize(new Dimension(0, 120));
@@ -48,14 +61,20 @@ public class SessionConfigTab extends JPanel {
         JButton addTokenBtn = new JButton("添加位置");
         JButton editTokenBtn = new JButton("编辑位置");
         JButton deleteTokenBtn = new JButton("删除位置");
+        JButton importTokenBtn = new JButton("导入");
+        JButton exportTokenBtn = new JButton("导出");
 
         addTokenBtn.addActionListener(e -> addTokenLocation());
         editTokenBtn.addActionListener(e -> editTokenLocation());
         deleteTokenBtn.addActionListener(e -> deleteTokenLocation());
+        importTokenBtn.addActionListener(e -> importTokenLocations());
+        exportTokenBtn.addActionListener(e -> exportTokenLocations());
 
         tokenButtonPanel.add(addTokenBtn);
         tokenButtonPanel.add(editTokenBtn);
         tokenButtonPanel.add(deleteTokenBtn);
+        tokenButtonPanel.add(importTokenBtn);
+        tokenButtonPanel.add(exportTokenBtn);
 
         tokenLocationPanel.add(tokenScroll, BorderLayout.CENTER);
         tokenLocationPanel.add(tokenButtonPanel, BorderLayout.SOUTH);
@@ -155,7 +174,8 @@ public class SessionConfigTab extends JPanel {
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().addTokenLocation(
-                    dialog.getLocationType(), dialog.getExpression(), dialog.getDescription());
+                    dialog.getLocationType(), dialog.getExpression(), dialog.getDescription(),
+                    dialog.isPersistToGlobal(), dialog.isEnabled());
             refreshData();
         }
     }
@@ -172,7 +192,8 @@ public class SessionConfigTab extends JPanel {
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().updateTokenLocation(
-                    selected.getId(), dialog.getLocationType(), dialog.getExpression(), dialog.getDescription());
+                    selected.getId(), dialog.getLocationType(), dialog.getExpression(), dialog.getDescription(),
+                    dialog.isPersistToGlobal(), dialog.isEnabled());
             refreshData();
         }
     }
@@ -260,5 +281,135 @@ public class SessionConfigTab extends JPanel {
         sm.setDedupEnabled(dedupCheckbox.isSelected());
         sm.setSimilarityThreshold((Double) thresholdSpinner.getValue());
         JOptionPane.showMessageDialog(this, "重放配置已保存", "提示", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // ========== 令牌位置导入导出 ==========
+
+    /**
+     * 导出令牌位置到YAML文件
+     */
+    private void exportTokenLocations() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("导出令牌位置");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
+        fileChooser.setSelectedFile(new File("token_locations.yaml"));
+
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
+                file = new File(file.getAbsolutePath() + ".yaml");
+            }
+
+            try {
+                List<TokenLocation> locations = SessionManager.getInstance().getTokenLocations();
+                List<Map<String, Object>> exportList = new ArrayList<>();
+                for (TokenLocation loc : locations) {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("type", loc.getType().name());
+                    entry.put("expression", loc.getExpression());
+                    entry.put("description", loc.getDescription());
+                    entry.put("persistToGlobal", loc.isPersistToGlobal());
+                    entry.put("enabled", loc.isEnabled());
+                    exportList.add(entry);
+                }
+
+                DumperOptions options = new DumperOptions();
+                options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+                options.setPrettyFlow(true);
+                Yaml yaml = new Yaml(options);
+                try (FileWriter writer = new FileWriter(file)) {
+                    yaml.dump(exportList, writer);
+                }
+
+                JOptionPane.showMessageDialog(this,
+                    "成功导出 " + exportList.size() + " 条令牌位置到:\n" + file.getAbsolutePath(),
+                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this,
+                    "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    /**
+     * 从YAML文件导入令牌位置
+     */
+    private void importTokenLocations() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("导入令牌位置");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+
+            try {
+                Yaml yaml = new Yaml();
+                List<Map<String, Object>> importList;
+
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    Iterable<Object> objects = yaml.loadAll(fis);
+                    List<Map<String, Object>> merged = new ArrayList<>();
+                    for (Object obj : objects) {
+                        if (obj instanceof List) {
+                            for (Object item : (List<?>) obj) {
+                                if (item instanceof Map) {
+                                    merged.add(castToMap((Map<?, ?>) item));
+                                }
+                            }
+                        } else if (obj instanceof Map) {
+                            merged.add(castToMap((Map<?, ?>) obj));
+                        }
+                    }
+                    importList = merged;
+                }
+
+                if (importList.isEmpty()) {
+                    JOptionPane.showMessageDialog(this,
+                        "文件中没有找到令牌位置数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+
+                int imported = 0;
+                SessionManager sm = SessionManager.getInstance();
+                for (Map<String, Object> entry : importList) {
+                    try {
+                        String typeStr = String.valueOf(entry.get("type"));
+                        TokenLocationType type = TokenLocationType.fromString(typeStr);
+                        String expression = String.valueOf(entry.getOrDefault("expression", ""));
+                        String description = String.valueOf(entry.getOrDefault("description", ""));
+                        boolean persistToGlobal = toBoolean(entry.getOrDefault("persistToGlobal", true));
+                        boolean enabled = toBoolean(entry.getOrDefault("enabled", true));
+                        sm.addTokenLocation(type, expression, description, persistToGlobal, enabled);
+                        imported++;
+                    } catch (Exception e) {
+                        // 跳过无效条目
+                    }
+                }
+
+                refreshData();
+                JOptionPane.showMessageDialog(this,
+                    "成功导入 " + imported + " 条令牌位置",
+                    "导入成功", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this,
+                    "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castToMap(Map<?, ?> map) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            result.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return result;
+    }
+
+    private static boolean toBoolean(Object value) {
+        if (value == null) return true;
+        if (value instanceof Boolean) return (Boolean) value;
+        String str = String.valueOf(value).trim().toLowerCase();
+        return "true".equals(str) || "1".equals(str) || "yes".equals(str);
     }
 }

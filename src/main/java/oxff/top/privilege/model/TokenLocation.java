@@ -10,17 +10,32 @@ public class TokenLocation {
     private TokenLocationType type;
     private String expression;
     private String description;
+    private boolean persistToGlobal;
+    private boolean enabled;
 
     public TokenLocation() {
         this.type = TokenLocationType.HEADER;
         this.expression = "";
         this.description = "";
+        this.persistToGlobal = true;
+        this.enabled = true;
     }
 
     public TokenLocation(TokenLocationType type, String expression, String description) {
         this.type = type;
         this.expression = expression;
         this.description = description != null ? description : "";
+        this.persistToGlobal = true;
+        this.enabled = true;
+    }
+
+    public TokenLocation(TokenLocationType type, String expression, String description,
+                         boolean persistToGlobal, boolean enabled) {
+        this.type = type;
+        this.expression = expression;
+        this.description = description != null ? description : "";
+        this.persistToGlobal = persistToGlobal;
+        this.enabled = enabled;
     }
 
     public TokenLocation(int id, TokenLocationType type, String expression, String description) {
@@ -28,6 +43,18 @@ public class TokenLocation {
         this.type = type;
         this.expression = expression;
         this.description = description != null ? description : "";
+        this.persistToGlobal = true;
+        this.enabled = true;
+    }
+
+    public TokenLocation(int id, TokenLocationType type, String expression, String description,
+                         boolean persistToGlobal, boolean enabled) {
+        this.id = id;
+        this.type = type;
+        this.expression = expression;
+        this.description = description != null ? description : "";
+        this.persistToGlobal = persistToGlobal;
+        this.enabled = enabled;
     }
 
     // Getters and Setters
@@ -62,6 +89,22 @@ public class TokenLocation {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public boolean isPersistToGlobal() {
+        return persistToGlobal;
+    }
+
+    public void setPersistToGlobal(boolean persistToGlobal) {
+        this.persistToGlobal = persistToGlobal;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
     @Override

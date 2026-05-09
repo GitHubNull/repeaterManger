@@ -14,6 +14,7 @@ import oxff.top.ui.editor.BurpResponsePanel;
 import oxff.top.ui.history.HistoryPanel;
 import oxff.top.ui.RequestListPanel;
 import oxff.top.ui.config.ConfigPanel;
+import oxff.top.ui.DataPanel;
 import oxff.top.ui.LogPanel;
 import oxff.top.ui.StatusPanel;
 import oxff.top.ui.layout.LayoutManager;
@@ -52,6 +53,7 @@ public class RepeaterManagerUI {
     private final BurpResponsePanel responsePanel;    // 右上响应展示区
     private final HistoryPanel historyPanel;          // 右下历史记录
     private final ConfigPanel configPanel;            // 配置面板
+    private final DataPanel dataPanel;                // 数据面板
     private final LogPanel logPanel;                  // 日志面板
     private final StatusPanel statusPanel;            // 底部状态栏
     private final PrivilegeTestPanel privilegeTestPanel; // 权限测试配置面板
@@ -143,6 +145,10 @@ public class RepeaterManagerUI {
         configPanel = new ConfigPanel();
         configPanel.setOnDataChanged(() -> SwingUtilities.invokeLater(() -> refreshAllData()));
 
+        // 创建数据面板
+        dataPanel = new DataPanel();
+        dataPanel.setOnDataChanged(() -> SwingUtilities.invokeLater(() -> refreshAllData()));
+
         // 创建日志面板
         logPanel = new LogPanel();
 
@@ -153,6 +159,7 @@ public class RepeaterManagerUI {
         tabbedPane = new JTabbedPane();
         tabbedPane.addTab("请求管理", mainSplitPane);
         tabbedPane.addTab("权限测试", privilegeTestPanel);
+        tabbedPane.addTab("数据", dataPanel);
         tabbedPane.addTab("配置", configPanel);
         tabbedPane.addTab("日志", logPanel);
 

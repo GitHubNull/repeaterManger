@@ -30,7 +30,7 @@ public class SessionDAO {
      */
     public List<TokenLocation> getAllTokenLocations() {
         List<TokenLocation> locations = new ArrayList<>();
-        String sql = "SELECT id, type, expression, description FROM token_locations ORDER BY id ASC";
+        String sql = "SELECT id, type, expression, description, persist_to_global, enabled FROM token_locations ORDER BY id ASC";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
@@ -40,6 +40,8 @@ public class SessionDAO {
                 location.setType(TokenLocationType.fromString(rs.getString("type")));
                 location.setExpression(rs.getString("expression"));
                 location.setDescription(rs.getString("description"));
+                location.setPersistToGlobal(rs.getInt("persist_to_global") == 1);
+                location.setEnabled(rs.getInt("enabled") == 1);
                 locations.add(location);
             }
         } catch (SQLException e) {
@@ -52,13 +54,16 @@ public class SessionDAO {
      * 添加令牌位置
      * @return 新记录ID，失败返回-1
      */
-    public int addTokenLocation(TokenLocationType type, String expression, String description) {
-        String sql = "INSERT INTO token_locations (type, expression, description) VALUES (?, ?, ?)";
+    public int addTokenLocation(TokenLocationType type, String expression, String description,
+                                boolean persistToGlobal, boolean enabled) {
+        String sql = "INSERT INTO token_locations (type, expression, description, persist_to_global, enabled) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, type.name());
             pstmt.setString(2, expression);
             pstmt.setString(3, description != null ? description : "");
+            pstmt.setInt(4, persistToGlobal ? 1 : 0);
+            pstmt.setInt(5, enabled ? 1 : 0);
             pstmt.executeUpdate();
             try (ResultSet rs = pstmt.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -74,14 +79,17 @@ public class SessionDAO {
     /**
      * 更新令牌位置
      */
-    public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description) {
-        String sql = "UPDATE token_locations SET type = ?, expression = ?, description = ? WHERE id = ?";
+    public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description,
+                                       boolean persistToGlobal, boolean enabled) {
+        String sql = "UPDATE token_locations SET type = ?, expression = ?, description = ?, persist_to_global = ?, enabled = ? WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, type.name());
             pstmt.setString(2, expression);
             pstmt.setString(3, description != null ? description : "");
-            pstmt.setInt(4, id);
+            pstmt.setInt(4, persistToGlobal ? 1 : 0);
+            pstmt.setInt(5, enabled ? 1 : 0);
+            pstmt.setInt(6, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             BurpExtender.printError("[!] 更新令牌位置失败: " + e.getMessage());
