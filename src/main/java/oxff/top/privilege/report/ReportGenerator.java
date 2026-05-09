@@ -12,6 +12,7 @@ import java.util.*;
 public abstract class ReportGenerator {
 
     protected final HistoryReadDAO historyReadDAO;
+    protected final BinaryContentRenderer binaryRenderer = new BinaryContentRenderer();
 
     protected ReportGenerator() {
         this.historyReadDAO = new HistoryReadDAO();
@@ -147,6 +148,44 @@ public abstract class ReportGenerator {
             text = text.substring(0, 50000) + "\n\n... [Truncated — total " + body.length + " bytes]";
         }
         return text;
+    }
+
+    /**
+     * 智能渲染 body 内容：检测二进制，返回分级渲染数据
+     *
+     * @param body              原始 body 字节
+     * @param contentTypeHeader Content-Type header 值（可为 null）
+     * @return 分级渲染内容，若为文本则 TieredRenderContent.tier == null
+     */
+    protected BinaryContentRenderer.TieredRenderContent renderBinaryBody(byte[] body, String contentTypeHeader) {
+        if (body == null || body.length == 0) {
+            // 空 body，返回文本标记
+            return new BinaryContentRenderer.TieredRenderContent(null, "", "", null, null,
+                    "text/plain", "text", "0 bytes");
+        }
+
+        BinaryContentRenderer.BinaryAnalysisResult analysis = binaryRenderer.analyzeBody(body, contentTypeHeader);
+        if (!analysis.isBinary) {
+            // 文本内容，返回标记为非二进制
+            return new BinaryContentRenderer.TieredRenderContent(null, "", "", null, null,
+                    analysis.contentType, "text", analysis.humanSize);
+        }
+
+        return binaryRenderer.createTieredContent(analysis);
+    }
+
+    /**
+     * 从 HTTP 响应数据中提取 Content-Type
+     */
+    protected String extractResponseContentType(byte[] responseData) {
+        return BinaryContentRenderer.extractContentTypeFromResponse(responseData);
+    }
+
+    /**
+     * 从 HTTP 请求数据中提取 Content-Type
+     */
+    protected String extractRequestContentType(byte[] requestData) {
+        return BinaryContentRenderer.extractContentTypeFromRequest(requestData);
     }
 
     /**

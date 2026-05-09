@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * Markdown 格式报告生成器
- * 生成 GitHub-Flavored Markdown 报告
+ * 生成 GitHub-Flavored Markdown 报告，支持二进制内容智能渲染
  */
 public class MarkdownReportGenerator extends ReportGenerator {
 
@@ -99,13 +99,15 @@ public class MarkdownReportGenerator extends ReportGenerator {
                 .append(" | ").append(finding.getRecord().getResponseLength()).append(" bytes | ")
                 .append(finding.getRecord().getResponseTime()).append("ms\n\n");
 
-        // Request
-        sb.append("**Request:**\n\n```http\n")
-                .append(sanitizeBody(finding.getRecord().getRequestData())).append("\n```\n\n");
+        // Request — 智能渲染
+        sb.append("**Request:**\n\n");
+        sb.append(renderBodyMd(finding.getRecord().getRequestData(),
+                extractRequestContentType(finding.getRecord().getRequestData())));
 
-        // Response
-        sb.append("**Response:**\n\n```\n")
-                .append(sanitizeBody(finding.getRecord().getResponseData())).append("\n```\n\n");
+        // Response — 智能渲染
+        sb.append("**Response:**\n\n");
+        sb.append(renderBodyMd(finding.getRecord().getResponseData(),
+                extractResponseContentType(finding.getRecord().getResponseData())));
 
         // cURL
         sb.append("**Reproduction (cURL):**\n\n```bash\n")
@@ -117,6 +119,111 @@ public class MarkdownReportGenerator extends ReportGenerator {
 
         sb.append("---\n\n");
         return sb.toString();
+    }
+
+    /**
+     * 智能渲染 body: 二进制内容展示为元数据表+hex预览，文本保持原样
+     */
+    private String renderBodyMd(byte[] body, String contentType) {
+        if (body == null || body.length == 0) {
+            return "```\n[Empty]\n```\n\n";
+        }
+
+        BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
+
+        // 文本内容: 保持原有渲染
+        if (content.tier == null) {
+            return "```http\n" + sanitizeBody(body) + "\n```\n\n";
+        }
+
+        // 二进制内容
+        return buildBinaryContentMd(content);
+    }
+
+    /**
+     * 构建二进制内容 Markdown
+     */
+    private String buildBinaryContentMd(BinaryContentRenderer.TieredRenderContent content) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("**Binary Content (").append(content.contentCategory)
+                .append(" — ").append(content.humanSize).append(")**\n\n");
+
+        // 元数据表
+        sb.append("| Property | Value |\n");
+        sb.append("|----------|-------|\n");
+        sb.append("| Content-Type | ").append(escapeMd(content.contentType)).append(" |\n");
+        sb.append("| Size | ").append(escapeMd(content.humanSize)).append(" |\n");
+        if (content.metadataCardText != null) {
+            String sha = extractShaFromMetadata(content.metadataCardText);
+            if (!sha.isEmpty()) {
+                sb.append("| SHA-256 | `").append(sha).append("` |\n");
+            }
+        }
+        if (content.multipartParts != null && !content.multipartParts.isEmpty()) {
+            sb.append("| Multipart Parts | ").append(content.multipartParts.size()).append(" |\n");
+        }
+        sb.append("\n");
+
+        // Multipart 部分
+        if (content.multipartParts != null) {
+            for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
+                sb.append(buildMultipartPartMd(part));
+            }
+        }
+
+        // Hex dump 预览
+        if (content.hexDumpPreview != null && !content.hexDumpPreview.isEmpty()) {
+            sb.append("```hex\n").append(content.hexDumpPreview).append("```\n\n");
+        }
+
+        // Base64 折叠 (GFM 兼容)
+        if (content.base64Content != null && !content.base64Content.isEmpty()) {
+            sb.append("<details><summary>Base64 (").append(content.base64Content.length())
+                    .append(" chars)</summary>\n\n");
+            sb.append("```base64\n").append(content.base64Content).append("\n```\n\n");
+            sb.append("</details>\n\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 构建 multipart 单 part Markdown
+     */
+    private String buildMultipartPartMd(BinaryContentRenderer.MultipartPartInfo part) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("##### Part: ");
+        if (part.name != null) sb.append(part.name);
+        if (part.fileName != null) sb.append(" (").append(part.fileName).append(")");
+        sb.append(" — ").append(part.partContentType)
+                .append(" — ").append(BinaryContentRenderer.formatHumanSize(part.partSize));
+        sb.append("\n\n");
+
+        if (part.isText) {
+            sb.append("```http\n").append(part.textContent).append("\n```\n\n");
+        } else {
+            // 二进制 part: hex 预览
+            if (part.binaryPreview != null && part.binaryPreview.length > 0) {
+                String hexDump = BinaryContentRenderer.generateHexDump(part.binaryPreview, part.binaryPreview.length);
+                sb.append("```hex\n").append(hexDump).append("```\n\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 从元数据卡文本中提取 SHA-256 值
+     */
+    private String extractShaFromMetadata(String metadata) {
+        for (String line : metadata.split("\n")) {
+            if (line.startsWith("SHA-256:")) {
+                return line.substring("SHA-256:".length()).trim();
+            }
+        }
+        return "";
     }
 
     private String escapeMd(String s) {

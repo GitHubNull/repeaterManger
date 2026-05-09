@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * PDF 格式报告生成器
- * 使用 Apache PDFBox 直接布局
+ * 使用 Apache PDFBox 直接布局，支持二进制内容智能渲染
  */
 public class PdfReportGenerator extends ReportGenerator {
 
@@ -25,6 +25,8 @@ public class PdfReportGenerator extends ReportGenerator {
     private static final float CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN;
     /** PDF 中每个代码块的最大字符数，避免报告过大 */
     private static final int PDF_BODY_LIMIT = 3000;
+    /** PDF 中 base64 显示的最大字符数 */
+    private static final int PDF_BASE64_LIMIT = 2000;
 
     @Override
     public String getFileExtension() {
@@ -142,15 +144,17 @@ public class PdfReportGenerator extends ReportGenerator {
 
         writer.drawLine();
 
-        // Request
+        // Request — 智能渲染
         writer.drawSectionTitle("Request:");
-        writer.drawCodeBlock(sanitizeBodyForPdf(finding.getRecord().getRequestData()));
+        renderBodyPdf(writer, finding.getRecord().getRequestData(),
+                extractRequestContentType(finding.getRecord().getRequestData()));
 
-        // Response
+        // Response — 智能渲染
         writer.drawSectionTitle("Response  -  HTTP " + finding.getRecord().getStatusCode()
                 + " (" + finding.getRecord().getResponseLength() + " bytes, "
                 + finding.getRecord().getResponseTime() + "ms):");
-        writer.drawCodeBlock(sanitizeBodyForPdf(finding.getRecord().getResponseData()));
+        renderBodyPdf(writer, finding.getRecord().getResponseData(),
+                extractResponseContentType(finding.getRecord().getResponseData()));
 
         // cURL
         writer.drawSectionTitle("Reproduction  -  cURL:");
@@ -161,6 +165,111 @@ public class PdfReportGenerator extends ReportGenerator {
         writer.drawCodeBlock(truncForPdf(finding.getPostmanSnippet()));
 
         writer.drawLine();
+    }
+
+    /**
+     * 智能渲染 body: 二进制内容展示为元数据表+hex预览，文本保持原样
+     */
+    private void renderBodyPdf(InnerWriter writer, byte[] body, String contentType) throws Exception {
+        if (body == null || body.length == 0) {
+            writer.drawCodeBlock("[Empty]");
+            return;
+        }
+
+        BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
+
+        // 文本内容: 保持原有渲染
+        if (content.tier == null) {
+            writer.drawCodeBlock(sanitizeBodyForPdf(body));
+            return;
+        }
+
+        // 二进制内容: 渲染元数据表 + hex/base64
+        buildBinaryContentPdf(writer, content);
+    }
+
+    /**
+     * 构建二进制内容 PDF 渲染
+     */
+    private void buildBinaryContentPdf(InnerWriter writer,
+                                        BinaryContentRenderer.TieredRenderContent content) throws Exception {
+        // 元数据表
+        writer.drawSectionTitle("Binary Content (" + InnerWriter.filter(content.contentCategory)
+                + " - " + InnerWriter.filter(content.humanSize) + "):");
+
+        String[] headers = {"Property", "Value"};
+        float[] widths = {0.3f, 0.7f};
+        List<String[]> rows = new ArrayList<>();
+        rows.add(new String[]{"Content-Type", trunc(content.contentType, 50)});
+        rows.add(new String[]{"Size", content.humanSize});
+
+        if (content.metadataCardText != null) {
+            String sha = extractShaFromMetadata(content.metadataCardText);
+            if (!sha.isEmpty()) {
+                rows.add(new String[]{"SHA-256", trunc(sha, 50)});
+            }
+        }
+
+        writer.drawTable(headers, rows, widths);
+
+        // Multipart 部分
+        if (content.multipartParts != null) {
+            for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
+                buildMultipartPartPdf(writer, part);
+            }
+        }
+
+        // Hex dump 预览
+        if (content.hexDumpPreview != null && !content.hexDumpPreview.isEmpty()) {
+            writer.drawSectionTitle("Hex Preview:");
+            writer.drawCodeBlock(truncForPdf(content.hexDumpPreview));
+        }
+
+        // Base64 (仅 SMALL, 截断显示)
+        if (content.base64Content != null && !content.base64Content.isEmpty()) {
+            writer.drawSectionTitle("Base64:");
+            String base64Display = content.base64Content;
+            if (base64Display.length() > PDF_BASE64_LIMIT) {
+                base64Display = base64Display.substring(0, PDF_BASE64_LIMIT)
+                        + "\n... [Truncated in PDF - see HTML report for full data]";
+            }
+            writer.drawCodeBlock(base64Display);
+        }
+    }
+
+    /**
+     * 构建 multipart 单 part PDF
+     */
+    private void buildMultipartPartPdf(InnerWriter writer,
+                                        BinaryContentRenderer.MultipartPartInfo part) throws Exception {
+        String partTitle = "Part: ";
+        if (part.name != null) partTitle += part.name;
+        if (part.fileName != null) partTitle += " (" + part.fileName + ")";
+        partTitle += " - " + part.partContentType + " - " + BinaryContentRenderer.formatHumanSize(part.partSize);
+
+        writer.drawSectionTitle(partTitle);
+
+        if (part.isText) {
+            writer.drawCodeBlock(truncForPdf(part.textContent));
+        } else {
+            // 二进制 part: hex 预览
+            if (part.binaryPreview != null && part.binaryPreview.length > 0) {
+                String hexDump = BinaryContentRenderer.generateHexDump(part.binaryPreview, part.binaryPreview.length);
+                writer.drawCodeBlock(truncForPdf(hexDump));
+            }
+        }
+    }
+
+    /**
+     * 从元数据卡文本中提取 SHA-256 值
+     */
+    private String extractShaFromMetadata(String metadata) {
+        for (String line : metadata.split("\n")) {
+            if (line.startsWith("SHA-256:")) {
+                return line.substring("SHA-256:".length()).trim();
+            }
+        }
+        return "";
     }
 
     private static String trunc(String s, int max) {
@@ -192,7 +301,7 @@ public class PdfReportGenerator extends ReportGenerator {
 
     // ========== 内部 PDF 写入器 ==========
 
-    private static class InnerWriter {
+    static class InnerWriter {
         private final PDDocument document;
         private final PDType1Font regularFont;
         private final PDType1Font boldFont;
@@ -384,7 +493,7 @@ public class PdfReportGenerator extends ReportGenerator {
          * 过滤单行文本：移除控制字符，替换非 Latin-1 字符为 '?'
          * 用于 drawTitle / drawText 等单行渲染
          */
-        private static String filter(String s) {
+        static String filter(String s) {
             if (s == null) return "";
             StringBuilder sb = new StringBuilder(s.length());
             for (int i = 0; i < s.length(); i++) {
@@ -410,7 +519,7 @@ public class PdfReportGenerator extends ReportGenerator {
          * 过滤代码行文本：保留换行（由调用方拆分），替换非 Latin-1 字符为 '?'
          * 用于 drawCodeBlock 中逐行处理
          */
-        private static String filterLine(String s) {
+        static String filterLine(String s) {
             if (s == null) return "";
             StringBuilder sb = new StringBuilder(s.length());
             for (int i = 0; i < s.length(); i++) {

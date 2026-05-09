@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * 报告导出 UI 入口
- * 处理格式选择、文件保存对话框、异步生成和进度显示
+ * 处理格式选择、加密模式、文件保存对话框、异步生成和进度显示
  */
 public class ReportExporter {
 
@@ -24,9 +24,10 @@ public class ReportExporter {
     /**
      * 导出报告
      *
-     * @param format "html" | "md" | "pdf"
+     * @param format         "html" | "md" | "pdf"
+     * @param encryptionMode 加密压缩模式
      */
-    public void export(String format) {
+    public void export(String format, ReportContainerWriter.EncryptionMode encryptionMode) {
         ReportGenerator generator;
         String ext;
         switch (format) {
@@ -49,11 +50,20 @@ public class ReportExporter {
         }
 
         // 文件保存对话框
+        boolean useContainer = encryptionMode != ReportContainerWriter.EncryptionMode.PLAIN;
+        String outputExt = useContainer ? "ermr" : ext;
+        String defaultFilename = "privilege_test_report." + outputExt;
+
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("导出越权测试报告");
-        fileChooser.setFileFilter(new FileNameExtensionFilter(
-                format.toUpperCase() + " Report (*." + ext + ")", ext));
-        fileChooser.setSelectedFile(new File("privilege_test_report." + ext));
+        if (useContainer) {
+            fileChooser.setFileFilter(new FileNameExtensionFilter(
+                    "ERM Report (*.ermr)", "ermr"));
+        } else {
+            fileChooser.setFileFilter(new FileNameExtensionFilter(
+                    format.toUpperCase() + " Report (*." + ext + ")", ext));
+        }
+        fileChooser.setSelectedFile(new File(defaultFilename));
 
         if (fileChooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
             return;
@@ -61,7 +71,7 @@ public class ReportExporter {
 
         File outputFile = fileChooser.getSelectedFile();
         if (!outputFile.getName().contains(".")) {
-            outputFile = new File(outputFile.getAbsolutePath() + "." + ext);
+            outputFile = new File(outputFile.getAbsolutePath() + "." + outputExt);
         }
 
         // 覆盖确认
@@ -107,22 +117,40 @@ public class ReportExporter {
                 BurpExtender.printOutput("[*] 开始生成越权测试报告...");
                 ReportData data = finalGenerator.collectData();
 
+                // 生成报告内容为 byte[]
+                byte[] reportBytes;
                 if ("pdf".equals(format)) {
-                    byte[] pdfBytes = ((PdfReportGenerator) finalGenerator).generateToBytes(data);
-                    try (FileOutputStream fos = new FileOutputStream(finalFile)) {
-                        fos.write(pdfBytes);
-                    }
+                    reportBytes = ((PdfReportGenerator) finalGenerator).generateToBytes(data);
                 } else {
                     String content = finalGenerator.generate(data);
+                    reportBytes = content.getBytes(StandardCharsets.UTF_8);
+                }
+
+                // 根据加密模式输出
+                if (useContainer) {
+                    String originalFilename = "privilege_test_report." + ext;
+                    ReportContainerWriter containerWriter = new ReportContainerWriter();
+                    boolean success = containerWriter.write(finalFile, reportBytes, originalFilename,
+                            encryptionMode, parent);
+                    if (!success) {
+                        // 用户取消密码输入
+                        SwingUtilities.invokeLater(() -> {
+                            progressDialog.dispose();
+                        });
+                        return;
+                    }
+                } else {
+                    // 明文模式: 直接写文件
                     try (FileOutputStream fos = new FileOutputStream(finalFile)) {
-                        fos.write(content.getBytes(StandardCharsets.UTF_8));
+                        fos.write(reportBytes);
                     }
                 }
 
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
+                    String modeDesc = useContainer ? " (" + encryptionMode + ")" : " (明文)";
                     JOptionPane.showMessageDialog(parent,
-                            "报告导出成功！\n" + finalFile.getAbsolutePath(),
+                            "报告导出成功！\n" + finalFile.getAbsolutePath() + modeDesc,
                             "导出成功", JOptionPane.INFORMATION_MESSAGE);
                 });
                 BurpExtender.printOutput("[+] 越权测试报告导出成功: " + finalFile.getAbsolutePath());
@@ -136,5 +164,13 @@ public class ReportExporter {
                 BurpExtender.printError("[!] 越权测试报告导出失败: " + e.getMessage());
             }
         }).start();
+    }
+
+    /**
+     * 解密报告文件 (UI 入口)
+     */
+    public static void decryptReportFile(Component parent) {
+        ReportContainerReader reader = new ReportContainerReader();
+        reader.extractAndSave(parent);
     }
 }

@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * HTML 格式报告生成器
- * 生成自包含的 HTML 报告（内联 CSS）
+ * 生成自包含的 HTML 报告（内联 CSS），支持二进制内容智能渲染
  */
 public class HtmlReportGenerator extends ReportGenerator {
 
@@ -95,6 +95,21 @@ public class HtmlReportGenerator extends ReportGenerator {
                 "  .postman-block { background: #263238; color: #eeffff; max-height: 200px; }\n" +
                 "  .meta-info { font-size: 12px; color: #888; margin-bottom: 6px; }\n" +
                 "  .meta-info span { margin-right: 16px; }\n" +
+                // === 二进制内容渲染 CSS ===
+                "  .binary-card { border: 1px solid #b0bec5; border-radius: 6px; margin: 6px 0; overflow: hidden; }\n" +
+                "  .binary-card .card-header { background: #eceff1; padding: 8px 14px; font-weight: 600; font-size: 13px; color: #37474f; " +
+                "    border-bottom: 1px solid #cfd8dc; }\n" +
+                "  .binary-card .meta-row { padding: 4px 14px; font-size: 12px; display: flex; }\n" +
+                "  .binary-card .meta-key { font-weight: 600; color: #546e7a; min-width: 130px; flex-shrink: 0; }\n" +
+                "  .binary-card .meta-value { font-family: 'Courier New', monospace; color: #263238; word-break: break-all; }\n" +
+                "  .binary-card pre.hex-dump { background: #1a1a2e; color: #a8d8ea; font-size: 11px; max-height: 300px; border-radius: 0 0 4px 4px; }\n" +
+                "  .binary-card details.base64-section summary { padding: 6px 14px; background: #e8eaf6; cursor: pointer; font-size: 12px; font-weight: 600; color: #283593; }\n" +
+                "  .binary-card details.base64-section pre { border-radius: 0; max-height: 200px; }\n" +
+                "  .multipart-part { border: 1px dashed #90a4ae; border-radius: 4px; margin: 6px 14px; }\n" +
+                "  .multipart-part .part-header { padding: 4px 10px; background: #f5f5f5; font-size: 12px; font-weight: 600; color: #546e7a; }\n" +
+                "  .multipart-part pre { border-radius: 0 0 4px 4px; margin: 0; }\n" +
+                "  .multipart-binary-part { background: #fff8e1; border-color: #ffb74d; }\n" +
+                "  .multipart-binary-part .part-header { background: #fff3e0; color: #e65100; }\n" +
                 "  @media print { body { background: white; padding: 0; } .card { box-shadow: none; border: 1px solid #ddd; } }\n" +
                 "</style>\n";
     }
@@ -176,18 +191,18 @@ public class HtmlReportGenerator extends ReportGenerator {
         sb.append("    <div class=\"meta-info\">Similarity: ")
                 .append(String.format("%.2f", finding.getSimilarity())).append("</div>\n");
 
-        // Request
+        // Request — 智能渲染
         sb.append("    <div class=\"section-title\">Request</div>\n");
-        sb.append("    <pre>").append(escapeHtml(sanitizeBody(finding.getRecord().getRequestData())))
-                .append("</pre>\n");
+        sb.append(renderBodyHtml(finding.getRecord().getRequestData(),
+                extractRequestContentType(finding.getRecord().getRequestData())));
 
-        // Response
+        // Response — 智能渲染
         sb.append("    <div class=\"section-title\">Response — HTTP ")
                 .append(finding.getRecord().getStatusCode()).append(" (")
                 .append(finding.getRecord().getResponseLength()).append(" bytes, ")
                 .append(finding.getRecord().getResponseTime()).append("ms)</div>\n");
-        sb.append("    <pre>").append(escapeHtml(sanitizeBody(finding.getRecord().getResponseData())))
-                .append("</pre>\n");
+        sb.append(renderBodyHtml(finding.getRecord().getResponseData(),
+                extractResponseContentType(finding.getRecord().getResponseData())));
 
         // cURL
         sb.append("    <div class=\"section-title\">Reproduction — cURL</div>\n");
@@ -202,5 +217,115 @@ public class HtmlReportGenerator extends ReportGenerator {
         sb.append("  </div>\n");
         sb.append("</details>\n");
         return sb.toString();
+    }
+
+    /**
+     * 智能渲染 body：二进制内容展示为元数据卡+hex预览，文本保持原样
+     */
+    private String renderBodyHtml(byte[] body, String contentType) {
+        if (body == null || body.length == 0) {
+            return "<pre>[Empty]</pre>\n";
+        }
+
+        BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
+
+        // 文本内容: 保持原有渲染
+        if (content.tier == null) {
+            return "<pre>" + escapeHtml(sanitizeBody(body)) + "</pre>\n";
+        }
+
+        // 二进制内容: 渲染为 binary-card
+        return buildBinaryContentHtml(content);
+    }
+
+    /**
+     * 构建二进制内容 HTML 卡片
+     */
+    private String buildBinaryContentHtml(BinaryContentRenderer.TieredRenderContent content) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div class=\"binary-card\">\n");
+
+        // 卡片标题
+        sb.append("  <div class=\"card-header\">Binary Content (").append(escapeHtml(content.contentCategory))
+                .append(" — ").append(escapeHtml(content.humanSize)).append(")</div>\n");
+
+        // 元数据行
+        sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">Content-Type:</span> ")
+                .append("<span class=\"meta-value\">").append(escapeHtml(content.contentType)).append("</span></div>\n");
+        sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">Size:</span> ")
+                .append("<span class=\"meta-value\">").append(escapeHtml(content.humanSize)).append("</span></div>\n");
+
+        // SHA-256 (仅显示前32字符 + ...)
+        if (content.metadataCardText != null && content.metadataCardText.contains("SHA-256:")) {
+            String shaLine = extractShaFromMetadata(content.metadataCardText);
+            sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">SHA-256:</span> ")
+                    .append("<span class=\"meta-value\">").append(escapeHtml(shaLine)).append("</span></div>\n");
+        }
+
+        // Multipart 部分
+        if (content.multipartParts != null && !content.multipartParts.isEmpty()) {
+            sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">Multipart Parts:</span> ")
+                    .append("<span class=\"meta-value\">").append(content.multipartParts.size()).append("</span></div>\n");
+            for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
+                sb.append(buildMultipartPartHtml(part));
+            }
+        }
+
+        // Hex dump 预览 (SMALL / MEDIUM)
+        if (content.hexDumpPreview != null && !content.hexDumpPreview.isEmpty()) {
+            sb.append("  <pre class=\"hex-dump\">").append(escapeHtml(content.hexDumpPreview)).append("</pre>\n");
+        }
+
+        // Base64 折叠 (仅 SMALL)
+        if (content.base64Content != null && !content.base64Content.isEmpty()) {
+            sb.append("  <details class=\"base64-section\"><summary>Base64 (")
+                    .append(content.base64Content.length()).append(" chars)</summary>\n");
+            sb.append("    <pre>").append(escapeHtml(content.base64Content)).append("</pre>\n");
+            sb.append("  </details>\n");
+        }
+
+        sb.append("</div>\n");
+        return sb.toString();
+    }
+
+    /**
+     * 构建 multipart 单 part HTML
+     */
+    private String buildMultipartPartHtml(BinaryContentRenderer.MultipartPartInfo part) {
+        StringBuilder sb = new StringBuilder();
+        String partClass = part.isText ? "multipart-part" : "multipart-part multipart-binary-part";
+
+        sb.append("  <div class=\"").append(partClass).append("\">\n");
+        sb.append("    <div class=\"part-header\">");
+        if (part.name != null) sb.append("Field: ").append(escapeHtml(part.name));
+        if (part.fileName != null) sb.append(" | File: ").append(escapeHtml(part.fileName));
+        sb.append(" | Type: ").append(escapeHtml(part.partContentType));
+        sb.append(" | ").append(BinaryContentRenderer.formatHumanSize(part.partSize));
+        sb.append("</div>\n");
+
+        if (part.isText) {
+            sb.append("    <pre>").append(escapeHtml(part.textContent)).append("</pre>\n");
+        } else {
+            // 二进制 part: hex 预览
+            if (part.binaryPreview != null && part.binaryPreview.length > 0) {
+                String hexDump = BinaryContentRenderer.generateHexDump(part.binaryPreview, part.binaryPreview.length);
+                sb.append("    <pre class=\"hex-dump\">").append(escapeHtml(hexDump)).append("</pre>\n");
+            }
+        }
+
+        sb.append("  </div>\n");
+        return sb.toString();
+    }
+
+    /**
+     * 从元数据卡文本中提取 SHA-256 行
+     */
+    private String extractShaFromMetadata(String metadata) {
+        for (String line : metadata.split("\n")) {
+            if (line.startsWith("SHA-256:")) {
+                return line.substring("SHA-256:".length()).trim();
+            }
+        }
+        return "";
     }
 }

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-05-09
+
+### Added
+- 新增 BinaryContentRenderer 二进制内容渲染器，支持在报告中渲染图片等二进制响应内容
+- 新增 ReportContainerReader/ReportContainerWriter，支持报告容器的序列化读写
+
+### Changed
+- 增强 HtmlReportGenerator/MarkdownReportGenerator/PdfReportGenerator，集成二进制内容渲染支持
+- 增强 ReportExporter 和 ReportGenerator 接口，扩展报告导出能力
+- 增强 PrivilegeTestPanel 面板交互与功能
+
 ## [2.9.0] - 2026-05-09
 
 ### Added
