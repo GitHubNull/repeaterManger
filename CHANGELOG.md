@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-05-09
+
+### Changed
+- 重构 README.md 快速开始章节，结构更清晰
+- 重写中英文快速使用指南和详细使用教程，内容更完整、排版更规范
+
+### Fixed
+- 移除 ConfigPanel 中未使用的 `burp.BurpExtender` import
+- 移除 SessionConfigTab 中多余的 `@SuppressWarnings("unchecked")` 注解
+
 ## [2.4.0] - 2026-05-09
 
 ### Added

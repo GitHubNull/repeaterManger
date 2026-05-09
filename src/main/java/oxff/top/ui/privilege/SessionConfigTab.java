@@ -397,7 +397,6 @@ public class SessionConfigTab extends JPanel {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> castToMap(Map<?, ?> map) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : map.entrySet()) {

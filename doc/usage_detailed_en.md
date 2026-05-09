@@ -1,6 +1,6 @@
 # Detailed Usage Tutorial
 
-This document provides detailed instructions for all features of Repeater Manager.
+This document provides detailed instructions for all features of Repeater Manager. It is recommended to read through the chapters in order.
 
 ---
 
@@ -15,30 +15,39 @@ This document provides detailed instructions for all features of Repeater Manage
 - [7. Data Import/Export](#7-data-importexport)
 - [8. Logging System](#8-logging-system)
 - [9. Storage and Data Management](#9-storage-and-data-management)
-- [10. Advanced Tips](#10-advanced-tips)
-- [11. FAQ](#11-faq)
+- [10. API Rule Extraction](#10-api-rule-extraction)
+- [11. Privilege Testing](#11-privilege-testing)
+- [12. Advanced Tips](#12-advanced-tips)
+- [13. FAQ](#13-faq)
 
 ---
 
 ## 1. Installation and Uninstallation
 
-### 1.1 Installation
+### 1.1 Prerequisites
+
+- Burp Suite Professional 2024.1 or higher
+- Java 17 or higher
+
+### 1.2 Installation Steps
 
 1. Download the latest JAR file from the GitHub [Releases](../../releases) page
 2. Open Burp Suite Professional
-3. Navigate to `Extender` → `Extensions` tab
+3. Navigate to `Extensions` → `Installed` tab
 4. Click the `Add` button
 5. Select the downloaded JAR file in `Extension file`
 6. Click `Next` to complete installation
 7. You'll see **"Repeater Manager 插件加载成功"** in the Burp Suite output panel, confirming successful installation
 
-### 1.2 Uninstallation
+> On first load, the plugin automatically creates a session directory (named with a timestamp) under `~/.burp/`, containing the database file, body data directory, and logs directory. Global API extraction rules are stored in `~/.burp/repeater_manager/api_extraction_rules.yaml`.
 
-Select the plugin in `Extender` → `Extensions` and click `Remove`. Saved data will not be deleted.
+### 1.3 Uninstallation
 
-### 1.3 Updating
+Select the plugin in `Extensions` → `Installed` and click `Remove`. Saved data will not be deleted.
 
-Unload the old version and reload the new JAR file. It's recommended to export a data backup before updating.
+### 1.4 Updating
+
+Unload the old version and reload the new JAR file. It's recommended to export an ERM archive as a backup before updating.
 
 ---
 
@@ -55,10 +64,10 @@ The main working interface, with the following layout:
 |                           |  [New Request] [Clear] Layout: [v]|
 |   Request List            |                                   |
 |   (search/filter/color/   |   Request Editor | Response Viewer|
-|    comments)               |                                   |
+|    comments)              |                                   |
 +---------------------------+                                   |
 |                           +-----------------------------------+
-|   History Panel           |   Status Bar: Size / Time / Status |
+|   History Panel           |   Status Bar: Size / Time / Status|
 |   (double-click to load)  |                                   |
 +---------------------------+-----------------------------------+
 ```
@@ -70,12 +79,14 @@ The main working interface, with the following layout:
 
 ### 2.2 Configuration Tab
 
-Contains four sub-tabs:
+Contains multiple sub-tabs:
 
 - **Storage Config**: Database path, storage mode, auto-save parameters
 - **Logging**: Log level, file logging, UI logging, Burp console logging
 - **Proxy Debugging**: HTTP proxy configuration
 - **Data Import/Export**: ERM archive / Postman Collection import/export
+- **API Rule Config**: CRUD operations for global and project rules
+- **Privilege Testing**: User sessions, judgment rules, request scope configuration
 
 ### 2.3 Log Tab
 
@@ -87,7 +98,7 @@ Displays plugin runtime logs with level filtering support.
 
 ### 3.1 Sending Requests to the Plugin
 
-Right-click on any HTTP request in Burp Suite and select **"Send to Repeater Manager"** (发送到 Repeater Manager). Supported locations include:
+Right-click on any HTTP request in Burp Suite and select **"Send to Repeater Manager"**. Supported locations include:
 
 - Proxy → HTTP History
 - Proxy → Intercept
@@ -98,12 +109,11 @@ Right-click on any HTTP request in Burp Suite and select **"Send to Repeater Man
 
 ### 3.2 Creating a New Blank Request
 
-Click the **"New Request"** (新建请求) button at the top-right to create a default GET request template:
+Click the **"New Request"** button at the top-right to create a default GET request template:
 
 ```
 GET / HTTP/1.1
 Host: example.com
-
 ```
 
 ### 3.3 Request List Operations
@@ -112,7 +122,8 @@ Host: example.com
 - **Color marking**: Right-click a list entry to choose a color for categorization (e.g., red=high risk, green=normal)
 - **Add comments**: Add text descriptions to requests for later reference
 - **Search and filter**: Enter keywords in the search box to quickly locate requests
-- **Column display control**: Customize which table columns are shown/hidden
+- **Column display control**: Right-click the header to open the column control dialog and customize visible columns
+- **Delete request**: Right-click and select delete to clean up unwanted requests
 
 ---
 
@@ -155,7 +166,7 @@ The dropdown menu at the top-right offers four layout modes:
 
 ### 4.5 Clearing Content
 
-Click the **"Clear"** (清空) button to clear the current request and response content.
+Click the **"Clear"** button to clear the current request and response content.
 
 ---
 
@@ -182,7 +193,14 @@ Double-click any history entry to load that replay's:
 - Response data (loaded into the response viewer)
 - Status information (updated in the status bar)
 
-### 5.4 Data Persistence
+### 5.4 Advanced Search
+
+Right-click the history panel and select **"Advanced Search"**:
+
+- Supports multi-condition composite filtering (status code, response length, time range, etc.)
+- Quickly locate specific history records
+
+### 5.5 Data Persistence
 
 All history records are automatically saved to the SQLite database and survive Burp Suite restarts.
 
@@ -211,7 +229,7 @@ All history records are automatically saved to the SQLite database and survive B
 
 | Setting | Description |
 |---------|-------------|
-| Log Level | DEBUG / INFO / WARN / ERROR |
+| Log Level | DEBUG / INFO / SUCCESS / WARN / ERROR |
 | File Logging | Enable/disable file log output |
 | Log Directory | File log save path |
 | Max File Size | 1 MB / 5 MB / 10 MB / 50 MB |
@@ -309,15 +327,13 @@ Log files are stored in the `logs/` subdirectory of the session directory, suppo
 
 ```
 ~/.burp/
-└── session_20240101_120000/
-    ├── repeater_manager.sqlite3   # SQLite database
-    ├── blobs/                     # External body data
-    │   ├── req_body_abc123.bin    # Request body file
-    │   └── resp_body_def456.bin   # Response body file
-    └── logs/                      # Log files
-        ├── repeater_0.log         # Current log
-        ├── repeater_1.log         # Backup log
-        └── ...
+├── repeater_manager_config.properties     # Plugin configuration file
+├── repeater_manager/
+│   └── api_extraction_rules.yaml          # Global API extraction rules (cross-session)
+└── session_20240101_120000/               # Session directory (timestamp-named)
+    ├── repeater_manager.sqlite3           # SQLite database file
+    ├── blobs/                             # External body data directory
+    └── logs/                              # Log files directory
 ```
 
 ### 9.2 Pool Deduplication Mechanism
@@ -345,9 +361,105 @@ The database uses a Pool architecture for content deduplication, reducing storag
 
 ---
 
-## 10. Advanced Tips
+## 10. API Rule Extraction
 
-### 10.1 HTTPS Request Handling
+### 10.1 Feature Overview
+
+The API rule extraction engine can automatically extract standardized API paths from irregular HTTP requests, making it easier to organize and manage large numbers of requests. For example, extracting `/api/v1/users/{id}/detail` from `/api/v1/users/12345/detail`.
+
+### 10.2 Rule Types
+
+- **Global Rules**: Stored in `~/.burp/repeater_manager/api_extraction_rules.yaml`, shared across sessions, using negative IDs
+- **Project Rules**: Stored in the session SQLite database's `api_extraction_rules` table, only available in the current session, using positive IDs
+
+### 10.3 Extraction Sources
+
+| Source | Description |
+|--------|-------------|
+| URL_PATH | Extract from URL path |
+| URL_QUERY | Extract from URL query parameters |
+| HEADER | Extract from request headers |
+| BODY | Extract from request body |
+
+### 10.4 Extraction Methods
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| REGEX | Regular expression matching | `^/api/(.*)$` |
+| SUBSTR | Substring extraction | `start:end` or `start,length` |
+| JSON_PATH | JSONPath expression | `$.data.api_path` |
+| XPATH | XPath expression | `//api/@path` |
+
+### 10.5 Rule Priority
+
+Global and project rules are sorted by the `priority` field, using a **first-match-wins** strategy, meaning the first matching rule takes effect.
+
+### 10.6 Usage
+
+1. Navigate to **"Configuration"** → **"API Rule Config"** tab
+2. Click **"Add Rule"**, choose global or project rule
+3. Configure rule name, extraction source, extraction method, match expression, and priority
+4. Save the rule
+5. Right-click in the request list and select **"Re-extract API"**, or auto-trigger re-extraction when rules change
+
+---
+
+## 11. Privilege Testing
+
+### 11.1 Feature Overview
+
+The privilege testing module provides automated horizontal/vertical privilege escalation vulnerability detection. By configuring multiple user sessions and judgment rules, the plugin can automatically intercept proxy traffic, replace identity credentials, replay requests, and determine whether there is a privilege escalation risk based on the response.
+
+### 11.2 User Session Configuration
+
+Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab:
+
+- Add user sessions with different privilege levels (e.g., admin, regular user, guest)
+- Configure credentials or tokens for each session
+
+### 11.3 Token Location Configuration
+
+Configure where the token is located in the request:
+
+| Location Type | Description |
+|---------------|-------------|
+| HEADER | Request header (e.g., Authorization: Bearer xxx) |
+| COOKIE | Cookie field |
+| BODY | In the request body |
+| URL_PARAM | In the URL query parameters |
+
+Token locations support **persist to global** (cross-session sharing) and **enable/disable** control.
+
+### 11.4 Judgment Rule Configuration
+
+Set conditions for detecting privilege escalation:
+
+| Judgment Target | Judgment Method | Description |
+|-----------------|-----------------|-------------|
+| STATUS_CODE | EQUALS / NOT_EQUALS / CONTAINS | Status code matching |
+| RESPONSE_BODY | CONTAINS / NOT_CONTAINS / REGEX | Response body content matching |
+| RESPONSE_HEADER | CONTAINS / NOT_CONTAINS | Response header matching |
+| RESPONSE_TIME | GREATER_THAN / LESS_THAN | Response time judgment |
+
+### 11.5 Request Scope Configuration
+
+Specify URL patterns to test. Only requests matching the scope will be intercepted and tested.
+
+### 11.6 Running Tests
+
+1. After completing the above configurations, enable **"Auto-testing"**
+2. The plugin intercepts scope-matched proxy traffic
+3. Automatically replaces tokens and replays requests
+4. Evaluates privilege escalation risk based on judgment rules
+5. View results in the **"Privilege Test"** panel:
+   - **Green**: Safe, no privilege escalation detected
+   - **Red**: Potential privilege escalation, requires manual confirmation
+
+---
+
+## 12. Advanced Tips
+
+### 12.1 HTTPS Request Handling
 
 The plugin automatically preserves HTTPS protocol information:
 
@@ -355,11 +467,11 @@ The plugin automatically preserves HTTPS protocol information:
 - HTTPS protocol is not lost when resending saved requests
 - Supports port number recognition in the Host header (e.g., :443 → HTTPS)
 
-### 10.2 Request Timeout Settings
+### 12.2 Request Timeout Settings
 
 The request editor provides timeout configuration for customizing request timeout duration.
 
-### 10.3 Cross-session Data Migration
+### 12.3 Cross-session Data Migration
 
 Use the ERM archive format for cross-session data migration:
 
@@ -367,15 +479,16 @@ Use the ERM archive format for cross-session data migration:
 2. Switch sessions or restart Burp Suite
 3. Import ERM archive in the new session
 
-### 10.4 Team Collaboration
+### 12.4 Team Collaboration
 
 - Export ERM archives (with optional encryption) to share with team members
 - Export Postman Collections for sharing with team members who don't use Burp
 - Encrypted archives use AES-256-CBC to ensure secure data transfer
+- Global API extraction rules are shared via YAML files
 
 ---
 
-## 11. FAQ
+## 13. FAQ
 
 ### Q: I can't see the "Repeater Manager" tab after loading the plugin?
 

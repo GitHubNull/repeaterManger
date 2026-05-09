@@ -5,8 +5,6 @@ import oxff.top.db.DatabaseManager;
 import oxff.top.logging.LogLevel;
 import oxff.top.logging.LogManager;
 import oxff.top.http.ProxyConfig;
-import burp.BurpExtender;
-
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
