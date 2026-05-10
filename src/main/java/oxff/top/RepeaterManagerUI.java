@@ -558,7 +558,12 @@ public class RepeaterManagerUI {
     public void setPrivilegeTestRequest(HttpRequestResponse requestResponse) {
         try {
             if (requestResponse != null && requestResponse.request() != null) {
-                // 先用常规方式加载请求（复用setRequest的逻辑）
+                // 先关闭权限测试模式，避免 setRequest() 内部误触发重放
+                // （setRequest() 在 privilegeTestMode=true 时会自动触发重放，
+                //   而本方法后续也会手动触发，导致双重重放）
+                dispatchHandler.setPrivilegeTestMode(false);
+
+                // 用常规方式加载请求（复用setRequest的逻辑）
                 int dbId = setRequest(requestResponse);
 
                 // 标记为越权测试请求
