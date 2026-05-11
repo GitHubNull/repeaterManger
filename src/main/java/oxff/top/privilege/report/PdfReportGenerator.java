@@ -330,6 +330,7 @@ public class PdfReportGenerator extends ReportGenerator {
 
     /**
      * 针对PDF显示的body数据清洗，使用更短的限制
+     * 对 base64 长字符串做独立截断，避免 PDF 页面被无意义编码撑满
      */
     private String sanitizeBodyForPdf(byte[] body) {
         if (body == null || body.length == 0) {
@@ -340,10 +341,32 @@ public class PdfReportGenerator extends ReportGenerator {
             return "[Binary data - " + body.length + " bytes]";
         }
         String str = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        str = truncateBase64InText(str);
         if (str.length() > PDF_BODY_LIMIT) {
             str = str.substring(0, PDF_BODY_LIMIT) + "\n... [Truncated in PDF - see HTML report for full data]";
         }
         return str;
+    }
+
+    private static final java.util.regex.Pattern BASE64_PATTERN =
+            java.util.regex.Pattern.compile("([A-Za-z0-9+/]{80,}={0,2})");
+
+    /**
+     * 检测文本中的 base64 长字符串并截断至 PDF_BASE64_LIMIT
+     */
+    private String truncateBase64InText(String text) {
+        java.util.regex.Matcher matcher = BASE64_PATTERN.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String b64 = matcher.group(1);
+            if (b64.length() > PDF_BASE64_LIMIT) {
+                String truncated = b64.substring(0, PDF_BASE64_LIMIT)
+                        + "... [Base64 truncated in PDF - " + b64.length() + " chars total]";
+                matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(truncated));
+            }
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     private boolean isBinaryBody(byte[] data) {

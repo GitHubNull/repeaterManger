@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] - 2026-05-11
+
+### Fixed
+- PdfReportGenerator 新增 base64 长字符串截断逻辑，避免 PDF 页面被无意义编码撑满
+
+### Changed
+- 简化 ReportGenerator 端点迭代循环，移除未使用的 key 变量
+
 ## [2.11.0] - 2026-05-11
 
 ### Added

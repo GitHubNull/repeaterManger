@@ -42,9 +42,7 @@ public abstract class ReportGenerator {
         int endpointIndex = 1;
         Map<String, ReportData.SessionBreakdown> sessionMap = new LinkedHashMap<>();
 
-        for (Map.Entry<String, List<RequestResponseRecord>> entry : endpointRecordsMap.entrySet()) {
-            String key = entry.getKey();
-            List<RequestResponseRecord> epRecords = entry.getValue();
+        for (List<RequestResponseRecord> epRecords : endpointRecordsMap.values()) {
 
             ReportData.EndpointSection section = new ReportData.EndpointSection();
             section.setEndpointIndex(endpointIndex++);
