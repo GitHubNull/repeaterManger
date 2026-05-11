@@ -26,6 +26,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 请求调度处理器 - 管理HTTP请求发送、响应处理和历史记录更新
@@ -629,5 +630,201 @@ public class RequestDispatchHandler {
 
             BurpExtender.printOutput("[+] 已加载历史记录: " + record.toString());
         }
+    }
+
+    /**
+     * 批量权限测试 - 逐个请求ID执行越权重放
+     * 在后台线程中逐条处理，复用现有的 ReplayEngine 逻辑
+     *
+     * @param requestIds 要执行权限测试的请求ID列表
+     */
+    public void batchSendPrivilegeTestRequests(List<Integer> requestIds) {
+        if (requestIds == null || requestIds.isEmpty()) return;
+
+        SessionManager sessionManager = SessionManager.getInstance();
+        if (!sessionManager.hasEnabledSessions()) {
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(mainPanel,
+                    "没有已启用的用户会话，请先在\"权限测试\"标签页中配置用户会话",
+                    "权限测试配置缺失",
+                    JOptionPane.WARNING_MESSAGE);
+            });
+            return;
+        }
+
+        BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", requestIds.size()));
+
+        SwingUtilities.invokeLater(() -> setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)));
+
+        int totalCount = requestIds.size();
+        AtomicInteger completedCount = new AtomicInteger(0);
+
+        // 在后台线程逐条处理
+        new Thread(() -> {
+            for (int i = 0; i < requestIds.size(); i++) {
+                int requestId = requestIds.get(i);
+                try {
+                    // 从 requestDataMap 获取请求字节数组
+                    byte[] requestBytes = requestListPanel.getRequestData(requestId);
+                    if (requestBytes == null || requestBytes.length == 0) {
+                        BurpExtender.printError("[!] 批量权限测试：请求ID " + requestId + " 数据为空，跳过");
+                        completedCount.incrementAndGet();
+                        statusPanel.showBatchProgress(completedCount.get(), totalCount, "权限测试");
+                        continue;
+                    }
+
+                    // 从 httpServiceMap 获取 HttpService
+                    HttpService httpService = httpServiceMap.get(requestId);
+
+                    // 临时设置当前请求状态
+                    currentRequestId = requestId;
+                    currentHttpService = httpService;
+
+                    // 使用 CountDownLatch 等待当前请求的所有会话重放完成
+                    java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+                    SwingUtilities.invokeLater(() -> responsePanel.clear());
+
+                    ReplayEngine replayEngine = ReplayEngine.getInstance();
+                    replayEngine.replay(requestBytes, httpService, requestId, requestManager,
+                            new ReplayEngine.ReplayCallback() {
+                                @Override
+                                public void onReplayComplete(RequestResponseRecord rec, boolean isFirst) {
+                                    addHistoryRecord(rec.getRequestId(), rec);
+
+                                    rec.setApi(HttpRequestHelper.computeApiFromRequest(
+                                            rec.getPath(),
+                                            rec.getQueryParameters() != null ? rec.getQueryParameters() : "",
+                                            rec.getRequestData()));
+
+                                    try {
+                                        HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
+                                        int historyId = historyWriteDAO.saveHistory(rec);
+                                        if (historyId > 0) {
+                                            rec.setId(historyId);
+                                        }
+                                    } catch (Exception ex) {
+                                        BurpExtender.printError("[!] 批量越权测试记录保存异常: " + ex.getMessage());
+                                    }
+
+                                    SwingUtilities.invokeLater(() -> historyPanel.addHistoryRecord(rec));
+
+                                    if (isFirst && rec.getResponseData() != null && rec.getResponseData().length > 0) {
+                                        SwingUtilities.invokeLater(() -> {
+                                            responsePanel.setResponse(rec.getResponseData());
+                                            updateStatusFromRecord(rec);
+                                        });
+                                    }
+
+                                    BurpExtender.printOutput(String.format(
+                                            "[*] 批量权限测试 [%d/%d]: 用户=%s, 判决=%s",
+                                            completedCount.get() + 1, totalCount,
+                                            rec.getUserSessionName(),
+                                            rec.getJudgment()));
+                                }
+
+                                @Override
+                                public void onAllComplete() {
+                                    int done = completedCount.incrementAndGet();
+                                    statusPanel.showBatchProgress(done, totalCount, "权限测试");
+                                    latch.countDown();
+                                }
+                            });
+
+                    // 等待当前请求的所有重放完成后再处理下一条
+                    latch.await();
+
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 批量权限测试：请求ID " + requestId + " 处理异常: " + e.getMessage());
+                    completedCount.incrementAndGet();
+                    statusPanel.showBatchProgress(completedCount.get(), totalCount, "权限测试");
+                }
+            }
+
+            // 全部完成
+            SwingUtilities.invokeLater(() -> {
+                setCursor(Cursor.getDefaultCursor());
+                statusPanel.clearBatchProgress();
+                BurpExtender.printOutput(String.format("[+] 批量权限测试完成：共处理 %d 条请求", totalCount));
+            });
+        }, "batch-privilege-test").start();
+    }
+
+    /**
+     * 批量普通重放 - 逐条发送选中的历史记录请求
+     *
+     * @param records 要重放的历史记录列表
+     */
+    public void batchSendRequests(List<RequestResponseRecord> records) {
+        if (records == null || records.isEmpty()) return;
+
+        BurpExtender.printOutput(String.format("[*] 批量重放：开始处理 %d 条请求...", records.size()));
+
+        SwingUtilities.invokeLater(() -> setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)));
+
+        int totalCount = records.size();
+        AtomicInteger completedCount = new AtomicInteger(0);
+
+        new Thread(() -> {
+            for (int i = 0; i < records.size(); i++) {
+                RequestResponseRecord record = records.get(i);
+                try {
+                    byte[] requestBytes = record.getRequestData();
+                    if (requestBytes == null || requestBytes.length == 0) {
+                        BurpExtender.printError("[!] 批量重放：请求数据为空，跳过");
+                        completedCount.incrementAndGet();
+                        statusPanel.showBatchProgress(completedCount.get(), totalCount, "重放");
+                        continue;
+                    }
+
+                    int requestId = record.getRequestId();
+                    HttpService httpService = httpServiceMap.get(requestId);
+
+                    // 临时设置当前请求状态
+                    currentRequestId = requestId;
+                    currentHttpService = httpService;
+
+                    java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+                    requestManager.makeHttpRequestAsync(requestBytes, requestPanel.getTimeout(),
+                            requestId, httpService, new RequestManager.RequestCallback() {
+                                @Override
+                                public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
+                                    SwingUtilities.invokeLater(() -> {
+                                        try {
+                                            handleResponseSuccess(requestBytes, response, requestTimeMs, responseTimeMs, durationMs);
+                                        } catch (Exception ex) {
+                                            BurpExtender.printError("[!] 批量重放处理响应异常: " + ex.getMessage());
+                                        }
+                                    });
+                                    latch.countDown();
+                                }
+
+                                @Override
+                                public void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
+                                    SwingUtilities.invokeLater(() -> {
+                                        handleResponseFailure(requestBytes, errorMessage, requestTimeMs, responseTimeMs, durationMs);
+                                    });
+                                    latch.countDown();
+                                }
+                            });
+
+                    latch.await();
+                    int done = completedCount.incrementAndGet();
+                    statusPanel.showBatchProgress(done, totalCount, "重放");
+
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 批量重放：处理异常: " + e.getMessage());
+                    completedCount.incrementAndGet();
+                    statusPanel.showBatchProgress(completedCount.get(), totalCount, "重放");
+                }
+            }
+
+            SwingUtilities.invokeLater(() -> {
+                setCursor(Cursor.getDefaultCursor());
+                statusPanel.clearBatchProgress();
+                BurpExtender.printOutput(String.format("[+] 批量重放完成：共处理 %d 条请求", totalCount));
+            });
+        }, "batch-replay").start();
     }
 }

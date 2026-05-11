@@ -114,6 +114,9 @@ public class RepeaterManagerUI {
         // 初始化请求调度处理器
         dispatchHandler = new RequestDispatchHandler(mainPanel, requestPanel, responsePanel, historyPanel, requestListPanel, statusPanel, requestManager);
 
+        // 将 dispatchHandler 传递给 historyPanel，供右键菜单批量操作使用
+        historyPanel.setDispatchHandler(dispatchHandler);
+
         // 注册模式变更监听器：同步状态栏指示
         dispatchHandler.addModeChangeListener(mode -> {
             SwingUtilities.invokeLater(() -> statusPanel.setModeIndicator(mode));
@@ -584,6 +587,74 @@ public class RepeaterManagerUI {
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置权限测试请求失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 批量设置请求内容 - 用于从右键菜单接收多条请求
+     * @return 成功保存的请求ID列表
+     */
+    public List<Integer> setRequests(List<HttpRequestResponse> requestResponses) {
+        List<Integer> dbIds = new ArrayList<>();
+        if (requestResponses == null || requestResponses.isEmpty()) return dbIds;
+
+        for (int i = 0; i < requestResponses.size(); i++) {
+            HttpRequestResponse rr = requestResponses.get(i);
+            try {
+                int dbId = setRequest(rr);
+                if (dbId > 0) {
+                    dbIds.add(dbId);
+                }
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
+            }
+        }
+
+        if (!dbIds.isEmpty()) {
+            BurpExtender.printOutput(String.format("[+] 批量加载完成：成功 %d / %d 条", dbIds.size(), requestResponses.size()));
+        }
+
+        return dbIds;
+    }
+
+    /**
+     * 批量设置请求并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收多条请求
+     * 自动加载所有请求、切换到请求管理标签页、开启权限测试模式、批量重放
+     */
+    public void setPrivilegeTestRequests(List<HttpRequestResponse> requestResponses) {
+        if (requestResponses == null || requestResponses.isEmpty()) return;
+
+        try {
+            // 先关闭权限测试模式，避免 setRequest() 内部误触发重放
+            dispatchHandler.setPrivilegeTestMode(false);
+
+            // 批量加载请求
+            List<Integer> dbIds = setRequests(requestResponses);
+
+            if (dbIds.isEmpty()) {
+                BurpExtender.printError("[!] 批量权限测试：所有请求保存失败");
+                return;
+            }
+
+            // 标记为越权测试请求
+            for (int dbId : dbIds) {
+                new RequestDAO().markAsPrivilegeTest(dbId);
+                requestListPanel.updatePrivilegeTestFlag(dbId, true);
+            }
+
+            // 切换到请求管理标签页
+            tabbedPane.setSelectedIndex(0);
+
+            // 开启权限测试模式
+            dispatchHandler.setPrivilegeTestMode(true);
+            BurpExtender.printOutput(String.format("[*] 权限测试模式已开启，准备批量重放 %d 条请求...", dbIds.size()));
+
+            // 批量触发权限测试重放
+            dispatchHandler.batchSendPrivilegeTestRequests(dbIds);
+
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 批量设置权限测试请求失败: " + e.getMessage());
             e.printStackTrace();
         }
     }

@@ -1,14 +1,20 @@
 package oxff.top.ui.history;
 
+import burp.BurpExtender;
+import oxff.top.RequestDispatchHandler;
+import oxff.top.db.RequestDAO;
+import oxff.top.db.history.HistoryUpdateDAO;
 import oxff.top.http.RequestResponseRecord;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.util.List;
 
 /**
  * 历史记录右键菜单工厂 - 创建和管理历史记录表格的右键菜单
+ * 支持多选操作
  */
 public class HistoryContextMenu {
 
@@ -35,16 +41,23 @@ public class HistoryContextMenu {
     }
 
     /**
-     * 创建右键菜单
+     * 创建右键菜单（每次右键时重新创建，以反映当前选中数量）
      */
     public JPopupMenu createPopupMenu() {
         JPopupMenu popupMenu = new JPopupMenu();
 
+        int selectedCount = historyTable.getSelectedRows().length;
+
+        // 加载所选项
         JMenuItem loadItem = new JMenuItem("加载所选项");
         loadItem.addActionListener(e -> historyPanel.loadSelectedHistoryItem());
 
-        JMenuItem deleteItem = new JMenuItem("删除所选项");
-        deleteItem.addActionListener(e -> deleteSelectedHistoryItem());
+        // 删除所选项
+        String deleteText = selectedCount > 1
+            ? String.format("删除所选项 (%d条)", selectedCount)
+            : "删除所选项";
+        JMenuItem deleteItem = new JMenuItem(deleteText);
+        deleteItem.addActionListener(e -> historyPanel.deleteSelectedRecords());
 
         // 添加控制列显示的菜单项
         JMenuItem columnControlItem = new JMenuItem("显示/隐藏列");
@@ -65,9 +78,28 @@ public class HistoryContextMenu {
         colorMenu.addSeparator();
         addColorMenuItem(colorMenu, "清除颜色标记", null, true);
 
-        // 添加设置备注菜单项
+        // 编辑备注（多选时禁用）
         JMenuItem commentItem = new JMenuItem("编辑备注");
+        commentItem.setEnabled(selectedCount <= 1);
         commentItem.addActionListener(e -> editComment());
+
+        // 批量重放（选中 >= 2 条时显示）
+        JMenuItem batchReplayItem = null;
+        if (selectedCount >= 2) {
+            batchReplayItem = new JMenuItem(String.format("批量重放 (%d条)", selectedCount));
+            JMenuItem finalBatchReplayItem = batchReplayItem;
+            batchReplayItem.addActionListener(e -> batchReplaySelectedItems());
+        }
+
+        // 发送到权限测试
+        JMenuItem sendToPrivilegeTestItem = null;
+        if (selectedCount >= 1) {
+            String privText = selectedCount > 1
+                ? String.format("发送到权限测试 (%d条)", selectedCount)
+                : "发送到权限测试";
+            sendToPrivilegeTestItem = new JMenuItem(privText);
+            sendToPrivilegeTestItem.addActionListener(e -> sendSelectedToPrivilegeTest());
+        }
 
         JMenuItem clearItem = new JMenuItem("清空所有历史");
         clearItem.addActionListener(e -> historyPanel.clearHistoryWithConfirm());
@@ -75,6 +107,13 @@ public class HistoryContextMenu {
         popupMenu.add(loadItem);
         popupMenu.add(deleteItem);
         popupMenu.addSeparator();
+        if (batchReplayItem != null) {
+            popupMenu.add(batchReplayItem);
+        }
+        if (sendToPrivilegeTestItem != null) {
+            popupMenu.add(sendToPrivilegeTestItem);
+            popupMenu.addSeparator();
+        }
         popupMenu.add(columnControlItem);
         popupMenu.addSeparator();
         popupMenu.add(colorMenu);
@@ -86,6 +125,58 @@ public class HistoryContextMenu {
     }
 
     /**
+     * 批量重放选中的历史记录
+     */
+    private void batchReplaySelectedItems() {
+        List<RequestResponseRecord> selectedRecords = historyPanel.getSelectedRecords();
+        if (selectedRecords.isEmpty()) return;
+
+        RequestDispatchHandler dispatchHandler = historyPanel.getDispatchHandler();
+        if (dispatchHandler == null) {
+            BurpExtender.printError("[!] 批量重放：调度处理器未初始化");
+            return;
+        }
+
+        dispatchHandler.batchSendRequests(selectedRecords);
+    }
+
+    /**
+     * 将选中的历史记录发送到权限测试
+     */
+    private void sendSelectedToPrivilegeTest() {
+        List<RequestResponseRecord> selectedRecords = historyPanel.getSelectedRecords();
+        if (selectedRecords.isEmpty()) return;
+
+        RequestDispatchHandler dispatchHandler = historyPanel.getDispatchHandler();
+        if (dispatchHandler == null) {
+            BurpExtender.printError("[!] 权限测试：调度处理器未初始化");
+            return;
+        }
+
+        // 收集所有不重复的 requestId
+        java.util.Set<Integer> requestIds = new java.util.LinkedHashSet<>();
+        for (RequestResponseRecord record : selectedRecords) {
+            if (record.getRequestId() > 0) {
+                requestIds.add(record.getRequestId());
+            }
+        }
+
+        if (requestIds.isEmpty()) {
+            BurpExtender.printError("[!] 权限测试：选中的记录没有有效的请求ID");
+            return;
+        }
+
+        // 标记为越权测试请求
+        RequestDAO requestDAO = new RequestDAO();
+        for (int requestId : requestIds) {
+            requestDAO.markAsPrivilegeTest(requestId);
+        }
+
+        // 执行批量权限测试
+        dispatchHandler.batchSendPrivilegeTestRequests(new java.util.ArrayList<>(requestIds));
+    }
+
+    /**
      * 添加颜色菜单项
      */
     private void addColorMenuItem(JMenu parentMenu, String name, Color color) {
@@ -93,7 +184,7 @@ public class HistoryContextMenu {
     }
 
     /**
-     * 添加颜色菜单项
+     * 添加颜色菜单项（支持多选批量标记颜色）
      */
     private void addColorMenuItem(JMenu parentMenu, String name, Color color, boolean isClear) {
         JMenuItem item = new JMenuItem(name);
@@ -104,29 +195,43 @@ public class HistoryContextMenu {
         }
 
         item.addActionListener((ActionEvent e) -> {
-            int selectedRow = historyTable.getSelectedRow();
-            if (selectedRow == -1) {
+            int[] selectedRows = historyTable.getSelectedRows();
+            if (selectedRows.length == 0) {
                 return;
             }
 
-            int modelRow = historyTable.convertRowIndexToModel(selectedRow);
-            if (modelRow >= 0 && modelRow < historyRecords.size()) {
-                RequestResponseRecord record = historyRecords.get(modelRow);
-
-                if (isClear) {
-                    record.setColor(null);
-                } else if (color == null) {
-                    Color selectedColor = JColorChooser.showDialog(
-                        historyPanel, "选择标记颜色", Color.YELLOW);
-                    if (selectedColor != null) {
-                        record.setColor(selectedColor);
-                    }
-                } else {
-                    record.setColor(color);
-                }
-
-                historyTable.repaint();
+            Color finalColor;
+            if (isClear) {
+                finalColor = null;
+            } else if (color == null) {
+                Color selectedColor = JColorChooser.showDialog(
+                    historyPanel, "选择标记颜色", Color.YELLOW);
+                if (selectedColor == null) return;
+                finalColor = selectedColor;
+            } else {
+                finalColor = color;
             }
+
+            // 批量设置所有选中行的颜色
+            HistoryUpdateDAO historyUpdateDAO = new HistoryUpdateDAO();
+            for (int viewRow : selectedRows) {
+                int modelRow = historyTable.convertRowIndexToModel(viewRow);
+                if (modelRow >= 0 && modelRow < historyRecords.size()) {
+                    RequestResponseRecord record = historyRecords.get(modelRow);
+                    record.setColor(finalColor);
+
+                    // 同步更新数据库
+                    if (record.getId() > 0) {
+                        try {
+                            historyUpdateDAO.updateHistoryColor(record.getId(), finalColor);
+                        } catch (Exception ex) {
+                            BurpExtender.printError("[!] 更新历史记录颜色失败: " + ex.getMessage());
+                        }
+                    }
+                }
+            }
+
+            historyTable.repaint();
         });
 
         parentMenu.add(item);
@@ -160,7 +265,7 @@ public class HistoryContextMenu {
     }
 
     /**
-     * 编辑备注
+     * 编辑备注（仅支持单条）
      */
     private void editComment() {
         int selectedRow = historyTable.getSelectedRow();
@@ -189,32 +294,13 @@ public class HistoryContextMenu {
 
                 int commentColumn = 14; // 备注列索引
                 historyTableModel.setValueAt(record.getTruncatedComment(16), modelRow, commentColumn);
+
+                // 同步更新数据库
+                if (record.getId() > 0) {
+                    HistoryUpdateDAO historyUpdateDAO = new HistoryUpdateDAO();
+                    historyUpdateDAO.updateHistoryComment(record.getId(), newComment.trim());
+                }
             }
-        }
-    }
-
-    /**
-     * 删除选中的历史记录项
-     */
-    private void deleteSelectedHistoryItem() {
-        int selectedRow = historyTable.getSelectedRow();
-        if (selectedRow == -1) {
-            return;
-        }
-
-        int modelRow = historyTable.convertRowIndexToModel(selectedRow);
-
-        int result = JOptionPane.showConfirmDialog(
-            historyPanel,
-            "确认删除选中的历史记录?",
-            "删除确认",
-            JOptionPane.YES_NO_OPTION
-        );
-
-        if (result == JOptionPane.YES_OPTION) {
-            historyRecords.remove(modelRow);
-            historyTableModel.removeRow(modelRow);
-            historyPanel.updateRecordNumbers();
         }
     }
 }

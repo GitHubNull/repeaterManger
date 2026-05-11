@@ -20,6 +20,7 @@ public class StatusPanel extends JPanel {
     private final JLabel requestTimeLabel;
     private final JLabel responseTimeLabel;
     private final JLabel durationLabel;
+    private final JLabel batchProgressLabel;
 
     public StatusPanel() {
         setLayout(new FlowLayout(FlowLayout.LEFT, 12, 2));
@@ -61,6 +62,12 @@ public class StatusPanel extends JPanel {
         durationLabel = new JLabel(PLACEHOLDER);
         add(durationLabel);
         add(new JLabel("ms"));
+
+        // 批量操作进度
+        add(createSeparator());
+        batchProgressLabel = new JLabel("");
+        batchProgressLabel.setForeground(new Color(0, 100, 200));
+        add(batchProgressLabel);
     }
 
     /**
@@ -118,6 +125,30 @@ public class StatusPanel extends JPanel {
         durationLabel.setText(PLACEHOLDER);
         // 重置模式指示为普通模式
         setModeIndicator(false);
+    }
+
+    /**
+     * 显示批量操作进度
+     *
+     * @param current     当前已完成数量
+     * @param total       总数量
+     * @param description 操作描述（如"权限测试"、"重放"）
+     */
+    public void showBatchProgress(int current, int total, String description) {
+        SwingUtilities.invokeLater(() -> {
+            batchProgressLabel.setText(String.format("批量操作: %d/%d (%s中...)", current, total, description));
+            batchProgressLabel.setFont(batchProgressLabel.getFont().deriveFont(Font.BOLD));
+        });
+    }
+
+    /**
+     * 清除批量操作进度显示
+     */
+    public void clearBatchProgress() {
+        SwingUtilities.invokeLater(() -> {
+            batchProgressLabel.setText("");
+            batchProgressLabel.setFont(batchProgressLabel.getFont().deriveFont(Font.PLAIN));
+        });
     }
 
     private JLabel createSeparator() {

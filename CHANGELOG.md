@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-05-11
+
+### Added
+- 历史面板新增多选模式（MULTIPLE_INTERVAL_SELECTION），支持 Shift/Ctrl 多行选择
+- 历史面板右键菜单新增批量重放功能：逐条重放选中的多条历史记录
+- 历史面板右键菜单新增批量权限测试功能：逐条对选中的多条记录进行越权测试
+- 历史面板右键菜单新增批量删除功能：支持一次性删除多条历史记录（含数据库同步）
+- 状态栏新增批量进度显示支持（showBatchProgress / clearBatchProgress）
+- BurpExtender 新增批量请求入口方法（setRepeaterUIRequests / setPrivilegeTestRequests）
+
+### Changed
+- 重构代理右键菜单（PopMenu）：过滤无效请求，支持多选时批量发送到 Repeater Manager 和权限测试
+- 重构历史面板右键菜单（HistoryContextMenu）：每次弹出时动态构建菜单项，根据选中数量自适应菜单文本
+- 重构 RequestDispatchHandler：新增 batchPrivilegeTest 和 batchSendRequests 方法，使用 CountDownLatch 顺序处理
+- 备注编辑后自动同步到数据库（HistoryUpdateDAO）
+
 ## [2.12.0] - 2026-05-11
 
 ### Added

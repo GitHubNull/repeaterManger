@@ -1,6 +1,8 @@
 package oxff.top.ui.history;
 
 import burp.BurpExtender;
+import oxff.top.RequestDispatchHandler;
+import oxff.top.db.history.HistoryUpdateDAO;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.RequestResponseRecord;
 
@@ -32,6 +34,7 @@ public class HistoryPanel extends JPanel {
     private final JTextField searchField;
     private TableRowSorter<DefaultTableModel> tableRowSorter;
     private HistoryContextMenu contextMenu;
+    private RequestDispatchHandler dispatchHandler;
 
     /**
      * 创建历史记录面板
@@ -106,10 +109,20 @@ public class HistoryPanel extends JPanel {
         add(searchPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
 
-        // 创建右键菜单
+        // 创建右键菜单工厂（每次右键时动态生成菜单以反映选中数量）
         contextMenu = new HistoryContextMenu(this, historyTable, historyRecords, historyTableModel);
-        JPopupMenu popupMenu = contextMenu.createPopupMenu();
-        historyTable.setComponentPopupMenu(popupMenu);
+        historyTable.setComponentPopupMenu(new JPopupMenu() {
+            @Override
+            public void show(Component invoker, int x, int y) {
+                // 每次弹出前重新构建菜单项
+                removeAll();
+                JPopupMenu freshMenu = contextMenu.createPopupMenu();
+                for (int i = 0; i < freshMenu.getComponentCount(); i++) {
+                    add(freshMenu.getComponent(i));
+                }
+                super.show(invoker, x, y);
+            }
+        });
     }
 
     /**
@@ -139,7 +152,7 @@ public class HistoryPanel extends JPanel {
 
         // 创建表格
         historyTable = new JTable(historyTableModel);
-        historyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        historyTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         historyTable.setAutoCreateRowSorter(true);
         historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
@@ -432,5 +445,82 @@ public class HistoryPanel extends JPanel {
         for (int i = 0; i < historyTableModel.getRowCount(); i++) {
             historyTableModel.setValueAt(i + 1, i, 0);  // 第一列是序号列
         }
+    }
+
+    /**
+     * 设置请求调度处理器引用（由 RepeaterManagerUI 在创建 dispatchHandler 后调用）
+     */
+    public void setDispatchHandler(RequestDispatchHandler dispatchHandler) {
+        this.dispatchHandler = dispatchHandler;
+    }
+
+    /**
+     * 获取请求调度处理器引用
+     */
+    public RequestDispatchHandler getDispatchHandler() {
+        return dispatchHandler;
+    }
+
+    /**
+     * 获取所有选中行的历史记录
+     * @return 选中的记录列表（可能为空）
+     */
+    public List<RequestResponseRecord> getSelectedRecords() {
+        List<RequestResponseRecord> selected = new ArrayList<>();
+        int[] selectedRows = historyTable.getSelectedRows();
+        for (int viewRow : selectedRows) {
+            int modelRow = historyTable.convertRowIndexToModel(viewRow);
+            if (modelRow >= 0 && modelRow < historyRecords.size()) {
+                selected.add(historyRecords.get(modelRow));
+            }
+        }
+        return selected;
+    }
+
+    /**
+     * 删除所有选中的历史记录（UI + 数据库）
+     */
+    public void deleteSelectedRecords() {
+        List<RequestResponseRecord> selected = getSelectedRecords();
+        if (selected.isEmpty()) return;
+
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            String.format("确认删除选中的 %d 条历史记录?", selected.size()),
+            "删除确认",
+            JOptionPane.YES_NO_OPTION
+        );
+
+        if (result != JOptionPane.YES_OPTION) return;
+
+        // 从数据库逐条删除
+        HistoryUpdateDAO historyUpdateDAO = new HistoryUpdateDAO();
+        for (RequestResponseRecord record : selected) {
+            if (record.getId() > 0) {
+                try {
+                    historyUpdateDAO.deleteHistory(record.getId());
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 删除历史记录失败 ID=" + record.getId() + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // 从内存和表格中移除（从后向前删除避免索引偏移）
+        int[] selectedRows = historyTable.getSelectedRows();
+        List<Integer> modelRows = new ArrayList<>();
+        for (int viewRow : selectedRows) {
+            modelRows.add(historyTable.convertRowIndexToModel(viewRow));
+        }
+        // 降序排列，从后向前删除
+        modelRows.sort(java.util.Collections.reverseOrder());
+        for (int modelRow : modelRows) {
+            if (modelRow >= 0 && modelRow < historyRecords.size()) {
+                historyRecords.remove(modelRow);
+                historyTableModel.removeRow(modelRow);
+            }
+        }
+
+        updateRecordNumbers();
+        BurpExtender.printOutput(String.format("[+] 已删除 %d 条历史记录", selected.size()));
     }
 }

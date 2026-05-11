@@ -12,6 +12,7 @@ import oxff.top.logging.LogManager;
 import oxff.top.http.RequestResponseRecord;
 
 import javax.swing.SwingUtilities;
+import java.util.List;
 
 /**
  * Burp扩展入口点 - 负责注册插件并初始化所需组件
@@ -238,6 +239,34 @@ public class BurpExtender implements BurpExtension {
             SwingUtilities.invokeLater(() -> {
                 repeaterUI.setPrivilegeTestRequest(requestResponse);
                 logManager.success("[+] 已将请求发送到权限测试，重放结果将在请求管理标签页中显示");
+            });
+        }
+    }
+
+    /**
+     * 批量将请求发送到 Repeater Manager
+     * 供 PopMenu 右键菜单多选时调用
+     */
+    public static void setRepeaterUIRequests(List<HttpRequestResponse> requestResponses) {
+        if (repeaterUI != null && requestResponses != null && !requestResponses.isEmpty()) {
+            SwingUtilities.invokeLater(() -> {
+                repeaterUI.setRequests(requestResponses);
+                logManager.success(String.format("[+] 已将 %d 条请求发送到 Repeater Manager，请切换到相应标签页查看",
+                    requestResponses.size()));
+            });
+        }
+    }
+
+    /**
+     * 批量将请求发送到权限测试模式
+     * 供 PopMenu 右键菜单多选时调用
+     */
+    public static void setPrivilegeTestRequests(List<HttpRequestResponse> requestResponses) {
+        if (repeaterUI != null && requestResponses != null && !requestResponses.isEmpty()) {
+            SwingUtilities.invokeLater(() -> {
+                repeaterUI.setPrivilegeTestRequests(requestResponses);
+                logManager.success(String.format("[+] 已将 %d 条请求发送到权限测试，重放结果将在请求管理标签页中显示",
+                    requestResponses.size()));
             });
         }
     }
