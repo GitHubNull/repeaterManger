@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-05-11
+
+### Added
+- 引入 FreeMarker 模板引擎，新增 FreeMarkerConfig 配置与 BodyRenderer 渲染器
+- 新增 HTML/Markdown 报告 FreeMarker 模板（html_report.ftl / md_report.ftl / html_css.ftl）
+- ReportData 新增请求/响应 body 预渲染字段（requestHtml/responseHtml/requestMd/responseMd）
+
+### Changed
+- 重构 HtmlReportGenerator，使用 FreeMarker 模板替代内联 HTML 拼接
+- 重构 MarkdownReportGenerator，使用 FreeMarker 模板替代内联 Markdown 拼接
+- 重构 PdfReportGenerator，优化二进制内容渲染与布局
+- 增强 BinaryContentRenderer 分级渲染能力
+- ReportGenerator 新增阶段 D：body 内容预渲染逻辑
+- 精简 ReportGenerator 基类，移除已迁移到 BodyRenderer 的 sanitizeBody/isBinaryBody 等方法
+- 优化 AutoTestEngine/BurpExtender/RepeaterManagerUI 相关逻辑
+
 ## [2.10.2] - 2026-05-10
 
 ### Fixed

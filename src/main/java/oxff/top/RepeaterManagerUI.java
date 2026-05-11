@@ -618,6 +618,16 @@ public class RepeaterManagerUI {
     }
 
     /**
+     * 将自动化测试的原始请求添加到请求列表面板和内存映射
+     * 供 AutoTestEngine 通过 BurpExtender 调用
+     */
+    public void addAutoTestRequest(int requestId, String api, String method,
+            String protocol, String domain, String path, String query, byte[] requestData) {
+        requestListPanel.addRequest(requestId, api, method, protocol, domain, path, query, true, requestData);
+        dispatchHandler.getRequestHistoryMap().computeIfAbsent(requestId, k -> new ArrayList<>());
+    }
+
+    /**
      * 关闭资源
      */
     public void close() {

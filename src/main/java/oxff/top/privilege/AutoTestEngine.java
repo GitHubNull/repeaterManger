@@ -3,6 +3,7 @@ package oxff.top.privilege;
 import burp.BurpExtender;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.proxy.http.InterceptedRequest;
+import oxff.top.db.RequestDAO;
 import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
@@ -96,6 +97,35 @@ public class AutoTestEngine {
                 List<TokenLocation> locations = sessionManager.getTokenLocations();
                 RequestManager requestManager = new RequestManager();
 
+                // 保存原始请求到 requests 表（用于报告生成时获取原始报文）
+                int requestId = -1;
+                try {
+                    RequestDAO requestDAO = new RequestDAO();
+                    requestId = requestDAO.saveRequest(
+                            httpService.secure() ? "https" : "http",
+                            httpService.host(),
+                            interceptedRequest.path(),
+                            interceptedRequest.query() != null ? interceptedRequest.query() : "",
+                            interceptedRequest.method(),
+                            requestBytes,
+                            true  // isPrivilegeTest
+                    );
+                    if (requestId > 0) {
+                        final int finalRequestId = requestId;
+                        SwingUtilities.invokeLater(() -> {
+                            BurpExtender.addAutoTestRequestToPanel(finalRequestId, api,
+                                    interceptedRequest.method(),
+                                    httpService.secure() ? "https" : "http",
+                                    httpService.host(),
+                                    interceptedRequest.path(),
+                                    interceptedRequest.query() != null ? interceptedRequest.query() : "",
+                                    requestBytes);
+                        });
+                    }
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 保存自动化测试原始请求失败: " + e.getMessage());
+                }
+
                 // 存储基准用户响应
                 byte[] baselineResponse = null;
                 int baselineStatusCode = -1;
@@ -143,6 +173,7 @@ public class AutoTestEngine {
                         }
 
                         RequestResponseRecord record = new RequestResponseRecord();
+                        record.setRequestId(requestId);
                         record.setMethod(interceptedRequest.method());
                         record.setProtocol(httpService.secure() ? "https" : "http");
                         record.setDomain(httpService.host());

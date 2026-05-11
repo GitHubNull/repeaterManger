@@ -7,7 +7,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import oxff.top.http.RequestResponseRecord;
 
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -72,7 +71,8 @@ public class PostmanSnippetBuilder {
                     if (body != null && body.length > 0) {
                         JsonObject bodyObj = new JsonObject();
                         bodyObj.addProperty("mode", "raw");
-                        bodyObj.addProperty("raw", new String(body, StandardCharsets.UTF_8));
+                        bodyObj.addProperty("raw", BinaryContentRenderer.decodeBody(body,
+                                BinaryContentRenderer.extractContentTypeFromRequest(requestData)));
                         request.add("body", bodyObj);
                     }
                 } catch (Exception ignored) {
@@ -103,7 +103,8 @@ public class PostmanSnippetBuilder {
                 response.addProperty("name", "Response (" + record.getStatusCode() + ")");
                 response.addProperty("status", getStatusText(record.getStatusCode()));
                 response.addProperty("code", record.getStatusCode());
-                response.addProperty("body", new String(responseData, StandardCharsets.UTF_8));
+                response.addProperty("body", BinaryContentRenderer.decodeBody(responseData,
+                        BinaryContentRenderer.extractContentTypeFromResponse(responseData)));
                 responseArray.add(response);
                 item.add("response", responseArray);
             }

@@ -1,9 +1,9 @@
 package oxff.top.privilege.report;
 
+import oxff.top.db.RequestDAO;
 import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.http.RequestResponseRecord;
 
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -12,7 +12,7 @@ import java.util.*;
 public abstract class ReportGenerator {
 
     protected final HistoryReadDAO historyReadDAO;
-    protected final BinaryContentRenderer binaryRenderer = new BinaryContentRenderer();
+    protected final BodyRenderer bodyRenderer = new BodyRenderer();
 
     protected ReportGenerator() {
         this.historyReadDAO = new HistoryReadDAO();
@@ -20,6 +20,7 @@ public abstract class ReportGenerator {
 
     /**
      * 收集报告数据
+     * 四阶段：端点分组 → 构建 EndpointSection → 计数修正 → 预渲染 body
      */
     public ReportData collectData() {
         ReportData data = new ReportData();
@@ -27,72 +28,131 @@ public abstract class ReportGenerator {
         // 获取所有越权测试结果
         List<RequestResponseRecord> records = historyReadDAO.getPrivilegeTestResults();
 
-        // ===== 阶段 A：按端点分组 =====
-        Map<String, ReportData.EndpointSummary> endpointMap = new LinkedHashMap<>();
+        // ===== 阶段 A：按端点分组，分桶存储 baseline 和 user session =====
+        Map<String, List<RequestResponseRecord>> endpointRecordsMap = new LinkedHashMap<>();
         Set<String> uniqueEndpoints = new HashSet<>();
         for (RequestResponseRecord record : records) {
             String key = record.getMethod() + " " + record.getDomain() + record.getPath();
             uniqueEndpoints.add(key);
-
-            ReportData.EndpointSummary es = endpointMap.computeIfAbsent(key, k -> {
-                ReportData.EndpointSummary e = new ReportData.EndpointSummary();
-                e.setMethod(record.getMethod());
-                e.setUrl(record.getProtocol() + "://" + record.getDomain() + record.getPath());
-                return e;
-            });
-
-            ReportData.Finding finding = new ReportData.Finding();
-            finding.setUserSessionName(record.getUserSessionName());
-            finding.setJudgment(record.getJudgment());
-            finding.setSimilarity(record.getSimilarity());
-            finding.setRecord(record);
-            finding.setCurlCommand(CurlBuilder.build(record));
-            finding.setPostmanSnippet(PostmanSnippetBuilder.build(record));
-
-            // 尝试获取匹配规则名（从注释提取或留空）
-            String comment = record.getComment();
-            if (comment != null && !comment.isEmpty()) {
-                finding.setMatchedRuleName(extractRuleName(comment));
-            }
-
-            es.getFindings().add(finding);
+            endpointRecordsMap.computeIfAbsent(key, k -> new ArrayList<>()).add(record);
         }
 
-        // ===== 阶段 B：识别并关联基准 =====
-        for (ReportData.EndpointSummary es : endpointMap.values()) {
-            ReportData.Finding baselineFinding = null;
-            for (ReportData.Finding f : es.getFindings()) {
-                if (f.getSimilarity() == -1 && "NOT_ESCALATED".equalsIgnoreCase(f.getJudgment())) {
-                    baselineFinding = f;
-                    break;
+        // ===== 阶段 B：构建 EndpointSection（baseline 与 user session 分离） =====
+        List<ReportData.EndpointSection> endpointSections = new ArrayList<>();
+        int endpointIndex = 1;
+        Map<String, ReportData.SessionBreakdown> sessionMap = new LinkedHashMap<>();
+
+        for (Map.Entry<String, List<RequestResponseRecord>> entry : endpointRecordsMap.entrySet()) {
+            String key = entry.getKey();
+            List<RequestResponseRecord> epRecords = entry.getValue();
+
+            ReportData.EndpointSection section = new ReportData.EndpointSection();
+            section.setEndpointIndex(endpointIndex++);
+
+            // 从第一条记录提取端点信息
+            RequestResponseRecord first = epRecords.get(0);
+            section.setMethod(first.getMethod());
+            section.setUrl(first.getProtocol() + "://" + first.getDomain() + first.getPath());
+
+            // 分离 baseline 和 user session 记录
+            RequestResponseRecord baselineRecord = null;
+            String baselineSessionName = null;
+            List<RequestResponseRecord> userRecords = new ArrayList<>();
+
+            for (RequestResponseRecord record : epRecords) {
+                if (record.getSimilarity() == -1 && "NOT_ESCALATED".equalsIgnoreCase(record.getJudgment())) {
+                    baselineRecord = record;
+                    baselineSessionName = record.getUserSessionName();
+                } else {
+                    userRecords.add(record);
                 }
             }
 
-            if (baselineFinding != null) {
-                baselineFinding.setBaseline(true);
-                for (ReportData.Finding f : es.getFindings()) {
-                    if (f != baselineFinding) {
-                        f.setBaselineRecord(baselineFinding.getRecord());
-                        f.setBaselineSessionName(baselineFinding.getUserSessionName());
+            // 构建 BaselineData - 使用 requests 表中的原始请求数据
+            if (baselineRecord != null) {
+                ReportData.BaselineData baselineData = new ReportData.BaselineData();
+                baselineData.setSessionName(baselineSessionName);
+
+                int requestId = baselineRecord.getRequestId();
+                if (requestId > 0) {
+                    RequestDAO requestDAO = new RequestDAO();
+                    Map<String, Object> originalRequest = requestDAO.getRequest(requestId);
+                    if (originalRequest != null && originalRequest.containsKey("request_data")) {
+                        byte[] originalRequestData = (byte[]) originalRequest.get("request_data");
+                        RequestResponseRecord orinRecord = new RequestResponseRecord();
+                        orinRecord.setRequestData(originalRequestData);
+                        orinRecord.setResponseData(baselineRecord.getResponseData());
+                        orinRecord.setStatusCode(baselineRecord.getStatusCode());
+                        orinRecord.setResponseLength(baselineRecord.getResponseLength());
+                        orinRecord.setResponseTime(baselineRecord.getResponseTime());
+                        orinRecord.setMethod((String) originalRequest.get("method"));
+                        orinRecord.setProtocol((String) originalRequest.get("protocol"));
+                        orinRecord.setDomain((String) originalRequest.get("domain"));
+                        orinRecord.setPath((String) originalRequest.get("path"));
+                        orinRecord.setQueryParameters((String) originalRequest.get("query"));
+                        baselineData.setRecord(orinRecord);
+                    } else {
+                        baselineData.setRecord(baselineRecord);
                     }
+                } else {
+                    baselineData.setRecord(baselineRecord);
                 }
+                section.setBaselineData(baselineData);
             }
+
+            // 构建 SessionFinding 列表（所有用户会话均作为普通会话显示）
+            List<ReportData.SessionFinding> sessionFindings = new ArrayList<>();
+
+            // 将 baseline 用户添加为 SessionFinding（显示为 "用户X http data"，使用实际判决结果）
+            if (baselineRecord != null) {
+                ReportData.SessionFinding baselineFinding = new ReportData.SessionFinding();
+                baselineFinding.setSessionName(baselineSessionName);
+                baselineFinding.setJudgment(baselineRecord.getJudgment());
+                baselineFinding.setSimilarity(-1);
+                baselineFinding.setRecord(baselineRecord);
+                baselineFinding.setBaseline(false);
+                baselineFinding.setCurlCommand(CurlBuilder.build(baselineRecord));
+                baselineFinding.setPostmanSnippet(PostmanSnippetBuilder.build(baselineRecord));
+                sessionFindings.add(baselineFinding);
+            }
+
+            // 非基准用户会话
+            for (RequestResponseRecord record : userRecords) {
+                ReportData.SessionFinding finding = new ReportData.SessionFinding();
+                finding.setSessionName(record.getUserSessionName());
+                finding.setJudgment(record.getJudgment());
+                finding.setSimilarity(record.getSimilarity());
+                finding.setRecord(record);
+                finding.setCurlCommand(CurlBuilder.build(record));
+                finding.setPostmanSnippet(PostmanSnippetBuilder.build(record));
+
+                // 尝试获取匹配规则名（从注释提取）
+                String comment = record.getComment();
+                if (comment != null && !comment.isEmpty()) {
+                    finding.setMatchedRuleName(extractRuleName(comment));
+                }
+
+                sessionFindings.add(finding);
+            }
+            section.setUserSessions(sessionFindings);
+
+            endpointSections.add(section);
         }
 
-        // ===== 阶段 C：修正计数（排除基准记录） =====
+        // ===== 阶段 C：计数修正（排除 baseline SessionFinding） =====
         ReportData.ReportSummary summary = new ReportData.ReportSummary();
         int escalated = 0, safe = 0, errors = 0, baselineTotal = 0;
 
-        Map<String, ReportData.SessionBreakdown> sessionMap = new LinkedHashMap<>();
-        for (ReportData.EndpointSummary es : endpointMap.values()) {
-            int epEscalated = 0, epSafe = 0, epError = 0, epBaseline = 0;
+        for (ReportData.EndpointSection section : endpointSections) {
+            int epEscalated = 0, epSafe = 0, epError = 0;
 
-            for (ReportData.Finding f : es.getFindings()) {
-                if (f.isBaseline()) {
-                    epBaseline++;
-                    baselineTotal++;
-                    continue; // 基准不计入测试统计
-                }
+            if (section.getBaselineData() != null) {
+                baselineTotal++;
+            }
+
+            for (ReportData.SessionFinding f : section.getUserSessions()) {
+                // baseline 用户的 SessionFinding 不计入测试统计
+                if (f.isBaseline()) continue;
 
                 String judgment = f.getJudgment();
                 if ("ESCALATED".equalsIgnoreCase(judgment)) {
@@ -106,9 +166,9 @@ public abstract class ReportGenerator {
                     errors++;
                 }
 
-                // 按会话统计（排除基准）
+                // 按会话统计
                 ReportData.SessionBreakdown sb = sessionMap.computeIfAbsent(
-                        f.getUserSessionName(), k -> {
+                        f.getSessionName(), k -> {
                             ReportData.SessionBreakdown b = new ReportData.SessionBreakdown();
                             b.setSessionName(k);
                             return b;
@@ -122,10 +182,10 @@ public abstract class ReportGenerator {
                 }
             }
 
-            es.setEscalatedCount(epEscalated);
-            es.setSafeCount(epSafe);
-            es.setErrorCount(epError);
-            es.setBaselineCount(epBaseline);
+            section.setEscalatedCount(epEscalated);
+            section.setSafeCount(epSafe);
+            section.setErrorCount(epError);
+            section.setBaselineCount(section.getBaselineData() != null ? 1 : 0);
         }
 
         summary.setTotalTests(escalated + safe + errors);
@@ -136,8 +196,38 @@ public abstract class ReportGenerator {
         summary.setEndpointsTested(uniqueEndpoints.size());
 
         data.setSummary(summary);
-        data.setEndpoints(new ArrayList<>(endpointMap.values()));
+        data.setEndpoints(endpointSections);
         data.setSessionBreakdown(new ArrayList<>(sessionMap.values()));
+
+        // ===== 阶段 D：预渲染 body 内容 =====
+        for (ReportData.EndpointSection section : endpointSections) {
+            // 预渲染 baseline body
+            if (section.getBaselineData() != null) {
+                ReportData.BaselineData bd = section.getBaselineData();
+                RequestResponseRecord rec = bd.getRecord();
+                bd.setRequestHtml(bodyRenderer.renderBodyHtml(rec.getRequestData(),
+                        bodyRenderer.extractRequestContentType(rec.getRequestData())));
+                bd.setResponseHtml(bodyRenderer.renderBodyHtml(rec.getResponseData(),
+                        bodyRenderer.extractResponseContentType(rec.getResponseData())));
+                bd.setRequestMd(bodyRenderer.renderBodyMd(rec.getRequestData(),
+                        bodyRenderer.extractRequestContentType(rec.getRequestData())));
+                bd.setResponseMd(bodyRenderer.renderBodyMd(rec.getResponseData(),
+                        bodyRenderer.extractResponseContentType(rec.getResponseData())));
+            }
+
+            // 预渲染 user session body
+            for (ReportData.SessionFinding sf : section.getUserSessions()) {
+                RequestResponseRecord rec = sf.getRecord();
+                sf.setRequestHtml(bodyRenderer.renderBodyHtml(rec.getRequestData(),
+                        bodyRenderer.extractRequestContentType(rec.getRequestData())));
+                sf.setResponseHtml(bodyRenderer.renderBodyHtml(rec.getResponseData(),
+                        bodyRenderer.extractResponseContentType(rec.getResponseData())));
+                sf.setRequestMd(bodyRenderer.renderBodyMd(rec.getRequestData(),
+                        bodyRenderer.extractRequestContentType(rec.getRequestData())));
+                sf.setResponseMd(bodyRenderer.renderBodyMd(rec.getResponseData(),
+                        bodyRenderer.extractResponseContentType(rec.getResponseData())));
+            }
+        }
 
         return data;
     }
@@ -153,87 +243,10 @@ public abstract class ReportGenerator {
     public abstract String getFileExtension();
 
     /**
-     * 检测是否为二进制 body
-     */
-    protected boolean isBinaryBody(byte[] data) {
-        if (data == null || data.length == 0) return false;
-        int nonPrintable = 0;
-        int checkLen = Math.min(data.length, 1024);
-        for (int i = 0; i < checkLen; i++) {
-            byte b = data[i];
-            if (b < 0x09 || (b > 0x0D && b < 0x20) || b == 0x7F) {
-                nonPrintable++;
-            }
-        }
-        return (double) nonPrintable / checkLen > 0.3;
-    }
-
-    /**
-     * 安全处理 body 用于显示
-     */
-    protected String sanitizeBody(byte[] body) {
-        if (body == null || body.length == 0) return "[Empty]";
-        if (isBinaryBody(body)) return "[Binary data — " + body.length + " bytes]";
-        String text = new String(body, StandardCharsets.UTF_8);
-        if (text.length() > 50000) {
-            text = text.substring(0, 50000) + "\n\n... [Truncated — total " + body.length + " bytes]";
-        }
-        return text;
-    }
-
-    /**
-     * 智能渲染 body 内容：检测二进制，返回分级渲染数据
-     *
-     * @param body              原始 body 字节
-     * @param contentTypeHeader Content-Type header 值（可为 null）
-     * @return 分级渲染内容，若为文本则 TieredRenderContent.tier == null
-     */
-    protected BinaryContentRenderer.TieredRenderContent renderBinaryBody(byte[] body, String contentTypeHeader) {
-        if (body == null || body.length == 0) {
-            // 空 body，返回文本标记
-            return new BinaryContentRenderer.TieredRenderContent(null, "", "", null, null,
-                    "text/plain", "text", "0 bytes");
-        }
-
-        BinaryContentRenderer.BinaryAnalysisResult analysis = binaryRenderer.analyzeBody(body, contentTypeHeader);
-        if (!analysis.isBinary) {
-            // 文本内容，返回标记为非二进制
-            return new BinaryContentRenderer.TieredRenderContent(null, "", "", null, null,
-                    analysis.contentType, "text", analysis.humanSize);
-        }
-
-        return binaryRenderer.createTieredContent(analysis);
-    }
-
-    /**
-     * 从 HTTP 响应数据中提取 Content-Type
-     */
-    protected String extractResponseContentType(byte[] responseData) {
-        return BinaryContentRenderer.extractContentTypeFromResponse(responseData);
-    }
-
-    /**
-     * 从 HTTP 请求数据中提取 Content-Type
-     */
-    protected String extractRequestContentType(byte[] requestData) {
-        return BinaryContentRenderer.extractContentTypeFromRequest(requestData);
-    }
-
-    /**
-     * HTML 转义
-     */
-    protected String escapeHtml(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\"", "&quot;").replace("'", "&#39;");
-    }
-
-    /**
      * 从注释提取规则名
      */
     private String extractRuleName(String comment) {
         if (comment == null) return null;
-        // 尝试匹配 "规则: xxx" 或 "Rule: xxx"
         java.util.regex.Pattern p = java.util.regex.Pattern.compile("(?:规则|Rule):\\s*(.+?)(?:\\s|$)");
         java.util.regex.Matcher m = p.matcher(comment);
         if (m.find()) {

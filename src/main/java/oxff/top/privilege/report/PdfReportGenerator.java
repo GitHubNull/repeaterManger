@@ -6,17 +6,25 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
+import org.apache.fontbox.ttf.TrueTypeCollection;
+import org.apache.fontbox.ttf.TrueTypeFont;
+
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * PDF 格式报告生成器
- * 使用 Apache PDFBox 直接布局，支持二进制内容智能渲染
+ * 使用 Apache PDFBox 直接布局，适配 EndpointSection 数据模型
+ * 优先加载系统 CJK 字体以支持中文渲染
  */
 public class PdfReportGenerator extends ReportGenerator {
 
@@ -29,6 +37,23 @@ public class PdfReportGenerator extends ReportGenerator {
     private static final int PDF_BODY_LIMIT = 3000;
     /** PDF 中 base64 显示的最大字符数 */
     private static final int PDF_BASE64_LIMIT = 2000;
+
+    /** CJK 字体候选路径（按优先级排列） */
+    private static final String[] CJK_FONT_PATHS = {
+            // Windows
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+            "C:/Windows/Fonts/simsun.ttc",
+            // macOS
+            "/System/Library/Fonts/PingFang.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            // Linux
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    };
 
     @Override
     public String getFileExtension() {
@@ -45,11 +70,20 @@ public class PdfReportGenerator extends ReportGenerator {
      */
     public byte[] generateToBytes(ReportData data) throws Exception {
         try (PDDocument document = new PDDocument()) {
-            PDType1Font regularFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-            PDType1Font boldFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDType1Font monoFont = new PDType1Font(Standard14Fonts.FontName.COURIER);
+            // 尝试加载 CJK 字体
+            CJKFontHolder cjkFonts = loadCJKFonts(document);
 
-            InnerWriter writer = new InnerWriter(document, regularFont, boldFont, monoFont);
+            InnerWriter writer;
+            if (cjkFonts != null) {
+                writer = new InnerWriter(document, cjkFonts.regular, cjkFonts.bold, cjkFonts.mono, true);
+            } else {
+                // 回退到标准字体（中文将显示为 ?）
+                PDType1Font regularFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                PDType1Font boldFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+                PDType1Font monoFont = new PDType1Font(Standard14Fonts.FontName.COURIER);
+                writer = new InnerWriter(document, regularFont, boldFont, monoFont, false);
+            }
+
             writer.beginPage();
 
             // Title
@@ -66,7 +100,7 @@ public class PdfReportGenerator extends ReportGenerator {
 
             // Endpoints
             writer.drawTitle("Findings by Endpoint", 14);
-            for (ReportData.EndpointSummary endpoint : data.getEndpoints()) {
+            for (ReportData.EndpointSection endpoint : data.getEndpoints()) {
                 buildEndpoint(writer, endpoint);
             }
 
@@ -75,6 +109,75 @@ public class PdfReportGenerator extends ReportGenerator {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             document.save(baos);
             return baos.toByteArray();
+        }
+    }
+
+    /**
+     * 尝试加载 CJK 字体，返回 null 则回退到标准字体
+     */
+    private CJKFontHolder loadCJKFonts(PDDocument document) {
+        for (String path : CJK_FONT_PATHS) {
+            File fontFile = new File(path);
+            if (!fontFile.exists()) continue;
+
+            try {
+                if (path.endsWith(".ttc")) {
+                    // .ttc 是 TrueType Collection
+                    TrueTypeCollection ttc = new TrueTypeCollection(fontFile);
+                    try {
+                        // 用 processAllFonts 收集字体名
+                        List<String> fontNames = new ArrayList<>();
+                        ttc.processAllFonts(ttf -> fontNames.add(ttf.getName()));
+
+                        for (String name : fontNames) {
+                            try {
+                                TrueTypeFont ttf = ttc.getFontByName(name);
+                                PDType0Font regular = PDType0Font.load(document, ttf, true);
+                                if (regular.getStringWidth("\u4e2d") > 0) {
+                                    PDType0Font bold = findBoldInTTC(document, ttc, fontNames, name);
+                                    return new CJKFontHolder(regular, bold, regular);
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    } finally {
+                        ttc.close();
+                    }
+                } else {
+                    // .ttf 单文件字体
+                    try (FileInputStream fis = new FileInputStream(fontFile)) {
+                        PDType0Font regular = PDType0Font.load(document, fis, true);
+                        if (regular.getStringWidth("\u4e2d") > 0) {
+                            return new CJKFontHolder(regular, regular, regular);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // 字体加载失败，尝试下一个路径
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 从 .ttc 中查找 bold 变体，失败则复用 regular
+     */
+    private PDType0Font findBoldInTTC(PDDocument document, TrueTypeCollection ttc,
+                                       List<String> fontNames, String regularName) {
+        for (String name : fontNames) {
+            if (name.contains("Bold") && !name.equals(regularName)) {
+                try {
+                    TrueTypeFont ttf = ttc.getFontByName(name);
+                    return PDType0Font.load(document, ttf, true);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        try {
+            TrueTypeFont ttf = ttc.getFontByName(regularName);
+            return PDType0Font.load(document, ttf, true);
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -113,8 +216,9 @@ public class PdfReportGenerator extends ReportGenerator {
         writer.drawLine();
     }
 
-    private void buildEndpoint(InnerWriter writer, ReportData.EndpointSummary endpoint) throws Exception {
-        writer.drawTitle(endpoint.getMethod() + " " + endpoint.getUrl(), 11);
+    private void buildEndpoint(InnerWriter writer, ReportData.EndpointSection endpoint) throws Exception {
+        String epLabel = "api_" + String.format("%02d", endpoint.getEndpointIndex());
+        writer.drawTitle(epLabel + "  " + endpoint.getMethod() + " " + endpoint.getUrl(), 11);
         StringBuilder stats = new StringBuilder();
         if (endpoint.getBaselineCount() > 0) {
             stats.append("Baseline: ").append(endpoint.getBaselineCount()).append(" | ");
@@ -126,185 +230,133 @@ public class PdfReportGenerator extends ReportGenerator {
         writer.drawText(stats.toString(), 9, MARGIN + 15);
         writer.drawLine();
 
-        for (ReportData.Finding finding : endpoint.getFindings()) {
-            buildFinding(writer, finding);
+        // Baseline 区域（orin http data，在端点顶部展示一次）
+        if (endpoint.getBaselineData() != null) {
+            buildBaselineSection(writer, endpoint.getBaselineData());
+        }
+
+        // 用户会话区域（包括 baseline 用户的 SessionFinding）
+        for (ReportData.SessionFinding session : endpoint.getUserSessions()) {
+            buildUserSessionSection(writer, session);
         }
     }
 
-    private void buildFinding(InnerWriter writer, ReportData.Finding finding) throws Exception {
-        String judgmentLabel;
-        if (finding.isBaseline()) {
-            judgmentLabel = "BASELINE";
-        } else if ("ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
-            judgmentLabel = "ESCALATED";
-        } else if ("NOT_ESCALATED".equalsIgnoreCase(finding.getJudgment())) {
-            judgmentLabel = "SAFE";
-        } else {
-            judgmentLabel = "ERROR";
-        }
+    /**
+     * 渲染基准报文区域（orin http data，每个端点顶部展示一次）
+     */
+    private void buildBaselineSection(InnerWriter writer, ReportData.BaselineData baseline) throws Exception {
+        writer.drawTitle("orin http data  |  BASELINE", 10);
 
-        // Finding header
-        writer.drawTitle("Session: " + finding.getUserSessionName() + "  |  " + judgmentLabel, 10);
+        RequestResponseRecord rec = baseline.getRecord();
 
-        // Metadata
-        StringBuilder meta = new StringBuilder();
-        if (finding.isBaseline()) {
-            meta.append("Similarity: N/A (baseline)");
-        } else {
-            meta.append("Similarity: ").append(String.format("%.2f", finding.getSimilarity()));
-        }
-        meta.append("  |  HTTP ").append(finding.getRecord().getStatusCode());
-        meta.append("  |  ").append(finding.getRecord().getResponseLength()).append(" bytes");
-        meta.append("  |  ").append(finding.getRecord().getResponseTime()).append("ms");
-        writer.drawText(meta.toString(), 9, MARGIN + 15);
-
-        if (finding.getMatchedRuleName() != null) {
-            writer.drawText("Rule: " + finding.getMatchedRuleName(), 9, MARGIN + 15);
-        }
-
-        writer.drawLine();
-
-        // 非基准 Finding：在当前报文前展示基准报文
-        if (!finding.isBaseline() && finding.getBaselineRecord() != null) {
-            RequestResponseRecord baselineRec = finding.getBaselineRecord();
-
-            writer.drawSectionTitle("Baseline Request  -  Session: " + finding.getBaselineSessionName());
-            renderBodyPdf(writer, baselineRec.getRequestData(),
-                    extractRequestContentType(baselineRec.getRequestData()));
-
-            writer.drawSectionTitle("Baseline Response  -  HTTP " + baselineRec.getStatusCode()
-                    + " (" + baselineRec.getResponseLength() + " bytes, "
-                    + baselineRec.getResponseTime() + "ms)  -  Session: " + finding.getBaselineSessionName());
-            renderBodyPdf(writer, baselineRec.getResponseData(),
-                    extractResponseContentType(baselineRec.getResponseData()));
-        }
-
-        // Request — 智能渲染
+        // Request
         writer.drawSectionTitle("Request:");
-        renderBodyPdf(writer, finding.getRecord().getRequestData(),
-                extractRequestContentType(finding.getRecord().getRequestData()));
+        writer.drawCodeBlock(sanitizeBodyForPdf(rec.getRequestData()));
 
-        // Response — 智能渲染
-        writer.drawSectionTitle("Response  -  HTTP " + finding.getRecord().getStatusCode()
-                + " (" + finding.getRecord().getResponseLength() + " bytes, "
-                + finding.getRecord().getResponseTime() + "ms):");
-        renderBodyPdf(writer, finding.getRecord().getResponseData(),
-                extractResponseContentType(finding.getRecord().getResponseData()));
+        // Response
+        writer.drawSectionTitle("Response  -  HTTP " + rec.getStatusCode()
+                + " (" + rec.getResponseLength() + " bytes, "
+                + rec.getResponseTime() + "ms):");
+        writer.drawCodeBlock(sanitizeBodyForPdf(rec.getResponseData()));
 
-        // cURL
-        writer.drawSectionTitle("Reproduction  -  cURL:");
-        writer.drawCodeBlock(truncForPdf(finding.getCurlCommand()));
-
-        // Postman
-        writer.drawSectionTitle("Reproduction  -  Postman Import:");
-        writer.drawCodeBlock(truncForPdf(finding.getPostmanSnippet()));
-
-        writer.drawLine();
+        writer.drawSeparatorLine();
     }
 
     /**
-     * 智能渲染 body: 二进制内容展示为元数据表+hex预览，文本保持原样
+     * 渲染用户会话报文区域（包括 baseline 用户的 SessionFinding）
      */
-    private void renderBodyPdf(InnerWriter writer, byte[] body, String contentType) throws Exception {
-        if (body == null || body.length == 0) {
-            writer.drawCodeBlock("[Empty]");
-            return;
-        }
+    private void buildUserSessionSection(InnerWriter writer, ReportData.SessionFinding session) throws Exception {
+        if (session.isBaseline()) {
+            // baseline 用户的 SessionFinding — 只显示用户名和报文，不显示 cURL/Postman
+            writer.drawTitle(session.getSessionName() + " http data  |  BASELINE", 10);
 
-        BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
+            RequestResponseRecord rec = session.getRecord();
+            writer.drawSectionTitle("Request:");
+            writer.drawCodeBlock(sanitizeBodyForPdf(rec.getRequestData()));
 
-        // 文本内容: 保持原有渲染
-        if (content.tier == null) {
-            writer.drawCodeBlock(sanitizeBodyForPdf(body));
-            return;
-        }
-
-        // 二进制内容: 渲染元数据表 + hex/base64
-        buildBinaryContentPdf(writer, content);
-    }
-
-    /**
-     * 构建二进制内容 PDF 渲染
-     */
-    private void buildBinaryContentPdf(InnerWriter writer,
-                                        BinaryContentRenderer.TieredRenderContent content) throws Exception {
-        // 元数据表
-        writer.drawSectionTitle("Binary Content (" + InnerWriter.filter(content.contentCategory)
-                + " - " + InnerWriter.filter(content.humanSize) + "):");
-
-        String[] headers = {"Property", "Value"};
-        float[] widths = {0.3f, 0.7f};
-        List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"Content-Type", trunc(content.contentType, 50)});
-        rows.add(new String[]{"Size", content.humanSize});
-
-        if (content.metadataCardText != null) {
-            String sha = extractShaFromMetadata(content.metadataCardText);
-            if (!sha.isEmpty()) {
-                rows.add(new String[]{"SHA-256", trunc(sha, 50)});
-            }
-        }
-
-        writer.drawTable(headers, rows, widths);
-
-        // Multipart 部分
-        if (content.multipartParts != null) {
-            for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
-                buildMultipartPartPdf(writer, part);
-            }
-        }
-
-        // Hex dump 预览
-        if (content.hexDumpPreview != null && !content.hexDumpPreview.isEmpty()) {
-            writer.drawSectionTitle("Hex Preview:");
-            writer.drawCodeBlock(truncForPdf(content.hexDumpPreview));
-        }
-
-        // Base64 (仅 SMALL, 截断显示)
-        if (content.base64Content != null && !content.base64Content.isEmpty()) {
-            writer.drawSectionTitle("Base64:");
-            String base64Display = content.base64Content;
-            if (base64Display.length() > PDF_BASE64_LIMIT) {
-                base64Display = base64Display.substring(0, PDF_BASE64_LIMIT)
-                        + "\n... [Truncated in PDF - see HTML report for full data]";
-            }
-            writer.drawCodeBlock(base64Display);
-        }
-    }
-
-    /**
-     * 构建 multipart 单 part PDF
-     */
-    private void buildMultipartPartPdf(InnerWriter writer,
-                                        BinaryContentRenderer.MultipartPartInfo part) throws Exception {
-        String partTitle = "Part: ";
-        if (part.name != null) partTitle += part.name;
-        if (part.fileName != null) partTitle += " (" + part.fileName + ")";
-        partTitle += " - " + part.partContentType + " - " + BinaryContentRenderer.formatHumanSize(part.partSize);
-
-        writer.drawSectionTitle(partTitle);
-
-        if (part.isText) {
-            writer.drawCodeBlock(truncForPdf(part.textContent));
+            writer.drawSectionTitle("Response  -  HTTP " + rec.getStatusCode()
+                    + " (" + rec.getResponseLength() + " bytes, "
+                    + rec.getResponseTime() + "ms):");
+            writer.drawCodeBlock(sanitizeBodyForPdf(rec.getResponseData()));
         } else {
-            // 二进制 part: hex 预览
-            if (part.binaryPreview != null && part.binaryPreview.length > 0) {
-                String hexDump = BinaryContentRenderer.generateHexDump(part.binaryPreview, part.binaryPreview.length);
-                writer.drawCodeBlock(truncForPdf(hexDump));
+            // 非基准用户会话
+            String judgmentLabel;
+            if ("ESCALATED".equalsIgnoreCase(session.getJudgment())) {
+                judgmentLabel = "ESCALATED";
+            } else if ("NOT_ESCALATED".equalsIgnoreCase(session.getJudgment())) {
+                judgmentLabel = "SAFE";
+            } else {
+                judgmentLabel = "ERROR";
             }
+
+            writer.drawTitle(session.getSessionName() + " http data  |  " + judgmentLabel, 10);
+
+            // Metadata
+            StringBuilder meta = new StringBuilder();
+            meta.append("Similarity: ").append(String.format("%.2f", session.getSimilarity()));
+            RequestResponseRecord rec = session.getRecord();
+            meta.append("  |  HTTP ").append(rec.getStatusCode());
+            meta.append("  |  ").append(rec.getResponseLength()).append(" bytes");
+            meta.append("  |  ").append(rec.getResponseTime()).append("ms");
+            writer.drawText(meta.toString(), 9, MARGIN + 15);
+
+            if (session.getMatchedRuleName() != null) {
+                writer.drawText("Rule: " + session.getMatchedRuleName(), 9, MARGIN + 15);
+            }
+
+            writer.drawLine();
+
+            // Request
+            writer.drawSectionTitle("Request:");
+            writer.drawCodeBlock(sanitizeBodyForPdf(rec.getRequestData()));
+
+            // Response
+            writer.drawSectionTitle("Response  -  HTTP " + rec.getStatusCode()
+                    + " (" + rec.getResponseLength() + " bytes, "
+                    + rec.getResponseTime() + "ms):");
+            writer.drawCodeBlock(sanitizeBodyForPdf(rec.getResponseData()));
+
+            // cURL
+            writer.drawSectionTitle("Reproduction  -  cURL:");
+            writer.drawCodeBlock(truncForPdf(session.getCurlCommand()));
+
+            // Postman
+            writer.drawSectionTitle("Reproduction  -  Postman Import:");
+            writer.drawCodeBlock(truncForPdf(session.getPostmanSnippet()));
         }
+
+        writer.drawSeparatorLine();
     }
 
     /**
-     * 从元数据卡文本中提取 SHA-256 值
+     * 针对PDF显示的body数据清洗，使用更短的限制
      */
-    private String extractShaFromMetadata(String metadata) {
-        for (String line : metadata.split("\n")) {
-            if (line.startsWith("SHA-256:")) {
-                return line.substring("SHA-256:".length()).trim();
+    private String sanitizeBodyForPdf(byte[] body) {
+        if (body == null || body.length == 0) {
+            return "[Empty]";
+        }
+        boolean binary = isBinaryBody(body);
+        if (binary) {
+            return "[Binary data - " + body.length + " bytes]";
+        }
+        String str = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        if (str.length() > PDF_BODY_LIMIT) {
+            str = str.substring(0, PDF_BODY_LIMIT) + "\n... [Truncated in PDF - see HTML report for full data]";
+        }
+        return str;
+    }
+
+    private boolean isBinaryBody(byte[] data) {
+        if (data == null || data.length == 0) return false;
+        int nonPrintable = 0;
+        int checkLen = Math.min(data.length, 1024);
+        for (int i = 0; i < checkLen; i++) {
+            byte b = data[i];
+            if (b < 0x09 || (b > 0x0D && b < 0x20) || b == 0x7F) {
+                nonPrintable++;
             }
         }
-        return "";
+        return (double) nonPrintable / checkLen > 0.3;
     }
 
     private static String trunc(String s, int max) {
@@ -312,9 +364,6 @@ public class PdfReportGenerator extends ReportGenerator {
         return s.length() > max ? s.substring(0, max - 3) + "..." : s;
     }
 
-    /**
-     * 截断文本以适应 PDF 代码块长度限制
-     */
     private static String truncForPdf(String s) {
         if (s == null) return "";
         if (s.length() > PDF_BODY_LIMIT) {
@@ -323,32 +372,38 @@ public class PdfReportGenerator extends ReportGenerator {
         return s;
     }
 
-    /**
-     * 针对PDF显示的body数据清洗，使用更短的限制
-     */
-    private String sanitizeBodyForPdf(byte[] body) {
-        String text = sanitizeBody(body);
-        if (text.length() > PDF_BODY_LIMIT) {
-            text = text.substring(0, PDF_BODY_LIMIT) + "\n... [Truncated in PDF - see HTML report for full data]";
+    // ========== CJK 字体持有者 ==========
+
+    private static class CJKFontHolder {
+        final PDFont regular;
+        final PDFont bold;
+        final PDFont mono;
+
+        CJKFontHolder(PDFont regular, PDFont bold, PDFont mono) {
+            this.regular = regular;
+            this.bold = bold;
+            this.mono = mono;
         }
-        return text;
     }
 
     // ========== 内部 PDF 写入器 ==========
 
     static class InnerWriter {
         private final PDDocument document;
-        private final PDType1Font regularFont;
-        private final PDType1Font boldFont;
-        private final PDType1Font monoFont;
+        private final PDFont regularFont;
+        private final PDFont boldFont;
+        private final PDFont monoFont;
+        /** 是否使用 CJK 字体（决定 filter 策略） */
+        private final boolean cjkEnabled;
         private PDPageContentStream cs;
         private float y;
 
-        InnerWriter(PDDocument document, PDType1Font regularFont, PDType1Font boldFont, PDType1Font monoFont) {
+        InnerWriter(PDDocument document, PDFont regularFont, PDFont boldFont, PDFont monoFont, boolean cjkEnabled) {
             this.document = document;
             this.regularFont = regularFont;
             this.boldFont = boldFont;
             this.monoFont = monoFont;
+            this.cjkEnabled = cjkEnabled;
         }
 
         void beginPage() throws Exception {
@@ -372,9 +427,6 @@ public class PdfReportGenerator extends ReportGenerator {
             y -= fontSize + 10;
         }
 
-        /**
-         * 绘制小节标题（如 "Request:"、"Response:" 等）
-         */
         void drawSectionTitle(String text) throws Exception {
             ensureSpace(16);
             cs.beginText();
@@ -411,8 +463,20 @@ public class PdfReportGenerator extends ReportGenerator {
         }
 
         /**
-         * 绘制代码块：使用等宽字体、浅灰背景，支持自动换行和分页
+         * 分隔线 — 用于 baseline 与 user session 之间的视觉分隔
          */
+        void drawSeparatorLine() throws Exception {
+            ensureSpace(16);
+            y -= 4;
+            cs.setLineWidth(1.5f);
+            cs.setStrokingColor(0.56f, 0.64f, 0.74f);
+            cs.moveTo(MARGIN, y);
+            cs.lineTo(MARGIN + CONTENT_WIDTH, y);
+            cs.stroke();
+            cs.setStrokingColor(0, 0, 0);
+            y -= 12;
+        }
+
         void drawCodeBlock(String content) throws Exception {
             if (content == null || content.isEmpty()) {
                 drawText("[Empty]", 8, MARGIN + 12);
@@ -423,10 +487,18 @@ public class PdfReportGenerator extends ReportGenerator {
             float lineHeight = codeFontSize + 3;
             float codeX = MARGIN + 12;
             float codeMaxWidth = CONTENT_WIDTH - 24;
-            float charWidth = monoFont.getStringWidth("M") / 1000f * codeFontSize;
-            int maxCharsPerLine = Math.max(1, (int) (codeMaxWidth / charWidth));
 
-            // 按换行符拆分，再对超长行按字符宽度折行
+            // 计算 maxCharsPerLine：使用 try-catch 回退策略
+            int maxCharsPerLine = 80; // 默认值
+            try {
+                float charWidth = monoFont.getStringWidth("M") / 1000f * codeFontSize;
+                if (charWidth > 0) {
+                    maxCharsPerLine = Math.max(1, (int) (codeMaxWidth / charWidth));
+                }
+            } catch (Exception ignored) {
+                // 字体不支持 getStringWidth，使用默认值
+            }
+
             List<String> lines = new ArrayList<>();
             for (String rawLine : content.split("\n", -1)) {
                 String line = filterLine(rawLine);
@@ -442,17 +514,14 @@ public class PdfReportGenerator extends ReportGenerator {
                 }
             }
 
-            // 逐行渲染，每行画浅灰背景 + 等宽文字
             for (String line : lines) {
                 ensureSpace(lineHeight);
 
-                // 浅灰背景
                 cs.setNonStrokingColor(0.95f, 0.95f, 0.95f);
                 cs.addRect(MARGIN + 8, y - lineHeight + 2, CONTENT_WIDTH - 16, lineHeight);
                 cs.fill();
                 cs.setNonStrokingColor(0, 0, 0);
 
-                // 文字
                 if (!line.isEmpty()) {
                     cs.beginText();
                     cs.setFont(monoFont, codeFontSize);
@@ -464,7 +533,7 @@ public class PdfReportGenerator extends ReportGenerator {
                 y -= lineHeight;
             }
 
-            y -= 6; // 代码块后间距
+            y -= 6;
         }
 
         void drawTable(String[] headers, List<String[]> rows, float[] colWidths) throws Exception {
@@ -525,10 +594,9 @@ public class PdfReportGenerator extends ReportGenerator {
         }
 
         /**
-         * 过滤单行文本：移除控制字符，替换非 Latin-1 字符为 '?'
-         * 用于 drawTitle / drawText 等单行渲染
+         * 过滤文本：CJK 字体模式下保留中文，否则替换为 ?
          */
-        static String filter(String s) {
+        String filter(String s) {
             if (s == null) return "";
             StringBuilder sb = new StringBuilder(s.length());
             for (int i = 0; i < s.length(); i++) {
@@ -540,7 +608,10 @@ public class PdfReportGenerator extends ReportGenerator {
                     case '\f': break;
                     case '\u0000': break;
                     default:
-                        if (c <= 0xFF) {
+                        if (cjkEnabled) {
+                            // CJK 字体支持所有 Unicode 字符，直接保留
+                            sb.append(c);
+                        } else if (c <= 0xFF) {
                             sb.append(c);
                         } else {
                             sb.append('?');
@@ -550,11 +621,7 @@ public class PdfReportGenerator extends ReportGenerator {
             return sb.toString();
         }
 
-        /**
-         * 过滤代码行文本：保留换行（由调用方拆分），替换非 Latin-1 字符为 '?'
-         * 用于 drawCodeBlock 中逐行处理
-         */
-        static String filterLine(String s) {
+        String filterLine(String s) {
             if (s == null) return "";
             StringBuilder sb = new StringBuilder(s.length());
             for (int i = 0; i < s.length(); i++) {
@@ -565,7 +632,9 @@ public class PdfReportGenerator extends ReportGenerator {
                     case '\f': break;
                     case '\u0000': break;
                     default:
-                        if (c <= 0xFF) {
+                        if (cjkEnabled) {
+                            sb.append(c);
+                        } else if (c <= 0xFF) {
                             sb.append(c);
                         } else {
                             sb.append('?');

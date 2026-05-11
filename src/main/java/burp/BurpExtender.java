@@ -255,6 +255,19 @@ public class BurpExtender implements BurpExtension {
     }
 
     /**
+     * 将自动化测试的原始请求添加到请求列表面板
+     * 供 AutoTestEngine 调用
+     */
+    public static void addAutoTestRequestToPanel(int requestId, String api, String method,
+            String protocol, String domain, String path, String query, byte[] requestData) {
+        if (repeaterUI != null) {
+            SwingUtilities.invokeLater(() -> {
+                repeaterUI.addAutoTestRequest(requestId, api, method, protocol, domain, path, query, requestData);
+            });
+        }
+    }
+
+    /**
      * 获取日志管理器实例
      */
     public static LogManager getLogManager() {

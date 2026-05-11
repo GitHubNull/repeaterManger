@@ -4,7 +4,6 @@ import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import oxff.top.http.RequestResponseRecord;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -59,7 +58,8 @@ public class CurlBuilder {
                 if (isBinaryBody(body)) {
                     curl.append(" \\\n  # [Binary body omitted — ").append(body.length).append(" bytes]");
                 } else {
-                    String bodyStr = new String(body, StandardCharsets.UTF_8);
+                    String contentType = BinaryContentRenderer.extractContentTypeFromRequest(record.getRequestData());
+                    String bodyStr = BinaryContentRenderer.decodeBody(body, contentType);
                     curl.append(" \\\n  -d '").append(escapeShell(bodyStr)).append("'");
                 }
             }

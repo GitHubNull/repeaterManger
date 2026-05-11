@@ -8,6 +8,7 @@ import java.util.List;
 
 /**
  * 越权测试报告数据模型
+ * 结构：Endpoint → BaselineData（原始报文） → List<SessionFinding>（各用户会话报文）
  */
 public class ReportData {
 
@@ -16,7 +17,7 @@ public class ReportData {
     private String pluginVersion = "2.7.0";
 
     private ReportSummary summary;
-    private List<EndpointSummary> endpoints = new ArrayList<>();
+    private List<EndpointSection> endpoints = new ArrayList<>();
     private List<SessionBreakdown> sessionBreakdown = new ArrayList<>();
 
     public String getTitle() {
@@ -51,11 +52,11 @@ public class ReportData {
         this.summary = summary;
     }
 
-    public List<EndpointSummary> getEndpoints() {
+    public List<EndpointSection> getEndpoints() {
         return endpoints;
     }
 
-    public void setEndpoints(List<EndpointSummary> endpoints) {
+    public void setEndpoints(List<EndpointSection> endpoints) {
         this.endpoints = endpoints;
     }
 
@@ -128,16 +129,18 @@ public class ReportData {
     }
 
     /**
-     * 端点汇总（按 URL 分组）
+     * 端点区域（按接口分组，含原始报文和用户会话报文）
      */
-    public static class EndpointSummary {
+    public static class EndpointSection {
         private String method;
         private String url;
+        private int endpointIndex;
         private int escalatedCount;
         private int safeCount;
         private int errorCount;
         private int baselineCount;
-        private List<Finding> findings = new ArrayList<>();
+        private BaselineData baselineData;
+        private List<SessionFinding> userSessions = new ArrayList<>();
 
         public String getMethod() {
             return method;
@@ -153,6 +156,14 @@ public class ReportData {
 
         public void setUrl(String url) {
             this.url = url;
+        }
+
+        public int getEndpointIndex() {
+            return endpointIndex;
+        }
+
+        public void setEndpointIndex(int endpointIndex) {
+            this.endpointIndex = endpointIndex;
         }
 
         public int getEscalatedCount() {
@@ -191,20 +202,88 @@ public class ReportData {
             return escalatedCount + safeCount + errorCount;
         }
 
-        public List<Finding> getFindings() {
-            return findings;
+        public BaselineData getBaselineData() {
+            return baselineData;
         }
 
-        public void setFindings(List<Finding> findings) {
-            this.findings = findings;
+        public void setBaselineData(BaselineData baselineData) {
+            this.baselineData = baselineData;
+        }
+
+        public List<SessionFinding> getUserSessions() {
+            return userSessions;
+        }
+
+        public void setUserSessions(List<SessionFinding> userSessions) {
+            this.userSessions = userSessions;
         }
     }
 
     /**
-     * 单条发现详情
+     * 原始基准报文数据（每个端点最多一个）
      */
-    public static class Finding {
-        private String userSessionName;
+    public static class BaselineData {
+        private String sessionName;
+        private RequestResponseRecord record;
+        private String requestHtml;
+        private String responseHtml;
+        private String requestMd;
+        private String responseMd;
+
+        public String getSessionName() {
+            return sessionName;
+        }
+
+        public void setSessionName(String sessionName) {
+            this.sessionName = sessionName;
+        }
+
+        public RequestResponseRecord getRecord() {
+            return record;
+        }
+
+        public void setRecord(RequestResponseRecord record) {
+            this.record = record;
+        }
+
+        public String getRequestHtml() {
+            return requestHtml;
+        }
+
+        public void setRequestHtml(String requestHtml) {
+            this.requestHtml = requestHtml;
+        }
+
+        public String getResponseHtml() {
+            return responseHtml;
+        }
+
+        public void setResponseHtml(String responseHtml) {
+            this.responseHtml = responseHtml;
+        }
+
+        public String getRequestMd() {
+            return requestMd;
+        }
+
+        public void setRequestMd(String requestMd) {
+            this.requestMd = requestMd;
+        }
+
+        public String getResponseMd() {
+            return responseMd;
+        }
+
+        public void setResponseMd(String responseMd) {
+            this.responseMd = responseMd;
+        }
+    }
+
+    /**
+     * 用户会话发现详情（非基准的测试结果）
+     */
+    public static class SessionFinding {
+        private String sessionName;
         private String judgment;
         private double similarity;
         private String matchedRuleName;
@@ -212,15 +291,17 @@ public class ReportData {
         private String curlCommand;
         private String postmanSnippet;
         private boolean baseline;
-        private RequestResponseRecord baselineRecord;
-        private String baselineSessionName;
+        private String requestHtml;
+        private String responseHtml;
+        private String requestMd;
+        private String responseMd;
 
-        public String getUserSessionName() {
-            return userSessionName;
+        public String getSessionName() {
+            return sessionName;
         }
 
-        public void setUserSessionName(String userSessionName) {
-            this.userSessionName = userSessionName;
+        public void setSessionName(String sessionName) {
+            this.sessionName = sessionName;
         }
 
         public String getJudgment() {
@@ -279,20 +360,36 @@ public class ReportData {
             this.baseline = baseline;
         }
 
-        public RequestResponseRecord getBaselineRecord() {
-            return baselineRecord;
+        public String getRequestHtml() {
+            return requestHtml;
         }
 
-        public void setBaselineRecord(RequestResponseRecord baselineRecord) {
-            this.baselineRecord = baselineRecord;
+        public void setRequestHtml(String requestHtml) {
+            this.requestHtml = requestHtml;
         }
 
-        public String getBaselineSessionName() {
-            return baselineSessionName;
+        public String getResponseHtml() {
+            return responseHtml;
         }
 
-        public void setBaselineSessionName(String baselineSessionName) {
-            this.baselineSessionName = baselineSessionName;
+        public void setResponseHtml(String responseHtml) {
+            this.responseHtml = responseHtml;
+        }
+
+        public String getRequestMd() {
+            return requestMd;
+        }
+
+        public void setRequestMd(String requestMd) {
+            this.requestMd = requestMd;
+        }
+
+        public String getResponseMd() {
+            return responseMd;
+        }
+
+        public void setResponseMd(String responseMd) {
+            this.responseMd = responseMd;
         }
     }
 

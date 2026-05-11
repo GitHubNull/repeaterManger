@@ -225,6 +225,51 @@ public class BinaryContentRenderer {
         return sb.toString();
     }
 
+    // ========== Charset 提取与解码 ==========
+
+    /**
+     * 从 Content-Type 值中提取 charset 参数
+     * 例: "text/html; charset=GBK" → "GBK"
+     * 无 charset 或解析失败时返回 null
+     */
+    public static String extractCharset(String contentType) {
+        if (contentType == null) return null;
+        String lower = contentType.toLowerCase();
+        int idx = lower.indexOf("charset=");
+        if (idx < 0) return null;
+        int start = idx + "charset=".length();
+        // 去引号
+        if (start < contentType.length() && contentType.charAt(start) == '"') {
+            start++;
+            int endQuote = contentType.indexOf('"', start);
+            if (endQuote < 0) return null;
+            return contentType.substring(start, endQuote).trim();
+        }
+        // 到分号或结尾
+        int end = contentType.indexOf(';', start);
+        if (end < 0) end = contentType.length();
+        String charset = contentType.substring(start, end).trim();
+        return charset.isEmpty() ? null : charset;
+    }
+
+    /**
+     * 将 byte[] 按 Content-Type 指定的 charset 解码为 String
+     * 优先使用 Content-Type 中的 charset，失败则回退 UTF-8
+     */
+    public static String decodeBody(byte[] body, String contentType) {
+        if (body == null || body.length == 0) return "";
+        String charsetName = extractCharset(contentType);
+        if (charsetName != null) {
+            try {
+                java.nio.charset.Charset cs = java.nio.charset.Charset.forName(charsetName);
+                return new String(body, cs);
+            } catch (Exception ignored) {
+                // 不支持的 charset，回退 UTF-8
+            }
+        }
+        return new String(body, StandardCharsets.UTF_8);
+    }
+
     // ========== Content-Type 提取 ==========
 
     /**
@@ -544,7 +589,7 @@ public class BinaryContentRenderer {
         boolean isText = !isBinaryBody(partBody);
 
         if (isText) {
-            String textContent = new String(partBody, StandardCharsets.UTF_8);
+            String textContent = decodeBody(partBody, partContentType);
             // 限制文本长度
             if (textContent.length() > 50000) {
                 textContent = textContent.substring(0, 50000) + "\n... [Truncated — total " + partSize + " bytes]";
