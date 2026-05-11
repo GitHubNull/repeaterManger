@@ -133,6 +133,7 @@ public class UserSession {
 
     /**
      * 获取令牌值的摘要文本，用于表格展示
+     * 两层截断：单值超过30字符截断，整体超过80字符截断
      */
     public String getTokenValuesSummary() {
         if (tokenValues.isEmpty()) {
@@ -145,13 +146,23 @@ public class UserSession {
                 sb.append(" | ");
             }
             String value = entry.getValue();
-            if (value != null && value.length() > 20) {
-                value = value.substring(0, 17) + "...";
+            if (value != null) {
+                // 换行符替换为可见符号，防止破坏表格渲染
+                value = value.replace("\r\n", "\u21B5").replace("\n", "\u21B5").replace("\r", "\u21B5");
+                if (value.length() > 30) {
+                    value = value.substring(0, 27) + "...";
+                }
+            } else {
+                value = "";
             }
-            sb.append(value != null ? value : "");
+            sb.append(value);
             first = false;
         }
-        return sb.toString();
+        String result = sb.toString();
+        if (result.length() > 80) {
+            result = result.substring(0, 77) + "...";
+        }
+        return result;
     }
 
     @Override

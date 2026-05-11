@@ -171,7 +171,9 @@ public class SessionConfigTab extends JPanel {
         userSessionTable.getColumnModel().getColumn(0).setPreferredWidth(100);  // 名称
         userSessionTable.getColumnModel().getColumn(1).setPreferredWidth(50);   // 颜色
         userSessionTable.getColumnModel().getColumn(2).setPreferredWidth(50);   // 启用
-        userSessionTable.getColumnModel().getColumn(3).setPreferredWidth(300);  // 令牌值摘要
+        userSessionTable.getColumnModel().getColumn(3).setPreferredWidth(250);  // 令牌值摘要
+        userSessionTable.getColumnModel().getColumn(3).setMinWidth(100);       // 令牌值摘要最小宽度
+        userSessionTable.getColumnModel().getColumn(3).setCellRenderer(new TokenValueCellRenderer());
 
         // 设置 TableRowSorter 启用列头排序
         userSessionSorter = new TableRowSorter<>(userSessionModel);

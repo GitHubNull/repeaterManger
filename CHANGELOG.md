@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-05-11
+
+### Added
+- 新增 TokenValueCellRenderer 令牌值列渲染器，支持悬停 tooltip 查看完整令牌值
+
+### Changed
+- 重构 UserSessionEditDialog 令牌值编辑交互：单行 JTextField 替换为多行 JTextArea，支持行号显示、自动折行、右键上下文菜单（复制/粘贴/剪切/全选/清空）
+- 优化 UserSession.getTokenValuesSummary() 令牌摘要：两层截断（单值30字符/整体80字符），换行符替换为可见符号保证表格渲染安全
+- 优化令牌值摘要列宽与最小宽度配置
+
+### Fixed
+- TokenReplacementEngine 新增 sanitizeNewlines() 安全过滤，替换时将令牌值中的换行符转换为空格，防止 HTTP header 注入和 body 结构破坏
+
 ## [2.11.2] - 2026-05-11
 
 ### Changed

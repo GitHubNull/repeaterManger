@@ -96,6 +96,8 @@ public class TokenReplacementEngine {
             if (value == null) {
                 continue;
             }
+            // 安全过滤：将换行符替换为空格，防止HTTP header注入
+            value = sanitizeNewlines(value, loc.getExpression());
             try {
                 headerStr = replaceHeader(headerStr, loc.getExpression(), value);
             } catch (Exception e) {
@@ -110,6 +112,8 @@ public class TokenReplacementEngine {
                 if (value == null) {
                     continue;
                 }
+                // 安全过滤：将换行符替换为空格，防止JSON/XML/body结构破坏
+                value = sanitizeNewlines(value, loc.getExpression());
                 try {
                     switch (loc.getType()) {
                         case JSON_BODY:
@@ -355,6 +359,23 @@ public class TokenReplacementEngine {
     }
 
     // ==================== 工具方法 ====================
+
+    /**
+     * 安全过滤令牌值中的换行符
+     * 将换行符替换为空格，防止HTTP header注入或body结构破坏
+     * 此过滤仅影响运行时替换，不影响数据库存储的原始值
+     *
+     * @param value      原始令牌值
+     * @param expression 令牌位置表达式（用于日志提示）
+     * @return 过滤后的安全值
+     */
+    private static String sanitizeNewlines(String value, String expression) {
+        if (value.contains("\n") || value.contains("\r")) {
+            BurpExtender.printOutput("[*] 令牌值包含换行符，替换时已转换为空格 (location=" + expression + ")");
+            value = value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ");
+        }
+        return value;
+    }
 
     /**
      * 查找请求中body的起始偏移量（\r\n\r\n之后）

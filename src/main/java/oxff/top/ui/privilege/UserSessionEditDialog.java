@@ -3,9 +3,11 @@ package oxff.top.ui.privilege;
 import oxff.top.privilege.SessionManager;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.UserSession;
+import oxff.top.utils.TextLineNumber;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +15,7 @@ import java.util.Map;
 /**
  * 用户会话编辑对话框
  * 允许编辑用户名称、颜色、启用状态，以及为每个令牌位置设置值
+ * 令牌值使用带行号的多行文本区域，支持自动折行
  */
 public class UserSessionEditDialog extends JDialog {
 
@@ -23,15 +26,15 @@ public class UserSessionEditDialog extends JDialog {
     private final JLabel colorPreview;
     private Color selectedColor;
 
-    /** 令牌值输入框映射：tokenLocationId -> JTextField */
-    private final Map<Integer, JTextField> tokenValueFields = new LinkedHashMap<>();
+    /** 令牌值输入框映射：tokenLocationId -> JTextArea */
+    private final Map<Integer, JTextArea> tokenValueFields = new LinkedHashMap<>();
 
     /** 最终的令牌值 */
     private Map<Integer, String> tokenValues = new LinkedHashMap<>();
 
     public UserSessionEditDialog(Frame owner, String title, UserSession existing) {
         super(owner, title, true);
-        setSize(500, 400);
+        setSize(650, 550);
         setLocationRelativeTo(owner);
         setResizable(true);
 
@@ -81,43 +84,87 @@ public class UserSessionEditDialog extends JDialog {
 
         List<TokenLocation> locations = SessionManager.getInstance().getTokenLocations();
         if (!locations.isEmpty()) {
-            JPanel tokenValuesPanel = new JPanel(new GridBagLayout());
-            GridBagConstraints tgbc = new GridBagConstraints();
-            tgbc.insets = new Insets(3, 3, 3, 3);
-            tgbc.fill = GridBagConstraints.HORIZONTAL;
+            // 令牌值内容面板，使用垂直BoxLayout
+            JPanel tokenValuesPanel = new JPanel();
+            tokenValuesPanel.setLayout(new BoxLayout(tokenValuesPanel, BoxLayout.Y_AXIS));
 
             for (int i = 0; i < locations.size(); i++) {
                 TokenLocation loc = locations.get(i);
-                tgbc.gridx = 0; tgbc.gridy = i; tgbc.weightx = 0;
+
+                // 每个令牌位置的子面板
+                JPanel tokenPanel = new JPanel(new BorderLayout());
+                tokenPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+                // 标签
                 JLabel label = new JLabel(loc.getType().getDisplayName() + " [" + loc.getExpression() + "]:");
-                tokenValuesPanel.add(label, tgbc);
+                label.setBorder(BorderFactory.createEmptyBorder(0, 0, 3, 0));
+                tokenPanel.add(label, BorderLayout.NORTH);
 
-                tgbc.gridx = 1; tgbc.weightx = 1.0;
-                JTextField valueField = new JTextField(20);
-                tokenValuesPanel.add(valueField, tgbc);
+                // 多行文本区域
+                JTextArea textArea = new JTextArea();
+                textArea.setRows(4);
+                textArea.setLineWrap(true);
+                textArea.setWrapStyleWord(true);
+                textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+                textArea.setTabSize(4);
 
-                tokenValueFields.put(loc.getId(), valueField);
+                // Tab键焦点切换：恢复Tab在控件间的导航功能
+                textArea.setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS,
+                        Collections.singleton(AWTKeyStroke.getAWTKeyStroke("TAB")));
+                textArea.setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS,
+                        Collections.singleton(AWTKeyStroke.getAWTKeyStroke("shift TAB")));
+
+                // 行号
+                JScrollPane scrollPane = new JScrollPane(textArea);
+                TextLineNumber lineNumbers = new TextLineNumber(textArea);
+                lineNumbers.setCurrentLineForeground(new Color(44, 121, 217));
+                lineNumbers.setForeground(Color.GRAY);
+                lineNumbers.setBackground(new Color(245, 245, 245));
+                lineNumbers.setFont(new Font("Monospaced", Font.PLAIN, 12));
+                scrollPane.setRowHeaderView(lineNumbers);
+                tokenPanel.add(scrollPane, BorderLayout.CENTER);
+
+                // 右键菜单
+                textArea.setComponentPopupMenu(createTextContextMenu(textArea));
+
+                tokenValuesPanel.add(tokenPanel);
+
+                // 令牌位置之间添加分隔间距（最后一个不加）
+                if (i < locations.size() - 1) {
+                    tokenValuesPanel.add(Box.createVerticalStrut(8));
+                }
+
+                tokenValueFields.put(loc.getId(), textArea);
 
                 // 如果是编辑模式，填充现有值
                 if (existing != null) {
                     String existingValue = existing.getTokenValue(loc.getId());
                     if (existingValue != null) {
-                        valueField.setText(existingValue);
+                        textArea.setText(existingValue);
+                        textArea.setCaretPosition(0);
                     }
                 }
             }
 
-            JScrollPane scrollPane = new JScrollPane(tokenValuesPanel);
-            scrollPane.setPreferredSize(new Dimension(440, 150));
+            // 外层滚动
+            JScrollPane outerScrollPane = new JScrollPane(tokenValuesPanel);
+            outerScrollPane.setBorder(BorderFactory.createEmptyBorder());
             gbc.gridy = 4;
-            mainPanel.add(scrollPane, gbc);
+            gbc.fill = GridBagConstraints.BOTH;
+            gbc.weighty = 1.0;
+            gbc.insets = new Insets(8, 10, 8, 10);
+            mainPanel.add(outerScrollPane, gbc);
         } else {
             JLabel noLocationsLabel = new JLabel("请先添加令牌位置");
             gbc.gridy = 4;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            gbc.weighty = 0;
+            gbc.insets = new Insets(8, 10, 8, 10);
             mainPanel.add(noLocationsLabel, gbc);
         }
 
         gbc.gridwidth = 1;
+        gbc.weighty = 0;
 
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -130,7 +177,7 @@ public class UserSessionEditDialog extends JDialog {
             }
             // 收集令牌值
             tokenValues = new LinkedHashMap<>();
-            for (Map.Entry<Integer, JTextField> entry : tokenValueFields.entrySet()) {
+            for (Map.Entry<Integer, JTextArea> entry : tokenValueFields.entrySet()) {
                 tokenValues.put(entry.getKey(), entry.getValue().getText());
             }
             confirmed = true;
@@ -153,6 +200,30 @@ public class UserSessionEditDialog extends JDialog {
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(new JScrollPane(mainPanel), BorderLayout.CENTER);
         getContentPane().add(buttonPanel, BorderLayout.SOUTH);
+    }
+
+    /**
+     * 为JTextArea创建右键上下文菜单
+     */
+    private JPopupMenu createTextContextMenu(JTextArea textArea) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem copyItem = new JMenuItem("复制");
+        copyItem.addActionListener(e -> textArea.copy());
+        JMenuItem pasteItem = new JMenuItem("粘贴");
+        pasteItem.addActionListener(e -> textArea.paste());
+        JMenuItem cutItem = new JMenuItem("剪切");
+        cutItem.addActionListener(e -> textArea.cut());
+        JMenuItem selectAllItem = new JMenuItem("全选");
+        selectAllItem.addActionListener(e -> textArea.selectAll());
+        JMenuItem clearItem = new JMenuItem("清空");
+        clearItem.addActionListener(e -> textArea.setText(""));
+        menu.add(copyItem);
+        menu.add(pasteItem);
+        menu.add(cutItem);
+        menu.addSeparator();
+        menu.add(selectAllItem);
+        menu.add(clearItem);
+        return menu;
     }
 
     public boolean isConfirmed() {
