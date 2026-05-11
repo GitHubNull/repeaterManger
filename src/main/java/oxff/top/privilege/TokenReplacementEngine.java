@@ -131,6 +131,11 @@ public class TokenReplacementEngine {
                                 bodyStr = replaceFormField(bodyStr, loc.getExpression(), value);
                             }
                             break;
+                        case MULTIPART_FIELD:
+                            if (contentType != null && contentType.contains("multipart/form-data")) {
+                                bodyStr = replaceMultipartField(bodyStr, contentType, loc.getExpression(), value);
+                            }
+                            break;
                         default:
                             break;
                     }
@@ -356,6 +361,171 @@ public class TokenReplacementEngine {
         }
 
         return String.join("&", resultPairs);
+    }
+
+    // ==================== Multipart Field 替换 ====================
+
+    /**
+     * 替换multipart/form-data body中指定字段的值
+     * 如果value为空字符串，则删除该字段对应的part
+     * 如果fieldName不存在，则追加新的part
+     *
+     * @param bodyStr      multipart body内容
+     * @param contentType  Content-Type头值（包含boundary参数）
+     * @param fieldName    要替换的表单字段名
+     * @param value        新值
+     * @return 替换后的body内容
+     */
+    private static String replaceMultipartField(String bodyStr, String contentType, String fieldName, String value) {
+        // 从Content-Type中提取boundary
+        String boundary = extractBoundary(contentType);
+        if (boundary == null) {
+            BurpExtender.printError("[!] multipart/form-data boundary提取失败，无法替换");
+            return bodyStr;
+        }
+
+        String boundaryDelimiter = "--" + boundary;
+        String boundaryEnd = boundaryDelimiter + "--";
+
+        // 按boundary分隔各part
+        String[] parts = bodyStr.split(boundaryDelimiter);
+        List<String> resultParts = new ArrayList<>();
+        boolean replaced = false;
+
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+
+            // 跳过前导空白和结尾标记
+            if (part.trim().isEmpty() || part.trim().startsWith("--")) {
+                continue;
+            }
+
+            // 解析part：子header和子body以\r\n\r\n分隔
+            int subBodyOffset = part.indexOf("\r\n\r\n");
+            if (subBodyOffset < 0) {
+                // 无子body的part，直接保留
+                resultParts.add(part);
+                continue;
+            }
+
+            String subHeaders = part.substring(0, subBodyOffset);
+            String subBody = part.substring(subBodyOffset + 4);
+
+            // 从Content-Disposition提取name参数
+            String partFieldName = extractMultipartFieldName(subHeaders);
+
+            if (partFieldName != null && partFieldName.equals(fieldName)) {
+                // 检查是否为二进制part（有非text/plain的Content-Type子header）
+                if (isBinaryPart(subHeaders)) {
+                    BurpExtender.printOutput("[*] 跳过二进制multipart part替换 (field=" + fieldName + ")");
+                    resultParts.add(part);
+                    replaced = true;
+                    continue;
+                }
+
+                replaced = true;
+                if (!value.isEmpty()) {
+                    // 替换子body内容
+                    String newPart = subHeaders + "\r\n\r\n" + value;
+                    // 保留原始part尾部的\r\n（如果有）
+                    if (subBody.endsWith("\r\n")) {
+                        newPart += "\r\n";
+                    }
+                    resultParts.add(newPart);
+                }
+                // value为空则删除该part（不添加到resultParts）
+            } else {
+                resultParts.add(part);
+            }
+        }
+
+        // 字段不存在时追加新part
+        if (!replaced && !value.isEmpty()) {
+            String newPart = "Content-Disposition: form-data; name=\"" + fieldName + "\"\r\n\r\n" + value + "\r\n";
+            resultParts.add(newPart);
+        }
+
+        // 重新组装multipart body
+        StringBuilder result = new StringBuilder();
+        for (String part : resultParts) {
+            result.append(boundaryDelimiter).append("\r\n").append(part);
+        }
+        result.append(boundaryEnd);
+
+        return result.toString();
+    }
+
+    /**
+     * 从Content-Type头中提取boundary参数
+     * 支持格式: boundary=xxx 或 boundary="xxx"
+     */
+    private static String extractBoundary(String contentType) {
+        if (contentType == null) return null;
+
+        // 查找boundary=参数
+        int boundaryIdx = contentType.toLowerCase().indexOf("boundary=");
+        if (boundaryIdx < 0) return null;
+
+        String boundaryValue = contentType.substring(boundaryIdx + 9).trim();
+
+        // 去除尾部可能的其他参数（如 ; charset=xxx）
+        int semiIdx = boundaryValue.indexOf(';');
+        if (semiIdx > 0) {
+            boundaryValue = boundaryValue.substring(0, semiIdx).trim();
+        }
+
+        // 去除引号包裹
+        if (boundaryValue.startsWith("\"") && boundaryValue.endsWith("\"") && boundaryValue.length() > 1) {
+            boundaryValue = boundaryValue.substring(1, boundaryValue.length() - 1);
+        }
+
+        return boundaryValue.isEmpty() ? null : boundaryValue;
+    }
+
+    /**
+     * 从multipart part的子header中提取name参数
+     * 格式: Content-Disposition: form-data; name="fieldName"
+     */
+    private static String extractMultipartFieldName(String subHeaders) {
+        String[] lines = subHeaders.split("\r\n");
+        for (String line : lines) {
+            if (line.toLowerCase().startsWith("content-disposition:")) {
+                int nameIdx = line.toLowerCase().indexOf("name=");
+                if (nameIdx > 0) {
+                    String nameValue = line.substring(nameIdx + 5).trim();
+                    // 去除尾部可能的其他参数
+                    int semiIdx = nameValue.indexOf(';');
+                    if (semiIdx > 0) {
+                        nameValue = nameValue.substring(0, semiIdx).trim();
+                    }
+                    // 去除引号包裹
+                    if (nameValue.startsWith("\"") && nameValue.endsWith("\"") && nameValue.length() > 1) {
+                        nameValue = nameValue.substring(1, nameValue.length() - 1);
+                    }
+                    return nameValue;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 判断multipart part是否为二进制内容
+     * 如果part的子header中有Content-Type且不是text/plain，则视为二进制
+     */
+    private static boolean isBinaryPart(String subHeaders) {
+        String[] lines = subHeaders.split("\r\n");
+        for (String line : lines) {
+            int colonIdx = line.indexOf(':');
+            if (colonIdx > 0) {
+                String name = line.substring(0, colonIdx).trim().toLowerCase();
+                String val = line.substring(colonIdx + 1).trim().toLowerCase();
+                if (name.equals("content-type") && !val.startsWith("text/plain")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // ==================== 工具方法 ====================

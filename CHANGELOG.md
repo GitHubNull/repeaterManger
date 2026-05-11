@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.0] - 2026-05-12
+
+### Added
+- 新增报文比对功能（ComparisonDialog），支持基线记录与会话记录的并排比对
+- 新增 DiffEngine 差异比较引擎，支持 HTTP 报文行级 diff 高亮显示
+- 新增 SynchronizedScrollPanel 同步滚动面板，比对时左右面板联动滚动
+- 新增 RequestColumnControlDialog 列显示控制对话框，支持自定义请求列表列可见性和宽度
+- 新增 RequestListContextMenu 请求列表右键菜单类
+- 新增 RequestListTableRenderer 表格渲染器，支持备注列等自定义渲染
+- RequestListPanel 新增备注列，支持通过注释同步更新表格显示
+- RequestListPanel 新增列显示控制按钮
+- HistoryContextMenu 新增"比对报文"右键菜单项
+- HistoryReadDAO 新增 getBaselineRecord 方法，获取指定请求的基线记录
+- TokenReplacementEngine 增强，支持更多 Token 位置类型替换
+- TokenLocationType 新增枚举值
+
 ## [2.14.0] - 2026-05-11
 
 ### Added

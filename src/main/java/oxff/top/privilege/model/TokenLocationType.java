@@ -12,7 +12,9 @@ public enum TokenLocationType {
     /** XML请求体中，如 //session/token */
     XML_BODY("XML Body"),
     /** 表单字段中，如 session_id */
-    FORM_FIELD("Form Field");
+    FORM_FIELD("Form Field"),
+    /** Multipart表单字段中，如 file_upload中的session_id */
+    MULTIPART_FIELD("Multipart Field");
 
     private final String displayName;
 

@@ -138,6 +138,54 @@ public class HistoryReadDAO {
         return records;
     }
 
+    /**
+     * 获取指定requestId的基线记录（原始请求）
+     * 基线记录定义：user_session_name为NULL或空字符串的最早一条历史记录
+     * 如果没有基线记录，则返回该requestId下的第一条记录
+     */
+    public RequestResponseRecord getBaselineRecord(int requestId) {
+        // 先尝试查找user_session_name为NULL或空的记录
+        String sql = buildHistorySelectQuery()
+            + " WHERE h.request_id = ? AND (h.user_session_name IS NULL OR h.user_session_name = '')"
+            + " ORDER BY h.id ASC LIMIT 1";
+
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, requestId);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToRecord(conn, rs);
+                }
+            }
+
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取基线记录失败: " + e.getMessage());
+        }
+
+        // 没有找到基线记录，尝试返回第一条记录
+        String fallbackSql = buildHistorySelectQuery()
+            + " WHERE h.request_id = ? ORDER BY h.id ASC LIMIT 1";
+
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(fallbackSql)) {
+
+            pstmt.setInt(1, requestId);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToRecord(conn, rs);
+                }
+            }
+
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取基线记录（回退查询）失败: " + e.getMessage());
+        }
+
+        return null;
+    }
+
     // ========== 内部辅助方法 ==========
 
     /**

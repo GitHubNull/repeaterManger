@@ -3,6 +3,7 @@ package oxff.top.ui.history;
 import burp.BurpExtender;
 import oxff.top.RequestDispatchHandler;
 import oxff.top.db.RequestDAO;
+import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.db.history.HistoryUpdateDAO;
 import oxff.top.http.RequestResponseRecord;
 
@@ -101,6 +102,22 @@ public class HistoryContextMenu {
             sendToPrivilegeTestItem.addActionListener(e -> sendSelectedToPrivilegeTest());
         }
 
+        // 比对报文（仅选中1条越权测试记录时显示）
+        JMenuItem comparisonItem = null;
+        if (selectedCount == 1) {
+            int selRow = historyTable.getSelectedRow();
+            if (selRow >= 0) {
+                int modelRow = historyTable.convertRowIndexToModel(selRow);
+                if (modelRow >= 0 && modelRow < historyRecords.size()) {
+                    RequestResponseRecord record = historyRecords.get(modelRow);
+                    if (record.getUserSessionName() != null && !record.getUserSessionName().isEmpty()) {
+                        comparisonItem = new JMenuItem("比对报文");
+                        comparisonItem.addActionListener(e -> showComparisonDialog(modelRow));
+                    }
+                }
+            }
+        }
+
         JMenuItem clearItem = new JMenuItem("清空所有历史");
         clearItem.addActionListener(e -> historyPanel.clearHistoryWithConfirm());
 
@@ -112,6 +129,11 @@ public class HistoryContextMenu {
         }
         if (sendToPrivilegeTestItem != null) {
             popupMenu.add(sendToPrivilegeTestItem);
+        }
+        if (comparisonItem != null) {
+            popupMenu.add(comparisonItem);
+        }
+        if (sendToPrivilegeTestItem != null || comparisonItem != null) {
             popupMenu.addSeparator();
         }
         popupMenu.add(columnControlItem);
@@ -302,5 +324,38 @@ public class HistoryContextMenu {
                 }
             }
         }
+    }
+
+    /**
+     * 显示报文比对对话框
+     * 获取选中记录的基线记录，弹出ComparisonDialog
+     */
+    private void showComparisonDialog(int modelRow) {
+        if (modelRow < 0 || modelRow >= historyRecords.size()) return;
+
+        RequestResponseRecord sessionRecord = historyRecords.get(modelRow);
+        int requestId = sessionRecord.getRequestId();
+
+        if (requestId <= 0) {
+            JOptionPane.showMessageDialog(historyPanel, "选中记录没有有效的请求ID，无法比对", "无法比对", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // 在后台线程查找基线记录（避免UI卡顿）
+        new Thread(() -> {
+            HistoryReadDAO historyReadDAO = new HistoryReadDAO();
+            RequestResponseRecord baselineRecord = historyReadDAO.getBaselineRecord(requestId);
+
+            if (baselineRecord == null) {
+                SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(historyPanel, "未找到原始请求记录，无法比对", "无法比对", JOptionPane.WARNING_MESSAGE));
+                return;
+            }
+
+            SwingUtilities.invokeLater(() -> {
+                ComparisonDialog dialog = new ComparisonDialog(historyPanel, baselineRecord, sessionRecord);
+                dialog.setVisible(true);
+            });
+        }).start();
     }
 }

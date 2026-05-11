@@ -28,7 +28,7 @@ public class RequestListPanel extends JPanel {
 
     // 请求列表数据
     private final DefaultTableModel tableModel = new DefaultTableModel(
-        new Object[]{"ID", "API", "Method", "Protocol", "Domain", "Path", "Query", "越权测试", "Date"}, 0
+        new Object[]{"ID", "API", "Method", "Protocol", "Domain", "Path", "Query", "越权测试", "Date", "备注"}, 0
     ) {
         @Override
         public boolean isCellEditable(int row, int column) {
@@ -80,7 +80,34 @@ public class RequestListPanel extends JPanel {
         add(searchContainer, BorderLayout.NORTH);
 
         // 设置表格
-        requestTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        requestTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        requestTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        // 设置列宽
+        setupColumnWidths();
+
+        // 注册右键菜单（每次右键时动态创建以反映当前选中数量）
+        RequestListContextMenu contextMenuFactory = new RequestListContextMenu(requestTable, tableModel, requestColors, requestComments);
+        requestTable.setComponentPopupMenu(new JPopupMenu() {
+            private static final long serialVersionUID = 1L;
+            @Override
+            public void show(Component invoker, int x, int y) {
+                // 每次右键时动态重建菜单
+                removeAll();
+                JPopupMenu freshMenu = contextMenuFactory.createPopupMenu();
+                for (MenuElement element : freshMenu.getSubElements()) {
+                    if (element instanceof JMenuItem) {
+                        add((JMenuItem) element);
+                    } else if (element instanceof JMenu) {
+                        add((JMenu) element);
+                    } else if (element instanceof JSeparator) {
+                        addSeparator();
+                    }
+                }
+                super.show(invoker, x, y);
+            }
+        });
+
         requestTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int selectedRow = requestTable.getSelectedRow();
@@ -101,9 +128,41 @@ public class RequestListPanel extends JPanel {
         // 设置搜索功能
         setupSearch();
 
-        // 设置越权测试列宽
-        requestTable.getColumnModel().getColumn(7).setPreferredWidth(70);
-        requestTable.getColumnModel().getColumn(7).setMaxWidth(90);
+        // 设置行颜色渲染器
+        requestTable.setDefaultRenderer(Object.class, new RequestListTableRenderer(requestColors));
+    }
+
+    /**
+     * 设置各列的宽度
+     */
+    private void setupColumnWidths() {
+        javax.swing.table.TableColumnModel colModel = requestTable.getColumnModel();
+        // ID列
+        colModel.getColumn(0).setPreferredWidth(40);
+        colModel.getColumn(0).setMaxWidth(50);
+        // API列
+        colModel.getColumn(1).setPreferredWidth(200);
+        colModel.getColumn(1).setMaxWidth(400);
+        // Method列
+        colModel.getColumn(2).setPreferredWidth(60);
+        colModel.getColumn(2).setMaxWidth(80);
+        // Protocol列
+        colModel.getColumn(3).setPreferredWidth(60);
+        colModel.getColumn(3).setMaxWidth(80);
+        // Domain列
+        colModel.getColumn(4).setPreferredWidth(150);
+        // Path列
+        colModel.getColumn(5).setPreferredWidth(180);
+        // Query列
+        colModel.getColumn(6).setPreferredWidth(150);
+        // 越权测试列
+        colModel.getColumn(7).setPreferredWidth(70);
+        colModel.getColumn(7).setMaxWidth(90);
+        // Date列
+        colModel.getColumn(8).setPreferredWidth(150);
+        colModel.getColumn(8).setMaxWidth(180);
+        // 备注列
+        colModel.getColumn(9).setPreferredWidth(100);
     }
 
     /**
@@ -127,6 +186,12 @@ public class RequestListPanel extends JPanel {
         });
         simpleSearchPanel.add(clearBtn);
         simpleSearchPanel.add(advancedToggleBtn);
+        JButton columnControlBtn = new JButton("列显示控制");
+        columnControlBtn.addActionListener(e -> {
+            RequestColumnControlDialog dialog = new RequestColumnControlDialog(requestTable, requestTable, tableModel);
+            dialog.setVisible(true);
+        });
+        simpleSearchPanel.add(columnControlBtn);
 
         searchContainer.add(simpleSearchPanel, BorderLayout.NORTH);
 
@@ -361,10 +426,20 @@ public class RequestListPanel extends JPanel {
     }
 
     /**
-     * 更新请求注释
+     * 更新请求注释（同步更新映射和表格备注列）
      */
     public void updateRequestComment(int requestId, String comment) {
         requestComments.put(requestId, comment);
+        // 同步更新表格备注列
+        String displayComment = comment != null && comment.length() > 16
+            ? comment.substring(0, 16) + "..." : (comment != null ? comment : "");
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            int rowId = (int) tableModel.getValueAt(i, 0);
+            if (rowId == requestId) {
+                tableModel.setValueAt(displayComment, i, 9); // 备注列索引=9
+                break;
+            }
+        }
     }
 
     /**
@@ -421,7 +496,8 @@ public class RequestListPanel extends JPanel {
             path,
             query,
             isPrivilegeTest ? "是" : "否",
-            DATE_FORMAT.format(new Date())
+            DATE_FORMAT.format(new Date()),
+            ""  // 备注列初始为空
         });
 
         // 保存请求数据到内存映射
@@ -467,7 +543,8 @@ public class RequestListPanel extends JPanel {
             record.getPath(),
             record.getQuery(),
             record.isPrivilegeTest() ? "是" : "否",
-            DATE_FORMAT.format(new Date())
+            DATE_FORMAT.format(new Date()),
+            ""  // 备注列初始为空
         });
 
         // 保存请求数据到内存映射
