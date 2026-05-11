@@ -441,23 +441,23 @@ public class PdfReportGenerator extends ReportGenerator {
         }
 
         void drawTitle(String text, float fontSize) throws Exception {
-            ensureSpace(fontSize + 12);
+            ensureSpace(fontSize * 1.5f + 14);
             cs.beginText();
             cs.setFont(boldFont, fontSize);
             cs.newLineAtOffset(MARGIN, y);
             cs.showText(filter(text));
             cs.endText();
-            y -= fontSize + 10;
+            y -= fontSize * 1.5f + 12;
         }
 
         void drawSectionTitle(String text) throws Exception {
-            ensureSpace(16);
+            ensureSpace(28);
             cs.beginText();
             cs.setFont(boldFont, 9);
             cs.newLineAtOffset(MARGIN + 10, y);
             cs.showText(filter(text));
             cs.endText();
-            y -= 14;
+            y -= 22;
         }
 
         void drawText(String text, float fontSize) throws Exception {
@@ -465,39 +465,39 @@ public class PdfReportGenerator extends ReportGenerator {
         }
 
         void drawText(String text, float fontSize, float x) throws Exception {
-            ensureSpace(fontSize + 6);
+            ensureSpace(fontSize + 16);
             cs.beginText();
             cs.setFont(regularFont, fontSize);
             cs.newLineAtOffset(x, y);
             cs.showText(filter(text));
             cs.endText();
-            y -= fontSize + 5;
+            y -= fontSize + 12;
         }
 
         void drawLine() throws Exception {
-            ensureSpace(10);
+            ensureSpace(20);
             cs.setLineWidth(0.5f);
             cs.setStrokingColor(0.7f, 0.7f, 0.7f);
             cs.moveTo(MARGIN, y);
             cs.lineTo(MARGIN + CONTENT_WIDTH, y);
             cs.stroke();
             cs.setStrokingColor(0, 0, 0);
-            y -= 8;
+            y -= 18;
         }
 
         /**
          * 分隔线 — 用于 baseline 与 user session 之间的视觉分隔
          */
         void drawSeparatorLine() throws Exception {
-            ensureSpace(16);
-            y -= 4;
+            ensureSpace(34);
+            y -= 10;
             cs.setLineWidth(1.5f);
             cs.setStrokingColor(0.56f, 0.64f, 0.74f);
             cs.moveTo(MARGIN, y);
             cs.lineTo(MARGIN + CONTENT_WIDTH, y);
             cs.stroke();
             cs.setStrokingColor(0, 0, 0);
-            y -= 12;
+            y -= 22;
         }
 
         void drawCodeBlock(String content) throws Exception {
@@ -556,7 +556,7 @@ public class PdfReportGenerator extends ReportGenerator {
                 y -= lineHeight;
             }
 
-            y -= 6;
+            y -= 14;
         }
 
         void drawTable(String[] headers, List<String[]> rows, float[] colWidths) throws Exception {
@@ -603,7 +603,7 @@ public class PdfReportGenerator extends ReportGenerator {
                 y -= rowHeight;
                 rowIdx++;
             }
-            y -= 4;
+            y -= 12;
         }
 
         private void ensureSpace(float needed) throws Exception {
