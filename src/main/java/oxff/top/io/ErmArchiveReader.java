@@ -75,18 +75,14 @@ public class ErmArchiveReader {
             return false;
         }
 
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导入ERM存档");
-        fileChooser.setFileFilter(new FileNameExtensionFilter(
-                "ERM存档 (*.erm)", "erm"));
-        fileChooser.setAcceptAllFileFilterUsed(false);
+        File selectedFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_ERM_IMPORT, "导入ERM存档", parent,
+                new FileNameExtensionFilter("ERM存档 (*.erm)", "erm"));
 
-        int result = fileChooser.showOpenDialog(parent);
-        if (result != JFileChooser.APPROVE_OPTION) {
+        if (selectedFile == null) {
             return false;
         }
 
-        File selectedFile = fileChooser.getSelectedFile();
         if (!selectedFile.exists() || !selectedFile.isFile()) {
             JOptionPane.showMessageDialog(parent, "所选文件不存在", "导入错误", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -96,6 +92,41 @@ public class ErmArchiveReader {
         CompletableFuture.runAsync(() -> {
             try {
                 doImport(selectedFile, parent);
+                javax.swing.SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(parent, "ERM存档导入成功", "导入成功",
+                                JOptionPane.INFORMATION_MESSAGE));
+            } catch (Exception e) {
+                BurpExtender.printError("[!] 导入ERM存档失败: " + e.getMessage());
+                javax.swing.SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(parent,
+                                "导入数据失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE));
+            } finally {
+                isImporting.set(false);
+            }
+        });
+
+        return true;
+    }
+
+    /**
+     * 从指定文件路径导入（供 DataImporter.smartImport 调用，不再弹出文件对话框）
+     */
+    public boolean importFromPath(File file, Component parent) {
+        if (isImporting.get()) {
+            JOptionPane.showMessageDialog(parent,
+                    "另一个导入操作正在进行中，请稍后再试。", "导入繁忙", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+
+        if (!file.exists() || !file.isFile()) {
+            JOptionPane.showMessageDialog(parent, "所选文件不存在", "导入错误", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        isImporting.set(true);
+        CompletableFuture.runAsync(() -> {
+            try {
+                doImport(file, parent);
                 javax.swing.SwingUtilities.invokeLater(() ->
                         JOptionPane.showMessageDialog(parent, "ERM存档导入成功", "导入成功",
                                 JOptionPane.INFORMATION_MESSAGE));

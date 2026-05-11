@@ -312,20 +312,15 @@ public class ConfigPanel extends JPanel {
      * 浏览选择日志目录
      */
     private void browseForLogDirectory() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("选择日志目录");
-        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        // 优先使用当前日志目录路径
+        String preferredDir = logDirField.getText().trim();
 
-        String currentLogDir = logDirField.getText().trim();
-        if (currentLogDir != null && !currentLogDir.isEmpty()) {
-            File dir = new File(currentLogDir);
-            if (dir.exists()) {
-                fileChooser.setCurrentDirectory(dir);
-            }
-        }
+        File selectedDir = oxff.top.utils.FileChooserHelper.showDirectoryDialog(
+                oxff.top.utils.FileChooserHelper.OP_LOG_DIRECTORY, "选择日志目录", this,
+                preferredDir);
 
-        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            logDirField.setText(fileChooser.getSelectedFile().getAbsolutePath());
+        if (selectedDir != null) {
+            logDirField.setText(selectedDir.getAbsolutePath());
         }
     }
 

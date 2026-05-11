@@ -587,20 +587,19 @@ public class LogPanel extends JPanel {
      * 导出日志到文件
      */
     private void exportLog() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导出日志");
-        fileChooser.setSelectedFile(new File("repeater_manager_log.txt"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+            oxff.top.utils.FileChooserHelper.OP_LOG_EXPORT, "导出日志", this,
+            new File("repeater_manager_log.txt"));
 
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File outputFile = fileChooser.getSelectedFile();
+        if (selectedFile != null) {
             try (BufferedWriter bw = new BufferedWriter(
-                new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8))) {
+                new OutputStreamWriter(new FileOutputStream(selectedFile), StandardCharsets.UTF_8))) {
                 for (LogEntry entry : entryBuffer) {
                     bw.write(entry.getFileFormattedMesssage());
                     bw.newLine();
                 }
                 JOptionPane.showMessageDialog(this,
-                    "日志已导出到: " + outputFile.getAbsolutePath(),
+                    "日志已导出到: " + selectedFile.getAbsolutePath(),
                     "导出成功", JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(this,

@@ -53,25 +53,23 @@ public class EnhancedResponsePanel extends JPanel {
      */
     private void saveResponseToFile() {
         if (currentResponse == null) {
-            JOptionPane.showMessageDialog(this, 
+            JOptionPane.showMessageDialog(this,
                 "没有响应内容可保存", "错误", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("保存响应内容");
-        
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File selectedFile = fileChooser.getSelectedFile();
-            
+
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+            oxff.top.utils.FileChooserHelper.OP_RESPONSE_SAVE, "保存响应内容", this, null);
+
+        if (selectedFile != null) {
             try (FileOutputStream fos = new FileOutputStream(selectedFile)) {
                 fos.write(currentResponse);
-                JOptionPane.showMessageDialog(this, 
-                    "保存成功: " + selectedFile.getAbsolutePath(), 
+                JOptionPane.showMessageDialog(this,
+                    "保存成功: " + selectedFile.getAbsolutePath(),
                     "保存完成", JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException ex) {
-                JOptionPane.showMessageDialog(this, 
-                    "保存失败: " + ex.getMessage(), 
+                JOptionPane.showMessageDialog(this,
+                    "保存失败: " + ex.getMessage(),
                     "错误", JOptionPane.ERROR_MESSAGE);
             }
         }

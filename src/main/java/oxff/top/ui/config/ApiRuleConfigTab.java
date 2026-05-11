@@ -419,69 +419,71 @@ public class ApiRuleConfigTab extends JPanel {
     }
 
     private void exportRulesToYaml() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导出API提取规则");
-        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
-        fileChooser.setSelectedFile(new File("api_extraction_rules.yaml"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                oxff.top.utils.FileChooserHelper.OP_YAML_RULE_EXPORT, "导出API提取规则", this,
+                new File("api_extraction_rules.yaml"),
+                new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
 
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
-            if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
-                file = new File(file.getAbsolutePath() + ".yaml");
-            }
-            List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getAllRulesForDisplay();
-            if (rules.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "没有规则可导出", "提示", JOptionPane.INFORMATION_MESSAGE);
-                return;
-            }
-            if (ApiRuleYamlIO.writeToFile(rules, file.getAbsolutePath())) {
-                JOptionPane.showMessageDialog(this,
-                        "已导出 " + rules.size() + " 条规则到:\n" + file.getAbsolutePath(),
-                        "导出成功", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(this, "导出规则失败", "错误", JOptionPane.ERROR_MESSAGE);
-            }
+        if (selectedFile == null) {
+            return;
+        }
+
+        if (!selectedFile.getName().endsWith(".yaml") && !selectedFile.getName().endsWith(".yml")) {
+            selectedFile = new File(selectedFile.getAbsolutePath() + ".yaml");
+        }
+        List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getAllRulesForDisplay();
+        if (rules.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "没有规则可导出", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (ApiRuleYamlIO.writeToFile(rules, selectedFile.getAbsolutePath())) {
+            JOptionPane.showMessageDialog(this,
+                    "已导出 " + rules.size() + " 条规则到:\n" + selectedFile.getAbsolutePath(),
+                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "导出规则失败", "错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importRulesFromYaml() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导入API提取规则");
-        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+        File file = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_YAML_RULE_IMPORT, "导入API提取规则", this,
+                new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
 
-        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
-            List<ApiExtractionRule> importedRules = ApiRuleYamlIO.readFromFile(file.getAbsolutePath());
-            if (importedRules.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "文件中没有找到有效规则", "提示", JOptionPane.INFORMATION_MESSAGE);
-                return;
-            }
+        if (file == null) {
+            return;
+        }
 
-            String[] options = {"合并（保留现有规则）", "替换（清除现有规则）", "取消"};
-            int choice = JOptionPane.showOptionDialog(this,
-                    "检测到 " + importedRules.size() + " 条规则\n请选择导入模式:",
-                    "导入模式", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
-                    null, options, options[0]);
+        List<ApiExtractionRule> importedRules = ApiRuleYamlIO.readFromFile(file.getAbsolutePath());
+        if (importedRules.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "文件中没有找到有效规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
 
-            if (choice == 0) {
-                int added = ApiRuleManager.getInstance().importRulesMerge(importedRules);
+        String[] options = {"合并（保留现有规则）", "替换（清除现有规则）", "取消"};
+        int choice = JOptionPane.showOptionDialog(this,
+                "检测到 " + importedRules.size() + " 条规则\n请选择导入模式:",
+                "导入模式", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, options, options[0]);
+
+        if (choice == 0) {
+            int added = ApiRuleManager.getInstance().importRulesMerge(importedRules);
+            refreshApiRuleTable();
+            ApiReExtractWorker.reExtractSilently(onDataChanged);
+            JOptionPane.showMessageDialog(this,
+                    "合并导入完成\n新增 " + added + " 条规则（去重后）",
+                    "导入成功", JOptionPane.INFORMATION_MESSAGE);
+        } else if (choice == 1) {
+            int confirm = JOptionPane.showConfirmDialog(this,
+                    "替换模式将删除所有现有规则，确定继续吗？",
+                    "确认替换", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (confirm == JOptionPane.YES_OPTION) {
+                ApiRuleManager.getInstance().importRulesReplace(importedRules);
                 refreshApiRuleTable();
                 ApiReExtractWorker.reExtractSilently(onDataChanged);
                 JOptionPane.showMessageDialog(this,
-                        "合并导入完成\n新增 " + added + " 条规则（去重后）",
+                        "替换导入完成，共导入 " + importedRules.size() + " 条规则",
                         "导入成功", JOptionPane.INFORMATION_MESSAGE);
-            } else if (choice == 1) {
-                int confirm = JOptionPane.showConfirmDialog(this,
-                        "替换模式将删除所有现有规则，确定继续吗？",
-                        "确认替换", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-                if (confirm == JOptionPane.YES_OPTION) {
-                    ApiRuleManager.getInstance().importRulesReplace(importedRules);
-                    refreshApiRuleTable();
-                    ApiReExtractWorker.reExtractSilently(onDataChanged);
-                    JOptionPane.showMessageDialog(this,
-                            "替换导入完成，共导入 " + importedRules.size() + " 条规则",
-                            "导入成功", JOptionPane.INFORMATION_MESSAGE);
-                }
             }
         }
     }

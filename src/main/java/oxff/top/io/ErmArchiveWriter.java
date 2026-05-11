@@ -52,20 +52,16 @@ public class ErmArchiveWriter {
             BurpExtender.printOutput("[+] 开始ERM存档导出过程" + (encrypted ? "（加密模式）" : ""));
 
             // 1. 选择文件
-            JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setDialogTitle("导出ERM存档");
-            FileNameExtensionFilter filter = new FileNameExtensionFilter(
-                    "ERM存档 (*.erm)", "erm");
-            fileChooser.setFileFilter(filter);
-            fileChooser.setSelectedFile(new File(
-                    oxff.top.config.DatabaseConfig.generateSessionDirectoryName() + ".erm"));
+            File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                    oxff.top.utils.FileChooserHelper.OP_ERM_EXPORT, "导出ERM存档", parent,
+                    new File(oxff.top.config.DatabaseConfig.generateSessionDirectoryName() + ".erm"),
+                    new FileNameExtensionFilter("ERM存档 (*.erm)", "erm"));
 
-            int result = fileChooser.showSaveDialog(parent);
-            if (result != JFileChooser.APPROVE_OPTION) {
+            if (selectedFile == null) {
                 return false;
             }
 
-            File outputFile = fileChooser.getSelectedFile();
+            File outputFile = selectedFile;
 
             // 确保扩展名
             String name = outputFile.getName().toLowerCase();

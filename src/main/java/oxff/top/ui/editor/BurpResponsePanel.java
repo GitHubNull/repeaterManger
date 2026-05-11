@@ -52,12 +52,10 @@ public class BurpResponsePanel extends JPanel {
             return;
         }
 
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("保存响应内容");
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+            oxff.top.utils.FileChooserHelper.OP_RESPONSE_SAVE, "保存响应内容", this, null);
 
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File selectedFile = fileChooser.getSelectedFile();
-
+        if (selectedFile != null) {
             try (FileOutputStream fos = new FileOutputStream(selectedFile)) {
                 fos.write(currentResponse);
                 JOptionPane.showMessageDialog(this,

@@ -519,45 +519,47 @@ public class SessionConfigTab extends JPanel {
      * 导出令牌位置到YAML文件
      */
     private void exportTokenLocations() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导出令牌位置");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
-        fileChooser.setSelectedFile(new File("token_locations.yaml"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                oxff.top.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出令牌位置", this,
+                new File("token_locations.yaml"),
+                new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
 
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
-            if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
-                file = new File(file.getAbsolutePath() + ".yaml");
+        if (selectedFile == null) {
+            return;
+        }
+
+        File file = selectedFile;
+        if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
+            file = new File(file.getAbsolutePath() + ".yaml");
+        }
+
+        try {
+            List<TokenLocation> locations = SessionManager.getInstance().getTokenLocations();
+            List<Map<String, Object>> exportList = new ArrayList<>();
+            for (TokenLocation loc : locations) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("type", loc.getType().name());
+                entry.put("expression", loc.getExpression());
+                entry.put("description", loc.getDescription());
+                entry.put("persistToGlobal", loc.isPersistToGlobal());
+                entry.put("enabled", loc.isEnabled());
+                exportList.add(entry);
             }
 
-            try {
-                List<TokenLocation> locations = SessionManager.getInstance().getTokenLocations();
-                List<Map<String, Object>> exportList = new ArrayList<>();
-                for (TokenLocation loc : locations) {
-                    Map<String, Object> entry = new LinkedHashMap<>();
-                    entry.put("type", loc.getType().name());
-                    entry.put("expression", loc.getExpression());
-                    entry.put("description", loc.getDescription());
-                    entry.put("persistToGlobal", loc.isPersistToGlobal());
-                    entry.put("enabled", loc.isEnabled());
-                    exportList.add(entry);
-                }
-
-                DumperOptions options = new DumperOptions();
-                options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-                options.setPrettyFlow(true);
-                Yaml yaml = new Yaml(options);
-                try (FileWriter writer = new FileWriter(file)) {
-                    yaml.dump(exportList, writer);
-                }
-
-                JOptionPane.showMessageDialog(this,
-                    "成功导出 " + exportList.size() + " 条令牌位置到:\n" + file.getAbsolutePath(),
-                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(this,
-                    "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+            DumperOptions options = new DumperOptions();
+            options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+            options.setPrettyFlow(true);
+            Yaml yaml = new Yaml(options);
+            try (FileWriter writer = new FileWriter(file)) {
+                yaml.dump(exportList, writer);
             }
+
+            JOptionPane.showMessageDialog(this,
+                "成功导出 " + exportList.size() + " 条令牌位置到:\n" + file.getAbsolutePath(),
+                "导出成功", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -565,65 +567,67 @@ public class SessionConfigTab extends JPanel {
      * 从YAML文件导入令牌位置
      */
     private void importTokenLocations() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导入令牌位置");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入令牌位置", this,
+                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
 
-        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+        if (selectedFile == null) {
+            return;
+        }
 
-            try {
-                Yaml yaml = new Yaml();
-                List<Map<String, Object>> importList;
+        File file = selectedFile;
 
-                try (FileInputStream fis = new FileInputStream(file)) {
-                    Iterable<Object> objects = yaml.loadAll(fis);
-                    List<Map<String, Object>> merged = new ArrayList<>();
-                    for (Object obj : objects) {
-                        if (obj instanceof List) {
-                            for (Object item : (List<?>) obj) {
-                                if (item instanceof Map) {
-                                    merged.add(castToMap((Map<?, ?>) item));
-                                }
+        try {
+            Yaml yaml = new Yaml();
+            List<Map<String, Object>> importList;
+
+            try (FileInputStream fis = new FileInputStream(file)) {
+                Iterable<Object> objects = yaml.loadAll(fis);
+                List<Map<String, Object>> merged = new ArrayList<>();
+                for (Object obj : objects) {
+                    if (obj instanceof List) {
+                        for (Object item : (List<?>) obj) {
+                            if (item instanceof Map) {
+                                merged.add(castToMap((Map<?, ?>) item));
                             }
-                        } else if (obj instanceof Map) {
-                            merged.add(castToMap((Map<?, ?>) obj));
                         }
-                    }
-                    importList = merged;
-                }
-
-                if (importList.isEmpty()) {
-                    JOptionPane.showMessageDialog(this,
-                        "文件中没有找到令牌位置数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
-                    return;
-                }
-
-                int imported = 0;
-                SessionManager sm = SessionManager.getInstance();
-                for (Map<String, Object> entry : importList) {
-                    try {
-                        String typeStr = String.valueOf(entry.get("type"));
-                        TokenLocationType type = TokenLocationType.fromString(typeStr);
-                        String expression = String.valueOf(entry.getOrDefault("expression", ""));
-                        String description = String.valueOf(entry.getOrDefault("description", ""));
-                        boolean persistToGlobal = toBoolean(entry.getOrDefault("persistToGlobal", true));
-                        boolean enabled = toBoolean(entry.getOrDefault("enabled", true));
-                        sm.addTokenLocation(type, expression, description, persistToGlobal, enabled);
-                        imported++;
-                    } catch (Exception e) {
-                        // 跳过无效条目
+                    } else if (obj instanceof Map) {
+                        merged.add(castToMap((Map<?, ?>) obj));
                     }
                 }
-
-                refreshData();
-                JOptionPane.showMessageDialog(this,
-                    "成功导入 " + imported + " 条令牌位置",
-                    "导入成功", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(this,
-                    "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+                importList = merged;
             }
+
+            if (importList.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "文件中没有找到令牌位置数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            int imported = 0;
+            SessionManager sm = SessionManager.getInstance();
+            for (Map<String, Object> entry : importList) {
+                try {
+                    String typeStr = String.valueOf(entry.get("type"));
+                    TokenLocationType type = TokenLocationType.fromString(typeStr);
+                    String expression = String.valueOf(entry.getOrDefault("expression", ""));
+                    String description = String.valueOf(entry.getOrDefault("description", ""));
+                    boolean persistToGlobal = toBoolean(entry.getOrDefault("persistToGlobal", true));
+                    boolean enabled = toBoolean(entry.getOrDefault("enabled", true));
+                    sm.addTokenLocation(type, expression, description, persistToGlobal, enabled);
+                    imported++;
+                } catch (Exception e) {
+                    // 跳过无效条目
+                }
+            }
+
+            refreshData();
+            JOptionPane.showMessageDialog(this,
+                "成功导入 " + imported + " 条令牌位置",
+                "导入成功", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -633,35 +637,37 @@ public class SessionConfigTab extends JPanel {
      * 导出用户会话到YAML文件
      */
     private void exportUserSessions() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导出用户会话");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
-        fileChooser.setSelectedFile(new File("user_sessions.yaml"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                oxff.top.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出用户会话", this,
+                new File("user_sessions.yaml"),
+                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
 
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
-            if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
-                file = new File(file.getAbsolutePath() + ".yaml");
-            }
+        if (selectedFile == null) {
+            return;
+        }
 
-            try {
-                SessionManager sm = SessionManager.getInstance();
-                List<UserSession> sessions = sm.getUserSessions();
-                List<TokenLocation> locations = sm.getTokenLocations();
+        File file = selectedFile;
+        if (!file.getName().endsWith(".yaml") && !file.getName().endsWith(".yml")) {
+            file = new File(file.getAbsolutePath() + ".yaml");
+        }
 
-                boolean success = UserSessionYamlIO.writeToFile(sessions, locations, file.getAbsolutePath());
-                if (success) {
-                    JOptionPane.showMessageDialog(this,
-                        "成功导出 " + sessions.size() + " 个用户会话到:\n" + file.getAbsolutePath(),
-                        "导出成功", JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(this,
-                        "导出失败", "导出错误", JOptionPane.ERROR_MESSAGE);
-                }
-            } catch (Exception e) {
+        try {
+            SessionManager sm = SessionManager.getInstance();
+            List<UserSession> sessions = sm.getUserSessions();
+            List<TokenLocation> locations = sm.getTokenLocations();
+
+            boolean success = UserSessionYamlIO.writeToFile(sessions, locations, file.getAbsolutePath());
+            if (success) {
                 JOptionPane.showMessageDialog(this,
-                    "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+                    "成功导出 " + sessions.size() + " 个用户会话到:\n" + file.getAbsolutePath(),
+                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "导出失败", "导出错误", JOptionPane.ERROR_MESSAGE);
             }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -669,58 +675,60 @@ public class SessionConfigTab extends JPanel {
      * 从YAML文件导入用户会话
      */
     private void importUserSessions() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导入用户会话");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入用户会话", this,
+                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
 
-        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+        if (selectedFile == null) {
+            return;
+        }
 
-            try {
-                SessionManager sm = SessionManager.getInstance();
-                List<TokenLocation> locations = sm.getTokenLocations();
-                List<UserSession> importedSessions = UserSessionYamlIO.readFromFile(file.getAbsolutePath(), locations);
+        File file = selectedFile;
 
-                if (importedSessions.isEmpty()) {
-                    JOptionPane.showMessageDialog(this,
-                        "文件中没有找到用户会话数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
-                    return;
-                }
+        try {
+            SessionManager sm = SessionManager.getInstance();
+            List<TokenLocation> locations = sm.getTokenLocations();
+            List<UserSession> importedSessions = UserSessionYamlIO.readFromFile(file.getAbsolutePath(), locations);
 
-                // 选择导入模式：合并或替换
-                String[] options = {"合并导入", "替换导入", "取消"};
-                int choice = JOptionPane.showOptionDialog(this,
-                    "发现 " + importedSessions.size() + " 个用户会话，请选择导入方式：\n" +
-                    "合并导入：保留现有数据，仅添加不重名的会话\n" +
-                    "替换导入：清空所有现有会话后导入",
-                    "导入方式",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
-                    null, options, options[0]);
+            if (importedSessions.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "文件中没有找到用户会话数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
 
-                if (choice == 0) {
-                    // 合并导入
-                    int count = sm.importUserSessionsMerge(importedSessions);
+            // 选择导入模式：合并或替换
+            String[] options = {"合并导入", "替换导入", "取消"};
+            int choice = JOptionPane.showOptionDialog(this,
+                "发现 " + importedSessions.size() + " 个用户会话，请选择导入方式：\n" +
+                "合并导入：保留现有数据，仅添加不重名的会话\n" +
+                "替换导入：清空所有现有会话后导入",
+                "导入方式",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, options, options[0]);
+
+            if (choice == 0) {
+                // 合并导入
+                int count = sm.importUserSessionsMerge(importedSessions);
+                refreshData();
+                JOptionPane.showMessageDialog(this,
+                    "合并导入完成，新增 " + count + " 个用户会话",
+                    "导入成功", JOptionPane.INFORMATION_MESSAGE);
+            } else if (choice == 1) {
+                // 替换导入
+                int confirm = JOptionPane.showConfirmDialog(this,
+                    "替换导入将删除所有现有用户会话，是否继续？",
+                    "替换确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    int count = sm.importUserSessionsReplace(importedSessions);
                     refreshData();
                     JOptionPane.showMessageDialog(this,
-                        "合并导入完成，新增 " + count + " 个用户会话",
+                        "替换导入完成，共导入 " + count + " 个用户会话",
                         "导入成功", JOptionPane.INFORMATION_MESSAGE);
-                } else if (choice == 1) {
-                    // 替换导入
-                    int confirm = JOptionPane.showConfirmDialog(this,
-                        "替换导入将删除所有现有用户会话，是否继续？",
-                        "替换确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-                    if (confirm == JOptionPane.YES_OPTION) {
-                        int count = sm.importUserSessionsReplace(importedSessions);
-                        refreshData();
-                        JOptionPane.showMessageDialog(this,
-                            "替换导入完成，共导入 " + count + " 个用户会话",
-                            "导入成功", JOptionPane.INFORMATION_MESSAGE);
-                    }
                 }
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(this,
-                    "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
             }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
         }
     }
 

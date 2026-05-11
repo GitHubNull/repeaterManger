@@ -170,53 +170,59 @@ public class JudgmentRuleConfigTab extends JPanel {
     }
 
     private void exportRules() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导出判决规则");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yml, *.yaml)", "yml", "yaml"));
-        fileChooser.setSelectedFile(new File("judgment_rules.yml"));
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            String filePath = fileChooser.getSelectedFile().getAbsolutePath();
-            if (!filePath.endsWith(".yml") && !filePath.endsWith(".yaml")) {
-                filePath += ".yml";
-            }
-            if (JudgmentRuleYamlIO.writeToFile(
-                    JudgmentRuleManager.getInstance().getAllRules(), filePath)) {
-                JOptionPane.showMessageDialog(this, "规则导出成功: " + filePath,
-                        "导出成功", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(this, "规则导出失败", "导出失败", JOptionPane.ERROR_MESSAGE);
-            }
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                oxff.top.utils.FileChooserHelper.OP_YAML_RULE_EXPORT, "导出判决规则", this,
+                new File("judgment_rules.yml"),
+                new FileNameExtensionFilter("YAML文件 (*.yml, *.yaml)", "yml", "yaml"));
+
+        if (selectedFile == null) {
+            return;
+        }
+
+        String filePath = selectedFile.getAbsolutePath();
+        if (!filePath.endsWith(".yml") && !filePath.endsWith(".yaml")) {
+            filePath += ".yml";
+        }
+        if (JudgmentRuleYamlIO.writeToFile(
+                JudgmentRuleManager.getInstance().getAllRules(), filePath)) {
+            JOptionPane.showMessageDialog(this, "规则导出成功: " + filePath,
+                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "规则导出失败", "导出失败", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importRules() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导入判决规则");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("YAML文件 (*.yml, *.yaml)", "yml", "yaml"));
-        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            String filePath = fileChooser.getSelectedFile().getAbsolutePath();
-            List<JudgmentRule> importedRules = JudgmentRuleYamlIO.readFromFile(filePath);
-            if (importedRules.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "未找到有效的判决规则", "导入失败", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
+        File selectedFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_YAML_RULE_IMPORT, "导入判决规则", this,
+                new FileNameExtensionFilter("YAML文件 (*.yml, *.yaml)", "yml", "yaml"));
 
-            String[] options = {"合并导入", "替换导入", "取消"};
-            int choice = JOptionPane.showOptionDialog(this,
-                    "发现 " + importedRules.size() + " 条规则，请选择导入方式",
-                    "导入方式", 0, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
-
-            if (choice == 0) {
-                int added = JudgmentRuleManager.getInstance().importRulesMerge(importedRules);
-                JOptionPane.showMessageDialog(this,
-                        "合并导入完成，新增 " + added + " 条规则", "导入成功", JOptionPane.INFORMATION_MESSAGE);
-            } else if (choice == 1) {
-                JudgmentRuleManager.getInstance().importRulesReplace(importedRules);
-                JOptionPane.showMessageDialog(this,
-                        "替换导入完成，共 " + importedRules.size() + " 条规则", "导入成功", JOptionPane.INFORMATION_MESSAGE);
-            }
-            refreshData();
+        if (selectedFile == null) {
+            return;
         }
+
+        String filePath = selectedFile.getAbsolutePath();
+        List<JudgmentRule> importedRules = JudgmentRuleYamlIO.readFromFile(filePath);
+        if (importedRules.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "未找到有效的判决规则", "导入失败", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String[] options = {"合并导入", "替换导入", "取消"};
+        int choice = JOptionPane.showOptionDialog(this,
+                "发现 " + importedRules.size() + " 条规则，请选择导入方式",
+                "导入方式", 0, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+
+        if (choice == 0) {
+            int added = JudgmentRuleManager.getInstance().importRulesMerge(importedRules);
+            JOptionPane.showMessageDialog(this,
+                    "合并导入完成，新增 " + added + " 条规则", "导入成功", JOptionPane.INFORMATION_MESSAGE);
+        } else if (choice == 1) {
+            JudgmentRuleManager.getInstance().importRulesReplace(importedRules);
+            JOptionPane.showMessageDialog(this,
+                    "替换导入完成，共 " + importedRules.size() + " 条规则", "导入成功", JOptionPane.INFORMATION_MESSAGE);
+        }
+        refreshData();
     }
 
     private void filterRules() {

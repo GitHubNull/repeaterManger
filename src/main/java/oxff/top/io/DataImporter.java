@@ -2,7 +2,6 @@ package oxff.top.io;
 
 import burp.BurpExtender;
 
-import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.Component;
@@ -23,19 +22,17 @@ public class DataImporter {
 
     /**
      * 智能导入 - 自动检测文件格式并导入
+     * 只弹出一次文件对话框，不再二次弹出
      */
     public boolean smartImport(Component parent) {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导入数据文件");
-        fileChooser.setFileFilter(new FileNameExtensionFilter(
-                "支持的数据文件 (*.erm, *.json)", "erm", "json"));
+        File selectedFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_ERM_IMPORT, "导入数据文件", parent,
+                new FileNameExtensionFilter("支持的数据文件 (*.erm, *.json)", "erm", "json"));
 
-        int result = fileChooser.showOpenDialog(parent);
-        if (result != JFileChooser.APPROVE_OPTION) {
+        if (selectedFile == null) {
             return false;
         }
 
-        File selectedFile = fileChooser.getSelectedFile();
         if (!selectedFile.exists() || !selectedFile.isFile()) {
             JOptionPane.showMessageDialog(parent, "所选文件不存在", "导入错误", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -47,9 +44,9 @@ public class DataImporter {
 
         switch (format) {
             case ERM:
-                return ermReader.importFromFile(parent);
+                return ermReader.importFromPath(selectedFile, parent);
             case POSTMAN_V21:
-                return postmanImporter.importFromFile(parent);
+                return postmanImporter.importFromPath(selectedFile, parent);
             case SQLITE3:
                 JOptionPane.showMessageDialog(parent,
                         "旧版 SQLite3 格式已不再支持，请使用 ERM 存档格式 (.erm) 导入。",

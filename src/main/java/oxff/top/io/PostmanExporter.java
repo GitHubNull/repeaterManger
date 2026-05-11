@@ -45,19 +45,16 @@ public class PostmanExporter {
         try {
             BurpExtender.printOutput("[+] 开始Postman Collection v2.1.0导出过程");
 
-            JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setDialogTitle("导出Postman Collection");
-            FileNameExtensionFilter filter = new FileNameExtensionFilter("Postman Collection (*.json)", "json");
-            fileChooser.setFileFilter(filter);
-            fileChooser.setSelectedFile(new File(
-                    oxff.top.config.DatabaseConfig.generateSessionDirectoryName() + ".json"));
+            File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                    oxff.top.utils.FileChooserHelper.OP_POSTMAN_EXPORT, "导出Postman Collection", parent,
+                    new File(oxff.top.config.DatabaseConfig.generateSessionDirectoryName() + ".json"),
+                    new FileNameExtensionFilter("Postman Collection (*.json)", "json"));
 
-            int result = fileChooser.showSaveDialog(parent);
-            if (result != JFileChooser.APPROVE_OPTION) {
+            if (selectedFile == null) {
                 return false;
             }
 
-            File outputFile = fileChooser.getSelectedFile();
+            File outputFile = selectedFile;
             if (!outputFile.getName().toLowerCase().endsWith(".json")) {
                 outputFile = new File(outputFile.getAbsolutePath() + ".json");
             }

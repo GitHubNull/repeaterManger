@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-05-11
+
+### Added
+- 新增 FileChooserHelper 统一文件选择器工具类，支持打开/保存/目录三种对话框类型
+- 新增文件选择器操作类型枚举（OP_ERM_IMPORT, OP_POSTMAN_IMPORT, OP_RESPONSE_SAVE 等），支持按操作类型记忆上次浏览目录
+- RequestListPanel 新增可折叠高级搜索面板，支持按 URL/Header/Body 范围搜索
+- RequestListPanel 新增搜索配置类 SearchConfig，支持关键词/正则/大小写敏感等搜索选项
+
+### Changed
+- 重构 DataImporter/ErmArchiveReader/ErmArchiveWriter/PostmanExporter/PostmanImporter，使用 FileChooserHelper 替代原生 JFileChooser
+- 重构 ReportContainerReader/ReportExporter，使用 FileChooserHelper 统一文件对话框
+- 重构 LogPanel/ResponsePanel/ConfigPanel/StorageConfigTab，使用 FileChooserHelper 替代原生 JFileChooser
+- 重构 SessionConfigTab 令牌位置导出、用户会话导入/导出，使用 FileChooserHelper 替代原生 JFileChooser
+- 重构 ApiRuleConfigTab/JudgmentRuleConfigTab，使用 FileChooserHelper 替代原生 JFileChooser
+- 重构 BurpResponsePanel/EnhancedResponsePanel，使用 FileChooserHelper 替代原生 JFileChooser
+
 ## [2.13.0] - 2026-05-11
 
 ### Added

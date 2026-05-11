@@ -355,16 +355,13 @@ public class ReportContainerReader {
      */
     public boolean extractAndSave(Component parent) {
         // 1. 文件选择器
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("选择加密报告文件");
-        fileChooser.setFileFilter(new FileNameExtensionFilter(
-                "ERM Report (*.ermr)", "ermr"));
+        File inputFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_REPORT_IMPORT, "选择加密报告文件", parent,
+                new javax.swing.filechooser.FileNameExtensionFilter("ERM Report (*.ermr)", "ermr"));
 
-        if (fileChooser.showOpenDialog(parent) != JFileChooser.APPROVE_OPTION) {
+        if (inputFile == null) {
             return false;
         }
-
-        File inputFile = fileChooser.getSelectedFile();
 
         // 2. 读取容器头，判断是否加密（在 EDT 上同步执行，读取头很快）
         ContainerHeader header;
@@ -412,15 +409,13 @@ public class ReportContainerReader {
                     progressDialog.dispose();
 
                     // 5. 保存对话框
-                    JFileChooser saveChooser = new JFileChooser();
-                    saveChooser.setDialogTitle("保存解密报告");
-                    saveChooser.setSelectedFile(new File(result.originalFilename));
+                    File outputFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                            oxff.top.utils.FileChooserHelper.OP_REPORT_SAVE, "保存解密报告", parent,
+                            new File(result.originalFilename));
 
-                    if (saveChooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
+                    if (outputFile == null) {
                         return;
                     }
-
-                    File outputFile = saveChooser.getSelectedFile();
 
                     // 覆盖确认
                     if (outputFile.exists()) {

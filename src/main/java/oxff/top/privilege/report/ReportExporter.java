@@ -54,22 +54,24 @@ public class ReportExporter {
         String outputExt = useContainer ? "ermr" : ext;
         String defaultFilename = "privilege_test_report." + outputExt;
 
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("导出越权测试报告");
+        javax.swing.filechooser.FileNameExtensionFilter saveFilter;
         if (useContainer) {
-            fileChooser.setFileFilter(new FileNameExtensionFilter(
-                    "ERM Report (*.ermr)", "ermr"));
+            saveFilter = new javax.swing.filechooser.FileNameExtensionFilter(
+                    "ERM Report (*.ermr)", "ermr");
         } else {
-            fileChooser.setFileFilter(new FileNameExtensionFilter(
-                    format.toUpperCase() + " Report (*." + ext + ")", ext));
+            saveFilter = new javax.swing.filechooser.FileNameExtensionFilter(
+                    format.toUpperCase() + " Report (*." + ext + ")", ext);
         }
-        fileChooser.setSelectedFile(new File(defaultFilename));
 
-        if (fileChooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
+        File selectedFile = oxff.top.utils.FileChooserHelper.showSaveDialog(
+                oxff.top.utils.FileChooserHelper.OP_REPORT_EXPORT, "导出越权测试报告", parent,
+                new File(defaultFilename), saveFilter);
+
+        if (selectedFile == null) {
             return;
         }
 
-        File outputFile = fileChooser.getSelectedFile();
+        File outputFile = selectedFile;
         if (!outputFile.getName().contains(".")) {
             outputFile = new File(outputFile.getAbsolutePath() + "." + outputExt);
         }

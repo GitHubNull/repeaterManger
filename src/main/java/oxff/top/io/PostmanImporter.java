@@ -59,17 +59,14 @@ public class PostmanImporter {
             return false;
         }
 
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("从Postman Collection导入");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("Postman Collection (*.json)", "json"));
-        fileChooser.setAcceptAllFileFilterUsed(false);
+        File selectedFile = oxff.top.utils.FileChooserHelper.showOpenDialog(
+                oxff.top.utils.FileChooserHelper.OP_POSTMAN_IMPORT, "从Postman Collection导入", parent,
+                new FileNameExtensionFilter("Postman Collection (*.json)", "json"));
 
-        int result = fileChooser.showOpenDialog(parent);
-        if (result != JFileChooser.APPROVE_OPTION) {
+        if (selectedFile == null) {
             return false;
         }
 
-        File selectedFile = fileChooser.getSelectedFile();
         if (!selectedFile.exists() || !selectedFile.isFile()) {
             JOptionPane.showMessageDialog(parent, "所选文件不存在", "导入错误", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -83,6 +80,39 @@ public class PostmanImporter {
             return false;
         }
 
+        return doImportWithDialog(selectedFile, parent);
+    }
+
+    /**
+     * 从指定文件路径导入（供 DataImporter.smartImport 调用，不再弹出文件对话框）
+     */
+    public boolean importFromPath(File file, Component parent) {
+        if (isImporting.get()) {
+            JOptionPane.showMessageDialog(parent,
+                "另一个导入操作正在进行中，请稍后再试。", "导入繁忙", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+
+        if (!file.exists() || !file.isFile()) {
+            JOptionPane.showMessageDialog(parent, "所选文件不存在", "导入错误", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        // 验证格式
+        FormatDetector.ImportFormat format = FormatDetector.detectFormat(file);
+        if (format != FormatDetector.ImportFormat.POSTMAN_V21) {
+            JOptionPane.showMessageDialog(parent,
+                "选择的文件不是有效的Postman Collection格式。", "格式错误", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        return doImportWithDialog(file, parent);
+    }
+
+    /**
+     * 带合并/替换选项的导入流程（供 importFromFile 和 importFromPath 共用）
+     */
+    private boolean doImportWithDialog(File selectedFile, Component parent) {
         int mergeOrReplace = JOptionPane.showOptionDialog(parent,
             "选择导入模式：\n- 合并：将导入数据添加到现有数据\n- 替换：清空现有数据后导入",
             "选择导入模式", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,

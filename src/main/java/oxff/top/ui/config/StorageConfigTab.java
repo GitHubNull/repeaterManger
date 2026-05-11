@@ -267,20 +267,17 @@ public class StorageConfigTab extends JPanel {
     }
 
     private void browseForDirectory() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("选择存储目录");
-        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-
-        String currentBaseDir = dbManager.getConfig().getBaseDirectory();
-        if (currentBaseDir != null && !currentBaseDir.isEmpty()) {
-            fileChooser.setCurrentDirectory(new File(currentBaseDir));
-        } else {
-            fileChooser.setCurrentDirectory(new File(DatabaseConfig.getDefaultBaseDirectory()));
+        // 优先使用配置中的存储路径，不存在时才用上次浏览记忆
+        String preferredDir = dbManager.getConfig().getBaseDirectory();
+        if (preferredDir == null || preferredDir.isEmpty()) {
+            preferredDir = DatabaseConfig.getDefaultBaseDirectory();
         }
 
-        int result = fileChooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File selectedDir = fileChooser.getSelectedFile();
+        File selectedDir = oxff.top.utils.FileChooserHelper.showDirectoryDialog(
+                oxff.top.utils.FileChooserHelper.OP_STORAGE_DIRECTORY, "选择存储目录", this,
+                preferredDir);
+
+        if (selectedDir != null) {
             dbManager.getConfig().setBaseDirectory(selectedDir.getAbsolutePath());
             dbManager.getConfig().setStorageMode(DatabaseConfig.MODE_DIRECTORY);
             baseDirField.setText(selectedDir.getAbsolutePath());
