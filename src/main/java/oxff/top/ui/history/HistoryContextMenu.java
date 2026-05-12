@@ -89,7 +89,6 @@ public class HistoryContextMenu {
         JMenuItem batchReplayItem = null;
         if (selectedCount >= 2) {
             batchReplayItem = new JMenuItem(String.format("批量重放 (%d条)", selectedCount));
-            JMenuItem finalBatchReplayItem = batchReplayItem;
             batchReplayItem.addActionListener(e -> batchReplaySelectedItems());
         }
 

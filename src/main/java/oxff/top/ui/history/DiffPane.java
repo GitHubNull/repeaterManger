@@ -28,9 +28,7 @@ public class DiffPane extends JPanel {
     private static final Color COLOR_INLINE_DIFF_ORIG = new Color(255, 200, 200); // 红色: 原始侧差异字符
     private static final Color COLOR_INLINE_DIFF_MOD = new Color(150, 255, 150);  // 深绿: 修改侧差异字符
 
-    /** 搜索高亮颜色 */
-    private static final Color COLOR_SEARCH_MATCH = new Color(255, 255, 0);       // 黄色: 搜索匹配
-    private static final Color COLOR_SEARCH_CURRENT = new Color(255, 165, 0);     // 橙色: 当前搜索匹配
+
 
     private static final Font MONO_FONT = new Font("Monospaced", Font.PLAIN, 13);
 
@@ -50,9 +48,7 @@ public class DiffPane extends JPanel {
     /** 记录每行的差异背景色，用于搜索清除后恢复 */
     private final List<LineAttributeSnapshot> lineSnapshots = new ArrayList<>();
 
-    // ==================== 当前渲染状态 ====================
 
-    private boolean isOriginalSide;
 
     // ==================== 数据类 ====================
 
@@ -143,7 +139,6 @@ public class DiffPane extends JPanel {
      * @param isOriginalSide 是否为原始侧(左侧)
      */
     public void renderDiffLines(List<DiffEngine.DiffLine> diffLines, boolean isOriginalSide) {
-        this.isOriginalSide = isOriginalSide;
         this.diffRegions.clear();
         this.lineSnapshots.clear();
 
@@ -285,7 +280,6 @@ public class DiffPane extends JPanel {
      * 渲染 Hex 级差异
      */
     public void renderHexDiffSegments(List<DiffEngine.DiffSegment> diffSegments, boolean isOriginalSide) {
-        this.isOriginalSide = isOriginalSide;
         this.diffRegions.clear();
         this.lineSnapshots.clear();
 

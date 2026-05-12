@@ -10,7 +10,6 @@ import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.db.RequestDAO;
 import oxff.top.http.RequestResponseRecord;
 
-import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.Component;

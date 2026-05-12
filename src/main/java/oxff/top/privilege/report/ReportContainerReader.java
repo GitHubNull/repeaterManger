@@ -4,7 +4,6 @@ import oxff.top.io.ErmCryptoHelper;
 import oxff.top.io.ErmFormatConstants;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.Component;
 import java.awt.Frame;
 import java.io.*;

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.1] - 2026-05-12
+
+### Fixed
+- 移除 ErmArchiveReader/ErmArchiveWriter/PostmanExporter/PostmanImporter 中未使用的 JFileChooser import
+- 移除 ReportContainerReader/ReportExporter 中未使用的 FileNameExtensionFilter import
+- 移除 RequestListPanel/SearchBar 中未使用的 ActionEvent import
+- 移除 DiffPane 中未使用的搜索高亮常量和 isOriginalSide 字段
+- 移除 HistoryContextMenu 中未使用的 finalBatchReplayItem 变量
+
 ## [2.16.0] - 2026-05-12
 
 ### Added

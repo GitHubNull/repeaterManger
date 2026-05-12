@@ -3,7 +3,6 @@ package oxff.top.privilege.report;
 import burp.BurpExtender;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
