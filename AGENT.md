@@ -6,7 +6,7 @@
 
 **Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理、API 规则提取和自动化越权测试功能。项目使用 Java 17 编写，基于 Montoya SDK（`burp.api.montoya.*`），采用 MVC 架构。
 
-- **版本**: 2.2.0
+- **版本**: 2.16.2
 - **Java 版本**: 17（source/target 兼容）
 - **构建工具**: Maven
 - **许可证**: Apache License 2.0
@@ -49,6 +49,17 @@
 | Token 替换 | `oxff/top/privilege/TokenReplacementEngine.java` | 请求中 Token 自动替换 |
 | 判断引擎 | `oxff/top/privilege/JudgmentEngine.java` | 响应判断引擎 |
 | 配置管理 | `oxff/top/config/DatabaseConfig.java` | 存储模式/日志/代理配置 |
+| 报文比对引擎 | `oxff/top/ui/history/DiffEngine.java` / `DiffPane.java` | LCS 行级/字符级差异算法与 RSyntaxTextArea 渲染面板 |
+| 比对对话框 | `oxff/top/ui/history/ComparisonDialog.java` | 全功能报文比对（标签页/四分格布局） |
+| 差异导航器 | `oxff/top/ui/history/DiffNavigator.java` | 差异区域上一处/下一处跳转导航 |
+| 报告生成引擎 | `oxff/top/privilege/report/ReportGenerator.java` (abstract) | PDF/HTML/Markdown 报告生成基类 |
+| PDF 报告 | `oxff/top/privilege/report/PdfReportGenerator.java` | 原生 PDF 报告 (Apache PDFBox，内嵌中文字体) |
+| HTML/MD 报告 | `oxff/top/privilege/report/HtmlReportGenerator.java` / `MarkdownReportGenerator.java` | FreeMarker 模板渲染报告 |
+| 身体渲染器 | `oxff/top/privilege/report/BodyRenderer.java` / `BinaryContentRenderer.java` | 请求/响应体渲染与二进制内容转换 |
+| 全局Token管理 | `oxff/top/privilege/GlobalTokenLocationManager.java` | 跨会话全局 Token 位置管理 |
+| 用户会话导入导出 | `oxff/top/privilege/UserSessionYamlIO.java` | 用户会话 YAML 导入导出 |
+| 请求调度处理器 | `oxff/top/RequestDispatchHandler.java` | 统一请求调度（普通/越权测试模式路由） |
+| 文件选择器 | `oxff/top/utils/FileChooserHelper.java` | 统一文件选择器工具 |
 
 ## 关键设计决策
 
@@ -119,6 +130,34 @@
 
 支持级别过滤：DEBUG / INFO / SUCCESS / WARN / ERROR
 
+### 报告生成架构
+
+报告生成采用 Template Method 模式，`ReportGenerator` 为抽象基类：
+1. `ReportExporter` 负责收集数据并构建 `ReportData` 对象
+2. `BodyRenderer` / `BinaryContentRenderer` 负责将请求/响应体渲染为可展示格式（含 hex/base64/图片预览）
+3. 具体生成器 (`PdfReportGenerator` / `HtmlReportGenerator` / `MarkdownReportGenerator`) 实现 `generate()` 方法
+4. HTML/Markdown 报告通过 FreeMarker 模板 (`src/main/resources/templates/report/`) 渲染
+5. PDF 报告通过 Apache PDFBox 原生 API 构建，支持内嵌中文字体（`PdfReportGenerator` 内置字体资源）
+6. `ReportContainerWriter/Reader` 提供报告容器的序列化/反序列化
+7. `CurlBuilder` / `PostmanSnippetBuilder` 为每个请求生成 cURL 命令和 Postman 代码片段
+
+### 报文比对模块
+
+报文比对工作流：
+1. `ComparisonDialog` 提供标签页式/四分格布局的比对界面
+2. `DiffEngine` 实现基于 LCS 变体的行级差异算法，支持行内字符级差异
+3. `DiffPane` 使用 RSyntaxTextArea 渲染差异结果，支持语法高亮（绿色=新增、红色=删除、黄色=修改、行内差异=深色高亮）
+4. `DiffNavigator` 提供差异区域导航（上一处/下一处），合并左右面板差异区域
+5. `SynchronizedScrollPanel` 保证原始/修改两端面板同步滚动
+6. `SearchBar` 提供可折叠的搜索栏，支持关键字/正则匹配、大小写敏感
+
+### 全局 Token 位置管理
+
+`GlobalTokenLocationManager` 单例管理跨会话共享的 Token 位置配置：
+1. Token 位置通过 `TokenLocationYamlIO` 序列化到 YAML 文件
+2. 支持 4 种位置类型：HEADER、COOKIE、BODY、URL_PARAM
+3. 全局 Token 位置可用于所有用户会话的自动填充
+
 ## 构建命令
 
 ```bash
@@ -126,8 +165,8 @@ mvn clean package
 ```
 
 构建产物：
-- `target/repeater-manager-2.2.0.jar` — 开发版本
-- `target/releases/repeater-manager-2.2.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-2.16.2.jar` — 开发版本
+- `target/releases/repeater-manager-2.16.2-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 
@@ -171,6 +210,9 @@ schema_meta (key, value)
 | SnakeYAML | 2.2 | `org.yaml:snakeyaml` |
 | Commons IO | 2.11.0 | `commons-io:commons-io` |
 | Commons Lang | 3.12.0 | `org.apache.commons:commons-lang3` |
+| Apache PDFBox | 3.0.1 | `org.apache.pdfbox:pdfbox` |
+| FreeMarker | 2.3.33 | `org.freemarker:freemarker` |
+| CommonMark | 0.22.0 | `org.commonmark:commonmark` |
 
 ## 编码约定
 
@@ -202,7 +244,8 @@ schema_meta (key, value)
 
 项目使用 GitHub Actions（`.github/workflows/release.yml`）：
 
-- **触发条件**: 推送 `v*` 格式标签（如 `v2.2.0`）或手动触发
+- **触发条件**: 推送 `v*` 格式标签（如 `v2.16.2`）或手动触发
 - **构建**: JDK 17 + Maven
 - **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
+- **预发布**: 标签包含 `-` 后缀（如 `v2.16.2-beta`）时标记为预发布
 - **预发布**: 标签包含 `-` 后缀（如 `v2.2.0-beta`）时标记为预发布

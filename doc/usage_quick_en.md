@@ -74,7 +74,41 @@ Click the **"Layout"** dropdown in the top-right corner to choose your preferred
 
 ---
 
-## 8. Configure Storage and Logging
+## 8. Message Comparison
+
+- In the history panel, right-click and select **"Compare Messages"** to compare original request/response with privilege test messages
+- Supports **Tab mode** (request/response in separate tabs) and **Four-pane mode** (original/replaced request and response displayed simultaneously)
+- Diff highlighting (green for additions, red for deletions, yellow for modifications), with character-level inline differences
+- **Synchronized scrolling**: Original and replacement panels scroll in sync automatically
+- **Diff navigation**: Use prev/next difference buttons to jump between changes
+- **Search**: Use the collapsible search bar to find keywords in diff content, supports regular expressions
+
+---
+
+## 9. Batch Operations
+
+- In the history panel, hold **Ctrl/Shift** to multi-select entries
+- Right-click and select **"Batch Replay"** to sequentially resend all selected requests
+- Right-click and select **"Batch Privilege Test"** to automatically iterate through all user sessions for testing
+- Right-click and select **"Delete"** to batch remove unwanted records
+
+---
+
+## 10. Report Export
+
+- In the privilege test panel, click **"Export Report"** to export test results as a formal report
+- Supports three formats:
+  | Format | Characteristics |
+  |--------|-----------------|
+  | PDF | Native format, embedded Chinese fonts, suitable for formal delivery |
+  | HTML | Open directly in browser, visually appealing |
+  | Markdown | Plain text, suitable for version control and further processing |
+- Report content includes: Test summary, session statistics, per-endpoint details, cURL/Postman code snippets
+- Request/response bodies are auto-rendered (text highlighting, binary hex conversion)
+
+---
+
+## 11. Configure Storage and Logging
 
 Navigate to the **"Configuration"** tab:
 
@@ -89,7 +123,7 @@ Navigate to the **"Configuration"** tab:
 
 ---
 
-## 9. Import and Export Data
+## 12. Import and Export Data
 
 Navigate to **"Configuration"** → **"Data Import/Export"** tab:
 
@@ -101,7 +135,7 @@ Navigate to **"Configuration"** → **"Data Import/Export"** tab:
 
 ---
 
-## 10. API Rule Extraction
+## 13. API Rule Extraction
 
 The plugin can automatically extract API paths from non-standard requests for easier organization:
 
@@ -113,7 +147,7 @@ The plugin can automatically extract API paths from non-standard requests for ea
 
 ---
 
-## 11. Privilege Testing
+## 14. Privilege Testing
 
 Automated privilege escalation vulnerability detection:
 

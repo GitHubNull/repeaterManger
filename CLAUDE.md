@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, API extraction, privilege escalation testing, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
 
-- **Version**: 2.2.0
+- **Version**: 2.16.2
 - **Java**: 17 (source/target compatibility)
 - **Build**: Maven
 - **License**: Apache License 2.0
@@ -18,7 +18,7 @@ The project follows a layered architecture:
 +---------------------+
 |      UI Layer       |  Java Swing + RSyntaxTextArea
 +---------------------+
-|   Service Layer     |  AutoSave / GC / HistoryRecording / ApiExtraction / PrivilegeTest
+|   Service Layer     |  AutoSave / GC / HistoryRecording / ApiExtraction / PrivilegeTest / ReportGeneration
 +---------------------+
 |   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager / ApiExtractionRuleDAO
 +---------------------+
@@ -47,6 +47,14 @@ Key components:
 - **ReplayEngine.java**: Handles request replay logic for privilege testing
 - **JudgmentEngine.java**: Evaluates responses against configurable rules to detect privilege escalation
 - **TokenReplacementEngine.java**: Manages token substitution in requests across user sessions
+- **DiffEngine.java / DiffPane.java / SearchBar.java / DiffNavigator.java**: Message comparison components with string/byte-level diff, syntax highlighting, synchronized scrolling, and change navigation (ComparisonDialog for full-featured comparison)
+- **ReportGenerator.java**: Abstract base class for report generation with PdfReportGenerator (Apache PDFBox), HtmlReportGenerator, and MarkdownReportGenerator (FreeMarker templates) implementations
+- **ReportExporter.java**: Unified report export dispatcher (PDF/HTML/Markdown)
+- **BodyRenderer.java / BinaryContentRenderer.java**: Request/response body rendering including binary content support
+- **GlobalTokenLocationManager.java**: Singleton managing global token locations shared across sessions (TokenLocationYamlIO for YAML serialization)
+- **UserSessionYamlIO.java**: YAML serialization for user session import/export
+- **RequestDispatchHandler.java**: Central request dispatch handler coordinating privilege test and normal request flows
+- **FileChooserHelper.java**: Unified file chooser utility for consistent file selection dialogs
 
 ## Key Features
 
@@ -64,6 +72,9 @@ Key components:
 12. **Layout Switching**: Horizontal/vertical/request-only/response-only layout modes
 13. **API Extraction**: Configurable rule engine supporting 4 extraction sources (URL_PATH, URL_QUERY, HEADER, BODY) × 4 methods (REGEX, SUBSTR, JSON_PATH, XPATH), with global rules (YAML) and project-level rules (SQLite)
 14. **Privilege Escalation Testing**: Automated testing framework that intercepts scope-matched proxy traffic, replays requests with different user tokens, and judges responses against configurable rules (status code, response body/header/time comparison)
+15. **Message Comparison**: String and byte-level diff comparison between request/response pairs with syntax highlighting (RSyntaxTextArea), synchronized scrolling (SynchronizedScrollPanel), diff navigation (DiffNavigator), and in-line character-level diff highlighting via DiffEngine/DiffPane
+16. **Report Generation**: Export privilege test results as PDF (Apache PDFBox with embedded Chinese fonts), HTML or Markdown (FreeMarker templates) reports with embedded request/response bodies, cURL commands, and Postman code snippets; includes binary content rendering for non-text responses
+17. **Batch Operations**: Multi-select support in history and request panels; batch replay, batch privilege testing, and batch deletion of selected entries
 
 ## Build Commands
 
@@ -78,8 +89,8 @@ mvn clean package
 ```
 
 The build process creates two JAR files:
-- Development version: `target/repeater-manager-2.2.0.jar`
-- Timestamped release: `target/releases/repeater-manager-2.2.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.16.2.jar`
+- Timestamped release: `target/releases/repeater-manager-2.16.2-YYYYMMDD-HHMMSS.jar`
 
 ## Source Code Organization
 
@@ -174,6 +185,23 @@ src/main/java/
     │       ├── SessionDAO.java         # User session CRUD
     │       ├── JudgmentRuleDAO.java    # Judgment rule CRUD
     │       └── ScopeDAO.java           # Scope CRUD
+    │   ├── report/                      # Report generation subsystem
+    │   │   ├── ReportGenerator.java     # Abstract report generator base class
+    │   │   ├── PdfReportGenerator.java  # PDF report (Apache PDFBox 3.0.1)
+    │   │   ├── HtmlReportGenerator.java # HTML report (FreeMarker template)
+    │   │   ├── MarkdownReportGenerator.java # Markdown report (FreeMarker template)
+    │   │   ├── ReportExporter.java      # Report export dispatcher
+    │   │   ├── ReportData.java          # Report data model
+    │   │   ├── ReportContainerWriter.java # Report container serialization
+    │   │   ├── ReportContainerReader.java # Report container deserialization
+    │   │   ├── BodyRenderer.java        # Body content renderer
+    │   │   ├── BinaryContentRenderer.java # Binary content renderer (hex/base64/image)
+    │   │   ├── CurlBuilder.java         # cURL command builder
+    │   │   ├── PostmanSnippetBuilder.java # Postman code snippet builder
+    │   │   └── FreeMarkerConfig.java    # FreeMarker configuration
+    │   ├── UserSessionYamlIO.java       # User session YAML import/export
+    │   ├── TokenLocationYamlIO.java     # Token location YAML import/export
+    │   └── GlobalTokenLocationManager.java # Global token location manager
     ├── service/                        # Background services
     │   ├── AutoSaveService.java        # Scheduled database checkpoint
     │   ├── GarbageCollectorService.java # Zero-ref pool cleanup (10min interval)
@@ -204,25 +232,44 @@ src/main/java/
     │   │   ├── ApiRuleEditDialog.java  # Rule editor dialog
     │   │   ├── ApiRuleTableModel.java  # Rule table model
     │   │   └── ApiReExtractWorker.java # Background rule re-extraction worker
-    │   ├── history/                    # History UI
+    │   ├── history/                    # History UI + Message comparison
     │   │   ├── HistoryPanel.java       # History list with search/filter
-    │   │   ├── HistoryContextMenu.java # History context menu
+    │   │   ├── HistoryContextMenu.java # History context menu (batch ops, comparison)
     │   │   ├── HistoryTableRenderer.java # History table cell renderer
     │   │   ├── AdvancedSearchDialog.java # Advanced search dialog
-    │   │   └── ColumnControlDialog.java  # Column display control dialog
+    │   │   ├── ColumnControlDialog.java  # Column display control dialog
+    │   │   ├── ComparisonDialog.java   # Message comparison dialog (tab/four-pane layout)
+    │   │   ├── DiffEngine.java         # Diff algorithm engine (LCS-based, char-level inline diff)
+    │   │   ├── DiffPane.java           # Self-contained diff display panel (RSyntaxTextArea)
+    │   │   ├── DiffNavigator.java      # Diff region navigator (prev/next change)
+    │   │   ├── SearchBar.java          # Collapsible search bar for diff content
+    │   │   └── SynchronizedScrollPanel.java # Synchronized scrolling for side-by-side comparison
     │   ├── layout/                     # Layout management
     │   │   └── LayoutManager.java      # Layout switcher (HORIZONTAL/VERTICAL/REQUEST_ONLY/RESPONSE_ONLY)
     │   └── privilege/                  # Privilege test UI
     │       ├── PrivilegeTestPanel.java # Main privilege test panel
-    │       ├── UserSessionTableModel.java
-    │       ├── JudgmentRuleTableModel.java
-    │       ├── UserSessionEditDialog.java
-    │       ├── JudgmentRuleEditDialog.java
-    │       ├── TokenLocationEditDialog.java
-    │       └── ScopeConfigTab.java     # Scope configuration tab
+    │       ├── SessionConfigTab.java   # User session configuration tab
+    │       ├── JudgmentRuleConfigTab.java # Judgment rule configuration tab
+    │       ├── ScopeConfigTab.java     # Scope configuration tab
+    │       ├── UserSessionTableModel.java # Session table model
+    │       ├── JudgmentRuleTableModel.java # Judgment rule table model
+    │       ├── TokenLocationTableModel.java # Token location table model
+    │       ├── UserSessionEditDialog.java # User session editor dialog
+    │       ├── JudgmentRuleEditDialog.java # Judgment rule editor dialog
+    │       ├── TokenLocationEditDialog.java # Token location editor dialog
+    │       └── TokenValueCellRenderer.java # Token value cell renderer
+    ├── RequestDispatchHandler.java     # Central request dispatch handler
     └── utils/
-        └── TextLineNumber.java         # Line number utility for text components
+        ├── TextLineNumber.java         # Line number utility for text components
+        └── FileChooserHelper.java      # Unified file chooser utility
 ```
+```
+src/main/resources/
+└── templates/
+    └── report/
+        ├── report.html.ftl            # HTML report FreeMarker template
+        ├── report.md.ftl              # Markdown report FreeMarker template
+        └── report-styles.css          # Report stylesheet
 
 ## Montoya SDK API Mapping
 
@@ -294,9 +341,12 @@ SQLite is used with a custom connection pool (BlockingQueue + JDK Proxy for tran
 | SQLite JDBC | 3.42.0.0 | Local data persistence |
 | HikariCP | 5.0.1 | Declared but not actively used (custom pool instead) |
 | Gson | 2.10.1 | JSON serialization (ERM manifest, Postman export) |
-| SnakeYAML | 2.2 | YAML serialization (API extraction rules, judgment rules) |
+| SnakeYAML | 2.2 | YAML serialization (API extraction rules, judgment rules, user sessions, token locations) |
 | Apache Commons IO | 2.11.0 | File I/O utilities |
 | Apache Commons Lang | 3.12.0 | String/object utilities |
+| Apache PDFBox | 3.0.1 | Native PDF report generation with embedded Chinese fonts |
+| FreeMarker | 2.3.33 | Template engine for HTML/Markdown report generation |
+| CommonMark | 0.22.0 | Markdown-to-HTML rendering for usage tutorial panel |
 
 ## Configuration
 
@@ -333,11 +383,14 @@ Data is persisted in session directories under `~/.burp/` (timestamp-named), eac
 12. **Error filtering**: `BurpExtender.shouldFilterError()` filters IntelliJ-related harmless ClassNotFoundExceptions
 13. **API rule IDs**: Global rules use negative IDs, project-level rules use positive IDs (stored in SQLite)
 14. **YAML files**: Use SnakeYAML for reading/writing `api_extraction_rules.yaml` and judgment rule YAML files
+15. **FreeMarker templates**: Report templates in `src/main/resources/templates/report/` (*.ftl files); use `FreeMarkerConfig.getConfiguration()` for template loading
+16. **Report resources**: Report generation classes in `privilege/report/` follow Template Method pattern with `ReportGenerator` as abstract base; `PdfReportGenerator` requires embedded Chinese font resources
+17. **Diff rendering**: Diff components use `DiffEngine` for diff computation and `DiffPane` with `RSyntaxTextArea` for rendering; `SynchronizedScrollPanel` ensures side-by-side scroll sync; `DiffNavigator` provides prev/next change navigation
 
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/release.yml`):
-- **Trigger**: Push `v*` tags (e.g., `v2.2.0`) or manual dispatch
+- **Trigger**: Push `v*` tags (e.g., `v2.16.2`) or manual dispatch
 - **Build**: JDK 17 + Maven on Ubuntu
 - **Release**: Auto-creates GitHub Release with JAR attachment
-- **Prerelease**: Tags with `-` suffix (e.g., `v2.2.0-beta`) are marked as prerelease
+- **Prerelease**: Tags with `-` suffix (e.g., `v2.16.2-beta`) are marked as prerelease

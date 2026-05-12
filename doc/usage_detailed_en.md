@@ -17,8 +17,11 @@ This document provides detailed instructions for all features of Repeater Manage
 - [9. Storage and Data Management](#9-storage-and-data-management)
 - [10. API Rule Extraction](#10-api-rule-extraction)
 - [11. Privilege Testing](#11-privilege-testing)
-- [12. Advanced Tips](#12-advanced-tips)
-- [13. FAQ](#13-faq)
+- [12. Message Comparison](#12-message-comparison)
+- [13. Batch Operations](#13-batch-operations)
+- [14. Report Export](#14-report-export)
+- [15. Advanced Tips](#15-advanced-tips)
+- [16. FAQ](#16-faq)
 
 ---
 
@@ -457,9 +460,119 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 
 ---
 
-## 12. Advanced Tips
+## 12. Message Comparison
 
-### 12.1 HTTPS Request Handling
+### 12.1 Feature Overview
+
+The message comparison module provides diff comparison capabilities for request/response pairs, supporting comparison of original requests with token-replaced requests and their corresponding responses in privilege testing scenarios. It also supports comparing any two history records for the same request.
+
+### 12.2 Starting a Comparison
+
+- Select one or more records in the history panel, right-click and choose **"Compare Messages"** to open the comparison dialog
+- Select two history records and right-click to directly compare their requests and responses
+- Supports **Tab mode**: Request diff and response diff viewed in separate tabs
+- Supports **Four-pane mode**: Original request, replaced request, original response, replaced response displayed simultaneously
+
+### 12.3 Diff Display
+
+- **Green**: Added content
+- **Red**: Deleted content
+- **Yellow**: Modified content
+- Supports character-level inline diff highlighting, implemented by DiffEngine based on an LCS (Longest Common Subsequence) algorithm variant
+- Uses RSyntaxTextArea for HTTP syntax highlighting
+
+### 12.4 Synchronized Scrolling
+
+- Original and replacement panels are automatically synchronized via SynchronizedScrollPanel
+- Context consistency is maintained when comparing large messages, preventing misalignment
+
+### 12.5 Diff Navigation
+
+- Use DiffNavigator's **Previous Diff** / **Next Diff** buttons for quick navigation
+- Current diff region is automatically highlighted
+- Total diff count and current position displayed at the top
+
+### 12.6 Search
+
+- Use the collapsible SearchBar to search for keywords in diff content
+- Supports plain text search and regular expression search
+- Search results highlighted with navigation between matches
+
+---
+
+## 13. Batch Operations
+
+### 13.1 Feature Overview
+
+Batch operations allow processing multiple history records simultaneously, significantly improving testing efficiency and suitable for handling large volumes of requests.
+
+### 13.2 Multi-selection
+
+- Hold **Ctrl** and click to select non-contiguous entries in the history panel
+- Hold **Shift** and click to select a contiguous range of entries
+- Selected count displayed with visual feedback
+
+### 13.3 Batch Replay
+
+- Select multiple records and right-click to choose **"Batch Replay"**
+- The plugin sequentially resends all selected requests (async concurrent processing, non-blocking UI)
+- Replay results are automatically appended to the history panel
+
+### 13.4 Batch Privilege Testing
+
+- Select multiple records and right-click to choose **"Batch Privilege Test"**
+- Automatically iterates through all configured user sessions for privilege escalation detection
+- Test results are aggregated in the privilege test panel for unified analysis
+
+### 13.5 Batch Delete
+
+- Select multiple records and right-click to choose **"Delete"**
+- One-click cleanup of unwanted history records
+- Delete operations trigger GC queue, automatically cleaning up associated Pool data
+
+---
+
+## 14. Report Export
+
+### 14.1 Feature Overview
+
+The report export module uses the Template Method design pattern to export privilege testing results in multiple formats, facilitating delivery, archiving, and team sharing.
+
+### 14.2 Export Operation
+
+1. After completing tests in the privilege test panel, click the **"Export Report"** button
+2. Select export format: PDF / HTML / Markdown
+3. Choose the file save path
+4. The plugin generates the report
+5. HTML format reports automatically open in the browser after generation
+
+### 14.3 Report Formats
+
+| Format | Description | Implementation |
+|--------|-------------|----------------|
+| PDF | Apache PDFBox 3.0.1 native generation, embedded Chinese fonts, suitable for formal delivery | PdfReportGenerator |
+| HTML | FreeMarker template rendering, visually appealing, view in browser | HtmlReportGenerator |
+| Markdown | FreeMarker template generating plain text reports, suitable for version control management | MarkdownReportGenerator |
+
+### 14.4 Report Content
+
+- **Test Summary**: Test time, target scope, total requests, privilege escalation findings
+- **Session Statistics**: Aggregated test result statistics for each user session
+- **Per-endpoint Details**: Original request/response and replaced request/response details for each endpoint
+- **cURL Commands**: Equivalent cURL commands for each test (generated by CurlBuilder)
+- **Postman Snippets**: Postman code snippets for each test (generated by PostmanSnippetBuilder)
+
+### 14.5 Content Rendering
+
+- Request/response bodies automatically rendered (BodyRenderer)
+- Binary content (images, serialized data, etc.) automatically converted to hex or base64 text display (BinaryContentRenderer)
+- Text content maintains original formatting and syntax highlighting
+
+---
+
+## 15. Advanced Tips
+
+### 15.1 HTTPS Request Handling
 
 The plugin automatically preserves HTTPS protocol information:
 
@@ -467,11 +580,11 @@ The plugin automatically preserves HTTPS protocol information:
 - HTTPS protocol is not lost when resending saved requests
 - Supports port number recognition in the Host header (e.g., :443 → HTTPS)
 
-### 12.2 Request Timeout Settings
+### 15.2 Request Timeout Settings
 
 The request editor provides timeout configuration for customizing request timeout duration.
 
-### 12.3 Cross-session Data Migration
+### 15.3 Cross-session Data Migration
 
 Use the ERM archive format for cross-session data migration:
 
@@ -479,7 +592,7 @@ Use the ERM archive format for cross-session data migration:
 2. Switch sessions or restart Burp Suite
 3. Import ERM archive in the new session
 
-### 12.4 Team Collaboration
+### 15.4 Team Collaboration
 
 - Export ERM archives (with optional encryption) to share with team members
 - Export Postman Collections for sharing with team members who don't use Burp
@@ -488,7 +601,7 @@ Use the ERM archive format for cross-session data migration:
 
 ---
 
-## 13. FAQ
+## 16. FAQ
 
 ### Q: I can't see the "Repeater Manager" tab after loading the plugin?
 

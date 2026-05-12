@@ -14,7 +14,7 @@
 
 Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. Compared to the native Repeater, it provides more powerful features, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, API rule extraction, automated privilege escalation testing, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
-> **Current Version**: v2.2.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
+> **Current Version**: v2.16.2 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
 
 ## Core Features
 
@@ -34,6 +34,9 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Logging System | Multi-channel log output (Burp console/rolling file/UI panel) with level filtering (DEBUG/INFO/SUCCESS/WARN/ERROR) |
 | Proxy Debugging | Support HTTP proxy configuration for request debugging |
 | Layout Switching | Request/Response panel supports horizontal/vertical/request-only/response-only layouts |
+| Message Comparison | String- and byte-level diff comparison for request/response pairs with syntax highlighting, synchronized scrolling, and diff navigation |
+| Report Generation | Export privilege test results as PDF/HTML/Markdown reports with embedded request/response details and cURL/Postman code snippets |
+| Batch Operations | Multi-select support in history panel; batch replay, batch privilege testing, batch delete |
 
 ## Feature Architecture
 
@@ -48,9 +51,12 @@ Repeater Manager
 │   ├── Response Display (syntax highlighting)
 │   └── Layout Switching (horizontal/vertical/request-only/response-only)
 ├── History Tracking
-│   ├── Successful Request Recording
-│   ├── Failed Request Recording
-│   ├── History Replay and Comparison
+│   ├── Successful/Failed Request Recording
+│   ├── History Replay
+│   ├── Message Comparison (New)
+│   │   ├── String/Byte-level diff comparison
+│   │   ├── Diff navigation with synchronized scrolling
+│   │   └── Collapsible search bar
 │   └── Advanced Search (multi-condition filtering)
 ├── API Extraction Engine
 │   ├── Sources: URL_PATH / URL_QUERY / HEADER / BODY
@@ -63,7 +69,11 @@ Repeater Manager
 │   ├── Automated Token Replacement Engine
 │   ├── Judgment Rule Configuration (Status Code/Body/Header/Response Time)
 │   ├── Automated Testing Engine (intercept proxy traffic → replay → judge)
-│   └── Result Display with Color Coding
+│   ├── Result Display with Color Coding
+│   └── Report Generation (New)
+│       ├── PDF Report (Apache PDFBox)
+│       ├── HTML Report (FreeMarker template)
+│       └── Markdown Report (FreeMarker template)
 ├── Data Persistence
 │   ├── SQLite Storage (custom connection pool)
 │   ├── Content Splitting (Pool deduplication architecture)
@@ -250,6 +260,23 @@ src/main/java/
     │       ├── SessionDAO.java         # User session CRUD
     │       ├── JudgmentRuleDAO.java    # Judgment rule CRUD
     │       └── ScopeDAO.java           # Scope CRUD
+    │   ├── report/                      # Report generation subsystem
+    │   │   ├── ReportGenerator.java     # Abstract report generator base
+    │   │   ├── PdfReportGenerator.java  # PDF report (Apache PDFBox)
+    │   │   ├── HtmlReportGenerator.java # HTML report (FreeMarker)
+    │   │   ├── MarkdownReportGenerator.java # Markdown report (FreeMarker)
+    │   │   ├── ReportExporter.java      # Report export dispatcher
+    │   │   ├── ReportData.java          # Report data model
+    │   │   ├── ReportContainerWriter.java # Report container serialization
+    │   │   ├── ReportContainerReader.java # Report container deserialization
+    │   │   ├── BodyRenderer.java        # Body content renderer
+    │   │   ├── BinaryContentRenderer.java # Binary content renderer (hex/base64/image)
+    │   │   ├── CurlBuilder.java         # cURL command builder
+    │   │   ├── PostmanSnippetBuilder.java # Postman code snippet builder
+    │   │   └── FreeMarkerConfig.java    # FreeMarker configuration
+    │   ├── UserSessionYamlIO.java       # User session YAML import/export
+    │   ├── TokenLocationYamlIO.java     # Token location YAML import/export
+    │   └── GlobalTokenLocationManager.java # Global token location manager
     ├── service/
     │   ├── AutoSaveService.java        # Auto-save service
     │   ├── GarbageCollectorService.java # Garbage collection service (Pool zero-ref cleanup)
@@ -280,24 +307,36 @@ src/main/java/
     │   │   ├── ApiRuleEditDialog.java  # Rule editor dialog
     │   │   ├── ApiRuleTableModel.java  # Rule table model
     │   │   └── ApiReExtractWorker.java # Background rule re-extraction worker
-    │   ├── history/
-    │   │   ├── HistoryPanel.java       # History panel (search/filter)
-    │   │   ├── HistoryContextMenu.java # History context menu
+    │   ├── history/                    # History UI + Message comparison
+    │   │   ├── HistoryPanel.java       # History panel (search/filter/multi-select)
+    │   │   ├── HistoryContextMenu.java # History context menu (batch ops, comparison)
     │   │   ├── HistoryTableRenderer.java # History table cell renderer
     │   │   ├── AdvancedSearchDialog.java # Advanced search dialog
-    │   │   └── ColumnControlDialog.java  # Column control dialog
+    │   │   ├── ColumnControlDialog.java  # Column control dialog
+    │   │   ├── ComparisonDialog.java   # Message comparison dialog (tab/four-pane layout)
+    │   │   ├── DiffEngine.java         # Diff algorithm engine (LCS-based, char-level inline diff)
+    │   │   ├── DiffPane.java           # Self-contained diff display panel (RSyntaxTextArea)
+    │   │   ├── DiffNavigator.java      # Diff region navigator (prev/next change)
+    │   │   ├── SearchBar.java          # Collapsible search bar for diff content
+    │   │   └── SynchronizedScrollPanel.java # Synchronized scrolling for side-by-side comparison
     │   ├── layout/
     │   │   └── LayoutManager.java      # Layout manager
-    │   └── privilege/
+    │   └── privilege/                  # Privilege test UI
     │       ├── PrivilegeTestPanel.java # Privilege test main panel
+    │       ├── SessionConfigTab.java   # User session config tab
+    │       ├── JudgmentRuleConfigTab.java # Judgment rule config tab
+    │       ├── ScopeConfigTab.java     # Scope config tab
     │       ├── UserSessionTableModel.java
     │       ├── JudgmentRuleTableModel.java
+    │       ├── TokenLocationTableModel.java
     │       ├── UserSessionEditDialog.java
     │       ├── JudgmentRuleEditDialog.java
     │       ├── TokenLocationEditDialog.java
-    │       └── ScopeConfigTab.java     # Scope config tab
+    │       └── TokenValueCellRenderer.java # Token value cell renderer
+    ├── RequestDispatchHandler.java     # Central request dispatch handler
     └── utils/
-        └── TextLineNumber.java         # Text line number utility
+        ├── TextLineNumber.java         # Text line number utility
+        └── FileChooserHelper.java      # Unified file chooser utility
 ```
 
 ## Dependencies
@@ -309,9 +348,12 @@ src/main/java/
 | SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` | SQLite JDBC driver |
 | HikariCP | 5.0.1 | `com.zaxxer:HikariCP` | Connection pool (declared, custom pool used instead) |
 | Gson | 2.10.1 | `com.google.code.gson:gson` | JSON serialization/deserialization |
-| SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML serialization (API extraction rules, judgment rules) |
+| SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML serialization (API extraction, judgment rules, user sessions, token locations) |
 | Commons IO | 2.11.0 | `commons-io:commons-io` | Apache file I/O utilities |
 | Commons Lang3 | 3.12.0 | `org.apache.commons:commons-lang3` | Apache common utilities |
+| Apache PDFBox | 3.0.1 | `org.apache.pdfbox:pdfbox` | Native PDF report generation with embedded Chinese fonts |
+| FreeMarker | 2.3.33 | `org.freemarker:freemarker` | Template engine for HTML/Markdown report rendering |
+| CommonMark | 0.22.0 | `org.commonmark:commonmark` | Markdown-to-HTML rendering for usage tutorial |
 
 ## Build
 
@@ -327,8 +369,8 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/repeater-manager-2.2.0.jar`
-- Timestamped release version: `target/releases/repeater-manager-2.2.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.16.2.jar`
+- Timestamped release version: `target/releases/repeater-manager-2.16.2-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 
@@ -381,11 +423,13 @@ The database uses a Pool architecture for content deduplication via SHA-256 hash
 
 ## Roadmap
 
+- [x] Message Comparison (added v2.15.0, enhanced v2.16.0)
+- [x] Report Generation (added v2.10.0, PDF/HTML/Markdown)
+- [x] Batch Operations (added v2.13.0)
 - [ ] Add request sequence functionality for multi-step request workflows
 - [ ] Add request templates for quickly creating similar requests
 - [ ] Support more data formats for import/export
 - [ ] Add cloud sync for team rule sharing
-- [ ] Integrate with external vulnerability scanner result comparison
 
 ## Contributing
 
