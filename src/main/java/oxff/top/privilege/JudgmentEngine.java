@@ -51,14 +51,16 @@ public class JudgmentEngine {
      * @param statusCode        响应状态码
      * @param responseHeaders   响应头字符串
      * @param responseBody      响应体字节数组
-     * @param baselineResponse  基准用户响应字节数组（用于相似度计算）
+     * @param baselineResponse  基准用户响应字节数组（用于相似度计算和LENGTH_DIFF）
      * @param baselineStatusCode 基准用户状态码
      * @param similarityThreshold 相似度阈值
+     * @param responseTimeMs    响应时间（毫秒）
      * @return 判决结果
      */
     public static JudgmentOutcome judge(int statusCode, String responseHeaders,
                                          byte[] responseBody, byte[] baselineResponse,
-                                         int baselineStatusCode, double similarityThreshold) {
+                                         int baselineStatusCode, double similarityThreshold,
+                                         long responseTimeMs) {
         JudgmentRuleManager ruleManager = JudgmentRuleManager.getInstance();
         List<JudgmentRule> rules = ruleManager.getEnabledRules();
 
@@ -73,7 +75,7 @@ public class JudgmentEngine {
         // 有规则时：按优先级匹配
         if (!rules.isEmpty()) {
             return judgeWithRules(rules, statusCode, responseHeaders, responseBody,
-                    similarity, similarityThreshold);
+                    baselineResponse, similarity, similarityThreshold, responseTimeMs);
         }
 
         // 无规则时：回退到默认判决
@@ -86,15 +88,18 @@ public class JudgmentEngine {
      */
     private static JudgmentOutcome judgeWithRules(List<JudgmentRule> rules, int statusCode,
                                                    String responseHeaders, byte[] responseBody,
-                                                   double similarity, double similarityThreshold) {
+                                                   byte[] baselineResponse,
+                                                   double similarity, double similarityThreshold,
+                                                   long responseTimeMs) {
         String bodyStr = responseBody != null ? new String(responseBody, StandardCharsets.UTF_8) : "";
 
         for (JudgmentRule rule : rules) {
             if (!rule.isEnabled() || !rule.isValid()) continue;
 
             String targetValue = extractTargetValue(rule.getTarget(), statusCode,
-                    responseHeaders, bodyStr);
-            boolean matched = matchValue(rule.getMethod(), rule.getExpression(), targetValue, statusCode);
+                    responseHeaders, bodyStr, responseTimeMs);
+            boolean matched = matchValue(rule.getMethod(), rule.getExpression(),
+                    targetValue, statusCode, responseBody, baselineResponse);
 
             if (matched) {
                 // 规则匹配成功 → 表示越权
@@ -149,19 +154,29 @@ public class JudgmentEngine {
      * 提取规则目标值
      */
     private static String extractTargetValue(RuleTarget target, int statusCode,
-                                              String responseHeaders, String responseBody) {
+                                              String responseHeaders, String responseBody,
+                                              long responseTimeMs) {
         return switch (target) {
             case STATUS_CODE -> String.valueOf(statusCode);
             case RESPONSE_HEADER -> responseHeaders != null ? responseHeaders : "";
             case RESPONSE_BODY -> responseBody != null ? responseBody : "";
+            case RESPONSE_TIME -> String.valueOf(responseTimeMs);
         };
     }
 
     /**
      * 根据匹配方法判断目标值是否匹配表达式
+     *
+     * @param method        匹配方法
+     * @param expression    匹配表达式
+     * @param targetValue   目标值（字符串形式）
+     * @param statusCode    响应状态码
+     * @param responseBody  当前响应体字节数组（LENGTH_DIFF 使用）
+     * @param baselineResponse 基准响应体字节数组（LENGTH_DIFF 使用）
      */
     private static boolean matchValue(RuleMethod method, String expression,
-                                       String targetValue, int statusCode) {
+                                       String targetValue, int statusCode,
+                                       byte[] responseBody, byte[] baselineResponse) {
         if (expression == null || expression.isEmpty()) return false;
 
         try {
@@ -176,7 +191,9 @@ public class JudgmentEngine {
                     }
                 }
                 case CONTAINS -> targetValue.contains(expression);
+                case NOT_CONTAINS -> !targetValue.contains(expression);
                 case EQUALS -> targetValue.equals(expression);
+                case NOT_EQUALS -> !targetValue.equals(expression);
                 case GREATER_THAN -> {
                     try {
                         yield Double.parseDouble(targetValue.trim()) > Double.parseDouble(expression.trim());
@@ -194,6 +211,16 @@ public class JudgmentEngine {
                 case NUMERIC_EQUALS -> {
                     try {
                         yield Double.parseDouble(targetValue.trim()) == Double.parseDouble(expression.trim());
+                    } catch (NumberFormatException e) {
+                        yield false;
+                    }
+                }
+                case LENGTH_DIFF -> {
+                    try {
+                        int currentLen = responseBody != null ? responseBody.length : 0;
+                        int baselineLen = baselineResponse != null ? baselineResponse.length : 0;
+                        long diff = Math.abs((long) currentLen - (long) baselineLen);
+                        yield diff > Double.parseDouble(expression.trim());
                     } catch (NumberFormatException e) {
                         yield false;
                     }

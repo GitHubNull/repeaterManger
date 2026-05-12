@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.3] - 2026-05-12
+
+### Added
+- TokenLocationType 新增 URL_PARAM 枚举值，支持 URL 查询参数中替换 Token
+- RuleTarget 新增 RESPONSE_TIME 枚举值，支持基于响应时间的判断规则
+- RuleMethod 新增 NOT_CONTAINS、NOT_EQUALS、LENGTH_DIFF 枚举值，扩展判断方法
+- TokenReplacementEngine 增强 URL 查询参数替换能力，支持增删改查 URL 编码键值对
+- JudgmentRuleEditDialog LENGTH_DIFF 方法自动联动目标为 RESPONSE_BODY
+
+### Changed
+- JudgmentEngine 适配新增判断方法（NOT_CONTAINS/NOT_EQUALS/LENGTH_DIFF/RESPONSE_TIME）
+- 同步更新 CLAUDE.md/README.md/usage_detailed_zh.md 文档至最新枚举值
+
 ## [2.16.2] - 2026-05-12
 
 ### Fixed

@@ -15,7 +15,13 @@ public enum RuleMethod {
     /** 数值比较（小于） */
     LESS_THAN("小于"),
     /** 数值比较（等于） */
-    NUMERIC_EQUALS("数值等于");
+    NUMERIC_EQUALS("数值等于"),
+    /** 不包含匹配（CONTAINS 的反向） */
+    NOT_CONTAINS("不包含"),
+    /** 不等于匹配（EQUALS 的反向） */
+    NOT_EQUALS("不等于"),
+    /** 长度差比较（当前响应体与基准响应体的字节长度差） */
+    LENGTH_DIFF("长度差");
 
     private final String displayName;
 

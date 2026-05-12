@@ -157,7 +157,7 @@ public class AutoTestEngine {
                                 double threshold = sessionManager.getSimilarityThreshold();
                                 JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
                                         holder.statusCode, responseHeaders, holder.response,
-                                        baselineResponse, baselineStatusCode, threshold);
+                                        baselineResponse, baselineStatusCode, threshold, holder.durationMs);
                                 judgment = outcome.result.name();
                                 similarity = outcome.similarity;
                                 judgmentColor = outcome.color;

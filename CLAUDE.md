@@ -177,7 +177,7 @@ src/main/java/
     │   │   ├── JudgmentRule.java       # Escalation detection rule
     │   │   ├── JudgmentResult.java     # Test result
     │   │   ├── TokenLocation.java      # Token location in request
-    │   │   ├── TokenLocationType.java  # Enum: HEADER, COOKIE, BODY, URL_PARAM
+    │   │   ├── TokenLocationType.java  # Enum: HEADER, JSON_BODY, XML_BODY, FORM_FIELD, MULTIPART_FIELD, URL_PARAM
     │   │   ├── RuleTarget.java         # Enum: STATUS_CODE, RESPONSE_BODY, etc.
     │   │   ├── RuleMethod.java         # Enum: CONTAINS, NOT_CONTAINS, REGEX, LENGTH_DIFF
     │   │   └── ScopeEntry.java         # Scope configuration
@@ -267,9 +267,9 @@ src/main/java/
 src/main/resources/
 └── templates/
     └── report/
-        ├── report.html.ftl            # HTML report FreeMarker template
-        ├── report.md.ftl              # Markdown report FreeMarker template
-        └── report-styles.css          # Report stylesheet
+        ├── html_report.ftl            # HTML report FreeMarker template
+        ├── md_report.ftl              # Markdown report FreeMarker template
+        └── html_css.ftl               # Report CSS template
 
 ## Montoya SDK API Mapping
 

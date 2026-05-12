@@ -36,7 +36,7 @@ import java.util.List;
  * 令牌替换引擎 - 无状态工具类
  * 根据配置的令牌位置和用户会话值，替换HTTP请求中的会话令牌
  *
- * 支持4种位置类型：HEADER / JSON_BODY / XML_BODY / FORM_FIELD
+ * 支持6种位置类型：HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM
  * 替换后自动修正Content-Length
  */
 public class TokenReplacementEngine {
@@ -78,15 +78,32 @@ public class TokenReplacementEngine {
         // 提取Content-Type
         String contentType = extractContentType(headerStr);
 
-        // 分类处理：header类型的和body类型的分开
+        // 分类处理：URL参数、header类型和body类型的分开
+        List<TokenLocation> urlLocations = new ArrayList<>();
         List<TokenLocation> headerLocations = new ArrayList<>();
         List<TokenLocation> bodyLocations = new ArrayList<>();
 
         for (TokenLocation loc : locations) {
             if (loc.getType() == TokenLocationType.HEADER) {
                 headerLocations.add(loc);
+            } else if (loc.getType() == TokenLocationType.URL_PARAM) {
+                urlLocations.add(loc);
             } else {
                 bodyLocations.add(loc);
+            }
+        }
+
+        // 替换URL参数中的令牌（在header替换之前，因为URL参数在请求行中）
+        for (TokenLocation loc : urlLocations) {
+            String value = session.getTokenValue(loc.getId());
+            if (value == null) {
+                continue;
+            }
+            value = sanitizeNewlines(value, loc.getExpression());
+            try {
+                headerStr = replaceUrlParam(headerStr, loc.getExpression(), value);
+            } catch (Exception e) {
+                BurpExtender.printError("[!] URL参数令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
             }
         }
 
@@ -374,35 +391,7 @@ public class TokenReplacementEngine {
      * 如果value为空字符串，则删除该字段
      */
     private static String replaceFormField(String bodyStr, String fieldName, String value) {
-        String[] pairs = bodyStr.split("&");
-        List<String> resultPairs = new ArrayList<>();
-        boolean replaced = false;
-
-        for (String pair : pairs) {
-            int eqIdx = pair.indexOf('=');
-            if (eqIdx > 0) {
-                String key = URLDecoder.decode(pair.substring(0, eqIdx), StandardCharsets.UTF_8);
-                if (key.equals(fieldName)) {
-                    replaced = true;
-                    if (!value.isEmpty()) {
-                        resultPairs.add(URLEncoder.encode(fieldName, StandardCharsets.UTF_8) + "=" +
-                                URLEncoder.encode(value, StandardCharsets.UTF_8));
-                    }
-                    // value为空则删除该字段
-                } else {
-                    resultPairs.add(pair);
-                }
-            } else {
-                resultPairs.add(pair);
-            }
-        }
-
-        if (!replaced && !value.isEmpty()) {
-            resultPairs.add(URLEncoder.encode(fieldName, StandardCharsets.UTF_8) + "=" +
-                    URLEncoder.encode(value, StandardCharsets.UTF_8));
-        }
-
-        return String.join("&", resultPairs);
+        return replaceUrlEncodedPairs(bodyStr, fieldName, value);
     }
 
     // ==================== Multipart Field 替换 ====================
@@ -568,6 +557,122 @@ public class TokenReplacementEngine {
             }
         }
         return false;
+    }
+
+    // ==================== URL Parameter 替换 ====================
+
+    /**
+     * 替换请求行中URL查询参数的值
+     * 请求行格式如：GET /path?param1=val1&param2=val2 HTTP/1.1
+     * 如果参数不存在，则追加到查询字符串末尾
+     * 如果value为空字符串，则从查询字符串中删除该参数
+     *
+     * @param headerStr  包含请求行的完整header字符串
+     * @param paramName  要替换的查询参数名
+     * @param value      新值
+     * @return 修改后的header字符串
+     */
+    private static String replaceUrlParam(String headerStr, String paramName, String value) {
+        // 找到请求行（第一行，以\r\n结尾）
+        int firstCRLF = headerStr.indexOf("\r\n");
+        if (firstCRLF < 0) {
+            // 没有完整的请求行，无法替换URL参数
+            BurpExtender.printError("[!] 无法解析请求行，URL参数替换失败");
+            return headerStr;
+        }
+
+        String requestLine = headerStr.substring(0, firstCRLF);
+        String restHeaders = headerStr.substring(firstCRLF);
+
+        // 解析请求行：METHOD PATH HTTP_VERSION
+        String[] parts = requestLine.split("\\s+");
+        if (parts.length < 2) {
+            BurpExtender.printError("[!] 请求行格式异常，URL参数替换失败: " + requestLine);
+            return headerStr;
+        }
+
+        String method = parts[0];
+        String originalPath = parts[1];
+        String httpVersion = parts.length >= 3 ? parts[2] : "HTTP/1.1";
+
+        // 分离路径和查询字符串
+        int queryIdx = originalPath.indexOf('?');
+        String pathPart;
+        String queryString;
+
+        if (queryIdx >= 0) {
+            pathPart = originalPath.substring(0, queryIdx);
+            queryString = originalPath.substring(queryIdx + 1);
+        } else {
+            pathPart = originalPath;
+            queryString = "";
+        }
+
+        // 处理查询参数
+        String newQueryString = replaceUrlEncodedPairs(queryString, paramName, value);
+
+        // 重建路径
+        String newPath;
+        if (newQueryString.isEmpty()) {
+            newPath = pathPart;
+        } else {
+            newPath = pathPart + "?" + newQueryString;
+        }
+
+        // 重建请求行
+        String newRequestLine = method + " " + newPath + " " + httpVersion;
+
+        return newRequestLine + restHeaders;
+    }
+
+    /**
+     * 在URL编码的键值对字符串中替换/添加/删除指定参数
+     * 适用于 URL 查询参数和 x-www-form-urlencoded 表单字段
+     *
+     * @param pairsStr  原始键值对字符串（如 "key1=val1&key2=val2"）
+     * @param keyName   要替换的键名
+     * @param value     新值（空字符串表示删除该键）
+     * @return 修改后的键值对字符串
+     */
+    private static String replaceUrlEncodedPairs(String pairsStr, String keyName, String value) {
+        if (pairsStr == null || pairsStr.isEmpty()) {
+            if (!value.isEmpty()) {
+                return URLEncoder.encode(keyName, StandardCharsets.UTF_8) + "=" +
+                        URLEncoder.encode(value, StandardCharsets.UTF_8);
+            }
+            return "";
+        }
+
+        String[] pairs = pairsStr.split("&");
+        List<String> resultPairs = new ArrayList<>();
+        boolean replaced = false;
+
+        for (String pair : pairs) {
+            int eqIdx = pair.indexOf('=');
+            if (eqIdx > 0) {
+                String key = URLDecoder.decode(pair.substring(0, eqIdx), StandardCharsets.UTF_8);
+                if (key.equals(keyName)) {
+                    replaced = true;
+                    if (!value.isEmpty()) {
+                        resultPairs.add(URLEncoder.encode(keyName, StandardCharsets.UTF_8) + "=" +
+                                URLEncoder.encode(value, StandardCharsets.UTF_8));
+                    }
+                    // value为空则删除该键
+                } else {
+                    resultPairs.add(pair);
+                }
+            } else {
+                // 无等号或空参数名的项（罕见），直接保留
+                resultPairs.add(pair);
+            }
+        }
+
+        if (!replaced && !value.isEmpty()) {
+            resultPairs.add(URLEncoder.encode(keyName, StandardCharsets.UTF_8) + "=" +
+                    URLEncoder.encode(value, StandardCharsets.UTF_8));
+        }
+
+        return String.join("&", resultPairs);
     }
 
     // ==================== 工具方法 ====================

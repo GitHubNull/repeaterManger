@@ -126,6 +126,27 @@ public class RequestManager {
         // 创建Future任务（单次请求，不重试，避免耗时翻倍）
         Future<byte[]> future = executor.submit(() -> {
             try {
+                // 检查是否启用代理模式（同步路径也需要支持代理）
+                ProxyConfig proxyConfig = ProxyConfig.getInstance();
+                if (proxyConfig.isProxyEnabled()) {
+                    BurpExtender.printOutput(
+                        String.format("[D] 通过代理 %s:%d 发送请求",
+                            proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
+                    byte[] proxyResponse = makeHttpRequestWithProxy(requestBytes, service, timeoutSeconds);
+                    long responseTime = System.currentTimeMillis() - startTime;
+                    if (proxyResponse != null) {
+                        HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
+                        recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
+                            httpRequest, httpResponse, responseTime, service);
+                        return proxyResponse;
+                    } else {
+                        BurpExtender.printError("[!] 代理请求返回空响应");
+                        recordingService.recordFailure(requestId, requestBytes, httpRequest,
+                            "代理请求返回空响应", responseTime, service);
+                        return null;
+                    }
+                }
+
                 // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正）
                 byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
 

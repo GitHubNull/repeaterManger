@@ -66,7 +66,7 @@ Repeater Manager
 │   └── 项目规则（SQLite 独立存储）
 ├── 越权测试模块
 │   ├── 多用户会话管理
-│   ├── Token 位置配置（Header/Cookie/Body/URL参数）
+│   ├── Token 位置配置（Header/JSON Body/XML Body/Form Field/Multipart Field/URL参数）
 │   ├── Token 自动替换引擎
 │   ├── 判断规则配置（状态码/响应体/响应头/响应时间）
 │   ├── 自动化检测引擎（拦截代理流量 → 重放 → 判断）
@@ -255,9 +255,9 @@ src/main/java/
     │   │   ├── JudgmentRule.java       # 判断规则
     │   │   ├── JudgmentResult.java     # 测试结果
     │   │   ├── TokenLocation.java      # Token 位置
-    │   │   ├── TokenLocationType.java  # 枚举: HEADER/COOKIE/BODY/URL_PARAM
-    │   │   ├── RuleTarget.java         # 枚举: STATUS_CODE/RESPONSE_BODY/等
-    │   │   ├── RuleMethod.java         # 枚举: CONTAINS/NOT_CONTAINS/REGEX/LENGTH_DIFF
+    │   │   ├── TokenLocationType.java  # 枚举: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
+    │   │   ├── RuleTarget.java         # 枚举: STATUS_CODE/RESPONSE_HEADER/RESPONSE_BODY/RESPONSE_TIME
+    │   │   ├── RuleMethod.java         # 枚举: REGEX/CONTAINS/NOT_CONTAINS/EQUALS/NOT_EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/LENGTH_DIFF
     │   │   └── ScopeEntry.java         # 范围配置
     │   └── dao/
     │       ├── SessionDAO.java         # 用户会话 CRUD

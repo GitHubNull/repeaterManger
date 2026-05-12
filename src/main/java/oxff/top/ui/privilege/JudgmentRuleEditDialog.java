@@ -92,6 +92,17 @@ public class JudgmentRuleEditDialog extends JDialog {
                 return this;
             }
         });
+        methodCombo.addActionListener(e -> {
+            // LENGTH_DIFF 仅适用于 RESPONSE_BODY，自动联动目标
+            if (methodCombo.getSelectedItem() == RuleMethod.LENGTH_DIFF) {
+                if (targetCombo.getSelectedItem() != RuleTarget.RESPONSE_BODY) {
+                    targetCombo.setSelectedItem(RuleTarget.RESPONSE_BODY);
+                    JOptionPane.showMessageDialog(this,
+                            "LENGTH_DIFF 仅适用于响应体目标，已自动调整",
+                            "提示", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+        });
         mainPanel.add(methodCombo, gbc);
 
         row++;
@@ -229,6 +240,11 @@ public class JudgmentRuleEditDialog extends JDialog {
         if (expr.isEmpty()) {
             JOptionPane.showMessageDialog(this, "表达式不能为空", "验证错误", JOptionPane.ERROR_MESSAGE);
             return;
+        }
+        // LENGTH_DIFF 仅适用于 RESPONSE_BODY，防御性校验
+        if (methodCombo.getSelectedItem() == RuleMethod.LENGTH_DIFF
+                && targetCombo.getSelectedItem() != RuleTarget.RESPONSE_BODY) {
+            targetCombo.setSelectedItem(RuleTarget.RESPONSE_BODY);
         }
         confirmed = true;
         dispose();

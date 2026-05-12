@@ -14,7 +14,9 @@ public enum TokenLocationType {
     /** 表单字段中，如 session_id */
     FORM_FIELD("Form Field"),
     /** Multipart表单字段中，如 file_upload中的session_id */
-    MULTIPART_FIELD("Multipart Field");
+    MULTIPART_FIELD("Multipart Field"),
+    /** URL查询参数中，如 ?token=xxx */
+    URL_PARAM("URL Parameter");
 
     private final String displayName;
 

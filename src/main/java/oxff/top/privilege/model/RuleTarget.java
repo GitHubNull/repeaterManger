@@ -9,7 +9,9 @@ public enum RuleTarget {
     /** 响应头 */
     RESPONSE_HEADER("响应头"),
     /** 响应体 */
-    RESPONSE_BODY("响应体");
+    RESPONSE_BODY("响应体"),
+    /** 响应时间（毫秒） */
+    RESPONSE_TIME("响应时间");
 
     private final String displayName;
 
