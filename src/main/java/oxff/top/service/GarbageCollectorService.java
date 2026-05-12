@@ -291,15 +291,14 @@ public class GarbageCollectorService {
     private void deleteProcessedEntries(Connection conn, List<GcEntry> batch) throws SQLException {
         if (batch.isEmpty()) return;
 
-        // 使用 ID 范围删除
-        int minId = batch.get(0).id;
-        int maxId = batch.get(batch.size() - 1).id;
-
-        String sql = "DELETE FROM gc_queue WHERE id BETWEEN ? AND ?";
+        // 逐条按ID删除，避免 ID 范围删除在并发写入时误删尚未处理的新条目
+        String sql = "DELETE FROM gc_queue WHERE id = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, minId);
-            pstmt.setInt(2, maxId);
-            pstmt.executeUpdate();
+            for (GcEntry entry : batch) {
+                pstmt.setInt(1, entry.id);
+                pstmt.addBatch();
+            }
+            pstmt.executeBatch();
         }
     }
 

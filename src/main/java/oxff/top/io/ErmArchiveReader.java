@@ -654,13 +654,8 @@ public class ErmArchiveReader {
 
     private void refreshUIAfterImport() {
         try {
-            java.lang.reflect.Field repeaterUIField = burp.BurpExtender.class.getDeclaredField("repeaterUI");
-            repeaterUIField.setAccessible(true);
-            Object repeaterUIObj = repeaterUIField.get(null);
-            if (repeaterUIObj != null && repeaterUIObj instanceof oxff.top.RepeaterManagerUI) {
-                ((oxff.top.RepeaterManagerUI) repeaterUIObj).refreshAllData();
-                BurpExtender.printOutput("[+] 界面数据刷新成功");
-            }
+            burp.BurpExtender.refreshUIData();
+            BurpExtender.printOutput("[+] 界面数据刷新成功");
         } catch (Exception e) {
             BurpExtender.printError("[!] 刷新界面数据时出错: " + e.getMessage());
         }

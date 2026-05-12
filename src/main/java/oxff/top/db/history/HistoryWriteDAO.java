@@ -37,11 +37,9 @@ public class HistoryWriteDAO {
     public int saveHistory(RequestResponseRecord record) {
         Connection conn = null;
         try {
-            if (!dbManager.isConnectionValid()) {
-                BurpExtender.printError("[!] 保存历史记录失败: 数据库连接无效");
-                return -1;
-            }
-
+            // 直接获取连接，跳过 isConnectionValid() 检查
+            // 原因：isConnectionValid() 额外消耗一个连接池连接（池大小仅5），
+            // 高并发下容易导致连接池耗尽；SQLite 本地文件连接几乎不会失效
             conn = dbManager.getConnection();
             conn.setAutoCommit(false);
 

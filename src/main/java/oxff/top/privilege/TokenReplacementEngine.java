@@ -239,6 +239,7 @@ public class TokenReplacementEngine {
 
     /**
      * 在JSON结构中按路径设置值
+     * 保留原始值类型：如果原始值是数字或布尔值，替换值会自动转换类型
      */
     private static void setJsonValueAtPath(JsonElement root, String path, String value) {
         String[] segments = splitJsonPath(path);
@@ -261,14 +262,55 @@ public class TokenReplacementEngine {
                 JsonArray array = current.getAsJsonArray();
                 int idx = Integer.parseInt(lastSegment.substring(1, lastSegment.length() - 1));
                 if (idx >= 0 && idx < array.size()) {
-                    array.set(idx, new JsonPrimitive(value));
+                    JsonElement original = array.get(idx);
+                    array.set(idx, coerceJsonValue(original, value));
                 }
             }
         } else {
             if (current.isJsonObject()) {
-                current.getAsJsonObject().addProperty(lastSegment, value);
+                JsonObject obj = current.getAsJsonObject();
+                JsonElement original = obj.has(lastSegment) ? obj.get(lastSegment) : null;
+                obj.add(lastSegment, coerceJsonValue(original, value));
             }
         }
+    }
+
+    /**
+     * 根据原始JSON值类型，将替换字符串转换为对应类型的JsonElement
+     * 如果原始值为数字/布尔值，则尝试将替换值转换为相同类型；
+     * 如果无法转换，回退为字符串类型
+     */
+    private static JsonElement coerceJsonValue(JsonElement original, String value) {
+        if (original != null && original.isJsonPrimitive()) {
+            JsonPrimitive prim = original.getAsJsonPrimitive();
+            if (prim.isBoolean()) {
+                // 尝试解析为布尔值
+                if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
+                    return new JsonPrimitive(Boolean.parseBoolean(value));
+                }
+                // 无法转换为布尔值，保持字符串
+                return new JsonPrimitive(value);
+            } else if (prim.isNumber()) {
+                // 尝试解析为数字
+                try {
+                    if (value.contains(".") || value.contains("e") || value.contains("E")) {
+                        return new JsonPrimitive(Double.parseDouble(value));
+                    } else {
+                        long longVal = Long.parseLong(value);
+                        // 如果在 int 范围内，用 int 避免不必要的小数点
+                        if (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE) {
+                            return new JsonPrimitive((int) longVal);
+                        }
+                        return new JsonPrimitive(longVal);
+                    }
+                } catch (NumberFormatException e) {
+                    // 无法转换为数字，保持字符串
+                    return new JsonPrimitive(value);
+                }
+            }
+        }
+        // 默认：原始值为字符串或无原始值，直接使用字符串
+        return new JsonPrimitive(value);
     }
 
     /**

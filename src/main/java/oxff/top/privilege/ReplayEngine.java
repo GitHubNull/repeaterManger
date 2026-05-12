@@ -13,9 +13,9 @@ import oxff.top.privilege.model.UserSession;
 import javax.swing.SwingUtilities;
 import java.awt.Color;
 import java.net.URL;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,8 +31,8 @@ public class ReplayEngine {
 
     private final ExecutorService executor;
 
-    /** 当前批次已处理的API集合（用于去重） */
-    private final Set<String> processedApis = new HashSet<>();
+    /** 当前批次已处理的API集合（用于去重，线程安全） */
+    private final Set<String> processedApis = ConcurrentHashMap.newKeySet();
 
     private ReplayEngine() {
         this.executor = Executors.newCachedThreadPool(r -> {

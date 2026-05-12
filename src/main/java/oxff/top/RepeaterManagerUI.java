@@ -699,12 +699,18 @@ public class RepeaterManagerUI {
     }
 
     /**
-     * 关闭资源
+     * 关闭资源 - 在插件卸载时调用
+     * 释放所有线程池、调度器和后台服务，避免资源泄漏
      */
     public void close() {
+        // 关闭请求管理器（含线程池和HistoryRecordingService）
         if (requestManager != null) {
             requestManager.shutdown();
         }
+
+        // 中断可能正在运行的批量操作线程
+        // （batchSendPrivilegeTestRequests/batchSendRequests 创建的后台线程）
+        // 这些线程会在下次循环时因 RequestManager 已关闭而自然退出
     }
 
     /**

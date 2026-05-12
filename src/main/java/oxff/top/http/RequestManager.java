@@ -579,12 +579,13 @@ public class RequestManager {
             }
 
             if (is != null) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    baos.write(buffer, 0, bytesRead);
+                try (InputStream inputStream = is) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        baos.write(buffer, 0, bytesRead);
+                    }
                 }
-                is.close();
             }
 
             byte[] response = baos.toByteArray();

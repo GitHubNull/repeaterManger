@@ -89,7 +89,21 @@ public class BurpExtender implements BurpExtension {
 
             // 注册扩展卸载监听器
             api.extension().registerUnloadingHandler(() -> {
-                logManager.info("[*] 插件正在卸载，关闭日志系统...");
+                logManager.info("[*] 插件正在卸载，关闭资源...");
+
+                // 1. 关闭UI层资源（RequestManager线程池、HistoryRecordingService）
+                if (repeaterUI != null) {
+                    repeaterUI.close();
+                }
+
+                // 2. 关闭数据库连接池和GC服务
+                try {
+                    oxff.top.db.DatabaseManager.getInstance().closeConnections();
+                } catch (Exception e) {
+                    logManager.printError("[!] 关闭数据库连接时异常: " + e.getMessage());
+                }
+
+                // 3. 关闭日志系统（最后关闭，确保其他组件的关闭日志可被记录）
                 logManager.shutdown();
             });
 
@@ -301,5 +315,15 @@ public class BurpExtender implements BurpExtension {
      */
     public static LogManager getLogManager() {
         return logManager;
+    }
+
+    /**
+     * 刷新UI数据 - 供外部模块（如ErmArchiveReader）在导入数据后安全调用
+     * 避免通过反射访问私有字段
+     */
+    public static void refreshUIData() {
+        if (repeaterUI != null) {
+            SwingUtilities.invokeLater(() -> repeaterUI.refreshAllData());
+        }
     }
 }

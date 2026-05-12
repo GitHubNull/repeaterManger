@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.2] - 2026-05-12
+
+### Fixed
+- 修复插件卸载时资源未完全释放（数据库连接池、GC服务、RequestManager线程池、HistoryRecordingService）
+- 修复 GC 服务批量删除使用 ID 范围导致并发场景下误删未处理条目，改为逐条按 ID 删除
+- 修复 RequestDispatchHandler 核心状态字段（currentRequestId/currentHttpService/privilegeTestMode）缺少 volatile 导致跨线程可见性问题
+- 修复 RequestDispatchHandler 中 requestHistoryMap/httpServiceMap 使用 HashMap 导致并发访问不安全，改为 ConcurrentHashMap
+- 修复 ReplayEngine.processedApis 使用 HashSet 非线程安全，改为 ConcurrentHashMap.newKeySet()
+- 修复 HistoryWriteDAO.saveHistory() 冗余 isConnectionValid() 检查浪费连接池资源
+- 修复 TokenReplacementEngine JSON 替换丢失原始值类型（数字/布尔值被转为字符串）
+- 修复 ErmArchiveReader 通过反射访问 BurpExtender 私有字段，改为调用公开静态方法 refreshUIData()
+- 修复 RequestManager 代理模式响应流未使用 try-with-resources 导致异常时流泄漏
+
 ## [2.16.1] - 2026-05-12
 
 ### Fixed

@@ -23,9 +23,9 @@ import java.awt.*;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -45,12 +45,12 @@ public class RequestDispatchHandler {
     // 功能组件
     private final RequestManager requestManager;
 
-    // 当前请求状态
-    private int currentRequestId = -1;
-    private HttpService currentHttpService = null;
+    // 当前请求状态（volatile: 后台线程写/EDT线程读，保证可见性）
+    private volatile int currentRequestId = -1;
+    private volatile HttpService currentHttpService = null;
 
-    // 权限测试模式状态
-    private boolean privilegeTestMode = false;
+    // 权限测试模式状态（volatile: 多线程读写，保证可见性）
+    private volatile boolean privilegeTestMode = false;
 
     // 模式变更监听器列表
     private final List<ModeChangeListener> modeListeners = new ArrayList<>();
@@ -62,12 +62,13 @@ public class RequestDispatchHandler {
         void onModeChanged(boolean privilegeTestMode);
     }
 
-    // 请求历史记录映射: 请求ID -> 历史记录列表
-    private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new HashMap<>();
+    // 请求历史记录映射: 请求ID -> 历史记录列表（ConcurrentHashMap: 多线程并发读写安全）
+    private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new ConcurrentHashMap<>();
 
     // 请求ID -> HttpService映射: 保存每个请求的原始HttpService（含正确的协议、主机、端口）
     // 避免从数据库/Host头重建时丢失非标准端口（如9527）
-    private final Map<Integer, HttpService> httpServiceMap = new HashMap<>();
+    // ConcurrentHashMap: 后台线程和EDT线程并发访问
+    private final Map<Integer, HttpService> httpServiceMap = new ConcurrentHashMap<>();
 
     /**
      * 创建请求调度处理器
@@ -109,6 +110,7 @@ public class RequestDispatchHandler {
             return; // no-op guard
         }
         this.privilegeTestMode = enabled;
+        // 模式变更监听器在EDT上通知，避免在后台线程中直接操作Swing组件
         fireModeChanged(enabled);
     }
 
