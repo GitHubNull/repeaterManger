@@ -12,6 +12,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 历史记录右键菜单工厂 - 创建和管理历史记录表格的右键菜单
@@ -328,7 +329,11 @@ public class HistoryContextMenu {
 
     /**
      * 显示报文比对对话框
-     * 获取选中记录的基线记录，弹出ComparisonDialog
+     * 获取选中记录的基线记录（原始请求），弹出ComparisonDialog
+     *
+     * 基线数据来源优先级：
+     * 1. history 表中 user_session_name 为 NULL 的记录（正常发送时产生，含请求+响应）
+     * 2. requests 表中的原始请求数据（越权测试入口时产生，仅含请求，响应用会话记录的响应代替）
      */
     private void showComparisonDialog(int modelRow) {
         if (modelRow < 0 || modelRow >= historyRecords.size()) return;
@@ -344,7 +349,13 @@ public class HistoryContextMenu {
         // 在后台线程查找基线记录（避免UI卡顿）
         new Thread(() -> {
             HistoryReadDAO historyReadDAO = new HistoryReadDAO();
-            RequestResponseRecord baselineRecord = historyReadDAO.getBaselineRecord(requestId);
+            // 先尝试从 history 表找 user_session_name 为 NULL 的记录（含完整请求+响应）
+            RequestResponseRecord baselineRecord = historyReadDAO.getBaselineRecordWithoutFallback(requestId);
+
+            if (baselineRecord == null) {
+                // history 表没有基线记录，从 requests 表获取原始请求数据构造基线
+                baselineRecord = buildBaselineFromRequestsTable(requestId, historyReadDAO);
+            }
 
             if (baselineRecord == null) {
                 SwingUtilities.invokeLater(() ->
@@ -352,10 +363,59 @@ public class HistoryContextMenu {
                 return;
             }
 
+            final RequestResponseRecord finalBaseline = baselineRecord;
             SwingUtilities.invokeLater(() -> {
-                ComparisonDialog dialog = new ComparisonDialog(historyPanel, baselineRecord, sessionRecord);
+                ComparisonDialog dialog = new ComparisonDialog(historyPanel, finalBaseline, sessionRecord);
                 dialog.setVisible(true);
             });
         }).start();
+    }
+
+    /**
+     * 从 requests 表构造基线记录（用于越权测试直接入口、history 表无原始记录的场景）
+     * 请求数据来自 requests 表，响应数据取自该 requestId 下第一条 history 记录
+     */
+    private RequestResponseRecord buildBaselineFromRequestsTable(int requestId, HistoryReadDAO historyReadDAO) {
+        try {
+            RequestDAO requestDAO = new RequestDAO();
+            Map<String, Object> originalRequest = requestDAO.getRequest(requestId);
+            if (originalRequest == null || !originalRequest.containsKey("request_data")) {
+                return null;
+            }
+
+            byte[] originalRequestData = (byte[]) originalRequest.get("request_data");
+            RequestResponseRecord baseline = new RequestResponseRecord();
+            baseline.setRequestId(requestId);
+            baseline.setRequestData(originalRequestData);
+            baseline.setMethod((String) originalRequest.get("method"));
+            baseline.setProtocol((String) originalRequest.get("protocol"));
+            baseline.setDomain((String) originalRequest.get("domain"));
+            baseline.setPath((String) originalRequest.get("path"));
+            baseline.setQueryParameters((String) originalRequest.get("query"));
+
+            // 尝试从 history 表取第一条记录的响应数据作为基线响应
+            List<RequestResponseRecord> allHistory = historyReadDAO.getLatestHistoryByRequestId(requestId, 1);
+            if (!allHistory.isEmpty()) {
+                RequestResponseRecord firstHistory = allHistory.get(0);
+                baseline.setResponseData(firstHistory.getResponseData());
+                baseline.setStatusCode(firstHistory.getStatusCode());
+                baseline.setResponseLength(firstHistory.getResponseLength());
+                baseline.setResponseTime(firstHistory.getResponseTime());
+            } else {
+                baseline.setResponseData(new byte[0]);
+                baseline.setStatusCode(0);
+                baseline.setResponseLength(0);
+                baseline.setResponseTime(0);
+            }
+
+            baseline.setTimestamp(new java.util.Date());
+            baseline.setUserSessionName(null);
+            baseline.setSimilarity(-1);
+
+            return baseline;
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 从requests表构造基线记录失败: " + e.getMessage());
+            return null;
+        }
     }
 }

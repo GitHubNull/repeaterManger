@@ -186,6 +186,33 @@ public class HistoryReadDAO {
         return null;
     }
 
+    /**
+     * 获取指定requestId的基线记录（仅查找 user_session_name 为 NULL 的记录，不回退）
+     * 用于比对对话框：先尝试此方法，找不到再从 requests 表构造基线
+     */
+    public RequestResponseRecord getBaselineRecordWithoutFallback(int requestId) {
+        String sql = buildHistorySelectQuery()
+            + " WHERE h.request_id = ? AND (h.user_session_name IS NULL OR h.user_session_name = '')"
+            + " ORDER BY h.id ASC LIMIT 1";
+
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, requestId);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToRecord(conn, rs);
+                }
+            }
+
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取基线记录失败: " + e.getMessage());
+        }
+
+        return null;
+    }
+
     // ========== 内部辅助方法 ==========
 
     /**

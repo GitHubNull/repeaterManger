@@ -3,41 +3,47 @@ package oxff.top.ui.history;
 import oxff.top.http.RequestResponseRecord;
 
 import javax.swing.*;
-import javax.swing.text.*;
 import java.awt.*;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * 报文比对对话框 - 支持字符串级和字节级(hex)比对
+ * 报文比对对话框 - 支持字符串级(含行内字符级差异)和字节级(hex)比对
  * 双Tab模式：请求比对Tab / 响应比对Tab（左右同步滚动，左原始右会话）
- * 四面板模式：左=请求区(上原始下会话)，右=响应区(上原始下会话)，JSplitPane可拖拽
+ * 四面板模式：田字格2x2布局，支持上下布局(按原始/会话分行)和左右布局(按请求/响应分行)
  * 支持最大化/全屏/手动拉大，默认占屏幕90%
+ * 支持差异导航(上一个/下一个差异)和每个面板独立搜索(Ctrl+F)
  */
 public class ComparisonDialog extends JDialog {
     private static final long serialVersionUID = 1L;
-
-    // 差异高亮颜色
-    private static final Color COLOR_ADDED = new Color(200, 255, 200);     // 绿色：新增行
-    private static final Color COLOR_REMOVED = new Color(255, 200, 200);   // 红色：删除行
-    private static final Color COLOR_CHANGED = new Color(255, 255, 200);   // 黄色：修改行
 
     private final RequestResponseRecord originalRecord;
     private final RequestResponseRecord sessionRecord;
 
     private boolean isHexMode = false;
     private boolean isFourPaneMode = false;
+    private boolean isVerticalSubLayout = true; // true=上下布局, false=左右布局
 
     private JToggleButton stringModeBtn;
     private JToggleButton hexModeBtn;
     private JToggleButton fourPaneToggleBtn;
     private JButton maximizeBtn;
+    private JButton prevDiffBtn;
+    private JButton nextDiffBtn;
+    private JLabel diffCountLabel;
+    private JToggleButton verticalLayoutBtn;
+    private JToggleButton horizontalLayoutBtn;
     private JPanel centerPanel;
 
     // 双Tab模式的面板（每次刷新重建）
     private JTabbedPane dualTabPane;
     // 四面板模式的容器（每次刷新重建）
     private JSplitPane fourPaneSplit;
+
+    // 差异导航器（每次刷新重建）
+    private DiffNavigator diffNavigator;
 
     private double requestSimilarity;
     private double responseSimilarity;
@@ -76,6 +82,13 @@ public class ComparisonDialog extends JDialog {
 
         // 底部按钮面板
         add(createBottomPanel(), BorderLayout.SOUTH);
+
+        // 注册 Ctrl+F 快捷键
+        getRootPane().registerKeyboardAction(
+            e -> toggleSearchForActivePane(),
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
+            JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        );
     }
 
     // ==================== 比对面板构建 ====================
@@ -85,27 +98,23 @@ public class ComparisonDialog extends JDialog {
      */
     private void buildAndShowComparison() {
         centerPanel.removeAll();
-
-        // 构建请求比对面板
-        Component reqComparison = buildSingleComparison(
-            originalRecord.getRequestData(), sessionRecord.getRequestData(), "请求报文");
-
-        // 构建响应比对面板
-        Component resComparison = buildSingleComparison(
-            originalRecord.getResponseData(), sessionRecord.getResponseData(), "响应报文");
-
-        // 双Tab模式
-        dualTabPane = new JTabbedPane();
-        dualTabPane.addTab("请求报文比对", reqComparison);
-        dualTabPane.addTab("响应报文比对", resComparison);
-
-        // 四面板模式：外层水平分割(左=请求，右=响应)
-        // 每侧内部垂直分割(上=原始，下=用户会话)
-        fourPaneSplit = buildFourPaneLayout(reqComparison, resComparison);
+        diffNavigator = null;
 
         if (isFourPaneMode) {
+            // 四面板模式
+            fourPaneSplit = buildFourPaneLayout();
             centerPanel.add(fourPaneSplit, BorderLayout.CENTER);
         } else {
+            // 双Tab模式
+            Component reqComparison = buildSingleComparison(
+                originalRecord.getRequestData(), sessionRecord.getRequestData());
+
+            Component resComparison = buildSingleComparison(
+                originalRecord.getResponseData(), sessionRecord.getResponseData());
+
+            dualTabPane = new JTabbedPane();
+            dualTabPane.addTab("请求报文比对", reqComparison);
+            dualTabPane.addTab("响应报文比对", resComparison);
             centerPanel.add(dualTabPane, BorderLayout.CENTER);
         }
 
@@ -114,275 +123,153 @@ public class ComparisonDialog extends JDialog {
     }
 
     /**
-     * 构建四面板布局
-     * 左=请求区(上原始下会话)，右=响应区(上原始下会话)
-     * 所有divider可拖拽
+     * 构建单个比对面板（双Tab模式使用）
+     * 左侧=原始报文，右侧=用户会话报文，同步滚动
      */
-    private JSplitPane buildFourPaneLayout(Component reqComparison, Component resComparison) {
-        // 分别构建原始和会话的独立面板
-        JTextPane origReqPane = buildSingleContentPane(originalRecord.getRequestData(), "原始请求", false);
-        JTextPane sessReqPane = buildSingleContentPane(sessionRecord.getRequestData(), "会话请求", false);
-        JTextPane origResPane = buildSingleContentPane(originalRecord.getResponseData(), "原始响应", false);
-        JTextPane sessResPane = buildSingleContentPane(sessionRecord.getResponseData(), "会话响应", false);
+    private Component buildSingleComparison(byte[] originalData, byte[] sessionData) {
+        DiffPane origDiffPane = new DiffPane();
+        DiffPane sessDiffPane = new DiffPane();
 
-        // 为每个JTextPane创建JScrollPane（保留引用用于同步滚动）
-        JScrollPane origReqScroll = new JScrollPane(origReqPane);
-        origReqScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        JScrollPane sessReqScroll = new JScrollPane(sessReqPane);
-        sessReqScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        JScrollPane origResScroll = new JScrollPane(origResPane);
-        origResScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        JScrollPane sessResScroll = new JScrollPane(sessResPane);
-        sessResScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        if (isHexMode) {
+            List<DiffEngine.DiffSegment> diff = DiffEngine.computeByteDiff(originalData, sessionData);
+            origDiffPane.renderHexDiffSegments(diff, true);
+            sessDiffPane.renderHexDiffSegments(diff, false);
+        } else {
+            String origStr = bytesToString(originalData);
+            String sessStr = bytesToString(sessionData);
+            List<DiffEngine.DiffLine> diff = DiffEngine.computeLineDiff(origStr, sessStr);
+            origDiffPane.renderDiffLines(diff, true);
+            sessDiffPane.renderDiffLines(diff, false);
+        }
 
-        // 请求区垂直分割：上原始下会话
-        JSplitPane reqSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-            wrapWithTitle(origReqScroll, "原始请求"),
-            wrapWithTitle(sessReqScroll, "用户会话请求"));
-        reqSplit.setResizeWeight(0.5);
-        reqSplit.setDividerLocation(0.5);
-        reqSplit.setOneTouchExpandable(true);
+        SynchronizedScrollPanel syncPanel = new SynchronizedScrollPanel(origDiffPane, sessDiffPane);
 
-        // 响应区垂直分割：上原始下会话
-        JSplitPane resSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-            wrapWithTitle(origResScroll, "原始响应"),
-            wrapWithTitle(sessResScroll, "用户会话响应"));
-        resSplit.setResizeWeight(0.5);
-        resSplit.setDividerLocation(0.5);
-        resSplit.setOneTouchExpandable(true);
+        // 创建导航器
+        if (diffNavigator == null) {
+            diffNavigator = new DiffNavigator(origDiffPane, sessDiffPane);
+        }
 
-        // 同步滚动：原始↔会话 请求区/响应区内的上下面板
-        setupVerticalSync(origReqScroll, sessReqScroll);
-        setupVerticalSync(origResScroll, sessResScroll);
+        return syncPanel;
+    }
 
-        // 外层水平分割：左=请求区，右=响应区
-        JSplitPane outerSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, reqSplit, resSplit);
+    /**
+     * 构建四面板布局 — 田字格2x2网格
+     * 上下布局: 上=原始报文(左请求右响应)，下=会话报文(左请求右响应)
+     * 左右布局: 上=请求对比(左原始右会话)，下=响应对比(左原始右会话)
+     */
+    private JSplitPane buildFourPaneLayout() {
+        DiffPane origReqPane = new DiffPane();
+        DiffPane sessReqPane = new DiffPane();
+        DiffPane origResPane = new DiffPane();
+        DiffPane sessResPane = new DiffPane();
+
+        if (isHexMode) {
+            origReqPane.renderPlainText(originalRecord.getRequestData(), true);
+            sessReqPane.renderPlainText(sessionRecord.getRequestData(), true);
+            origResPane.renderPlainText(originalRecord.getResponseData(), true);
+            sessResPane.renderPlainText(sessionRecord.getResponseData(), true);
+        } else {
+            String origReqStr = bytesToString(originalRecord.getRequestData());
+            String sessReqStr = bytesToString(sessionRecord.getRequestData());
+            List<DiffEngine.DiffLine> reqDiff = DiffEngine.computeLineDiff(origReqStr, sessReqStr);
+            origReqPane.renderDiffLines(reqDiff, true);
+            sessReqPane.renderDiffLines(reqDiff, false);
+
+            String origResStr = bytesToString(originalRecord.getResponseData());
+            String sessResStr = bytesToString(sessionRecord.getResponseData());
+            List<DiffEngine.DiffLine> resDiff = DiffEngine.computeLineDiff(origResStr, sessResStr);
+            origResPane.renderDiffLines(resDiff, true);
+            sessResPane.renderDiffLines(resDiff, false);
+        }
+
+        JPanel topLeft, topRight, bottomLeft, bottomRight;
+
+        if (isVerticalSubLayout) {
+            // 上下布局: 上=原始行，下=会话行
+            topLeft = createTitledDiffPanePanel("原始请求", origReqPane);
+            topRight = createTitledDiffPanePanel("原始响应", origResPane);
+            bottomLeft = createTitledDiffPanePanel("会话请求", sessReqPane);
+            bottomRight = createTitledDiffPanePanel("会话响应", sessResPane);
+        } else {
+            // 左右布局: 上=请求对比行，下=响应对比行
+            topLeft = createTitledDiffPanePanel("原始请求", origReqPane);
+            topRight = createTitledDiffPanePanel("会话请求", sessReqPane);
+            bottomLeft = createTitledDiffPanePanel("原始响应", origResPane);
+            bottomRight = createTitledDiffPanePanel("会话响应", sessResPane);
+        }
+
+        // 上半行: 水平分割
+        JSplitPane topSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, topLeft, topRight);
+        topSplit.setResizeWeight(0.5);
+        topSplit.setDividerLocation(0.5);
+        topSplit.setOneTouchExpandable(true);
+
+        // 下半行: 水平分割
+        JSplitPane bottomSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, bottomLeft, bottomRight);
+        bottomSplit.setResizeWeight(0.5);
+        bottomSplit.setDividerLocation(0.5);
+        bottomSplit.setOneTouchExpandable(true);
+
+        // 外层: 垂直分割（上+下）
+        JSplitPane outerSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topSplit, bottomSplit);
         outerSplit.setResizeWeight(0.5);
         outerSplit.setDividerLocation(0.5);
         outerSplit.setOneTouchExpandable(true);
+
+        // 设置垂直滚动同步（原始↔会话，请求配对和响应配对）
+        setupVerticalScrollSync(origReqPane.getScrollPane(), sessReqPane.getScrollPane());
+        setupVerticalScrollSync(origResPane.getScrollPane(), sessResPane.getScrollPane());
+
+        // 导航器使用请求对比对
+        diffNavigator = new DiffNavigator(origReqPane, sessReqPane);
 
         return outerSplit;
     }
 
     /**
-     * 为四面板模式的上下两个面板设置垂直同步滚动
-     * 直接接收JScrollPane引用，避免从JPanel中按索引提取导致ClassCastException
+     * 创建带标题的 DiffPane 面板
      */
-    private void setupVerticalSync(JScrollPane topScroll, JScrollPane bottomScroll) {
-        final boolean[] isSyncing = {false};
-
-        topScroll.getVerticalScrollBar().addAdjustmentListener(e -> {
-            if (!isSyncing[0]) {
-                isSyncing[0] = true;
-                JScrollBar topBar = topScroll.getVerticalScrollBar();
-                JScrollBar bottomBar = bottomScroll.getVerticalScrollBar();
-                if (topBar.getMaximum() > 0 && bottomBar.getMaximum() > 0) {
-                    double ratio = (double) topBar.getValue() / topBar.getMaximum();
-                    bottomBar.setValue((int)(ratio * bottomBar.getMaximum()));
-                }
-                isSyncing[0] = false;
-            }
-        });
-
-        bottomScroll.getVerticalScrollBar().addAdjustmentListener(e -> {
-            if (!isSyncing[0]) {
-                isSyncing[0] = true;
-                JScrollBar topBar = topScroll.getVerticalScrollBar();
-                JScrollBar bottomBar = bottomScroll.getVerticalScrollBar();
-                if (bottomBar.getMaximum() > 0 && topBar.getMaximum() > 0) {
-                    double ratio = (double) bottomBar.getValue() / bottomBar.getMaximum();
-                    topBar.setValue((int)(ratio * topBar.getMaximum()));
-                }
-                isSyncing[0] = false;
-            }
-        });
-    }
-
-    /**
-     * 将JScrollPane包裹在带标题的JPanel中
-     */
-    private JPanel wrapWithTitle(JScrollPane scrollPane, String title) {
-        JPanel wrapper = new JPanel(new BorderLayout());
+    private JPanel createTitledDiffPanePanel(String title, DiffPane diffPane) {
+        JPanel panel = new JPanel(new BorderLayout());
         JLabel titleLabel = new JLabel(title);
         titleLabel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
-        wrapper.add(titleLabel, BorderLayout.NORTH);
-        wrapper.add(scrollPane, BorderLayout.CENTER);
-        return wrapper;
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(diffPane, BorderLayout.CENTER);
+        return panel;
     }
 
     /**
-     * 构建单个比对面板（双Tab模式使用）
-     * 左侧=原始报文，右侧=用户会话报文，同步滚动
-     * 左右都渲染差异高亮（左侧显示REMOVED红色行，右侧显示ADDED绿色行）
+     * 设置两个 JScrollPane 的垂直滚动同步
      */
-    private Component buildSingleComparison(byte[] originalData, byte[] sessionData, String label) {
-        if (isHexMode) {
-            List<DiffEngine.DiffSegment> diff = DiffEngine.computeByteDiff(originalData, sessionData);
-            JTextPane origPane = buildHexDiffPane(diff, true);   // 左侧（原始）
-            JTextPane sessPane = buildHexDiffPane(diff, false);  // 右侧（会话）
-            origPane.setFont(new Font("Monospaced", Font.PLAIN, 13));
-            sessPane.setFont(new Font("Monospaced", Font.PLAIN, 13));
-            return new SynchronizedScrollPanel(origPane, sessPane);
-        } else {
-            String origStr = bytesToString(originalData);
-            String sessStr = bytesToString(sessionData);
-            List<DiffEngine.DiffLine> diff = DiffEngine.computeLineDiff(origStr, sessStr);
-            JTextPane origPane = buildStringDiffPane(diff, true);   // 左侧（原始）
-            JTextPane sessPane = buildStringDiffPane(diff, false);  // 右侧（会话）
-            origPane.setFont(new Font("Monospaced", Font.PLAIN, 13));
-            sessPane.setFont(new Font("Monospaced", Font.PLAIN, 13));
-            return new SynchronizedScrollPanel(origPane, sessPane);
-        }
-    }
+    private void setupVerticalScrollSync(JScrollPane sp1, JScrollPane sp2) {
+        final boolean[] syncing = {false};
 
-    /**
-     * 构建单侧内容面板（四面板模式使用，不做diff高亮，直接显示原始内容）
-     */
-    private JTextPane buildSingleContentPane(byte[] data, String label, boolean isOriginalSide) {
-        JTextPane pane = new JTextPane();
-        pane.setEditable(false);
-        StyledDocument doc = pane.getStyledDocument();
-
-        Style baseStyle = pane.getStyle(StyleContext.DEFAULT_STYLE);
-        StyleConstants.setFontFamily(baseStyle, "Monospaced");
-        StyleConstants.setFontSize(baseStyle, 13);
-
-        try {
-            if (isHexMode) {
-                List<String> hexLines = DiffEngine.generateHexDump(data != null ? data : new byte[0]);
-                for (String line : hexLines) {
-                    doc.insertString(doc.getLength(), line + "\n", baseStyle);
+        sp1.getVerticalScrollBar().addAdjustmentListener(e -> {
+            if (!syncing[0]) {
+                syncing[0] = true;
+                JScrollBar sb1 = sp1.getVerticalScrollBar();
+                JScrollBar sb2 = sp2.getVerticalScrollBar();
+                if (sb1.getMaximum() > 0 && sb2.getMaximum() > 0) {
+                    double ratio = (double) sb1.getValue() / sb1.getMaximum();
+                    sb2.setValue((int) (ratio * sb2.getMaximum()));
                 }
-            } else {
-                doc.insertString(doc.getLength(), bytesToString(data), baseStyle);
+                syncing[0] = false;
             }
-        } catch (BadLocationException e) {
-            // 忽略
-        }
+        });
 
-        return pane;
-    }
-
-    // ==================== Diff渲染 ====================
-
-    /**
-     * 构建字符串级diff面板（单侧）
-     * isOriginalSide=true: 左侧（显示REMOVED行红色背景，空行占位ADDED行）
-     * isOriginalSide=false: 右侧（显示ADDED行绿色背景，空行占位REMOVED行）
-     */
-    private JTextPane buildStringDiffPane(List<DiffEngine.DiffLine> diffLines, boolean isOriginalSide) {
-        JTextPane pane = new JTextPane();
-        pane.setEditable(false);
-        pane.setBackground(Color.WHITE);
-        StyledDocument doc = pane.getStyledDocument();
-
-        // 定义样式
-        Style defaultStyle = pane.getStyle(StyleContext.DEFAULT_STYLE);
-        StyleConstants.setFontFamily(defaultStyle, "Monospaced");
-        StyleConstants.setFontSize(defaultStyle, 13);
-
-        Style unchangedStyle = doc.addStyle("unchanged", defaultStyle);
-        StyleConstants.setBackground(unchangedStyle, Color.WHITE);
-
-        Style removedStyle = doc.addStyle("removed", defaultStyle);
-        StyleConstants.setBackground(removedStyle, COLOR_REMOVED);
-
-        Style addedStyle = doc.addStyle("added", defaultStyle);
-        StyleConstants.setBackground(addedStyle, COLOR_ADDED);
-
-        Style changedStyle = doc.addStyle("changed", defaultStyle);
-        StyleConstants.setBackground(changedStyle, COLOR_CHANGED);
-
-        try {
-            for (DiffEngine.DiffLine line : diffLines) {
-                String lineText = line.getLineText() + "\n";
-                switch (line.getDiffType()) {
-                    case UNCHANGED:
-                        doc.insertString(doc.getLength(), lineText, unchangedStyle);
-                        break;
-                    case REMOVED:
-                        if (isOriginalSide) {
-                            doc.insertString(doc.getLength(), lineText, removedStyle);
-                        } else {
-                            doc.insertString(doc.getLength(), "\n", unchangedStyle);  // 对齐空行
-                        }
-                        break;
-                    case ADDED:
-                        if (isOriginalSide) {
-                            doc.insertString(doc.getLength(), "\n", unchangedStyle);  // 对齐空行
-                        } else {
-                            doc.insertString(doc.getLength(), lineText, addedStyle);
-                        }
-                        break;
-                    case CHANGED:
-                        if (isOriginalSide) {
-                            doc.insertString(doc.getLength(), lineText, changedStyle);
-                        } else {
-                            doc.insertString(doc.getLength(), lineText, addedStyle);
-                        }
-                        break;
+        sp2.getVerticalScrollBar().addAdjustmentListener(e -> {
+            if (!syncing[0]) {
+                syncing[0] = true;
+                JScrollBar sb1 = sp1.getVerticalScrollBar();
+                JScrollBar sb2 = sp2.getVerticalScrollBar();
+                if (sb1.getMaximum() > 0 && sb2.getMaximum() > 0) {
+                    double ratio = (double) sb2.getValue() / sb2.getMaximum();
+                    sb1.setValue((int) (ratio * sb1.getMaximum()));
                 }
+                syncing[0] = false;
             }
-        } catch (BadLocationException e) {
-            // 忽略
-        }
-
-        return pane;
-    }
-
-    /**
-     * 构建hex级diff面板（单侧）
-     */
-    private JTextPane buildHexDiffPane(List<DiffEngine.DiffSegment> diffSegments, boolean isOriginalSide) {
-        JTextPane pane = new JTextPane();
-        pane.setEditable(false);
-        pane.setBackground(Color.WHITE);
-        StyledDocument doc = pane.getStyledDocument();
-
-        Style defaultStyle = pane.getStyle(StyleContext.DEFAULT_STYLE);
-        StyleConstants.setFontFamily(defaultStyle, "Monospaced");
-        StyleConstants.setFontSize(defaultStyle, 13);
-
-        Style unchangedStyle = doc.addStyle("unchanged", defaultStyle);
-        StyleConstants.setBackground(unchangedStyle, Color.WHITE);
-
-        Style removedStyle = doc.addStyle("removed", defaultStyle);
-        StyleConstants.setBackground(removedStyle, COLOR_REMOVED);
-
-        Style addedStyle = doc.addStyle("added", defaultStyle);
-        StyleConstants.setBackground(addedStyle, COLOR_ADDED);
-
-        try {
-            for (DiffEngine.DiffSegment seg : diffSegments) {
-                String lineText = String.format("%08X  %-47s  %s\n",
-                    seg.getOffset(), seg.getHexData(), seg.getAsciiData());
-
-                switch (seg.getDiffType()) {
-                    case UNCHANGED:
-                        doc.insertString(doc.getLength(), lineText, unchangedStyle);
-                        break;
-                    case REMOVED:
-                        if (isOriginalSide) {
-                            doc.insertString(doc.getLength(), lineText, removedStyle);
-                        } else {
-                            doc.insertString(doc.getLength(), "\n", unchangedStyle);
-                        }
-                        break;
-                    case ADDED:
-                        if (isOriginalSide) {
-                            doc.insertString(doc.getLength(), "\n", unchangedStyle);
-                        } else {
-                            doc.insertString(doc.getLength(), lineText, addedStyle);
-                        }
-                        break;
-                }
-            }
-        } catch (BadLocationException e) {
-            // 忽略
-        }
-
-        return pane;
+        });
     }
 
     // ==================== 信息面板 ====================
@@ -414,8 +301,9 @@ public class ComparisonDialog extends JDialog {
             row1.add(judgmentLabel);
         }
 
-        // 第二行：模式按钮
+        // 第二行：模式按钮 + 差异导航 + 最大化
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+
         stringModeBtn = new JToggleButton("字符串模式");
         stringModeBtn.setSelected(true);
         hexModeBtn = new JToggleButton("Hex模式");
@@ -427,31 +315,85 @@ public class ComparisonDialog extends JDialog {
             if (stringModeBtn.isSelected()) {
                 isHexMode = false;
                 buildAndShowComparison();
+                updateDiffNavigatorStatus();
             }
         });
         hexModeBtn.addActionListener(e -> {
             if (hexModeBtn.isSelected()) {
                 isHexMode = true;
                 buildAndShowComparison();
+                updateDiffNavigatorStatus();
             }
         });
 
         fourPaneToggleBtn = new JToggleButton("四面板模式");
         fourPaneToggleBtn.addActionListener(e -> {
             isFourPaneMode = fourPaneToggleBtn.isSelected();
+            verticalLayoutBtn.setEnabled(isFourPaneMode);
+            horizontalLayoutBtn.setEnabled(isFourPaneMode);
             buildAndShowComparison();
+            updateDiffNavigatorStatus();
         });
+
+        // 四面板子布局选择
+        verticalLayoutBtn = new JToggleButton("上下布局");
+        verticalLayoutBtn.setSelected(true);
+        verticalLayoutBtn.setEnabled(false);
+        verticalLayoutBtn.setToolTipText("上=原始报文，下=会话报文，左=请求，右=响应");
+
+        horizontalLayoutBtn = new JToggleButton("左右布局");
+        horizontalLayoutBtn.setEnabled(false);
+        horizontalLayoutBtn.setToolTipText("上=请求报文对比，下=响应报文对比，左=原始，右=会话");
+
+        ButtonGroup subLayoutGroup = new ButtonGroup();
+        subLayoutGroup.add(verticalLayoutBtn);
+        subLayoutGroup.add(horizontalLayoutBtn);
+
+        verticalLayoutBtn.addActionListener(e -> {
+            isVerticalSubLayout = true;
+            buildAndShowComparison();
+            updateDiffNavigatorStatus();
+        });
+        horizontalLayoutBtn.addActionListener(e -> {
+            isVerticalSubLayout = false;
+            buildAndShowComparison();
+            updateDiffNavigatorStatus();
+        });
+
+        // 差异导航
+        prevDiffBtn = new JButton("◀ 上一个差异");
+        prevDiffBtn.setToolTipText("跳转到上一个差异区域");
+        prevDiffBtn.addActionListener(e -> {
+            if (diffNavigator != null) {
+                diffNavigator.prevDiff();
+                updateDiffNavigatorStatus();
+            }
+        });
+
+        nextDiffBtn = new JButton("下一个差异 ▶");
+        nextDiffBtn.setToolTipText("跳转到下一个差异区域");
+        nextDiffBtn.addActionListener(e -> {
+            if (diffNavigator != null) {
+                diffNavigator.nextDiff();
+                updateDiffNavigatorStatus();
+            }
+        });
+
+        diffCountLabel = new JLabel("差异 0/0");
+        diffCountLabel.setFont(diffCountLabel.getFont().deriveFont(Font.BOLD));
+
+        JButton searchBtn = new JButton("🔍 搜索");
+        searchBtn.setToolTipText("在当前面板中搜索 (Ctrl+F)");
+        searchBtn.addActionListener(e -> toggleSearchForActivePane());
 
         maximizeBtn = new JButton("最大化");
         maximizeBtn.addActionListener(e -> {
             Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
             if (maximizeBtn.getText().equals("最大化")) {
-                // 最大化：占满屏幕
                 setLocation(0, 0);
                 setSize(screenSize.width, screenSize.height);
                 maximizeBtn.setText("还原");
             } else {
-                // 还原：90%屏幕大小
                 setSize((int)(screenSize.width * 0.9), (int)(screenSize.height * 0.9));
                 setLocationRelativeTo(null);
                 maximizeBtn.setText("最大化");
@@ -461,7 +403,14 @@ public class ComparisonDialog extends JDialog {
         row2.add(stringModeBtn);
         row2.add(hexModeBtn);
         row2.add(fourPaneToggleBtn);
-        row2.add(Box.createHorizontalStrut(20));
+        row2.add(verticalLayoutBtn);
+        row2.add(horizontalLayoutBtn);
+        row2.add(Box.createHorizontalStrut(10));
+        row2.add(prevDiffBtn);
+        row2.add(diffCountLabel);
+        row2.add(nextDiffBtn);
+        row2.add(Box.createHorizontalStrut(10));
+        row2.add(searchBtn);
         row2.add(maximizeBtn);
 
         infoPanel.add(row1);
@@ -470,14 +419,99 @@ public class ComparisonDialog extends JDialog {
         return infoPanel;
     }
 
+    /**
+     * 更新差异导航状态显示
+     */
+    private void updateDiffNavigatorStatus() {
+        if (diffNavigator != null) {
+            diffCountLabel.setText(diffNavigator.getStatusText());
+        } else {
+            diffCountLabel.setText("差异 0/0");
+        }
+    }
+
     // ==================== 底部面板 ====================
 
     private JPanel createBottomPanel() {
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+
+        JLabel shortcutHint = new JLabel("Ctrl+F: 搜索");
+        shortcutHint.setForeground(Color.GRAY);
+        bottomPanel.add(shortcutHint);
+        bottomPanel.add(Box.createHorizontalStrut(20));
+
         JButton closeBtn = new JButton("关闭");
         closeBtn.addActionListener(e -> dispose());
         bottomPanel.add(closeBtn);
         return bottomPanel;
+    }
+
+    // ==================== 搜索栏控制 ====================
+
+    /**
+     * 切换当前焦点面板的搜索栏
+     */
+    private void toggleSearchForActivePane() {
+        DiffPane activePane = findActiveDiffPane();
+        if (activePane != null) {
+            activePane.toggleSearchBar();
+        }
+    }
+
+    /**
+     * 查找当前焦点的 DiffPane
+     */
+    private DiffPane findActiveDiffPane() {
+        Component focusOwner = getFocusOwner();
+        if (focusOwner == null) {
+            // 如果没有焦点，默认返回请求区的左侧面板
+            return findFirstDiffPane();
+        }
+
+        // 从焦点组件向上查找 DiffPane
+        Component parent = focusOwner;
+        while (parent != null) {
+            if (parent instanceof DiffPane) {
+                return (DiffPane) parent;
+            }
+            parent = parent.getParent();
+        }
+
+        // 焦点不在 DiffPane 内，返回第一个
+        return findFirstDiffPane();
+    }
+
+    /**
+     * 查找对话框中第一个 DiffPane
+     */
+    private DiffPane findFirstDiffPane() {
+        if (centerPanel == null) return null;
+
+        if (isFourPaneMode && fourPaneSplit != null) {
+            return findDiffPaneInContainer(fourPaneSplit);
+        } else if (dualTabPane != null) {
+            Component selectedTab = dualTabPane.getSelectedComponent();
+            if (selectedTab != null) {
+                return findDiffPaneInContainer(selectedTab);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 在容器中递归查找 DiffPane
+     */
+    private DiffPane findDiffPaneInContainer(Component container) {
+        if (container instanceof DiffPane) {
+            return (DiffPane) container;
+        }
+        if (container instanceof Container) {
+            for (Component child : ((Container) container).getComponents()) {
+                DiffPane result = findDiffPaneInContainer(child);
+                if (result != null) return result;
+            }
+        }
+        return null;
     }
 
     // ==================== 辅助方法 ====================

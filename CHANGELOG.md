@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0] - 2026-05-12
+
+### Added
+- 新增 DiffPane 自包含差异显示面板，封装差异渲染、行号显示、差异区域追踪
+- 新增 SearchBar 可折叠搜索栏，支持关键字/正则匹配、大小写敏感、上/下一个导航
+- 新增 DiffNavigator 差异区域导航器，合并左右面板差异区域，支持上/下一个差异跳转
+- DiffEngine 新增行内字符级差异对比，支持字符粒度的高亮着色
+- HistoryReadDAO 新增 getBaselineRecordWithoutFallback 方法，专门获取无会话关联的基线记录
+- SynchronizedScrollPanel 新增 DiffPane 构造函数重载，直接接受 DiffPane 组件
+
+### Changed
+- 重构 ComparisonDialog，使用 DiffPane 替代原有 JTextPane 进行差异显示
+- 重构 SynchronizedScrollPanel，提取 setupSyncListeners 公共方法
+- 增强 HistoryContextMenu 比对报文菜单项，集成 DiffNavigator 导航功能
+
 ## [2.15.0] - 2026-05-12
 
 ### Added
