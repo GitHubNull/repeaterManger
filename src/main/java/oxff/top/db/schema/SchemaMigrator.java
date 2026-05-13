@@ -54,6 +54,11 @@ public class SchemaMigrator {
         if (currentVersion < 9) {
             migrateV8ToV9(conn);
         }
+
+        // v9→v10 迁移
+        if (currentVersion < 10) {
+            migrateV9ToV10(conn);
+        }
     }
 
     /**
@@ -396,6 +401,44 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '9')");
 
             BurpExtender.printOutput("[+] v8→v9 迁移完成");
+        }
+    }
+
+    /**
+     * v9→v10 迁移：为 requests 表添加原始响应字段
+     * 用于存储"发送到权限测试"时的原始基线响应报文
+     */
+    private static void migrateV9ToV10(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v9→v10迁移...");
+
+            // 为 requests 表添加响应相关列
+            String[] columns = {
+                "ALTER TABLE requests ADD COLUMN resp_header_hash TEXT",
+                "ALTER TABLE requests ADD COLUMN resp_body_hash TEXT",
+                "ALTER TABLE requests ADD COLUMN resp_body_storage TEXT DEFAULT 'none'",
+                "ALTER TABLE requests ADD COLUMN resp_status_code INTEGER DEFAULT 0",
+                "ALTER TABLE requests ADD COLUMN resp_length INTEGER DEFAULT 0",
+                "ALTER TABLE requests ADD COLUMN resp_time INTEGER DEFAULT 0"
+            };
+
+            for (String ddl : columns) {
+                try {
+                    stmt.execute(ddl);
+                } catch (SQLException e) {
+                    if (!e.getMessage().contains("duplicate column name")) {
+                        BurpExtender.printError("[!] v9→v10迁移列添加失败: " + e.getMessage());
+                    }
+                }
+            }
+
+            BurpExtender.printOutput("[+] requests表添加响应字段成功");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '10' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '10')");
+
+            BurpExtender.printOutput("[+] v9→v10 迁移完成");
         }
     }
 }

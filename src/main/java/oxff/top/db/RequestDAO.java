@@ -487,6 +487,110 @@ public class RequestDAO {
     }
 
     /**
+     * 保存原始响应到 requests 表（用于基线比对）
+     * 将响应报文分割后存入池化存储，并更新 requests 记录的响应字段
+     *
+     * @param requestId    请求ID
+     * @param responseData 原始响应字节数组（含状态行+头部+正文）
+     * @param statusCode   HTTP状态码
+     * @param responseTime 响应时间（ms），未知时传0
+     */
+    public boolean saveOriginalResponse(int requestId, byte[] responseData, int statusCode, int responseTime) {
+        if (responseData == null || responseData.length == 0) return false;
+
+        try (Connection conn = dbManager.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // 分割响应
+                SplitResult split = poolManager.getSplitter().splitResponse(responseData);
+                String respHeaderHash = poolManager.ensureHeader(conn, split.getHeaders());
+                String respBodyHash = null;
+                String respBodyStorage = BodyStorageRoute.NONE.getDbValue();
+
+                if (split.hasBody()) {
+                    String[] bodyResult = poolManager.ensureBody(conn, split.getBody());
+                    respBodyHash = bodyResult[0];
+                    respBodyStorage = bodyResult[1];
+                }
+
+                String sql = "UPDATE requests SET resp_header_hash=?, resp_body_hash=?, resp_body_storage=?, " +
+                        "resp_status_code=?, resp_length=?, resp_time=? WHERE id=?";
+                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                    pstmt.setString(1, respHeaderHash);
+                    pstmt.setString(2, respBodyHash);
+                    pstmt.setString(3, respBodyStorage);
+                    pstmt.setInt(4, statusCode);
+                    pstmt.setInt(5, responseData.length);
+                    pstmt.setInt(6, responseTime);
+                    pstmt.setInt(7, requestId);
+
+                    int affected = pstmt.executeUpdate();
+                    if (affected > 0) {
+                        conn.commit();
+                        return true;
+                    }
+                    conn.rollback();
+                    return false;
+                }
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 保存原始响应失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 获取请求的原始响应数据（基线响应）
+     *
+     * @param requestId 请求ID
+     * @return 原始响应字节数组，无响应时返回 null
+     */
+    public byte[] getOriginalResponseData(int requestId) {
+        String sql = "SELECT resp_header_hash, resp_body_hash, resp_body_storage FROM requests WHERE id = ?";
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, requestId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    String headerHash = rs.getString("resp_header_hash");
+                    String bodyHash = rs.getString("resp_body_hash");
+                    String bodyStorage = rs.getString("resp_body_storage");
+
+                    if (headerHash == null && bodyHash == null) {
+                        return null; // 该请求没有存储过原始响应
+                    }
+                    return reconstructor.reconstructResponse(conn, headerHash, bodyHash, bodyStorage);
+                }
+            }
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取原始响应失败: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 获取请求的原始响应状态码
+     */
+    public int getOriginalResponseStatusCode(int requestId) {
+        String sql = "SELECT resp_status_code FROM requests WHERE id = ?";
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, requestId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("resp_status_code");
+                }
+            }
+        } catch (SQLException e) {
+            BurpExtender.printError("[!] 获取原始响应状态码失败: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    /**
      * 清空所有请求
      */
     public boolean clearAllRequests() {

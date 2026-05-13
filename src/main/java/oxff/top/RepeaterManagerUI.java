@@ -573,6 +573,10 @@ public class RepeaterManagerUI {
                 if (dbId > 0) {
                     new RequestDAO().markAsPrivilegeTest(dbId);
                     requestListPanel.updatePrivilegeTestFlag(dbId, true);
+
+                    // 保存原始响应作为基线 history 记录（user_session_name=NULL）
+                    // 从 Proxy History 等模块发送时，原始响应已存在，必须落库作为比对基线
+                    saveOriginalResponseAsBaseline(dbId, requestResponse);
                 }
 
                 // 切换到请求管理标签页
@@ -630,7 +634,20 @@ public class RepeaterManagerUI {
             dispatchHandler.setPrivilegeTestMode(false);
 
             // 批量加载请求
-            List<Integer> dbIds = setRequests(requestResponses);
+            List<Integer> dbIds = new ArrayList<>();
+            for (int i = 0; i < requestResponses.size(); i++) {
+                HttpRequestResponse rr = requestResponses.get(i);
+                try {
+                    int dbId = setRequest(rr);
+                    if (dbId > 0) {
+                        dbIds.add(dbId);
+                        // 保存原始响应作为基线 history 记录（user_session_name=NULL）
+                        saveOriginalResponseAsBaseline(dbId, rr);
+                    }
+                } catch (Exception e) {
+                    BurpExtender.printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
+                }
+            }
 
             if (dbIds.isEmpty()) {
                 BurpExtender.printError("[!] 批量权限测试：所有请求保存失败");
@@ -696,6 +713,38 @@ public class RepeaterManagerUI {
             String protocol, String domain, String path, String query, byte[] requestData) {
         requestListPanel.addRequest(requestId, api, method, protocol, domain, path, query, true, requestData);
         dispatchHandler.getRequestHistoryMap().computeIfAbsent(requestId, k -> new ArrayList<>());
+    }
+
+    /**
+     * 保存原始响应报文到 requests 表（作为基线）
+     * 在越权测试入口处调用：从 Proxy History / 其他模块发送报文到插件时，
+     * HttpRequestResponse 已包含原始响应，必须将其持久化到 requests 表，供后续报文比对使用。
+     *
+     * @param requestId       请求在 requests 表中的 ID
+     * @param requestResponse 含原始请求+响应的 Montoya 对象
+     */
+    private void saveOriginalResponseAsBaseline(int requestId, HttpRequestResponse requestResponse) {
+        try {
+            // 无原始响应则跳过（例如从 Proxy Intercept 直接 Forward 的情况）
+            if (requestResponse.response() == null) {
+                BurpExtender.printOutput("[*] 原始报文无响应数据，跳过基线保存");
+                return;
+            }
+
+            byte[] responseData = requestResponse.response().toByteArray().getBytes();
+            int statusCode = requestResponse.response().statusCode();
+
+            // 保存到 requests 表的响应字段
+            RequestDAO requestDAO = new RequestDAO();
+            boolean saved = requestDAO.saveOriginalResponse(requestId, responseData, statusCode, 0);
+            if (saved) {
+                BurpExtender.printOutput("[+] 原始响应基线已保存到 requests 表，requestId: " + requestId);
+            } else {
+                BurpExtender.printError("[!] 保存原始响应基线失败，requestId: " + requestId);
+            }
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 保存原始响应基线异常: " + e.getMessage());
+        }
     }
 
     /**

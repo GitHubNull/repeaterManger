@@ -56,7 +56,7 @@ public class SchemaInitializer {
         );
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_gc_queue_pool ON gc_queue(pool_type, hash)");
 
-        // 请求表（v8 结构：v3 + is_privilege_test）
+        // 请求表（v10 结构：v8 + 响应字段）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS requests (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -72,7 +72,13 @@ public class SchemaInitializer {
             "req_body_hash TEXT, " +
             "req_body_storage TEXT DEFAULT 'inline', " +
             "api_hash TEXT, " +
-            "is_privilege_test INTEGER NOT NULL DEFAULT 0" +
+            "is_privilege_test INTEGER NOT NULL DEFAULT 0, " +
+            "resp_header_hash TEXT, " +
+            "resp_body_hash TEXT, " +
+            "resp_body_storage TEXT DEFAULT 'none', " +
+            "resp_status_code INTEGER DEFAULT 0, " +
+            "resp_length INTEGER DEFAULT 0, " +
+            "resp_time INTEGER DEFAULT 0" +
             ")"
         );
 

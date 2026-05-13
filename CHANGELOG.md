@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.4] - 2026-05-13
+
+### Fixed
+- 修复报文比对中原始响应报文与用户会话响应报文完全一致的问题：原始响应基线现存储于 requests 表，不再错误借用 history 表中的会话响应冒充基线
+
+### Added
+- requests 表新增基线响应字段（resp_header_hash/resp_body_hash/resp_body_storage/resp_status_code/resp_length/resp_time）
+- RequestDAO 新增 saveOriginalResponse()/getOriginalResponseData()/getOriginalResponseStatusCode() 方法
+- Schema v9→v10 迁移，为已有数据库自动添加基线响应字段
+- 从 Proxy History 等模块"发送到权限测试"时，自动保存原始响应到 requests 表作为基线
+
+### Changed
+- buildBaselineFromRequestsTable() 改为从 requests 表读取基线响应，无基线时留空而非借用 history 会话响应
+
 ## [2.16.3] - 2026-05-12
 
 ### Added

@@ -371,8 +371,11 @@ public class HistoryContextMenu {
     }
 
     /**
-     * 从 requests 表构造基线记录（用于越权测试直接入口、history 表无原始记录的场景）
-     * 请求数据来自 requests 表，响应数据取自该 requestId 下第一条 history 记录
+     * 从 requests 表构造基线记录（用于越权测试直接入口、history 表无原始基线记录的场景）
+     *
+     * 请求数据：来自 requests 表中存储的原始请求字节（未经令牌替换）
+     * 响应数据：从 requests 表的响应字段获取（v10新增），包含发送到插件时携带的原始响应
+     *           如果无原始响应（如从 Proxy Intercept 发过来的），则置空
      */
     private RequestResponseRecord buildBaselineFromRequestsTable(int requestId, HistoryReadDAO historyReadDAO) {
         try {
@@ -392,20 +395,19 @@ public class HistoryContextMenu {
             baseline.setPath((String) originalRequest.get("path"));
             baseline.setQueryParameters((String) originalRequest.get("query"));
 
-            // 尝试从 history 表取第一条记录的响应数据作为基线响应
-            List<RequestResponseRecord> allHistory = historyReadDAO.getLatestHistoryByRequestId(requestId, 1);
-            if (!allHistory.isEmpty()) {
-                RequestResponseRecord firstHistory = allHistory.get(0);
-                baseline.setResponseData(firstHistory.getResponseData());
-                baseline.setStatusCode(firstHistory.getStatusCode());
-                baseline.setResponseLength(firstHistory.getResponseLength());
-                baseline.setResponseTime(firstHistory.getResponseTime());
+            // 从 requests 表读取原始响应（v10存入的基线响应）
+            byte[] originalResponseData = requestDAO.getOriginalResponseData(requestId);
+            if (originalResponseData != null && originalResponseData.length > 0) {
+                baseline.setResponseData(originalResponseData);
+                baseline.setStatusCode(requestDAO.getOriginalResponseStatusCode(requestId));
+                baseline.setResponseLength(originalResponseData.length);
             } else {
+                // 无基线响应（旧数据或 Intercept 发来的无响应报文）
                 baseline.setResponseData(new byte[0]);
                 baseline.setStatusCode(0);
                 baseline.setResponseLength(0);
-                baseline.setResponseTime(0);
             }
+            baseline.setResponseTime(0);
 
             baseline.setTimestamp(new java.util.Date());
             baseline.setUserSessionName(null);
