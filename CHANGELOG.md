@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.5] - 2026-05-13
+
+### Changed
+- 更新推广文案：补充报文比对、报告生成、批量操作等 v2.16.x 功能介绍
+- 新增毕导风格推广文案（doc/promotion_script_bidao_style.md）
+- 同步 AboutPanel 版本号至 v2.16.5
+
 ## [2.16.4] - 2026-05-13
 
 ### Fixed
