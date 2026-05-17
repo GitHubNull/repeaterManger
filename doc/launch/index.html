@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Repeater Manager — Reimagine Burp Repeater</title>
+<style>
+  :root {
+    --bg: #000;
+    --ink: #f5f5f7;
+    --ink-2: #a1a1a6;
+    --ink-3: #6e6e73;
+    --line: rgba(255,255,255,.08);
+    --glass: rgba(255,255,255,.04);
+    --glass-strong: rgba(255,255,255,.07);
+    --accent-a: #ff5e87;
+    --accent-b: #8e6bff;
+    --accent-c: #2bd4ff;
+    --accent-d: #ffd166;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+  }
+  body { font-feature-settings: "ss01","ss02","cv11"; letter-spacing: -0.01em; }
+
+  /* 全局光晕背景 */
+  .aurora {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(60% 50% at 18% 22%, rgba(255,94,135,.32), transparent 60%),
+      radial-gradient(55% 45% at 82% 30%, rgba(142,107,255,.30), transparent 65%),
+      radial-gradient(70% 60% at 50% 95%, rgba(43,212,255,.18), transparent 70%);
+    filter: blur(40px) saturate(120%);
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    0%   { transform: translate3d(0,0,0) scale(1); }
+    100% { transform: translate3d(-2%, 1%, 0) scale(1.05); }
+  }
+  .grain {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .035;
+    background-image: radial-gradient(rgba(255,255,255,.9) 1px, transparent 1px);
+    background-size: 3px 3px;
+    mix-blend-mode: screen;
+  }
+
+  /* 滑动容器 */
+  .deck {
+    position: relative; z-index: 2;
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: row;
+    transition: transform .9s cubic-bezier(.65,.04,.35,1);
+    will-change: transform;
+  }
+  .slide {
+    flex: 0 0 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 5vh 6vw;
+    position: relative; overflow: hidden;
+  }
+  .slide-inner {
+    width: 100%; max-width: 1240px;
+    opacity: 0; transform: translateY(28px);
+    transition: opacity .8s ease .15s, transform .8s cubic-bezier(.2,.7,.2,1) .15s;
+  }
+  .slide.active .slide-inner { opacity: 1; transform: none; }
+
+  /* 排版 */
+  .eyebrow {
+    font-size: 14px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 22px;
+  }
+  h1 {
+    font-size: clamp(48px, 7.5vw, 108px);
+    font-weight: 700; line-height: 1.02; letter-spacing: -0.035em;
+  }
+  h2 {
+    font-size: clamp(36px, 5.2vw, 76px);
+    font-weight: 700; line-height: 1.06; letter-spacing: -0.03em;
+  }
+  h3 {
+    font-size: clamp(22px, 2.4vw, 32px);
+    font-weight: 600; line-height: 1.2; letter-spacing: -0.015em;
+  }
+  p.lead {
+    margin-top: 22px;
+    font-size: clamp(18px, 1.6vw, 24px);
+    color: var(--ink-2); max-width: 880px; line-height: 1.5;
+  }
+  .gradient-text {
+    background: linear-gradient(120deg, #fff 0%, #fff 35%, var(--accent-a) 60%, var(--accent-b) 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .divider {
+    width: 56px; height: 3px; border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+    margin: 28px 0;
+  }
+
+  /* 玻璃卡片 */
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-radius: 22px;
+    padding: 28px;
+    transition: transform .5s ease, border-color .5s ease, background .5s ease;
+  }
+  .glass:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.18); background: var(--glass-strong); }
+
+  .grid { display: grid; gap: 18px; }
+  .g-3 { grid-template-columns: repeat(3, 1fr); }
+  .g-2 { grid-template-columns: repeat(2, 1fr); }
+  .g-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 900px) { .g-3,.g-4 { grid-template-columns: 1fr 1fr; } .g-2 { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) { .g-3,.g-4,.g-2 { grid-template-columns: 1fr; } }
+
+  .kpi { display: flex; flex-direction: column; gap: 8px; }
+  .kpi .num {
+    font-size: clamp(40px, 5vw, 64px);
+    font-weight: 700; letter-spacing: -.03em;
+    background: linear-gradient(120deg, #fff, var(--accent-a));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .kpi .lbl { color: var(--ink-2); font-size: 15px; }
+
+  .feat-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(255,94,135,.22), rgba(142,107,255,.22));
+    border: 1px solid rgba(255,255,255,.14);
+    margin-bottom: 16px;
+  }
+  .feat-icon svg { width: 22px; height: 22px; stroke: #fff; }
+
+  .feat h3 { margin-bottom: 8px; }
+  .feat p { color: var(--ink-2); font-size: 15px; line-height: 1.55; }
+
+  /* 标签徽章 */
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 99px;
+    background: rgba(255,255,255,.06); border: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-2);
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-c); box-shadow: 0 0 10px var(--accent-c); }
+
+  /* 痛点 → 方案对照 */
+  .pain {
+    border-left: 3px solid rgba(255,94,135,.6);
+    padding: 14px 18px; color: var(--ink-2);
+    background: rgba(255,94,135,.05); border-radius: 0 12px 12px 0;
+  }
+  .gain {
+    border-left: 3px solid rgba(43,212,255,.7);
+    padding: 14px 18px; color: var(--ink);
+    background: rgba(43,212,255,.06); border-radius: 0 12px 12px 0;
+  }
+
+  /* Pool 架构图 */
+  .pool-stack { display: flex; flex-direction: column; gap: 10px; }
+  .pool-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 18px; border-radius: 14px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line);
+    font-size: 15px;
+  }
+  .pool-row .tag {
+    font-family: "SF Mono", ui-monospace, "Menlo", monospace;
+    font-size: 12px; padding: 3px 10px; border-radius: 6px;
+    background: rgba(142,107,255,.18); color: #d9cdff; letter-spacing: .04em;
+  }
+  .pool-row .desc { color: var(--ink-2); flex: 1; }
+
+  /* 4×4 矩阵 */
+  .matrix {
+    display: grid; grid-template-columns: 120px repeat(4, 1fr);
+    gap: 8px; margin-top: 10px;
+  }
+  .matrix .h, .matrix .v {
+    font-size: 12px; color: var(--ink-3); padding: 10px 12px; text-align: center;
+    font-family: "SF Mono", ui-monospace, monospace; letter-spacing: .03em;
+  }
+  .matrix .v { text-align: left; }
+  .matrix .cell {
+    text-align: center;
+    padding: 14px 10px; border-radius: 10px;
+    background: rgba(255,255,255,.05); border: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-2);
+    transition: all .35s ease;
+  }
+  .matrix .cell:hover {
+    background: linear-gradient(135deg, rgba(255,94,135,.18), rgba(142,107,255,.18));
+    color: #fff; border-color: rgba(255,255,255,.25);
+    transform: scale(1.04);
+  }
+
+  /* 越权流程 */
+  .flow { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+  .flow .step {
+    flex: 1; min-width: 180px;
+    padding: 18px; border-radius: 16px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line);
+    position: relative;
+  }
+  .flow .step .n {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #fff;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    margin-bottom: 12px;
+  }
+  .flow .step h3 { font-size: 17px; margin-bottom: 6px; }
+  .flow .step p { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+
+  /* 报告格式 chips */
+  .chips { display: flex; gap: 14px; flex-wrap: wrap; }
+  .chip {
+    padding: 10px 16px; border-radius: 99px;
+    background: rgba(255,255,255,.05); border: 1px solid var(--line);
+    font-size: 14px; color: var(--ink); display: inline-flex; align-items: center; gap: 8px;
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* 布局示意 */
+  .layouts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .layouts { grid-template-columns: 1fr 1fr; } }
+  .layout-card {
+    aspect-ratio: 4/3; border-radius: 14px; padding: 12px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .layout-card .preview {
+    flex: 1; display: grid; gap: 6px; border-radius: 8px;
+    background: rgba(0,0,0,.35);
+    padding: 8px;
+  }
+  .layout-card .pane {
+    background: linear-gradient(135deg, rgba(255,94,135,.5), rgba(142,107,255,.5));
+    border-radius: 4px;
+  }
+  .lc-lr .preview { grid-template-columns: 1fr 1fr; }
+  .lc-tb .preview { grid-template-rows: 1fr 1fr; }
+  .lc-r .preview { grid-template-columns: 1fr; }
+  .lc-r .pane:last-child { display: none; }
+  .lc-rsp .preview { grid-template-columns: 1fr; }
+  .lc-rsp .pane:first-child { display: none; }
+  .layout-card .lbl { font-size: 13px; color: var(--ink-2); text-align: center; }
+
+  /* 技术栈 logos */
+  .stack-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .stack-list .item {
+    padding: 10px 16px; border-radius: 12px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--line);
+    font-size: 14px; color: var(--ink-2);
+    font-family: "SF Mono", ui-monospace, monospace;
+  }
+  .stack-list .item b { color: #fff; font-weight: 600; }
+
+  /* 场景列表 */
+  .scenes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (max-width: 800px) { .scenes { grid-template-columns: 1fr; } }
+  .scene { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid var(--line); }
+  .scene .idx {
+    width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent-c), var(--accent-b));
+    color: #fff; font-weight: 700; font-size: 14px;
+  }
+  .scene h3 { font-size: 16px; margin-bottom: 4px; }
+  .scene p { color: var(--ink-2); font-size: 13.5px; line-height: 1.5; }
+
+  /* CTA */
+  .cta-box { text-align: center; }
+  .cta-buttons { display: inline-flex; gap: 14px; margin-top: 28px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    padding: 14px 28px; border-radius: 99px;
+    font-size: 16px; font-weight: 600; text-decoration: none;
+    transition: transform .25s ease, box-shadow .25s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary {
+    background: #fff; color: #000;
+    box-shadow: 0 0 0 0 rgba(255,255,255,.4);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(255,255,255,.25); }
+  .btn-ghost {
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,.06); transform: translateY(-2px); }
+
+  /* 顶部进度条 + 页码 */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 28px; pointer-events: none;
+  }
+  .brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 14px; color: var(--ink-2); letter-spacing: .04em;
+  }
+  .brand .b-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    box-shadow: 0 0 14px rgba(142,107,255,.7);
+  }
+  .progress-wrap {
+    flex: 1; max-width: 360px; height: 3px; margin: 0 28px;
+    background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden;
+  }
+  .progress {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+    transition: width .6s ease;
+  }
+  .pager { font-size: 13px; color: var(--ink-2); font-family: "SF Mono", ui-monospace, monospace; }
+
+  /* 右侧导航点 */
+  .nav-dots {
+    position: fixed; right: 22px; top: 50%; transform: translateY(-50%);
+    z-index: 50; display: flex; flex-direction: column; gap: 10px;
+  }
+  .nav-dots button {
+    width: 8px; height: 8px; border-radius: 50%;
+    border: none; cursor: pointer;
+    background: rgba(255,255,255,.25); padding: 0;
+    transition: all .3s ease;
+  }
+  .nav-dots button.active {
+    background: #fff; transform: scale(1.4);
+    box-shadow: 0 0 10px rgba(255,255,255,.6);
+  }
+
+  /* 底部提示 */
+  .hint {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    z-index: 50; font-size: 12px; color: var(--ink-3);
+    letter-spacing: .12em; text-transform: uppercase;
+    display: inline-flex; gap: 14px; align-items: center;
+  }
+  .hint kbd {
+    font-family: "SF Mono", ui-monospace, monospace;
+    background: rgba(255,255,255,.08); border: 1px solid var(--line);
+    padding: 2px 6px; border-radius: 4px; font-size: 11px;
+  }
+
+  /* 封面专属 */
+  .cover-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+  .cover-meta { color: var(--ink-2); font-size: 14px; letter-spacing: .08em; }
+
+  @media (max-width: 720px) {
+    .topbar { padding: 12px 16px; }
+    .progress-wrap { margin: 0 14px; }
+    .nav-dots { display: none; }
+    .slide { padding: 8vh 6vw; }
+  }
+</style>
+</head>
+<body>
+  <div class="aurora"></div>
+  <div class="grain"></div>
+
+  <div class="topbar">
+    <div class="brand"><span class="b-dot"></span><span>Repeater Manager · Launch 2026</span></div>
+    <div class="progress-wrap"><div class="progress" id="progress"></div></div>
+    <div class="pager"><span id="pgCur">01</span> / <span id="pgTot">15</span></div>
+  </div>
+
+  <nav class="nav-dots" id="navDots"></nav>
+
+  <main class="deck" id="deck">
+
+    <!-- 1 封面 -->
+    <section class="slide">
+      <div class="slide-inner cover-wrap">
+        <span class="badge"><span class="dot"></span>v2.16.5 · Burp Suite Extension</span>
+        <h1>Repeater Manager.<br/><span class="gradient-text">Reimagine Repeater.</span></h1>
+        <p class="lead">为安全测试人员重新设计的 Burp Suite 请求重放管理插件 — 持久化 · 去重 · 越权 · 报告 · 一应俱全。</p>
+        <div class="cover-meta">2026 · MASTER KEYNOTE</div>
+      </div>
+    </section>
+
+    <!-- 2 痛点 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">The Problem</div>
+        <h2>原生 Repeater，有三道<br/>看不见的天花板。</h2>
+        <div class="divider"></div>
+        <div class="grid g-3" style="margin-top: 28px;">
+          <div class="pain"><b>测试结果会消失</b><br/>关闭 Burp 后所有 Repeater 标签丢失，无法回溯。</div>
+          <div class="pain"><b>难以分类与对比</b><br/>缺乏颜色/备注/搜索，更没有响应历史比对。</div>
+          <div class="pain"><b>无法批量越权</b><br/>多用户会话切换、批量重放、报告产出全靠手工。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 Hero -->
+    <section class="slide">
+      <div class="slide-inner" style="text-align:center;">
+        <div class="eyebrow" style="margin-bottom:36px;">One More Thing</div>
+        <h1 class="gradient-text">一次重放，<br/>永久留存。</h1>
+        <p class="lead" style="margin: 28px auto 0;">SQLite 持久化 + Pool 去重 + ERM 加密存档 — 让每一次测试都成为可追溯、可分享、可复现的资产。</p>
+      </div>
+    </section>
+
+    <!-- 4 数据指标 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">By the Numbers</div>
+        <h2>用数字说话。</h2>
+        <div class="divider"></div>
+        <div class="grid g-4" style="margin-top: 36px;">
+          <div class="glass kpi"><span class="num">4×4</span><span class="lbl">API 提取矩阵<br/>提取源 × 提取方法</span></div>
+          <div class="glass kpi"><span class="num">SHA-256</span><span class="lbl">内容寻址去重<br/>Pool 架构 5 大池</span></div>
+          <div class="glass kpi"><span class="num">AES-256</span><span class="lbl">CBC + HMAC-SHA256<br/>ERM 加密存档</span></div>
+          <div class="glass kpi"><span class="num">3 in 1</span><span class="lbl">PDF · HTML · Markdown<br/>越权报告输出</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 请求管理 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Request Management</div>
+        <h2>右键发送，<br/>从此 <span class="gradient-text">井井有条</span>。</h2>
+        <div class="divider"></div>
+        <div class="grid g-3" style="margin-top: 28px;">
+          <div class="glass feat">
+            <span class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></span>
+            <h3>颜色 · 备注 · 列控制</h3>
+            <p>多色高亮分类、单元格内备注、自定义可见列与列宽，请求列表如同你的工作台。</p>
+          </div>
+          <div class="glass feat">
+            <span class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+            <h3>高级搜索</h3>
+            <p>URL / Header / Body 范围切换，关键字 + 正则 + 大小写敏感，越权状态独立过滤。</p>
+          </div>
+          <div class="glass feat">
+            <span class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
+            <h3>批量操作</h3>
+            <p>Shift / Ctrl 多选历史记录，一键批量重放、批量越权测试、批量删除并实时显示进度。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 报文比对 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Diff Engine · v2.16</div>
+        <h2>差异之处，<br/>一目了然。</h2>
+        <div class="divider"></div>
+        <p class="lead">基于 LCS 的行级 + 行内字符级 diff 引擎，配合同步滚动、差异导航器和可折叠搜索栏 — 把肉眼对比的时代留在过去。</p>
+        <div class="grid g-3" style="margin-top: 32px;">
+          <div class="glass feat"><h3>字符级 diff</h3><p>新增的 DiffEngine 支持行内字符粒度差异，精准锁定一个字节的变化。</p></div>
+          <div class="glass feat"><h3>同步滚动</h3><p>SynchronizedScrollPanel 让左右两个 RSyntaxTextArea 锁步联动。</p></div>
+          <div class="glass feat"><h3>差异导航</h3><p>DiffNavigator 一键跳到上一处 / 下一处差异，再也不滚断鼠标滚轮。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 Pool 去重架构 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Pool Architecture</div>
+        <h2>同样的 Body，<br/>只存一份。</h2>
+        <div class="divider"></div>
+        <div class="grid g-2" style="margin-top: 28px;">
+          <div>
+            <p class="lead">SHA-256 内容寻址 + 引用计数 + 后台 GC，每 10 分钟自动清理零引用数据。大 Body 自动外置文件，节省数据库空间。</p>
+          </div>
+          <div class="pool-stack">
+            <div class="pool-row"><span class="tag">string_pool</span><span class="desc">域名 / 路径 / 查询参数去重</span></div>
+            <div class="pool-row"><span class="tag">header_pool</span><span class="desc">请求 / 响应头部统一存放</span></div>
+            <div class="pool-row"><span class="tag">body_pool</span><span class="desc">小 Body 行内存储（SQLite BLOB）</span></div>
+            <div class="pool-row"><span class="tag">file_pool</span><span class="desc">大 Body 外置 blobs/ 目录</span></div>
+            <div class="pool-row"><span class="tag">gc_queue</span><span class="desc">零引用回收队列，后台清理</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 ERM 加密 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Secure Archive</div>
+        <h2>带走整个会话 —<br/><span class="gradient-text">加密带走。</span></h2>
+        <div class="divider"></div>
+        <p class="lead">ERM 自有存档格式，PBKDF2 派生密钥 + AES-256-CBC 加密 + HMAC-SHA256 完整性校验，告别明文导出的隐患。同时无缝兼容 Postman Collection v2.1。</p>
+        <div class="grid g-3" style="margin-top: 32px;">
+          <div class="glass kpi"><span class="num">PBKDF2</span><span class="lbl">密钥派生</span></div>
+          <div class="glass kpi"><span class="num">AES-256-CBC</span><span class="lbl">报文加密</span></div>
+          <div class="glass kpi"><span class="num">HMAC-SHA256</span><span class="lbl">完整性校验</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 API 提取矩阵 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">API Extraction</div>
+        <h2>从混乱请求中，<br/>抽出标准 API。</h2>
+        <div class="divider"></div>
+        <p class="lead">规则引擎模式 — 4 种提取源 × 4 种提取方法 = 16 种组合；YAML 全局规则跨项目共享，SQLite 项目规则独立沉淀。</p>
+        <div class="matrix" style="margin-top: 28px;">
+          <div class="h"></div>
+          <div class="h">REGEX</div><div class="h">SUBSTR</div><div class="h">JSON_PATH</div><div class="h">XPATH</div>
+          <div class="v">URL_PATH</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div>
+          <div class="v">URL_QUERY</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div>
+          <div class="v">HEADER</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div>
+          <div class="v">BODY</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div><div class="cell">✓</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 越权测试 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Privilege Testing</div>
+        <h2>越权检测，<br/>从手工到 <span class="gradient-text">自动化</span>。</h2>
+        <div class="divider"></div>
+        <div class="flow" style="margin-top: 28px;">
+          <div class="step"><span class="n">1</span><h3>多用户会话</h3><p>用户会话与令牌值集中管理，支持 YAML 导入导出。</p></div>
+          <div class="step"><span class="n">2</span><h3>Token 替换</h3><p>Header / JSON / XML / Form / Multipart / URL 参数 6 种位置类型自动替换。</p></div>
+          <div class="step"><span class="n">3</span><h3>判断引擎</h3><p>状态码 / 响应头 / 响应体 / 响应时间 + 9 种比较方法（含 LENGTH_DIFF）。</p></div>
+          <div class="step"><span class="n">4</span><h3>结果可视化</h3><p>颜色标记 + Levenshtein 相似度 + 基线响应对比。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 报告生成 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Report Generation</div>
+        <h2>测试到报告，<br/>一步到位。</h2>
+        <div class="divider"></div>
+        <p class="lead">越权测试结果一键导出为正式报告，内嵌 cURL 命令、Postman 代码片段、二进制内容渲染（hex / base64 / 图片），FreeMarker 模板可定制。</p>
+        <div class="chips" style="margin-top: 28px;">
+          <div class="chip"><span class="dot" style="background: var(--accent-a)"></span>PDF · Apache PDFBox 内嵌中文字体</div>
+          <div class="chip"><span class="dot" style="background: var(--accent-b)"></span>HTML · FreeMarker 模板渲染</div>
+          <div class="chip"><span class="dot" style="background: var(--accent-c)"></span>Markdown · GFM 表格扩展</div>
+          <div class="chip"><span class="dot" style="background: var(--accent-d)"></span>cURL / Postman 复现片段</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12 多布局 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Layout Modes</div>
+        <h2>四种布局，<br/>适配每一块屏幕。</h2>
+        <div class="divider"></div>
+        <div class="layouts" style="margin-top: 28px;">
+          <div class="layout-card lc-lr"><div class="preview"><div class="pane"></div><div class="pane"></div></div><div class="lbl">左右分栏</div></div>
+          <div class="layout-card lc-tb"><div class="preview"><div class="pane"></div><div class="pane"></div></div><div class="lbl">上下分栏</div></div>
+          <div class="layout-card lc-r"><div class="preview"><div class="pane"></div><div class="pane"></div></div><div class="lbl">仅请求</div></div>
+          <div class="layout-card lc-rsp"><div class="preview"><div class="pane"></div><div class="pane"></div></div><div class="lbl">仅响应</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13 技术栈 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Engineered with</div>
+        <h2>站在巨人的肩膀上。</h2>
+        <div class="divider"></div>
+        <p class="lead">Java 17 · Montoya SDK · Swing 现代化 UI · 自定义 SQLite 连接池 · FreeMarker 模板渲染 · Apache PDFBox。</p>
+        <div class="stack-list">
+          <span class="item"><b>Montoya API</b> 2025.12</span>
+          <span class="item"><b>RSyntaxTextArea</b> 3.3.3</span>
+          <span class="item"><b>SQLite JDBC</b> 3.42.0</span>
+          <span class="item"><b>Gson</b> 2.10.1</span>
+          <span class="item"><b>SnakeYAML</b> 2.2</span>
+          <span class="item"><b>Apache PDFBox</b> 3.0.1</span>
+          <span class="item"><b>FreeMarker</b> 2.3.33</span>
+          <span class="item"><b>CommonMark</b> 0.22.0</span>
+          <span class="item"><b>Commons IO / Lang3</b></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14 使用场景 -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="eyebrow">Use Cases</div>
+        <h2>它属于这些场景。</h2>
+        <div class="divider"></div>
+        <div class="scenes" style="margin-top: 28px;">
+          <div class="scene"><span class="idx">01</span><div><h3>API 安全测试</h3><p>同一接口的不同参数组合反复重放，所有结果可追溯。</p></div></div>
+          <div class="scene"><span class="idx">02</span><div><h3>API 路径整理</h3><p>用提取规则从大量请求中萃取标准 API 列表。</p></div></div>
+          <div class="scene"><span class="idx">03</span><div><h3>越权漏洞检测</h3><p>多用户会话 + 自动判断，水平/垂直越权一网打尽。</p></div></div>
+          <div class="scene"><span class="idx">04</span><div><h3>漏洞复现</h3><p>记录每一步的请求与响应，复现报告轻而易举。</p></div></div>
+          <div class="scene"><span class="idx">05</span><div><h3>团队协作</h3><p>ERM 加密存档 + YAML 全局规则，共享更安全。</p></div></div>
+          <div class="scene"><span class="idx">06</span><div><h3>渗透报告</h3><p>PDF / HTML / Markdown 三连，交付即专业。</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 15 CTA -->
+    <section class="slide">
+      <div class="slide-inner cta-box">
+        <div class="eyebrow">Available Now</div>
+        <h1>从今天起，<br/><span class="gradient-text">让 Repeater 拥有记忆。</span></h1>
+        <p class="lead" style="margin: 28px auto 0;">在 Burp Suite Professional 2024+ 上加载 JAR，重启即用。完全开源，Apache License 2.0。</p>
+        <div class="cta-buttons">
+          <a href="../../README.md" class="btn btn-primary">阅读 README</a>
+          <a href="../usage_quick_zh.md" class="btn btn-ghost">快速入门</a>
+          <a href="../usage_detailed_zh.md" class="btn btn-ghost">详细教程</a>
+        </div>
+        <div style="margin-top: 38px; color: var(--ink-3); font-size: 13px; letter-spacing: .14em;">REPEATER MANAGER · v2.16.5 · APACHE 2.0</div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="hint">
+    <span><kbd>←</kbd> <kbd>→</kbd> 翻页</span>
+    <span><kbd>Space</kbd> 下一页</span>
+    <span><kbd>Home</kbd> / <kbd>End</kbd> 跳转</span>
+  </div>
+
+<script>
+(function () {
+  const deck = document.getElementById('deck');
+  const slides = Array.from(deck.querySelectorAll('.slide'));
+  const total = slides.length;
+  const progress = document.getElementById('progress');
+  const pgCur = document.getElementById('pgCur');
+  const pgTot = document.getElementById('pgTot');
+  const navDots = document.getElementById('navDots');
+  let idx = 0;
+  let isAnim = false;
+
+  pgTot.textContent = String(total).padStart(2, '0');
+
+  // 构建导航点
+  slides.forEach((_, i) => {
+    const b = document.createElement('button');
+    b.setAttribute('aria-label', '跳到第 ' + (i + 1) + ' 页');
+    b.addEventListener('click', () => goto(i));
+    navDots.appendChild(b);
+  });
+
+  function update() {
+    deck.style.transform = 'translate3d(' + (-idx * 100) + 'vw, 0, 0)';
+    slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+    progress.style.width = ((idx + 1) / total * 100) + '%';
+    pgCur.textContent = String(idx + 1).padStart(2, '0');
+    Array.from(navDots.children).forEach((d, i) => d.classList.toggle('active', i === idx));
+  }
+
+  function goto(i) {
+    if (isAnim) return;
+    const next = Math.max(0, Math.min(total - 1, i));
+    if (next === idx) return;
+    isAnim = true;
+    idx = next;
+    update();
+    setTimeout(() => { isAnim = false; }, 900);
+  }
+
+  function next() { goto(idx + 1); }
+  function prev() { goto(idx - 1); }
+
+  // 键盘
+  document.addEventListener('keydown', (e) => {
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'PageDown':
+      case ' ':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft':
+      case 'PageUp':
+        e.preventDefault(); prev(); break;
+      case 'Home':
+        e.preventDefault(); goto(0); break;
+      case 'End':
+        e.preventDefault(); goto(total - 1); break;
+    }
+  });
+
+  // 滚轮（去抖）
+  let wheelLock = false;
+  window.addEventListener('wheel', (e) => {
+    if (wheelLock) return;
+    if (Math.abs(e.deltaY) < 30 && Math.abs(e.deltaX) < 30) return;
+    wheelLock = true;
+    if ((e.deltaY > 0) || (e.deltaX > 0)) next();
+    else prev();
+    setTimeout(() => { wheelLock = false; }, 950);
+  }, { passive: true });
+
+  // 触摸
+  let tx = 0, ty = 0;
+  window.addEventListener('touchstart', (e) => {
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, { passive: true });
+  window.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - tx;
+    const dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) next(); else prev();
+    }
+  }, { passive: true });
+
+  // 初始化
+  update();
+})();
+</script>
+</body>
+</html>

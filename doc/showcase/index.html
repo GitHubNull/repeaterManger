@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repeater Manager — 重新定义 HTTP 请求重放管理</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #000;
+  --bg-elevated: #0a0a0a;
+  --surface: rgba(255,255,255,0.04);
+  --surface-hover: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.14);
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #6e6e73;
+  --accent: #2997ff;
+  --accent-glow: rgba(41,151,255,0.25);
+  --purple: #bf5af2;
+  --purple-glow: rgba(191,90,242,0.25);
+  --green: #30d158;
+  --green-glow: rgba(48,209,88,0.25);
+  --orange: #f5a623;
+  --orange-glow: rgba(245,166,35,0.25);
+  --red: #ff453a;
+  --red-glow: rgba(255,69,58,0.2);
+  --cyan: #5ef0d0;
+  --cyan-glow: rgba(94,240,208,0.25);
+  --transition: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  background: var(--bg); color: var(--text-primary);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  user-select: none; -webkit-user-select: none;
+}
+
+/* ===== Starfield Background ===== */
+.stars-canvas {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0; opacity: 0.5;
+}
+
+/* ===== Presentation Container ===== */
+.presentation {
+  width: 100%; height: 100%; position: relative; z-index: 1;
+}
+
+/* ===== Slide ===== */
+.slide {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: 60px 80px;
+  opacity: 0; visibility: hidden;
+  transition: opacity 0.9s var(--transition), visibility 0.9s, transform 0.9s var(--transition);
+  transform: scale(0.98);
+  overflow: hidden;
+}
+.slide.active {
+  opacity: 1; visibility: visible; transform: scale(1);
+}
+
+/* Slide background gradient orb */
+.slide::after {
+  content: ''; position: absolute;
+  width: 900px; height: 900px; border-radius: 50%;
+  filter: blur(180px); opacity: 0.04; pointer-events: none;
+  background: radial-gradient(circle, var(--accent), transparent 70%);
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+}
+
+/* ===== Navigation Dots ===== */
+.nav-dots {
+  position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 10px; z-index: 100;
+}
+.nav-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  cursor: pointer; border: none; outline: none;
+  transition: all 0.35s var(--transition);
+}
+.nav-dot:hover { background: rgba(255,255,255,0.45); transform: scale(1.4); }
+.nav-dot.active { background: var(--accent); transform: scale(1.4); box-shadow: 0 0 12px var(--accent-glow); }
+
+/* ===== Progress Bar ===== */
+.progress-bar {
+  position: fixed; bottom: 0; left: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+  transition: width 0.5s var(--transition); z-index: 100;
+}
+
+/* ===== Page Info ===== */
+.page-info {
+  position: fixed; bottom: 24px; right: 28px;
+  font-size: 12px; color: var(--text-tertiary); z-index: 100;
+  font-variant-numeric: tabular-nums; font-weight: 500; letter-spacing: 0.04em;
+}
+.key-hint {
+  position: fixed; bottom: 24px; left: 28px;
+  font-size: 11px; color: rgba(255,255,255,0.12); z-index: 100;
+  letter-spacing: 0.03em;
+}
+
+/* ===== Typography ===== */
+.eyebrow {
+  font-size: 15px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 18px;
+}
+.hero-title {
+  font-size: clamp(56px, 7vw, 96px); font-weight: 700;
+  letter-spacing: -0.035em; line-height: 1.04; text-align: center;
+  background: linear-gradient(175deg, #fff 15%, #a1a1a6 85%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.section-title {
+  font-size: clamp(40px, 5.5vw, 64px); font-weight: 700;
+  letter-spacing: -0.03em; line-height: 1.08; text-align: center;
+}
+.section-sub {
+  font-size: clamp(18px, 2.2vw, 24px); font-weight: 400;
+  color: var(--text-secondary); text-align: center;
+  max-width: 680px; line-height: 1.55; margin-top: 16px;
+}
+.body-text {
+  font-size: clamp(15px, 1.8vw, 20px); font-weight: 400;
+  color: var(--text-secondary); line-height: 1.6; max-width: 720px; text-align: center;
+}
+.tagline {
+  font-size: 28px; font-weight: 400; color: var(--text-secondary);
+  letter-spacing: -0.01em; text-align: center; margin-top: 18px;
+}
+.version-chip {
+  display: inline-block; padding: 7px 20px; border-radius: 20px;
+  background: rgba(41,151,255,0.12); border: 1px solid rgba(41,151,255,0.28);
+  font-size: 13px; color: var(--accent); font-weight: 500; margin-top: 28px;
+  letter-spacing: 0.02em;
+}
+
+/* ===== Two Column Layout ===== */
+.col2 {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 70px;
+  max-width: 1120px; width: 100%; align-items: center;
+}
+.col2-text { text-align: left; }
+.col2-text .section-title { text-align: left; font-size: clamp(32px, 4vw, 48px); }
+.col2-text .body-text { text-align: left; margin-top: 18px; }
+.col2-visual { display: flex; justify-content: center; align-items: center; }
+
+/* ===== Visual Elements (CSS Graphics) ===== */
+.orb {
+  width: 300px; height: 300px; border-radius: 50%; position: relative;
+  background: radial-gradient(circle at 35% 35%, var(--accent-glow), transparent 65%);
+}
+.orb::before {
+  content: ''; position: absolute; inset: 20px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.orb-inner {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 170px; height: 170px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 64px;
+  background: radial-gradient(circle at 35% 35%, var(--accent-glow), transparent 70%);
+}
+.orb.purple { background: radial-gradient(circle at 35% 35%, var(--purple-glow), transparent 65%); }
+.orb.purple .orb-inner { background: radial-gradient(circle at 35% 35%, var(--purple-glow), transparent 70%); }
+.orb.green { background: radial-gradient(circle at 35% 35%, var(--green-glow), transparent 65%); }
+.orb.green .orb-inner { background: radial-gradient(circle at 35% 35%, var(--green-glow), transparent 70%); }
+.orb.orange { background: radial-gradient(circle at 35% 35%, var(--orange-glow), transparent 65%); }
+.orb.orange .orb-inner { background: radial-gradient(circle at 35% 35%, var(--orange-glow), transparent 70%); }
+.orb.cyan { background: radial-gradient(circle at 35% 35%, var(--cyan-glow), transparent 65%); }
+.orb.cyan .orb-inner { background: radial-gradient(circle at 35% 35%, var(--cyan-glow), transparent 70%); }
+.orb.red { background: radial-gradient(circle at 35% 35%, var(--red-glow), transparent 65%); }
+.orb.red .orb-inner { background: radial-gradient(circle at 35% 35%, var(--red-glow), transparent 70%); }
+
+/* ===== Grid Cards ===== */
+.card-grid { display: grid; gap: 24px; max-width: 1080px; width: 100%; margin-top: 44px; }
+.card-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+.card-grid.cols4 { grid-template-columns: repeat(4, 1fr); }
+.card-grid.cols2 { grid-template-columns: repeat(2, 1fr); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px; padding: 32px 26px; text-align: center;
+  transition: all 0.45s var(--transition);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.card:hover {
+  background: var(--surface-hover); border-color: var(--border-hover);
+  transform: translateY(-4px);
+}
+.card-icon {
+  width: 52px; height: 52px; margin: 0 auto 18px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.card h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+.card p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+.icon-blue { background: rgba(41,151,255,0.15); }
+.icon-purple { background: rgba(191,90,242,0.15); }
+.icon-orange { background: rgba(245,166,35,0.15); }
+.icon-green { background: rgba(48,209,88,0.15); }
+.icon-cyan { background: rgba(94,240,208,0.15); }
+.icon-red { background: rgba(255,69,58,0.12); }
+
+/* ===== Pain Point Cards ===== */
+.pain-card {
+  background: rgba(255,69,58,0.04); border: 1px solid rgba(255,69,58,0.1);
+  border-radius: 16px; padding: 26px 28px; text-align: left;
+}
+.pain-card h4 { font-size: 16px; color: var(--red); margin-bottom: 6px; font-weight: 600; }
+.pain-card p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+/* ===== Stats Row ===== */
+.stats-row { display: flex; gap: 60px; margin-top: 40px; }
+.stat-item { text-align: center; }
+.stat-num {
+  font-size: clamp(40px, 5vw, 56px); font-weight: 700; line-height: 1;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.stat-label { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
+
+/* ===== Feature List ===== */
+.feat-list { list-style: none; margin-top: 22px; text-align: left; }
+.feat-list li {
+  font-size: 16px; color: var(--text-secondary); padding: 8px 0 8px 30px;
+  position: relative; line-height: 1.5;
+}
+.feat-list li::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; border-radius: 50%; background: rgba(48,209,88,0.15);
+}
+.feat-list li::after {
+  content: ''; position: absolute; left: 6px; top: 50%;
+  transform: translateY(-60%) rotate(45deg);
+  width: 5px; height: 9px; border-right: 2px solid var(--green); border-bottom: 2px solid var(--green);
+}
+
+/* ===== Architecture Layers ===== */
+.arch-stack {
+  display: flex; flex-direction: column; gap: 10px;
+  max-width: 680px; width: 100%; margin-top: 32px;
+}
+.arch-layer {
+  display: flex; align-items: center; gap: 18px; padding: 16px 26px;
+  border-radius: 11px; background: var(--surface); border: 1px solid var(--border);
+}
+.arch-layer .layer-name {
+  font-size: 14px; font-weight: 600; color: var(--text-primary); min-width: 110px;
+}
+.arch-layer .layer-desc { font-size: 13px; color: var(--text-secondary); }
+
+/* ===== Tech Tags ===== */
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 860px; margin-top: 32px; }
+.tag {
+  padding: 9px 20px; border-radius: 20px; background: var(--surface);
+  border: 1px solid var(--border); font-size: 14px; color: var(--text-secondary);
+  transition: all 0.3s var(--transition);
+}
+.tag:hover { background: rgba(41,151,255,0.08); border-color: rgba(41,151,255,0.3); color: var(--text-primary); }
+
+/* ===== Export / Format Cards ===== */
+.fmt-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px; padding: 36px 26px; text-align: center;
+  transition: all 0.45s var(--transition);
+}
+.fmt-card:hover { background: var(--surface-hover); transform: translateY(-3px); }
+.fmt-card .fmt-icon { font-size: 44px; margin-bottom: 14px; }
+.fmt-card h3 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.fmt-card p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+/* ===== Use Case Cards ===== */
+.uc-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px 22px; text-align: left;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.uc-card .uc-num {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(41,151,255,0.12); display: flex; align-items: center;
+  justify-content: center; font-size: 15px; font-weight: 700; color: var(--accent);
+}
+.uc-card h4 { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.uc-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+
+/* ===== CTA Button ===== */
+.cta-btn {
+  display: inline-block; margin-top: 36px; padding: 15px 42px;
+  border-radius: 28px; background: var(--accent); color: #fff;
+  font-size: 17px; font-weight: 600; text-decoration: none;
+  transition: all 0.3s var(--transition); border: none; cursor: pointer;
+  letter-spacing: 0.01em;
+}
+.cta-btn:hover { background: #0077ed; transform: scale(1.04); box-shadow: 0 8px 30px var(--accent-glow); }
+
+/* ===== Slide-specific ===== */
+.slide-hero .hero-title { font-size: clamp(64px, 8vw, 110px); }
+.slide-hero .tagline { font-size: 26px; }
+
+/* ===== Animations ===== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(36px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.anim-fadeUp { animation: fadeUp 0.85s var(--transition) forwards; opacity: 0; }
+.anim-fadeIn { animation: fadeIn 1s ease forwards; opacity: 0; }
+.anim-scaleIn { animation: scaleIn 0.8s var(--transition) forwards; opacity: 0; }
+.anim-float { animation: float 5s ease-in-out infinite; }
+.anim-pulse { animation: pulse 3s ease-in-out infinite; }
+
+.d1 { animation-delay: 0.08s; } .d2 { animation-delay: 0.16s; } .d3 { animation-delay: 0.24s; }
+.d4 { animation-delay: 0.32s; } .d5 { animation-delay: 0.4s; }  .d6 { animation-delay: 0.48s; }
+.d7 { animation-delay: 0.56s; } .d8 { animation-delay: 0.64s; } .d9 { animation-delay: 0.72s; }
+
+/* ===== Data Persistence Visual (Pool Architecture) ===== */
+.pool-viz { display: flex; gap: 12px; flex-direction: column; max-width: 580px; width: 100%; margin: 0 auto; }
+.pool-row {
+  display: flex; align-items: center; gap: 14px; padding: 14px 22px;
+  border-radius: 10px; background: var(--surface); border: 1px solid var(--border);
+  font-size: 14px;
+}
+.pool-row .pool-sigil {
+  width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+}
+.pool-sigil.s { background: rgba(41,151,255,0.15); color: var(--accent); }
+.pool-sigil.h { background: rgba(191,90,242,0.15); color: var(--purple); }
+.pool-sigil.b { background: rgba(48,209,88,0.15); color: var(--green); }
+.pool-sigil.f { background: rgba(245,166,35,0.15); color: var(--orange); }
+.pool-row .pool-desc { color: var(--text-secondary); }
+.pool-row .pool-desc strong { color: var(--text-primary); font-weight: 500; }
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+  .slide { padding: 40px; }
+  .col2 { grid-template-columns: 1fr; gap: 40px; }
+  .col2-visual { order: -1; }
+  .card-grid.cols4 { grid-template-columns: repeat(2, 1fr); }
+  .card-grid.cols3 { grid-template-columns: repeat(2, 1fr); }
+  .card-grid.cols2 { grid-template-columns: 1fr; }
+  .stats-row { gap: 36px; flex-wrap: wrap; justify-content: center; }
+  .orb { width: 220px; height: 220px; }
+  .orb-inner { width: 130px; height: 130px; font-size: 48px; }
+}
+@media (max-width: 640px) {
+  .slide { padding: 28px 20px; }
+  .hero-title { font-size: 40px !important; }
+  .section-title { font-size: 30px !important; }
+  .card-grid.cols4, .card-grid.cols3, .card-grid.cols2 { grid-template-columns: 1fr; }
+  .nav-dots { right: 10px; gap: 8px; }
+  .nav-dot { width: 5px; height: 5px; }
+  .stats-row { gap: 24px; }
+  .key-hint { display: none; }
+}
+</style>
+</head>
+<body>
+
+<canvas class="stars-canvas" id="stars"></canvas>
+
+<div class="presentation" id="presentation">
+
+<!-- ===== Slide 1: Hero ===== -->
+<div class="slide slide-hero active">
+  <div class="eyebrow anim-fadeUp">Burp Suite Professional · Montoya SDK 2025</div>
+  <h1 class="hero-title anim-fadeUp d1">Repeater<br>Manager</h1>
+  <p class="tagline anim-fadeUp d2">重新定义 HTTP 请求重放管理</p>
+  <p class="tagline anim-fadeUp d3" style="font-size: 18px; margin-top: 10px; color: var(--text-tertiary);">面向安全测试人员的高级请求重放与越权测试插件</p>
+  <div class="version-chip anim-fadeUp d4">v2.16.5</div>
+</div>
+
+<!-- ===== Slide 2: The Problem ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">原生 Repeater 的痛点</div>
+  <h2 class="section-title anim-fadeUp d1">测试效率<br>被无形消耗</h2>
+  <div class="card-grid cols2" style="max-width:760px;">
+    <div class="pain-card anim-fadeUp d2">
+      <h4>🔴 数据易丢失</h4>
+      <p>关闭 Burp Suite 后所有请求和历史记录全部消失，无法持久化保存，每次重启从零开始</p>
+    </div>
+    <div class="pain-card anim-fadeUp d3">
+      <h4>🔴 无历史对比</h4>
+      <p>无法自动记录每次重放的响应变化，缺少差异对比工具，难以追踪测试演进过程</p>
+    </div>
+    <div class="pain-card anim-fadeUp d4">
+      <h4>🔴 管理混乱</h4>
+      <p>大量请求堆积在标签页中，缺乏分类、搜索、标记和批量操作能力</p>
+    </div>
+    <div class="pain-card anim-fadeUp d5">
+      <h4>🔴 越权测试繁琐</h4>
+      <p>手动替换 Token 进行水平/垂直越权测试，效率低下且极容易遗漏</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 3: Solution Overview ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">解决方案</div>
+  <h2 class="section-title anim-fadeUp d1">一个插件<br>终结所有痛点</h2>
+  <p class="section-sub anim-fadeUp d2">
+    Repeater Manager 专为渗透测试专家打造，将请求管理、历史追踪、报文比对、越权测试与报告生成融为一体
+  </p>
+  <div class="stats-row anim-fadeUp d3">
+    <div class="stat-item"><div class="stat-num">17+</div><div class="stat-label">核心功能模块</div></div>
+    <div class="stat-item"><div class="stat-num">4</div><div class="stat-label">布局模式</div></div>
+    <div class="stat-item"><div class="stat-num">3</div><div class="stat-label">报告格式</div></div>
+    <div class="stat-item"><div class="stat-num">0</div><div class="stat-label">数据丢失</div></div>
+  </div>
+</div>
+
+<!-- ===== Slide 4: Request Management ===== -->
+<div class="slide">
+  <div class="col2">
+    <div class="col2-text">
+      <div class="eyebrow anim-fadeUp">请求管理</div>
+      <h2 class="section-title anim-fadeUp d1">海量请求<br>井井有条</h2>
+      <p class="body-text anim-fadeUp d2">
+        从 Proxy / Intruder 等任意位置右键"发送到 Repeater Manager"，支持颜色标记、备注注释、高级搜索和列自定义，让每一条请求都可追溯
+      </p>
+      <ul class="feat-list anim-fadeUp d3">
+        <li>右键菜单一键发送请求</li>
+        <li>颜色标记 / 备注注释 / 列自定义</li>
+        <li>多条件复合筛选搜索</li>
+        <li>四种布局模式自由切换</li>
+      </ul>
+    </div>
+    <div class="col2-visual anim-scaleIn d2">
+      <div class="orb"><div class="orb-inner anim-float">📋</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 5: History & Diff ===== -->
+<div class="slide">
+  <div class="col2">
+    <div class="col2-visual anim-scaleIn d2">
+      <div class="orb green"><div class="orb-inner anim-float">🔬</div></div>
+    </div>
+    <div class="col2-text">
+      <div class="eyebrow anim-fadeUp">历史记录与报文比对</div>
+      <h2 class="section-title anim-fadeUp d1">每一次重放<br>都被精准记录</h2>
+      <p class="body-text anim-fadeUp d2">
+        自动录制每次请求的成功/失败响应历史，支持基线记录与任意记录之间的报文比对，差异一目了然
+      </p>
+      <ul class="feat-list anim-fadeUp d3">
+        <li>成功 / 失败请求自动分类记录</li>
+        <li>字符串级 & 字节级差异对比</li>
+        <li>行内字符粒度高亮着色</li>
+        <li>差异导航 + 同步滚动联动</li>
+        <li>批量重放 / 批量越权测试 / 批量删除</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 6: Data Persistence ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">数据持久化</div>
+  <h2 class="section-title anim-fadeUp d1">重启也不怕<br>数据永留存</h2>
+  <p class="section-sub anim-fadeUp d2">SQLite 本地持久化 + Pool 去重架构，存储效率与可靠性兼得</p>
+  <div class="pool-viz anim-fadeUp d3">
+    <div class="pool-row">
+      <div class="pool-sigil s">S</div>
+      <div class="pool-desc"><strong>string_pool</strong> — 域名 / 路径 / 查询参数等字符串去重存储</div>
+    </div>
+    <div class="pool-row">
+      <div class="pool-sigil h">H</div>
+      <div class="pool-desc"><strong>header_pool</strong> — HTTP 请求 / 响应头部去重存储</div>
+    </div>
+    <div class="pool-row">
+      <div class="pool-sigil b">B</div>
+      <div class="pool-desc"><strong>body_pool</strong> — 小体积 Body 行内 BLOB 存储</div>
+    </div>
+    <div class="pool-row">
+      <div class="pool-sigil f">F</div>
+      <div class="pool-desc"><strong>file_pool</strong> — 大体积 Body 外置文件 + SHA-256 校验</div>
+    </div>
+  </div>
+  <p class="body-text anim-fadeUp d4" style="margin-top: 20px; font-size: 15px;">
+    智能存储路由 + SHA-256 哈希引用计数，后台垃圾回收服务自动清理零引用数据
+  </p>
+</div>
+
+<!-- ===== Slide 7: API Extraction ===== -->
+<div class="slide">
+  <div class="col2">
+    <div class="col2-text">
+      <div class="eyebrow anim-fadeUp">API 规则提取引擎</div>
+      <h2 class="section-title anim-fadeUp d1">从不规则中<br>提取秩序</h2>
+      <p class="body-text anim-fadeUp d2">
+        可配置的 API 提取规则引擎，<strong>4 种提取源 × 4 种提取方法</strong>，自动从不规则请求中提取标准化 API 路径
+      </p>
+      <ul class="feat-list anim-fadeUp d3">
+        <li>提取源：URL_PATH / URL_QUERY / HEADER / BODY</li>
+        <li>提取方法：REGEX / SUBSTR / JSON_PATH / XPATH</li>
+        <li>全局规则 — YAML 跨会话共享</li>
+        <li>项目规则 — SQLite 独立存储，first-match-wins 策略</li>
+      </ul>
+    </div>
+    <div class="col2-visual anim-scaleIn d2">
+      <div class="orb purple"><div class="orb-inner anim-float">🔧</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 8: Privilege Testing ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">越权测试</div>
+  <h2 class="section-title anim-fadeUp d1">自动化越权检测<br>安全不留死角</h2>
+  <p class="section-sub anim-fadeUp d2">配置多用户会话与判断规则，自动拦截代理流量进行水平/垂直越权测试</p>
+  <div class="card-grid cols4 anim-fadeUp d3">
+    <div class="card">
+      <div class="card-icon icon-purple">👥</div>
+      <h3>多会话管理</h3>
+      <p>批量导入/导出用户会话凭证，按名称去重合并</p>
+    </div>
+    <div class="card">
+      <div class="card-icon icon-blue">🔑</div>
+      <h3>Token 替换</h3>
+      <p>6 种位置类型自动替换：Header / JSON / XML / 表单 / Multipart / URL参数</p>
+    </div>
+    <div class="card">
+      <div class="card-icon icon-orange">⚖️</div>
+      <h3>智能判断</h3>
+      <p>9 种判断方法 × 4 种目标维度，支持NOT_CONTAINS / LENGTH_DIFF / RESPONSE_TIME等</p>
+    </div>
+    <div class="card">
+      <div class="card-icon icon-green">🚨</div>
+      <h3>风险标记</h3>
+      <p>自动颜色标记越权风险等级，Levenshtein 相似度辅助判定</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 9: Import / Export ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">数据导入导出</div>
+  <h2 class="section-title anim-fadeUp d1">数据自由流动<br>协作无边界</h2>
+  <div class="card-grid cols3 anim-fadeUp d2">
+    <div class="fmt-card">
+      <div class="fmt-icon">🔐</div>
+      <h3>ERM 加密存档</h3>
+      <p>AES-256-CBC 加密 + HMAC-SHA256 完整性校验，安全存储与团队分享</p>
+    </div>
+    <div class="fmt-card">
+      <div class="fmt-icon">📮</div>
+      <h3>Postman Collection</h3>
+      <p>完整支持 v2.1 格式，与 Postman 生态无缝衔接</p>
+    </div>
+    <div class="fmt-card">
+      <div class="fmt-icon">🔍</div>
+      <h3>智能格式检测</h3>
+      <p>自动识别导入文件格式，无需手动选择，一键导入</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 10: Report Generation ===== -->
+<div class="slide">
+  <div class="col2">
+    <div class="col2-visual anim-scaleIn d2">
+      <div class="orb orange"><div class="orb-inner anim-float">📄</div></div>
+    </div>
+    <div class="col2-text">
+      <div class="eyebrow anim-fadeUp">报告生成</div>
+      <h2 class="section-title anim-fadeUp d1">专业报告<br>一键导出</h2>
+      <p class="body-text anim-fadeUp d2">
+        将越权测试结果导出为正式安全报告，内嵌请求/响应详情、cURL 命令和 Postman 代码片段
+      </p>
+      <ul class="feat-list anim-fadeUp d3">
+        <li>PDF 报告 — Apache PDFBox 原生生成，内嵌中文字体</li>
+        <li>HTML 报告 — FreeMarker 模板渲染，美观大方</li>
+        <li>Markdown 报告 — 轻量便捷，适合版本管理</li>
+        <li>内嵌 cURL / Postman 代码片段，方便复现</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 11: Tech Architecture ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">技术架构</div>
+  <h2 class="section-title anim-fadeUp d1">四层架构<br>清晰稳健</h2>
+  <div class="arch-stack anim-fadeUp d2">
+    <div class="arch-layer">
+      <div class="layer-name">🎨 UI Layer</div>
+      <div class="layer-desc">Java Swing + RSyntaxTextArea 语法高亮 · 四种布局模式 · SVG 图标</div>
+    </div>
+    <div class="arch-layer">
+      <div class="layer-name">⚙️ Service Layer</div>
+      <div class="layer-desc">AutoSave / GC / HistoryRecording / ApiExtraction / PrivilegeTest / Report</div>
+    </div>
+    <div class="arch-layer">
+      <div class="layer-name">🗄️ Data Access</div>
+      <div class="layer-desc">RequestDAO / HistoryDAO (读写分离) / PoolManager / Schema 版本化迁移</div>
+    </div>
+    <div class="arch-layer">
+      <div class="layer-name">💾 Storage</div>
+      <div class="layer-desc">SQLite + File Blobs (Pool 去重) + YAML (全局规则) · SHA-256 校验</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 12: Tech Stack ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">技术栈</div>
+  <h2 class="section-title anim-fadeUp d1">现代化技术选型<br>稳定可靠</h2>
+  <div class="tag-cloud anim-fadeUp d2">
+    <div class="tag">Montoya SDK 2025.12</div>
+    <div class="tag">Java 17+</div>
+    <div class="tag">Java Swing</div>
+    <div class="tag">RSyntaxTextArea 3.3.3</div>
+    <div class="tag">SQLite JDBC 3.42</div>
+    <div class="tag">自定义连接池</div>
+    <div class="tag">Gson 2.10</div>
+    <div class="tag">SnakeYAML 2.2</div>
+    <div class="tag">Apache PDFBox 3.0</div>
+    <div class="tag">FreeMarker 2.3</div>
+    <div class="tag">CommonMark 0.22</div>
+    <div class="tag">Apache Commons</div>
+    <div class="tag">MVC 架构</div>
+    <div class="tag">Pool 去重模式</div>
+    <div class="tag">规则引擎模式</div>
+    <div class="tag">观察者模式</div>
+  </div>
+</div>
+
+<!-- ===== Slide 13: Use Cases ===== -->
+<div class="slide">
+  <div class="eyebrow anim-fadeUp">应用场景</div>
+  <h2 class="section-title anim-fadeUp d1">七大核心场景<br>覆盖渗透全流程</h2>
+  <div class="card-grid cols2" style="max-width:820px;">
+    <div class="uc-card anim-fadeUp d2">
+      <div class="uc-num">1</div>
+      <div><h4>API 安全测试</h4><p>持续测试同 API 不同参数，保存所有结果</p></div>
+    </div>
+    <div class="uc-card anim-fadeUp d3">
+      <div class="uc-num">2</div>
+      <div><h4>API 路径整理</h4><p>从大量不规则请求中自动提取标准 API 路径</p></div>
+    </div>
+    <div class="uc-card anim-fadeUp d4">
+      <div class="uc-num">3</div>
+      <div><h4>越权漏洞检测</h4><p>配置多用户会话，自动检测水平/垂直越权</p></div>
+    </div>
+    <div class="uc-card anim-fadeUp d5">
+      <div class="uc-num">4</div>
+      <div><h4>漏洞复现</h4><p>记录利用过程所有请求/响应，便于复现</p></div>
+    </div>
+    <div class="uc-card anim-fadeUp d6">
+      <div class="uc-num">5</div>
+      <div><h4>安全评估</h4><p>整理大型应用 API 合集，系统化安全测试</p></div>
+    </div>
+    <div class="uc-card anim-fadeUp d7">
+      <div class="uc-num">6</div>
+      <div><h4>团队协作</h4><p>ERM 存档 + YAML 规则实现团队数据与规则共享</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Slide 14: Closing / CTA ===== -->
+<div class="slide slide-hero">
+  <div class="eyebrow anim-fadeUp">Repeater Manager</div>
+  <h1 class="hero-title anim-fadeUp d1" style="font-size: clamp(48px, 6.5vw, 80px);">让安全测试<br>更高效</h1>
+  <p class="tagline anim-fadeUp d2">v2.16.5 · Burp Suite Professional 2024+ · Java 17+</p>
+  <a href="https://github.com/githubnull/repeaterManger" class="cta-btn anim-fadeUp d3" target="_blank">前往 GitHub 了解更多</a>
+  <p class="body-text anim-fadeUp d4" style="margin-top: 26px; font-size: 14px; color: var(--text-tertiary);">
+    开源项目 · Apache License 2.0
+  </p>
+</div>
+
+</div><!-- /presentation -->
+
+<!-- ===== Navigation ===== -->
+<div class="nav-dots" id="navDots"></div>
+<div class="progress-bar" id="progressBar"></div>
+<div class="page-info"><span id="curPage">1</span> / <span id="totPage">14</span></div>
+<div class="key-hint">← → / 滚轮 切换 · 点击导航点跳转 · Home/End 首尾页</div>
+
+<script>
+(function() {
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+  let locked = false;
+
+  // Starfield canvas
+  const canvas = document.getElementById('stars');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    initStars();
+  }
+  function initStars() {
+    stars = [];
+    const count = Math.floor((canvas.width * canvas.height) / 2500);
+    for (let i = 0; i < count; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.4 + 0.3,
+        alpha: Math.random() * 0.45 + 0.15,
+        speed: Math.random() * 0.012 + 0.003
+      });
+    }
+  }
+  function drawStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      s.alpha += (Math.random() - 0.5) * 0.01;
+      s.alpha = Math.max(0.1, Math.min(0.6, s.alpha));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${s.alpha})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(drawStars);
+  }
+  resizeCanvas();
+  drawStars();
+  window.addEventListener('resize', resizeCanvas);
+
+  // Nav dots
+  const navContainer = document.getElementById('navDots');
+  slides.forEach((_, i) => {
+    const dot = document.createElement('button');
+    dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    dot.setAttribute('aria-label', '跳转到第 ' + (i + 1) + ' 页');
+    dot.addEventListener('click', () => goTo(i));
+    navContainer.appendChild(dot);
+  });
+  const dots = document.querySelectorAll('.nav-dot');
+  const progressBar = document.getElementById('progressBar');
+  const curPageEl = document.getElementById('curPage');
+  const totPageEl = document.getElementById('totPage');
+  totPageEl.textContent = total;
+
+  function updateUI() {
+    slides.forEach((s, i) => s.classList.toggle('active', i === current));
+    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+    progressBar.style.width = ((current + 1) / total * 100) + '%';
+    curPageEl.textContent = current + 1;
+  }
+
+  function goTo(idx) {
+    if (locked || idx === current || idx < 0 || idx >= total) return;
+    locked = true;
+    current = idx;
+    updateUI();
+    // Re-trigger animations on the new active slide
+    const activeSlide = slides[current];
+    const animEls = activeSlide.querySelectorAll('[class*="anim-"]');
+    animEls.forEach(el => {
+      el.style.animation = 'none';
+      el.offsetHeight;
+      el.style.animation = '';
+    });
+    setTimeout(() => { locked = false; }, 950);
+  }
+
+  function next() { goTo(current + 1); }
+  function prev() { goTo(current - 1); }
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); next();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); prev();
+    } else if (e.key === 'Home') {
+      e.preventDefault(); goTo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault(); goTo(total - 1);
+    }
+  });
+
+  // Touch swipe
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.changedTouches[0].screenX; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    const diff = touchX - e.changedTouches[0].screenX;
+    if (Math.abs(diff) > 50) { diff > 0 ? next() : prev(); }
+  }, { passive: true });
+
+  // Mouse wheel (debounced)
+  let wheelTimer;
+  document.addEventListener('wheel', e => {
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => { e.deltaY > 0 ? next() : prev(); }, 80);
+  }, { passive: true });
+
+  updateUI();
+})();
+</script>
+</body>
+</html>

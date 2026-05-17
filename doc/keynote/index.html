@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repeater Manager — 苹果发布会</title>
+<style>
+/* ===== Reset ===== */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;--surface:rgba(255,255,255,0.05);--surface2:rgba(255,255,255,0.08);
+  --border:rgba(255,255,255,0.1);--text1:#f5f5f7;--text2:#a1a1a6;--text3:#6e6e73;
+  --blue:#2997ff;--blue-g:rgba(41,151,255,0.3);
+  --purple:#bf5af2;--purple-g:rgba(191,90,242,0.3);
+  --green:#30d158;--green-g:rgba(48,209,88,0.3);
+  --orange:#f5a623;--orange-g:rgba(245,166,35,0.3);
+  --red:#ff453a;--red-g:rgba(255,69,58,0.25);
+  --cyan:#5ef0d0;--cyan-g:rgba(94,240,208,0.3);
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{width:100%;height:100%;overflow:hidden;outline:none;
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg);color:var(--text1);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  user-select:none;-webkit-user-select:none;
+}
+
+/* ===== Slide System ===== */
+.deck{position:relative;width:100%;height:100%}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:60px 80px;opacity:0;visibility:hidden;
+  transition:opacity .8s var(--ease),transform .8s var(--ease);
+  transform:translateY(30px) scale(0.98);
+}
+.slide.active{opacity:1;visibility:visible;transform:translateY(0) scale(1)}
+.slide.exit-up{opacity:0;transform:translateY(-40px) scale(0.98)}
+
+/* ===== Typography ===== */
+.hero-title{
+  font-size:clamp(48px,8vw,96px);font-weight:700;letter-spacing:-0.03em;
+  line-height:1.08;
+  background:linear-gradient(135deg,#f5f5f7 0%,#a1a1a6 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero-title.accent-blue{
+  background:linear-gradient(135deg,#2997ff 0%,#5ef0d0 100%);
+  -webkit-background-clip:text;background-clip:text;
+}
+.hero-title.accent-purple{
+  background:linear-gradient(135deg,#bf5af2 0%,#ff6a88 100%);
+  -webkit-background-clip:text;background-clip:text;
+}
+.hero-title.accent-green{
+  background:linear-gradient(135deg,#30d158 0%,#5ef0d0 100%);
+  -webkit-background-clip:text;background-clip:text;
+}
+.hero-title.accent-orange{
+  background:linear-gradient(135deg,#f5a623 0%,#ff6a88 100%);
+  -webkit-background-clip:text;background-clip:text;
+}
+.hero-title.accent-cyan{
+  background:linear-gradient(135deg,#5ef0d0 0%,#2997ff 100%);
+  -webkit-background-clip:text;background-clip:text;
+}
+.sub-title{
+  font-size:clamp(24px,3.5vw,42px);font-weight:600;letter-spacing:-0.02em;
+  color:var(--text2);margin-top:16px;line-height:1.3;
+}
+.body-text{
+  font-size:clamp(18px,2vw,24px);color:var(--text2);
+  line-height:1.6;max-width:720px;margin-top:24px;
+}
+.caption{font-size:14px;color:var(--text3);margin-top:40px;letter-spacing:0.05em;text-transform:uppercase}
+
+/* ===== Glow Decorations ===== */
+.glow{position:absolute;border-radius:50%;filter:blur(120px);pointer-events:none;opacity:.4}
+.glow-blue{width:500px;height:500px;background:var(--blue-g)}
+.glow-purple{width:500px;height:500px;background:var(--purple-g)}
+.glow-green{width:500px;height:500px;background:var(--green-g)}
+.glow-orange{width:500px;height:500px;background:var(--orange-g)}
+.glow-cyan{width:500px;height:500px;background:var(--cyan-g)}
+
+/* ===== Feature Grid ===== */
+.feature-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:24px;
+  margin-top:48px;width:100%;max-width:1000px;
+}
+.feature-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:20px;
+  padding:32px 24px;text-align:center;
+  transition:background .3s var(--ease),border-color .3s var(--ease),transform .3s var(--ease);
+}
+.feature-card:hover{background:var(--surface2);border-color:rgba(255,255,255,0.18);transform:translateY(-4px)}
+.feature-icon{font-size:40px;margin-bottom:16px;display:block}
+.feature-name{font-size:18px;font-weight:600;color:var(--text1);margin-bottom:8px}
+.feature-desc{font-size:14px;color:var(--text3);line-height:1.5}
+
+/* ===== Stat Row ===== */
+.stat-row{display:flex;gap:60px;margin-top:48px;justify-content:center;flex-wrap:wrap}
+.stat-item{text-align:center}
+.stat-num{font-size:clamp(48px,6vw,72px);font-weight:700;letter-spacing:-0.03em}
+.stat-num.blue{color:var(--blue)}.stat-num.purple{color:var(--purple)}
+.stat-num.green{color:var(--green)}.stat-num.orange{color:var(--orange)}
+.stat-label{font-size:16px;color:var(--text3);margin-top:4px}
+
+/* ===== Comparison ===== */
+.compare-wrap{display:flex;gap:40px;margin-top:48px;align-items:stretch;max-width:960px;width:100%}
+.compare-col{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 28px;text-align:left}
+.compare-col h3{font-size:20px;font-weight:600;margin-bottom:20px}
+.compare-col ul{list-style:none;padding:0}
+.compare-col li{font-size:16px;color:var(--text2);padding:8px 0;border-bottom:1px solid var(--border);line-height:1.5}
+.compare-col li:last-child{border-bottom:none}
+.compare-col.bad li::before{content:'✕ ';color:var(--red);font-weight:700}
+.compare-col.good li::before{content:'✓ ';color:var(--green);font-weight:700}
+.compare-col.good{border-color:rgba(48,209,88,0.25)}
+
+/* ===== Architecture Diagram ===== */
+.arch-wrap{margin-top:48px;display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;max-width:800px}
+.arch-layer{
+  display:flex;gap:12px;justify-content:center;flex-wrap:wrap;width:100%;
+}
+.arch-box{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:12px 20px;font-size:14px;font-weight:500;color:var(--text2);
+  transition:background .3s,transform .3s;
+}
+.arch-box:hover{background:var(--surface2);transform:translateY(-2px)}
+.arch-box.core{border-color:rgba(41,151,255,0.3);color:var(--blue)}
+.arch-box.data{border-color:rgba(48,209,88,0.3);color:var(--green)}
+.arch-box.ui{border-color:rgba(191,90,242,0.3);color:var(--purple)}
+.arch-arrow{color:var(--text3);font-size:20px;line-height:1}
+
+/* ===== Flow Steps ===== */
+.flow-steps{display:flex;gap:20px;margin-top:48px;align-items:center;flex-wrap:wrap;justify-content:center}
+.flow-step{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:24px 28px;text-align:center;min-width:140px;
+}
+.flow-step-num{font-size:28px;font-weight:700;margin-bottom:8px}
+.flow-step-text{font-size:14px;color:var(--text2)}
+.flow-arrow{color:var(--text3);font-size:24px}
+
+/* ===== Progress Bar ===== */
+.progress-bar{
+  position:fixed;bottom:0;left:0;height:3px;
+  background:linear-gradient(90deg,var(--blue),var(--purple));
+  transition:width .6s var(--ease);z-index:100;
+}
+
+/* ===== Nav Dots ===== */
+.nav-dots{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;z-index:100;
+}
+.nav-dot{
+  width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);
+  cursor:pointer;transition:background .3s,transform .3s;border:none;outline:none;
+}
+.nav-dot.active{background:var(--blue);transform:scale(1.3)}
+
+/* ===== Slide Counter ===== */
+.slide-counter{
+  position:fixed;top:24px;right:32px;font-size:14px;color:var(--text3);
+  z-index:100;font-variant-numeric:tabular-nums;
+}
+
+/* ===== Keyboard Hint ===== */
+.kb-hint{
+  position:fixed;bottom:24px;right:32px;font-size:12px;color:var(--text3);
+  z-index:100;display:flex;gap:6px;align-items:center;
+}
+.kb-key{
+  display:inline-block;background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;padding:2px 8px;font-size:11px;font-family:inherit;
+}
+
+/* ===== Tag ===== */
+.tag{
+  display:inline-block;padding:6px 16px;border-radius:100px;
+  font-size:13px;font-weight:500;letter-spacing:0.02em;margin:4px;
+}
+.tag-blue{background:rgba(41,151,255,0.12);color:var(--blue);border:1px solid rgba(41,151,255,0.2)}
+.tag-purple{background:rgba(191,90,242,0.12);color:var(--purple);border:1px solid rgba(191,90,242,0.2)}
+.tag-green{background:rgba(48,209,88,0.12);color:var(--green);border:1px solid rgba(48,209,88,0.2)}
+.tag-orange{background:rgba(245,166,35,0.12);color:var(--orange);border:1px solid rgba(245,166,35,0.2)}
+.tag-cyan{background:rgba(94,240,208,0.12);color:var(--cyan);border:1px solid rgba(94,240,208,0.2)}
+
+/* ===== Animated Entrance ===== */
+.slide.active .anim-up{animation:slideUp .7s var(--ease) both}
+.slide.active .anim-up-d1{animation:slideUp .7s .1s var(--ease) both}
+.slide.active .anim-up-d2{animation:slideUp .7s .2s var(--ease) both}
+.slide.active .anim-up-d3{animation:slideUp .7s .3s var(--ease) both}
+.slide.active .anim-up-d4{animation:slideUp .7s .4s var(--ease) both}
+.slide.active .anim-fade{animation:fadeIn .7s .3s var(--ease) both}
+@keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* ===== Separator line ===== */
+.sep{width:60px;height:3px;border-radius:2px;margin:24px auto 0}
+
+/* ===== Responsive ===== */
+@media(max-width:768px){
+  .slide{padding:40px 24px}
+  .feature-grid{grid-template-columns:1fr 1fr;gap:16px}
+  .compare-wrap{flex-direction:column;gap:20px}
+  .stat-row{gap:32px}
+  .flow-steps{flex-direction:column;gap:12px}
+  .flow-arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- ===== Slide 1: Cover ===== -->
+  <div class="slide active" data-slide="0">
+    <div class="glow glow-blue" style="top:-20%;left:-10%"></div>
+    <div class="glow glow-purple" style="bottom:-20%;right:-10%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--text3);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:24px">Burp Suite Extension</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-blue">Repeater Manager</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="sub-title">重新定义 HTTP 请求重放管理</div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="sep" style="background:linear-gradient(90deg,var(--blue),var(--purple))"></div>
+    </div>
+    <div class="anim-up-d4">
+      <div class="caption">v2.16 · 2026</div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 2: Problem ===== -->
+  <div class="slide" data-slide="1">
+    <div class="glow glow-red" style="top:10%;right:-5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--red);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">痛点</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title">原生 Repeater<br>远远不够</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="body-text">Burp Repeater 标签页不持久化，关闭即丢失；缺乏批量操作，无法组织管理，更没有权限测试能力。</div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="compare-wrap" style="margin-top:36px">
+        <div class="compare-col bad">
+          <h3 style="color:var(--red)">原生 Repeater</h3>
+          <ul>
+            <li>标签页关闭即丢失</li>
+            <li>无法持久化到项目文件</li>
+            <li>没有搜索与过滤</li>
+            <li>不支持越权检测</li>
+            <li>无报告生成能力</li>
+          </ul>
+        </div>
+        <div class="compare-col good">
+          <h3 style="color:var(--green)">Repeater Manager</h3>
+          <ul>
+            <li>请求持久化到 SQLite</li>
+            <li>项目级自动保存</li>
+            <li>关键词 + 高级搜索</li>
+            <li>一键越权测试 + 报告</li>
+            <li>HTML / MD / PDF 三格式</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 3: Core Overview ===== -->
+  <div class="slide" data-slide="2">
+    <div class="glow glow-cyan" style="bottom:-15%;left:5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">核心能力</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-cyan">一个插件<br>全流程覆盖</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="feature-icon">📨</span>
+          <div class="feature-name">请求管理</div>
+          <div class="feature-desc">右键发送，持久化存储<br>自动保存，永不丢失</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🛡️</span>
+          <div class="feature-name">权限测试</div>
+          <div class="feature-desc">Token 自动替换<br>越权判定 + 报告生成</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔍</span>
+          <div class="feature-name">智能搜索</div>
+          <div class="feature-desc">关键词 / 正则匹配<br>URL·Header·Body 范围过滤</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📊</span>
+          <div class="feature-name">报文比对</div>
+          <div class="feature-desc">字符级 Diff 高亮<br>同步滚动 + 差异导航</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📄</span>
+          <div class="feature-name">报告生成</div>
+          <div class="feature-desc">HTML / Markdown / PDF<br>一键导出专业报告</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🔄</span>
+          <div class="feature-name">数据互通</div>
+          <div class="feature-desc">ERM / Postman / YAML<br>导入导出无缝衔接</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 4: Request Management ===== -->
+  <div class="slide" data-slide="3">
+    <div class="glow glow-blue" style="top:-10%;right:10%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--blue);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">请求管理</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-blue">告别丢失<br>一切皆可追溯</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="body-text">从 Proxy、Intruder、Scanner 等任意模块右键发送请求到 Repeater Manager，自动持久化至 SQLite 数据库，项目保存时自动归档。</div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--blue)">01</div>
+          <div class="flow-step-text">右键发送</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--blue)">02</div>
+          <div class="flow-step-text">自动存储</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--blue)">03</div>
+          <div class="flow-step-text">重放编辑</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--blue)">04</div>
+          <div class="flow-step-text">持久保存</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim-up-d4">
+      <div style="margin-top:32px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <span class="tag tag-blue">SQLite 持久化</span>
+        <span class="tag tag-blue">自动保存服务</span>
+        <span class="tag tag-blue">批量操作</span>
+        <span class="tag tag-blue">备注标注</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 5: Multi-Layout ===== -->
+  <div class="slide" data-slide="4">
+    <div class="glow glow-purple" style="bottom:-10%;left:-5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--purple);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">布局控制</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-purple">三种布局<br>随心切换</div>
+    </div>
+    <div class="anim-up-d2">
+      <div style="display:flex;gap:24px;margin-top:40px;justify-content:center;flex-wrap:wrap">
+        <div style="background:var(--surface);border:1px solid rgba(191,90,242,0.2);border-radius:16px;padding:28px 24px;width:240px;text-align:center">
+          <div style="display:flex;gap:4px;justify-content:center;margin-bottom:16px">
+            <div style="width:50%;height:80px;background:rgba(191,90,242,0.15);border-radius:8px"></div>
+            <div style="width:50%;height:80px;background:rgba(191,90,242,0.08);border-radius:8px"></div>
+          </div>
+          <div style="font-size:18px;font-weight:600;color:var(--purple)">左右布局</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">请求 · 响应并排</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(191,90,242,0.2);border-radius:16px;padding:28px 24px;width:240px;text-align:center">
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:center;margin-bottom:16px">
+            <div style="width:80%;height:40px;background:rgba(191,90,242,0.15);border-radius:8px"></div>
+            <div style="width:80%;height:40px;background:rgba(191,90,242,0.08);border-radius:8px"></div>
+          </div>
+          <div style="font-size:18px;font-weight:600;color:var(--purple)">上下布局</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">请求 · 响应堆叠</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(191,90,242,0.2);border-radius:16px;padding:28px 24px;width:240px;text-align:center">
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:center;margin-bottom:16px">
+            <div style="width:80%;height:26px;background:rgba(191,90,242,0.15);border-radius:6px"></div>
+            <div style="width:80%;height:54px;background:rgba(191,90,242,0.08);border-radius:8px"></div>
+          </div>
+          <div style="font-size:18px;font-weight:600;color:var(--purple)">标签页</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">请求 · 响应切换</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 6: Privilege Testing ===== -->
+  <div class="slide" data-slide="5">
+    <div class="glow glow-green" style="top:-5%;left:20%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--green);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">权限测试</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-green">越权检测<br>自动化完成</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="body-text">配置用户会话与令牌位置，一键替换 Token 重放请求，自动对比基线响应判定越权结果。支持多种判断规则，让权限测试从手工走向自动化。</div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="flow-steps" style="margin-top:32px">
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--green)">①</div>
+          <div class="flow-step-text">配置会话<br>与令牌位置</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--green)">②</div>
+          <div class="flow-step-text">自动替换<br>Token 重放</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--green)">③</div>
+          <div class="flow-step-text">对比基线<br>判定越权</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-step-num" style="color:var(--green)">④</div>
+          <div class="flow-step-text">生成专业<br>测试报告</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim-up-d4">
+      <div style="margin-top:28px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <span class="tag tag-green">多会话管理</span>
+        <span class="tag tag-green">全局令牌位置</span>
+        <span class="tag tag-green">YAML 导入导出</span>
+        <span class="tag tag-green">灵活判断规则</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 7: Judgment Rules ===== -->
+  <div class="slide" data-slide="6">
+    <div class="glow glow-orange" style="top:10%;right:-10%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--orange);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">判断引擎</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-orange">灵活规则<br>精准判定</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="feature-grid" style="grid-template-columns:repeat(4,1fr);max-width:900px">
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">≡</span>
+          <div class="feature-name" style="font-size:15px">CONTAINS</div>
+          <div class="feature-desc">包含匹配</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">=</span>
+          <div class="feature-name" style="font-size:15px">EQUALS</div>
+          <div class="feature-desc">完全相等</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">≠</span>
+          <div class="feature-name" style="font-size:15px">NOT_EQUALS</div>
+          <div class="feature-desc">不等判断</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">⏱</span>
+          <div class="feature-name" style="font-size:15px">RESPONSE_TIME</div>
+          <div class="feature-desc">响应时间</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">📏</span>
+          <div class="feature-name" style="font-size:15px">LENGTH_DIFF</div>
+          <div class="feature-desc">长度差异</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">~</span>
+          <div class="feature-name" style="font-size:15px">REGEX</div>
+          <div class="feature-desc">正则匹配</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">⊘</span>
+          <div class="feature-name" style="font-size:15px">NOT_CONTAINS</div>
+          <div class="feature-desc">不包含</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon" style="font-size:28px">🔢</span>
+          <div class="feature-name" style="font-size:15px">STATUS_CODE</div>
+          <div class="feature-desc">状态码</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim-up-d3">
+      <div style="margin-top:28px;color:var(--text3);font-size:15px">支持响应状态码 · Header · Body · 响应时间等多目标判定</div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 8: Diff Comparison ===== -->
+  <div class="slide" data-slide="7">
+    <div class="glow glow-cyan" style="bottom:-10%;right:-5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">报文比对</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-cyan">字符级 Diff<br>差异一目了然</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="body-text">基线响应与会话响应并排显示，行级与字符级双重差异高亮，同步滚动联动，差异区域一键导航。</div>
+    </div>
+    <div class="anim-up-d3">
+      <div style="display:flex;gap:16px;margin-top:40px;justify-content:center;flex-wrap:wrap">
+        <div style="background:var(--surface);border:1px solid rgba(94,240,208,0.2);border-radius:14px;padding:20px 28px;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:var(--cyan)">行级 Diff</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">整行增删高亮</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(94,240,208,0.2);border-radius:14px;padding:20px 28px;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:var(--cyan)">字符级 Diff</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">精确到字符粒度</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(94,240,208,0.2);border-radius:14px;padding:20px 28px;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:var(--cyan)">同步滚动</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">左右面板联动</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(94,240,208,0.2);border-radius:14px;padding:20px 28px;text-align:center">
+          <div style="font-size:24px;font-weight:700;color:var(--cyan)">差异导航</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:6px">上/下一处快速跳转</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 9: Report Generation ===== -->
+  <div class="slide" data-slide="8">
+    <div class="glow glow-purple" style="top:-10%;left:-5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--purple);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">报告生成</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-purple">三种格式<br>专业交付</div>
+    </div>
+    <div class="anim-up-d2">
+      <div style="display:flex;gap:32px;margin-top:40px;justify-content:center;flex-wrap:wrap">
+        <div style="text-align:center">
+          <div style="width:100px;height:100px;background:rgba(191,90,242,0.1);border:1px solid rgba(191,90,242,0.2);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+            <span style="font-size:40px">🌐</span>
+          </div>
+          <div style="font-size:18px;font-weight:600">HTML</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:4px">浏览器直接查看</div>
+        </div>
+        <div style="text-align:center">
+          <div style="width:100px;height:100px;background:rgba(191,90,242,0.1);border:1px solid rgba(191,90,242,0.2);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+            <span style="font-size:40px">📝</span>
+          </div>
+          <div style="font-size:18px;font-weight:600">Markdown</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:4px">文档友好格式</div>
+        </div>
+        <div style="text-align:center">
+          <div style="width:100px;height:100px;background:rgba(191,90,242,0.1);border:1px solid rgba(191,90,242,0.2);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+            <span style="font-size:40px">📄</span>
+          </div>
+          <div style="font-size:18px;font-weight:600">PDF</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:4px">正式交付格式</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim-up-d3">
+      <div style="margin-top:32px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <span class="tag tag-purple">FreeMarker 模板引擎</span>
+        <span class="tag tag-purple">二进制内容渲染</span>
+        <span class="tag tag-purple">端点统计摘要</span>
+        <span class="tag tag-purple">curl / Postman 片段</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 10: Search & Filter ===== -->
+  <div class="slide" data-slide="9">
+    <div class="glow glow-blue" style="bottom:-10%;left:10%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--blue);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">搜索过滤</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-blue">精准定位<br>毫秒级检索</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="feature-grid" style="grid-template-columns:repeat(2,1fr);max-width:700px">
+        <div class="feature-card">
+          <span class="feature-icon">🔎</span>
+          <div class="feature-name">关键词搜索</div>
+          <div class="feature-desc">URL / Header / Body 范围<br>实时过滤匹配结果</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">⚙️</span>
+          <div class="feature-name">正则匹配</div>
+          <div class="feature-desc">支持正则表达式<br>大小写敏感可控</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📋</span>
+          <div class="feature-name">高级搜索</div>
+          <div class="feature-desc">可折叠搜索面板<br>多维度组合过滤</div>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">🏷️</span>
+          <div class="feature-name">越权过滤</div>
+          <div class="feature-desc">按越权测试状态<br>快速筛选历史记录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 11: Batch Operations ===== -->
+  <div class="slide" data-slide="10">
+    <div class="glow glow-orange" style="top:-10%;right:10%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--orange);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">批量操作</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-orange">选中即批处理<br>效率翻倍</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="body-text">Shift / Ctrl 多选历史记录，一键批量重放、批量越权测试、批量删除。实时进度反馈，操作过程清晰可控。</div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="stat-row" style="margin-top:36px">
+        <div class="stat-item">
+          <div class="stat-num orange">N×</div>
+          <div class="stat-label">批量重放</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num orange">N×</div>
+          <div class="stat-label">批量越权</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num orange">N×</div>
+          <div class="stat-label">批量删除</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim-up-d4">
+      <div style="margin-top:28px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <span class="tag tag-orange">多选模式</span>
+        <span class="tag tag-orange">进度实时显示</span>
+        <span class="tag tag-orange">代理右键菜单</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 12: Data Interop ===== -->
+  <div class="slide" data-slide="11">
+    <div class="glow glow-green" style="top:10%;left:-5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--green);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">数据互通</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-green">导入导出<br>无缝衔接</div>
+    </div>
+    <div class="anim-up-d2">
+      <div style="display:flex;gap:24px;margin-top:40px;justify-content:center;flex-wrap:wrap">
+        <div style="background:var(--surface);border:1px solid rgba(48,209,88,0.2);border-radius:16px;padding:28px;width:200px;text-align:center">
+          <div style="font-size:36px;margin-bottom:12px">📦</div>
+          <div style="font-size:18px;font-weight:600;color:var(--green)">ERM 归档</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:8px">加密压缩格式<br>完整数据备份</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(48,209,88,0.2);border-radius:16px;padding:28px;width:200px;text-align:center">
+          <div style="font-size:36px;margin-bottom:12px">📮</div>
+          <div style="font-size:18px;font-weight:600;color:var(--green)">Postman</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:8px">集合导入导出<br>团队协作共享</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid rgba(48,209,88,0.2);border-radius:16px;padding:28px;width:200px;text-align:center">
+          <div style="font-size:36px;margin-bottom:12px">📋</div>
+          <div style="font-size:18px;font-weight:600;color:var(--green)">YAML 配置</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:8px">会话 · 令牌 · 规则<br>跨项目复用</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 13: Architecture ===== -->
+  <div class="slide" data-slide="12">
+    <div class="glow glow-blue" style="top:-5%;left:50%;transform:translateX(-50%)"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--blue);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">技术架构</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-blue">模块化设计<br>清晰可控</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="arch-wrap">
+        <div class="arch-layer">
+          <div class="arch-box ui">MainTabPanel</div>
+          <div class="arch-box ui">HistoryPanel</div>
+          <div class="arch-box ui">RequestListPanel</div>
+          <div class="arch-box ui">PrivilegeTestPanel</div>
+          <div class="arch-box ui">ConfigPanel</div>
+        </div>
+        <div class="arch-arrow">▼</div>
+        <div class="arch-layer">
+          <div class="arch-box core">RequestDispatchHandler</div>
+          <div class="arch-box core">ReplayEngine</div>
+          <div class="arch-box core">AutoTestEngine</div>
+          <div class="arch-box core">JudgmentEngine</div>
+        </div>
+        <div class="arch-arrow">▼</div>
+        <div class="arch-layer">
+          <div class="arch-box data">DatabaseManager</div>
+          <div class="arch-box data">HistoryDAO</div>
+          <div class="arch-box data">RequestDAO</div>
+          <div class="arch-box data">SessionDAO</div>
+        </div>
+        <div class="arch-arrow">▼</div>
+        <div class="arch-layer">
+          <div class="arch-box">SQLite</div>
+          <div class="arch-box">HikariCP</div>
+          <div class="arch-box">Montoya API</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 14: Stats ===== -->
+  <div class="slide" data-slide="13">
+    <div class="glow glow-purple" style="top:-10%;left:-5%"></div>
+    <div class="glow glow-blue" style="bottom:-10%;right:-5%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--text3);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:20px">项目规模</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title">用数字说话</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="stat-row" style="margin-top:48px">
+        <div class="stat-item">
+          <div class="stat-num blue">50+</div>
+          <div class="stat-label">版本迭代</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num purple">8</div>
+          <div class="stat-label">种判断规则</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num green">3</div>
+          <div class="stat-label">种布局模式</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num orange">3</div>
+          <div class="stat-label">种报告格式</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="stat-row" style="margin-top:40px">
+        <div class="stat-item">
+          <div class="stat-num blue">10</div>
+          <div class="stat-label">数据库 Schema 版本</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num purple">6</div>
+          <div class="stat-label">核心子系统</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num green">4</div>
+          <div class="stat-label">种 Token 位置类型</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num orange">3</div>
+          <div class="stat-label">种数据互通格式</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Slide 15: Closing ===== -->
+  <div class="slide" data-slide="14">
+    <div class="glow glow-blue" style="top:-20%;left:30%"></div>
+    <div class="glow glow-purple" style="bottom:-20%;right:20%"></div>
+    <div class="anim-up">
+      <div style="font-size:14px;color:var(--blue);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:24px">Repeater Manager</div>
+    </div>
+    <div class="anim-up-d1">
+      <div class="hero-title accent-blue">让安全测试<br>更高效</div>
+    </div>
+    <div class="anim-up-d2">
+      <div class="sep" style="background:linear-gradient(90deg,var(--blue),var(--purple))"></div>
+    </div>
+    <div class="anim-up-d3">
+      <div class="body-text" style="margin-top:32px">
+        开源免费 · 持续更新<br>
+        <span style="color:var(--text3);font-size:16px;margin-top:8px;display:inline-block">
+          GitHub: github.com/0xff-x/repeaterManger
+        </span>
+      </div>
+    </div>
+    <div class="anim-up-d4">
+      <div style="margin-top:40px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <span class="tag tag-blue">请求管理</span>
+        <span class="tag tag-purple">权限测试</span>
+        <span class="tag tag-green">报文比对</span>
+        <span class="tag tag-orange">报告生成</span>
+        <span class="tag tag-cyan">数据互通</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Progress Bar -->
+<div class="progress-bar" id="progressBar" style="width:0%"></div>
+
+<!-- Nav Dots -->
+<div class="nav-dots" id="navDots"></div>
+
+<!-- Slide Counter -->
+<div class="slide-counter" id="slideCounter">1 / 15</div>
+
+<!-- Keyboard Hint -->
+<div class="kb-hint">
+  <span class="kb-key">←</span><span class="kb-key">→</span> 翻页
+</div>
+
+<script>
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+  let transitioning = false;
+
+  // Build nav dots
+  const dotsWrap = document.getElementById('navDots');
+  for(let i = 0; i < total; i++){
+    const dot = document.createElement('button');
+    dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    dot.setAttribute('aria-label', 'Slide ' + (i+1));
+    dot.addEventListener('click', function(){ goTo(i); });
+    dotsWrap.appendChild(dot);
+  }
+
+  function updateUI(){
+    // Progress
+    document.getElementById('progressBar').style.width = ((current + 1) / total * 100) + '%';
+    // Counter
+    document.getElementById('slideCounter').textContent = (current + 1) + ' / ' + total;
+    // Dots
+    dotsWrap.querySelectorAll('.nav-dot').forEach(function(d, i){
+      d.classList.toggle('active', i === current);
+    });
+  }
+
+  function goTo(index){
+    if(transitioning || index === current || index < 0 || index >= total) return;
+    transitioning = true;
+
+    const dir = index > current ? 1 : -1;
+    const prev = slides[current];
+    const next = slides[index];
+
+    // Remove all transition classes
+    slides.forEach(function(s){ s.classList.remove('active','exit-up'); });
+
+    // Exit current
+    if(dir > 0) prev.classList.add('exit-up');
+
+    // Enter next
+    next.classList.add('active');
+
+    current = index;
+    updateUI();
+
+    setTimeout(function(){
+      prev.classList.remove('exit-up');
+      transitioning = false;
+    }, 850);
+  }
+
+  // Keyboard
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' '){
+      e.preventDefault(); goTo(current + 1);
+    } else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){
+      e.preventDefault(); goTo(current - 1);
+    } else if(e.key === 'Home'){
+      e.preventDefault(); goTo(0);
+    } else if(e.key === 'End'){
+      e.preventDefault(); goTo(total - 1);
+    }
+  });
+
+  // Touch swipe
+  let touchX = 0;
+  document.addEventListener('touchstart', function(e){ touchX = e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    const dx = e.changedTouches[0].clientX - touchX;
+    if(Math.abs(dx) > 50){
+      if(dx < 0) goTo(current + 1);
+      else goTo(current - 1);
+    }
+  }, {passive:true});
+
+  // Mouse wheel
+  let wheelTimeout = null;
+  document.addEventListener('wheel', function(e){
+    e.preventDefault();
+    if(wheelTimeout) return;
+    wheelTimeout = setTimeout(function(){ wheelTimeout = null; }, 900);
+    if(e.deltaY > 0) goTo(current + 1);
+    else if(e.deltaY < 0) goTo(current - 1);
+  }, {passive:false});
+
+  updateUI();
+  // Auto-focus body for keyboard navigation
+  document.body.setAttribute('tabindex', '0');
+  document.body.focus();
+})();
+</script>
+</body>
+</html>

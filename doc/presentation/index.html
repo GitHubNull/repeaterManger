@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repeater Manager - 产品演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-black: #000000;
+            --bg-dark: #0d0d0d;
+            --bg-gray: #1a1a1a;
+            --text-white: #f5f5f7;
+            --text-gray: #86868b;
+            --text-light-gray: #a1a1a6;
+            --accent-blue: #2997ff;
+            --accent-purple: #bf5af2;
+            --accent-orange: #f5a623;
+            --accent-green: #30d158;
+            --accent-red: #ff453a;
+        }
+
+        @font-face {
+            font-family: 'SF Pro Display';
+            src: local('SF Pro Display'), local('SFProDisplay'), local('-apple-system'), local('BlinkMacSystemFont');
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-black);
+            color: var(--text-white);
+        }
+
+        /* Slide Container */
+        .presentation {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .slide {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.8s;
+            overflow: hidden;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Background Effects */
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, rgba(41, 151, 255, 0.03) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* Navigation */
+        .nav-dots {
+            position: fixed;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 1000;
+        }
+
+        .nav-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .nav-dot:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.3);
+        }
+
+        .nav-dot.active {
+            background: var(--text-white);
+            transform: scale(1.3);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+            transition: width 0.5s ease;
+            z-index: 1000;
+        }
+
+        /* Page Counter */
+        .page-counter {
+            position: fixed;
+            bottom: 25px;
+            right: 30px;
+            font-size: 13px;
+            color: var(--text-gray);
+            z-index: 1000;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Keyboard Hint */
+        .keyboard-hint {
+            position: fixed;
+            bottom: 25px;
+            left: 30px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.15);
+            z-index: 1000;
+        }
+
+        /* Typography - Apple Style */
+        .headline {
+            font-size: 80px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.05;
+            text-align: center;
+            background: linear-gradient(180deg, #ffffff 0%, #a1a1a6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subheadline {
+            font-size: 32px;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            line-height: 1.3;
+            color: var(--text-gray);
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .title {
+            font-size: 56px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            font-size: 24px;
+            font-weight: 400;
+            color: var(--text-gray);
+            text-align: center;
+            max-width: 700px;
+            line-height: 1.5;
+        }
+
+        .body-text {
+            font-size: 21px;
+            font-weight: 400;
+            color: var(--text-light-gray);
+            line-height: 1.6;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        .eyebrow {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 16px;
+        }
+
+        /* Feature Cards */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            max-width: 1100px;
+            width: 100%;
+            margin-top: 50px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            padding: 35px 30px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+        }
+
+        .feature-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.12);
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 20px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+        }
+
+        .feature-card h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-white);
+        }
+
+        .feature-card p {
+            font-size: 15px;
+            color: var(--text-gray);
+            line-height: 1.5;
+        }
+
+        /* Icon backgrounds */
+        .icon-blue { background: rgba(41, 151, 255, 0.15); }
+        .icon-purple { background: rgba(191, 90, 242, 0.15); }
+        .icon-orange { background: rgba(245, 166, 35, 0.15); }
+        .icon-green { background: rgba(48, 209, 88, 0.15); }
+        .icon-red { background: rgba(255, 69, 58, 0.15); }
+        .icon-cyan { background: rgba(50, 215, 210, 0.15); }
+
+        /* Two Column Layout */
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            max-width: 1100px;
+            width: 100%;
+            align-items: center;
+        }
+
+        .column-text {
+            text-align: left;
+        }
+
+        .column-text .title {
+            text-align: left;
+            font-size: 42px;
+        }
+
+        .column-text .body-text {
+            text-align: left;
+            margin-top: 20px;
+        }
+
+        .column-visual {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Visual Elements */
+        .visual-circle {
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(41, 151, 255, 0.2), rgba(191, 90, 242, 0.1));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .visual-circle::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .visual-circle-inner {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(41, 151, 255, 0.3), rgba(191, 90, 242, 0.15));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 72px;
+        }
+
+        /* Stats */
+        .stats-row {
+            display: flex;
+            gap: 60px;
+            margin-top: 50px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 56px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 15px;
+            color: var(--text-gray);
+            margin-top: 8px;
+        }
+
+        /* List Items */
+        .feature-list {
+            list-style: none;
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .feature-list li {
+            font-size: 18px;
+            color: var(--text-light-gray);
+            padding: 10px 0;
+            padding-left: 32px;
+            position: relative;
+        }
+
+        .feature-list li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+
+        .feature-list li::after {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 50%;
+            transform: translateY(-50%) rotate(45deg);
+            width: 5px;
+            height: 9px;
+            border-right: 2px solid var(--accent-green);
+            border-bottom: 2px solid var(--accent-green);
+        }
+
+        /* Architecture Diagram */
+        .arch-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 700px;
+            width: 100%;
+            margin-top: 40px;
+        }
+
+        .arch-layer {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 18px 28px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .arch-layer-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-white);
+            min-width: 140px;
+        }
+
+        .arch-layer-desc {
+            font-size: 14px;
+            color: var(--text-gray);
+        }
+
+        /* Tech Stack Tags */
+        .tech-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            max-width: 900px;
+            margin-top: 40px;
+        }
+
+        .tech-tag {
+            padding: 10px 22px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 15px;
+            color: var(--text-light-gray);
+            transition: all 0.3s ease;
+        }
+
+        .tech-tag:hover {
+            background: rgba(41, 151, 255, 0.1);
+            border-color: rgba(41, 151, 255, 0.3);
+            color: var(--text-white);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .animate-fadeInUp {
+            animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            opacity: 0;
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 1s ease forwards;
+            opacity: 0;
+        }
+
+        .animate-scaleIn {
+            animation: scaleIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            opacity: 0;
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        .delay-5 { animation-delay: 0.5s; }
+        .delay-6 { animation-delay: 0.6s; }
+        .delay-7 { animation-delay: 0.7s; }
+        .delay-8 { animation-delay: 0.8s; }
+
+        /* Slide-specific styles */
+        .slide-cover .headline {
+            font-size: 96px;
+        }
+
+        .slide-cover .subheadline {
+            font-size: 28px;
+            margin-top: 20px;
+        }
+
+        .version-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            background: rgba(41, 151, 255, 0.15);
+            border: 1px solid rgba(41, 151, 255, 0.3);
+            font-size: 14px;
+            color: var(--accent-blue);
+            margin-top: 30px;
+            font-weight: 500;
+        }
+
+        /* Pain point cards */
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            max-width: 800px;
+            width: 100%;
+            margin-top: 40px;
+        }
+
+        .pain-card {
+            background: rgba(255, 69, 58, 0.05);
+            border: 1px solid rgba(255, 69, 58, 0.1);
+            border-radius: 16px;
+            padding: 28px;
+            text-align: left;
+        }
+
+        .pain-card h4 {
+            font-size: 17px;
+            color: var(--accent-red);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .pain-card p {
+            font-size: 14px;
+            color: var(--text-gray);
+            line-height: 1.5;
+        }
+
+        /* Export format cards */
+        .export-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            max-width: 900px;
+            width: 100%;
+            margin-top: 50px;
+        }
+
+        .export-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: all 0.4s ease;
+        }
+
+        .export-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .export-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .export-card h3 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .export-card p {
+            font-size: 14px;
+            color: var(--text-gray);
+        }
+
+        /* CTA Button */
+        .cta-button {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 16px 40px;
+            border-radius: 30px;
+            background: var(--accent-blue);
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .cta-button:hover {
+            background: #0077ed;
+            transform: scale(1.05);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .headline { font-size: 56px; }
+            .slide-cover .headline { font-size: 64px; }
+            .title { font-size: 40px; }
+            .feature-grid { grid-template-columns: repeat(2, 1fr); }
+            .two-column { grid-template-columns: 1fr; gap: 40px; }
+            .export-grid { grid-template-columns: 1fr; }
+            .pain-grid { grid-template-columns: 1fr; }
+            .slide { padding: 40px; }
+        }
+
+        @media (max-width: 768px) {
+            .headline { font-size: 40px; }
+            .slide-cover .headline { font-size: 48px; }
+            .title { font-size: 32px; }
+            .subheadline { font-size: 20px; }
+            .feature-grid { grid-template-columns: 1fr; }
+            .stats-row { flex-direction: column; gap: 30px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation">
+        <!-- Slide 1: Cover -->
+        <div class="slide slide-cover active" data-index="0">
+            <div class="eyebrow animate-fadeInUp">Burp Suite Professional 扩展插件</div>
+            <h1 class="headline animate-fadeInUp delay-1">Repeater Manager</h1>
+            <p class="subheadline animate-fadeInUp delay-2">重新定义 HTTP 请求重放管理</p>
+            <p class="subheadline animate-fadeInUp delay-3" style="font-size: 20px; margin-top: 12px;">面向安全测试人员的高级请求重放与越权测试插件</p>
+            <div class="version-badge animate-fadeInUp delay-4">v2.16.2</div>
+        </div>
+
+        <!-- Slide 2: Pain Points -->
+        <div class="slide" data-index="1">
+            <div class="eyebrow animate-fadeInUp">原生 Repeater 的局限</div>
+            <h2 class="title animate-fadeInUp delay-1">测试效率，正在被拖累</h2>
+            <div class="pain-grid">
+                <div class="pain-card animate-fadeInUp delay-2">
+                    <h4>数据易丢失</h4>
+                    <p>关闭 Burp Suite 后，所有请求和历史记录全部消失，无法持久化保存</p>
+                </div>
+                <div class="pain-card animate-fadeInUp delay-3">
+                    <h4>无历史对比</h4>
+                    <p>无法自动记录每次重放的响应变化，难以追踪测试演进过程</p>
+                </div>
+                <div class="pain-card animate-fadeInUp delay-4">
+                    <h4>管理混乱</h4>
+                    <p>大量请求堆积在标签页中，缺乏分类、搜索和标记能力</p>
+                </div>
+                <div class="pain-card animate-fadeInUp delay-5">
+                    <h4>越权测试繁琐</h4>
+                    <p>手动替换 Token 进行越权测试，效率低下且容易遗漏</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Core Positioning -->
+        <div class="slide" data-index="2">
+            <div class="eyebrow animate-fadeInUp">解决方案</div>
+            <h2 class="headline animate-fadeInUp delay-1" style="font-size: 64px;">一个插件<br>解决所有痛点</h2>
+            <p class="subheadline animate-fadeInUp delay-2" style="max-width: 700px;">
+                Repeater Manager 是专为安全测试人员和渗透测试专家打造的 Burp Suite 扩展，将请求管理、历史追踪、越权测试融为一体
+            </p>
+            <div class="stats-row animate-fadeInUp delay-3">
+                <div class="stat-item">
+                    <div class="stat-number">15+</div>
+                    <div class="stat-label">核心功能模块</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">4</div>
+                    <div class="stat-label">布局模式</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">3</div>
+                    <div class="stat-label">报告格式</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">数据丢失</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Request Management -->
+        <div class="slide" data-index="3">
+            <div class="two-column">
+                <div class="column-text">
+                    <div class="eyebrow animate-fadeInUp">请求管理</div>
+                    <h2 class="title animate-fadeInUp delay-1">组织有序<br>一目了然</h2>
+                    <p class="body-text animate-fadeInUp delay-2">
+                        右键发送请求至 Repeater Manager，支持颜色标记、备注注释、多条件高级搜索和列显示自定义，让海量请求井井有条
+                    </p>
+                    <ul class="feature-list animate-fadeInUp delay-3">
+                        <li>右键菜单一键发送请求</li>
+                        <li>颜色标记与备注分类</li>
+                        <li>多条件复合筛选搜索</li>
+                        <li>四种布局模式自由切换</li>
+                    </ul>
+                </div>
+                <div class="column-visual animate-scaleIn delay-2">
+                    <div class="visual-circle">
+                        <div class="visual-circle-inner">&#128203;</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: History & Comparison -->
+        <div class="slide" data-index="4">
+            <div class="two-column">
+                <div class="column-visual animate-scaleIn delay-2">
+                    <div class="visual-circle" style="background: radial-gradient(circle at 30% 30%, rgba(48, 209, 88, 0.2), rgba(50, 215, 210, 0.1));">
+                        <div class="visual-circle-inner" style="background: radial-gradient(circle at 30% 30%, rgba(48, 209, 88, 0.3), rgba(50, 215, 210, 0.15));">&#128260;</div>
+                    </div>
+                </div>
+                <div class="column-text">
+                    <div class="eyebrow animate-fadeInUp">历史记录</div>
+                    <h2 class="title animate-fadeInUp delay-1">每一次重放<br>都被记录</h2>
+                    <p class="body-text animate-fadeInUp delay-2">
+                        自动记录每次请求的响应历史，支持字符串级和字节级差异对比，语法高亮展示差异，同步滚动与差异导航
+                    </p>
+                    <ul class="feature-list animate-fadeInUp delay-3">
+                        <li>自动录制每次重放响应</li>
+                        <li>字符串/字节级差异对比</li>
+                        <li>语法高亮差异展示</li>
+                        <li>批量重放与批量删除</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Data Persistence -->
+        <div class="slide" data-index="5">
+            <div class="eyebrow animate-fadeInUp">数据持久化</div>
+            <h2 class="title animate-fadeInUp delay-1">重启也不怕<br>数据永留存</h2>
+            <p class="subtitle animate-fadeInUp delay-2">SQLite 本地持久化 + Pool 去重架构，存储效率与可靠性兼得</p>
+            <div class="arch-diagram animate-fadeInUp delay-3">
+                <div class="arch-layer">
+                    <div class="arch-layer-name">string_pool</div>
+                    <div class="arch-layer-desc">域名/路径/查询参数等字符串去重存储</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-name">header_pool</div>
+                    <div class="arch-layer-desc">HTTP 请求/响应头部去重存储</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-name">body_pool</div>
+                    <div class="arch-layer-desc">小体积 Body 行内 BLOB 存储</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-name">file_pool</div>
+                    <div class="arch-layer-desc">大体积 Body 外置文件存储 + SHA-256 校验</div>
+                </div>
+            </div>
+            <p class="body-text animate-fadeInUp delay-4" style="margin-top: 24px; font-size: 16px;">
+                通过 SHA-256 哈希 + 引用计数实现内容去重，配合后台垃圾回收服务自动清理零引用数据
+            </p>
+        </div>
+
+        <!-- Slide 7: API Extraction -->
+        <div class="slide" data-index="6">
+            <div class="two-column">
+                <div class="column-text">
+                    <div class="eyebrow animate-fadeInUp">API 规则提取</div>
+                    <h2 class="title animate-fadeInUp delay-1">从不规则中<br>提取秩序</h2>
+                    <p class="body-text animate-fadeInUp delay-2">
+                        可配置的 API 提取规则引擎，支持 4 种提取源 × 4 种提取方法，自动从不规则请求中提取标准 API 路径
+                    </p>
+                    <ul class="feature-list animate-fadeInUp delay-3">
+                        <li>提取源：URL路径/查询参数/请求头/请求体</li>
+                        <li>提取方法：正则/子串/JSONPath/XPath</li>
+                        <li>全局规则 YAML 共享配置</li>
+                        <li>项目规则 SQLite 独立存储</li>
+                    </ul>
+                </div>
+                <div class="column-visual animate-scaleIn delay-2">
+                    <div class="visual-circle" style="background: radial-gradient(circle at 30% 30%, rgba(191, 90, 242, 0.2), rgba(41, 151, 255, 0.1));">
+                        <div class="visual-circle-inner" style="background: radial-gradient(circle at 30% 30%, rgba(191, 90, 242, 0.3), rgba(41, 151, 255, 0.15));">&#128207;</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Privilege Testing -->
+        <div class="slide" data-index="7">
+            <div class="eyebrow animate-fadeInUp">越权测试</div>
+            <h2 class="title animate-fadeInUp delay-1">自动化越权检测<br>安全不留死角</h2>
+            <p class="subtitle animate-fadeInUp delay-2">配置多用户会话与判断规则，自动拦截代理流量进行越权测试</p>
+            <div class="feature-grid" style="grid-template-columns: repeat(4, 1fr); max-width: 1200px;">
+                <div class="feature-card animate-fadeInUp delay-2">
+                    <div class="feature-icon icon-purple">&#128101;</div>
+                    <h3>多会话管理</h3>
+                    <p>配置多个用户会话凭证，支持批量导入导出</p>
+                </div>
+                <div class="feature-card animate-fadeInUp delay-3">
+                    <div class="feature-icon icon-blue">&#128273;</div>
+                    <h3>Token 替换</h3>
+                    <p>6 种位置类型自动替换：Header/JSON/XML/表单等</p>
+                </div>
+                <div class="feature-card animate-fadeInUp delay-4">
+                    <div class="feature-icon icon-orange">&#128301;</div>
+                    <h3>智能判断</h3>
+                    <p>状态码/响应头/响应体/响应时间多维度判断规则</p>
+                </div>
+                <div class="feature-card animate-fadeInUp delay-5">
+                    <div class="feature-icon icon-green">&#128308;</div>
+                    <h3>结果标记</h3>
+                    <p>颜色标记越权风险等级，结果一目了然</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Import/Export -->
+        <div class="slide" data-index="8">
+            <div class="eyebrow animate-fadeInUp">数据导入导出</div>
+            <h2 class="title animate-fadeInUp delay-1">数据自由流动<br>团队协作无忧</h2>
+            <div class="export-grid">
+                <div class="export-card animate-fadeInUp delay-2">
+                    <div class="export-icon">&#128274;</div>
+                    <h3>ERM 加密存档</h3>
+                    <p>AES-256-CBC 加密 + HMAC-SHA256 完整性校验，安全存储与分享</p>
+                </div>
+                <div class="export-card animate-fadeInUp delay-3">
+                    <div class="export-icon">&#128239;</div>
+                    <h3>Postman Collection</h3>
+                    <p>完整支持 v2.1 格式导入导出，与 Postman 无缝衔接</p>
+                </div>
+                <div class="export-card animate-fadeInUp delay-4">
+                    <div class="export-icon">&#128269;</div>
+                    <h3>智能格式检测</h3>
+                    <p>自动识别导入文件格式，无需手动选择，一键导入</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Report Generation -->
+        <div class="slide" data-index="9">
+            <div class="two-column">
+                <div class="column-visual animate-scaleIn delay-2">
+                    <div class="visual-circle" style="background: radial-gradient(circle at 30% 30%, rgba(245, 166, 35, 0.2), rgba(255, 69, 58, 0.1));">
+                        <div class="visual-circle-inner" style="background: radial-gradient(circle at 30% 30%, rgba(245, 166, 35, 0.3), rgba(255, 69, 58, 0.15));">&#128196;</div>
+                    </div>
+                </div>
+                <div class="column-text">
+                    <div class="eyebrow animate-fadeInUp">报告生成</div>
+                    <h2 class="title animate-fadeInUp delay-1">专业报告<br>一键生成</h2>
+                    <p class="body-text animate-fadeInUp delay-2">
+                        将越权测试结果导出为正式报告，内嵌请求/响应详情、cURL 和 Postman 代码片段，支持三种格式
+                    </p>
+                    <ul class="feature-list animate-fadeInUp delay-3">
+                        <li>PDF 报告（Apache PDFBox + 内嵌中文字体）</li>
+                        <li>HTML 报告（FreeMarker 模板渲染）</li>
+                        <li>Markdown 报告（轻量便捷分享）</li>
+                        <li>内嵌 cURL / Postman 代码片段</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Tech Stack -->
+        <div class="slide" data-index="10">
+            <div class="eyebrow animate-fadeInUp">技术架构</div>
+            <h2 class="title animate-fadeInUp delay-1">现代化技术栈<br>稳定可靠</h2>
+            <div class="tech-tags animate-fadeInUp delay-2">
+                <div class="tech-tag">Montoya SDK 2025.12</div>
+                <div class="tech-tag">Java Swing</div>
+                <div class="tech-tag">RSyntaxTextArea</div>
+                <div class="tech-tag">SQLite JDBC</div>
+                <div class="tech-tag">自定义连接池</div>
+                <div class="tech-tag">Gson</div>
+                <div class="tech-tag">SnakeYAML</div>
+                <div class="tech-tag">Apache PDFBox</div>
+                <div class="tech-tag">FreeMarker</div>
+                <div class="tech-tag">Apache Commons</div>
+                <div class="tech-tag">MVC 架构</div>
+                <div class="tech-tag">Pool 去重模式</div>
+            </div>
+            <div class="arch-diagram animate-fadeInUp delay-3" style="margin-top: 50px;">
+                <div class="arch-layer">
+                    <div class="arch-layer-name">UI Layer</div>
+                    <div class="arch-layer-desc">Java Swing + RSyntaxTextArea 语法高亮</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-name">Service Layer</div>
+                    <div class="arch-layer-desc">AutoSave / GC / HistoryRecording / ApiExtraction / PrivilegeTest</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-name">Data Access</div>
+                    <div class="arch-layer-desc">RequestDAO / HistoryDAO / PoolManager / ApiExtractionRuleDAO</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-name">Storage</div>
+                    <div class="arch-layer-desc">SQLite + File Blobs (Pool 去重) + YAML (全局规则)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Ending -->
+        <div class="slide slide-cover" data-index="11">
+            <div class="eyebrow animate-fadeInUp">Repeater Manager</div>
+            <h1 class="headline animate-fadeInUp delay-1" style="font-size: 72px;">让安全测试<br>更高效</h1>
+            <p class="subheadline animate-fadeInUp delay-2">v2.16.2 | Burp Suite Professional 2024+ | Java 17+</p>
+            <a href="https://github.com/your-repo/repeater-manager" class="cta-button animate-fadeInUp delay-3" target="_blank">立即体验</a>
+            <p class="body-text animate-fadeInUp delay-4" style="margin-top: 30px; font-size: 15px; color: var(--text-gray);">
+                开源项目 · Apache License 2.0
+            </p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-dots"></div>
+    <div class="progress-bar"></div>
+    <div class="page-counter"><span id="current">1</span> / <span id="total">12</span></div>
+    <div class="keyboard-hint">← → 方向键切换 · 点击导航点跳转</div>
+
+    <script>
+        (function() {
+            const slides = document.querySelectorAll('.slide');
+            const totalSlides = slides.length;
+            let currentSlide = 0;
+            let isAnimating = false;
+
+            // Create nav dots
+            const navDotsContainer = document.querySelector('.nav-dots');
+            slides.forEach((_, index) => {
+                const dot = document.createElement('button');
+                dot.className = 'nav-dot' + (index === 0 ? ' active' : '');
+                dot.setAttribute('aria-label', '跳转到第 ' + (index + 1) + ' 页');
+                dot.addEventListener('click', () => goToSlide(index));
+                navDotsContainer.appendChild(dot);
+            });
+
+            const dots = document.querySelectorAll('.nav-dot');
+            const progressBar = document.querySelector('.progress-bar');
+            const currentPageEl = document.getElementById('current');
+            const totalPageEl = document.getElementById('total');
+
+            totalPageEl.textContent = totalSlides;
+
+            function updateUI() {
+                slides.forEach((slide, index) => {
+                    slide.classList.toggle('active', index === currentSlide);
+                });
+                dots.forEach((dot, index) => {
+                    dot.classList.toggle('active', index === currentSlide);
+                });
+                progressBar.style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+                currentPageEl.textContent = currentSlide + 1;
+            }
+
+            function goToSlide(index) {
+                if (isAnimating || index === currentSlide || index < 0 || index >= totalSlides) return;
+                isAnimating = true;
+                currentSlide = index;
+                updateUI();
+                setTimeout(() => { isAnimating = false; }, 800);
+            }
+
+            function nextSlide() {
+                goToSlide(currentSlide + 1);
+            }
+
+            function prevSlide() {
+                goToSlide(currentSlide - 1);
+            }
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+                    e.preventDefault();
+                    nextSlide();
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    prevSlide();
+                } else if (e.key === 'Home') {
+                    e.preventDefault();
+                    goToSlide(0);
+                } else if (e.key === 'End') {
+                    e.preventDefault();
+                    goToSlide(totalSlides - 1);
+                }
+            });
+
+            // Touch/swipe support
+            let touchStartX = 0;
+            let touchEndX = 0;
+
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                const diff = touchStartX - touchEndX;
+                if (Math.abs(diff) > 50) {
+                    if (diff > 0) nextSlide();
+                    else prevSlide();
+                }
+            }, { passive: true });
+
+            // Mouse wheel navigation
+            let wheelTimeout;
+            document.addEventListener('wheel', (e) => {
+                clearTimeout(wheelTimeout);
+                wheelTimeout = setTimeout(() => {
+                    if (e.deltaY > 0) nextSlide();
+                    else if (e.deltaY < 0) prevSlide();
+                }, 50);
+            }, { passive: true });
+
+            // Initialize
+            updateUI();
+
+            // Re-trigger animations when slide becomes active
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                        const slide = mutation.target;
+                        if (slide.classList.contains('active')) {
+                            const animatedElements = slide.querySelectorAll('[class*="animate-"]');
+                            animatedElements.forEach(el => {
+                                el.style.animation = 'none';
+                                el.offsetHeight; // Trigger reflow
+                                el.style.animation = '';
+                            });
+                        }
+                    }
+                });
+            });
+
+            slides.forEach(slide => {
+                observer.observe(slide, { attributes: true });
+            });
+        })();
+    </script>
+</body>
+</html>
