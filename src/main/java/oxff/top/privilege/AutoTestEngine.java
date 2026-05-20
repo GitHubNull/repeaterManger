@@ -149,14 +149,15 @@ public class AutoTestEngine {
 
                         if (holder.response != null && holder.response.length > 0) {
                             if (isFirst) {
-                                baselineResponse = holder.response;
+                                baselineResponse = extractResponseBody(holder.response);
                                 baselineStatusCode = holder.statusCode;
                                 judgment = JudgmentResult.NOT_ESCALATED.name();
                             } else {
                                 String responseHeaders = extractResponseHeaders(holder.response);
+                                byte[] responseBodyOnly = extractResponseBody(holder.response);
                                 double threshold = sessionManager.getSimilarityThreshold();
                                 JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
-                                        holder.statusCode, responseHeaders, holder.response,
+                                        holder.statusCode, responseHeaders, responseBodyOnly,
                                         baselineResponse, baselineStatusCode, threshold, holder.durationMs);
                                 judgment = outcome.result.name();
                                 similarity = outcome.similarity;
@@ -248,6 +249,37 @@ public class AutoTestEngine {
             return responseStr;
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    /**
+     * 从响应字节数组中提取纯响应体（不含响应头）
+     * 相似度计算应仅基于响应体内容，排除响应头的影响
+     */
+    private byte[] extractResponseBody(byte[] responseBytes) {
+        if (responseBytes == null || responseBytes.length == 0) return new byte[0];
+        try {
+            String responseStr = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
+            int bodySeparator = responseStr.indexOf("\r\n\r\n");
+            if (bodySeparator > 0) {
+                int bodyStart = bodySeparator + 4;
+                if (bodyStart < responseBytes.length) {
+                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
+                }
+                return new byte[0];
+            }
+            bodySeparator = responseStr.indexOf("\n\n");
+            if (bodySeparator > 0) {
+                int bodyStart = bodySeparator + 2;
+                if (bodyStart < responseBytes.length) {
+                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
+                }
+                return new byte[0];
+            }
+            // 无法分离头和体时，返回完整内容作为fallback
+            return responseBytes;
+        } catch (Exception e) {
+            return responseBytes;
         }
     }
 

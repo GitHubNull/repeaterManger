@@ -4,6 +4,7 @@ import burp.BurpExtender;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
+import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.privilege.model.JudgmentResult;
@@ -89,6 +90,17 @@ public class ReplayEngine {
             return;
         }
 
+        // API去重检查
+        String api = HttpRequestHelper.computeApiFromRequest(
+                "", "", originalRequest);
+        if (sessionManager.isDedupEnabled() && isApiProcessed(api)) {
+            BurpExtender.printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
+            return;
+        }
+        if (sessionManager.isDedupEnabled()) {
+            addProcessedApi(api);
+        }
+
         List<TokenLocation> locations = sessionManager.getTokenLocations();
 
         executor.submit(() -> {
@@ -118,18 +130,19 @@ public class ReplayEngine {
 
                     if (holder.response != null && holder.response.length > 0) {
                         if (isFirst) {
-                            // 基准用户：保存响应作为比较基准
-                            baselineResponse = holder.response;
+                            // 基准用户：保存纯响应体作为比较基准（仅响应体，不含响应头）
+                            baselineResponse = extractResponseBody(holder.response);
                             baselineStatusCode = holder.statusCode;
                             judgment = JudgmentResult.NOT_ESCALATED.name(); // 基准用户默认标记为安全
                             judgmentColor = null; // 基准用户不特殊着色
                         } else {
                             // 非基准用户：使用 JudgmentEngine 判决
                             String responseHeaders = extractResponseHeaders(holder.response);
+                            byte[] responseBodyOnly = extractResponseBody(holder.response);
                             double threshold = sessionManager.getSimilarityThreshold();
 
                             JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
-                                    holder.statusCode, responseHeaders, holder.response,
+                                    holder.statusCode, responseHeaders, responseBodyOnly,
                                     baselineResponse, baselineStatusCode, threshold, holder.durationMs);
 
                             judgment = outcome.result.name();
@@ -339,6 +352,37 @@ public class ReplayEngine {
             return responseStr;
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    /**
+     * 从响应字节数组中提取纯响应体（不含响应头）
+     * 相似度计算应仅基于响应体内容，排除响应头的影响
+     */
+    private byte[] extractResponseBody(byte[] responseBytes) {
+        if (responseBytes == null || responseBytes.length == 0) return new byte[0];
+        try {
+            String responseStr = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
+            int bodySeparator = responseStr.indexOf("\r\n\r\n");
+            if (bodySeparator > 0) {
+                int bodyStart = bodySeparator + 4;
+                if (bodyStart < responseBytes.length) {
+                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
+                }
+                return new byte[0];
+            }
+            bodySeparator = responseStr.indexOf("\n\n");
+            if (bodySeparator > 0) {
+                int bodyStart = bodySeparator + 2;
+                if (bodyStart < responseBytes.length) {
+                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
+                }
+                return new byte[0];
+            }
+            // 无法分离头和体时，返回完整内容作为fallback
+            return responseBytes;
+        } catch (Exception e) {
+            return responseBytes;
         }
     }
 

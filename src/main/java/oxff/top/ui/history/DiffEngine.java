@@ -1,6 +1,7 @@
 package oxff.top.ui.history;
 
 import oxff.top.privilege.LevenshteinCalculator;
+import oxff.top.privilege.SimilarityEngine;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -574,10 +575,10 @@ public class DiffEngine {
     }
 
     /**
-     * 计算相似度（复用LevenshteinCalculator）
+     * 计算相似度（使用内容感知的混合算法）
      */
     public static double computeSimilarity(String text1, String text2) {
-        return LevenshteinCalculator.similarity(text1, text2);
+        return SimilarityEngine.similarity(text1, text2);
     }
 
     // ==================== LCS算法 ====================

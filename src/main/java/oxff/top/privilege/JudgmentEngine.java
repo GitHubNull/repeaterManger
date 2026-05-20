@@ -9,6 +9,7 @@ import oxff.top.privilege.model.RuleTarget;
 import java.awt.Color;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -50,8 +51,8 @@ public class JudgmentEngine {
      *
      * @param statusCode        响应状态码
      * @param responseHeaders   响应头字符串
-     * @param responseBody      响应体字节数组
-     * @param baselineResponse  基准用户响应字节数组（用于相似度计算和LENGTH_DIFF）
+     * @param responseBody      响应体字节数组（纯响应体，不含响应头）
+     * @param baselineResponse  基准用户响应体字节数组（纯响应体，用于相似度计算和LENGTH_DIFF）
      * @param baselineStatusCode 基准用户状态码
      * @param similarityThreshold 相似度阈值
      * @param responseTimeMs    响应时间（毫秒）
@@ -64,12 +65,13 @@ public class JudgmentEngine {
         JudgmentRuleManager ruleManager = JudgmentRuleManager.getInstance();
         List<JudgmentRule> rules = ruleManager.getEnabledRules();
 
-        // 计算相似度（即使有规则也可能需要）
+        // 计算相似度（使用内容感知的混合算法）
         double similarity = -1;
         if (baselineResponse != null && responseBody != null) {
             String respStr = new String(responseBody, StandardCharsets.UTF_8);
             String baseStr = new String(baselineResponse, StandardCharsets.UTF_8);
-            similarity = LevenshteinCalculator.similarity(respStr, baseStr);
+            String contentType = extractContentType(responseHeaders);
+            similarity = SimilarityEngine.similarity(respStr, baseStr, contentType);
         }
 
         // 有规则时：按优先级匹配
@@ -148,6 +150,19 @@ public class JudgmentEngine {
         return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, safeColor,
                 similarity >= 0 ? String.format("相似度: %.2f", similarity) : "",
                 similarity, null);
+    }
+
+    /**
+     * 从响应头字符串中提取 Content-Type 值
+     *
+     * @param responseHeaders 响应头字符串（多行格式）
+     * @return Content-Type 值，未找到时返回 null
+     */
+    private static String extractContentType(String responseHeaders) {
+        if (responseHeaders == null || responseHeaders.isEmpty()) return null;
+        Pattern p = Pattern.compile("(?i)Content-Type\\s*:\\s*(.+?)(?:\r?\n|$)");
+        Matcher m = p.matcher(responseHeaders);
+        return m.find() ? m.group(1).trim() : null;
     }
 
     /**

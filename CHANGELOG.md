@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.0] - 2026-05-20
+
+### Added
+- 新增结构化响应相似度引擎 SimilarityEngine，替代原有单一 Levenshtein 距离算法
+- 新增 JaccardSimilarityCalculator 通用文本相似度计算器
+- 新增 JsonSimilarityCalculator JSON 结构化响应相似度计算器（基于 key 集合和值内容双重比对）
+- 新增 XmlSimilarityCalculator XML 结构化响应相似度计算器（基于标签集合和文本内容双重比对）
+- 新增 ContentTypeDetector 自动检测响应 Content-Type（支持 JSON/XML/表单/文本等类型）
+- 新增 NoiseFilter 噪声过滤器，自动移除响应中的时间戳、随机数等动态内容
+- ReplayEngine 新增 API 去重检查，避免同一接口重复测试
+
+### Changed
+- JudgmentEngine 相似度计算升级为内容感知算法，根据 Content-Type 自动选择最优策略
+- AutoTestEngine 基线响应采集改为纯响应体（排除响应头），提升比对精度
+- ReplayEngine 相似度比对升级为纯响应体比对（排除响应头）
+- DiffEngine 相似度计算复用 SimilarityEngine 混合算法
+
 ## [2.16.5] - 2026-05-13
 
 ### Changed
