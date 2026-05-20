@@ -6,6 +6,7 @@ import oxff.top.privilege.model.ScopeEntry;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,8 @@ public class ScopeConfigTab extends JPanel {
     private JCheckBox useBurpScopeCheckbox;
     private JCheckBox autoTestCheckbox;
     private JLabel statusLabel;
+    /** autoTestCheckbox 的 ActionListener 实例引用，供 syncAutoTestCheckbox 临时移除/恢复使用 */
+    private final ActionListener autoTestActionListener = e -> toggleAutoTest();
 
     public ScopeConfigTab() {
         super(new BorderLayout(0, 5));
@@ -30,7 +33,7 @@ public class ScopeConfigTab extends JPanel {
 
         autoTestCheckbox = new JCheckBox("启用自动化测试", false);
         autoTestCheckbox.setToolTipText("开启后将自动监听代理流量，对匹配Scope的请求执行权限测试");
-        autoTestCheckbox.addActionListener(e -> toggleAutoTest());
+        autoTestCheckbox.addActionListener(autoTestActionListener);
 
         useBurpScopeCheckbox = new JCheckBox("使用Burp Suite Scope", false);
         useBurpScopeCheckbox.setToolTipText("同时使用Burp Suite自身的Target Scope作为匹配范围");
@@ -109,12 +112,37 @@ public class ScopeConfigTab extends JPanel {
         refreshData();
     }
 
+    /**
+     * 刷新数据，同步ScopeManager状态到UI组件
+     */
     public void refreshData() {
         ScopeManager manager = ScopeManager.getInstance();
         scopeModel.setData(manager.getAllEntries());
         useBurpScopeCheckbox.setSelected(manager.isUseBurpScope());
-        autoTestCheckbox.setSelected(manager.isAutoTestEnabled());
+        syncAutoTestCheckbox(manager);
         updateStatus();
+    }
+
+    /**
+     * 仅同步autoTestCheckbox状态（不触发ActionListener，避免递归调用toggleAutoTest）
+     * 供外部联动变更（如越权模式按钮切换）后同步UI状态使用
+     */
+    public void syncAutoTestState() {
+        syncAutoTestCheckbox(ScopeManager.getInstance());
+        updateStatus();
+    }
+
+    /**
+     * 同步autoTestCheckbox到ScopeManager当前状态
+     * 临时移除ActionListener避免 setSelected 触发 toggleAutoTest → setAutoTestEnabled 递归
+     */
+    private void syncAutoTestCheckbox(ScopeManager manager) {
+        autoTestCheckbox.removeActionListener(autoTestActionListener);
+        try {
+            autoTestCheckbox.setSelected(manager.isAutoTestEnabled());
+        } finally {
+            autoTestCheckbox.addActionListener(autoTestActionListener);
+        }
     }
 
     private void updateStatus() {

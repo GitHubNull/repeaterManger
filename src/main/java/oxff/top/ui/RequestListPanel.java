@@ -43,6 +43,10 @@ public class RequestListPanel extends JPanel {
     // 回调函数
     private RequestSelectedCallback requestSelectedCallback;
 
+    /** 批量添加模式标志：为true时暂停ListSelectionListener回调，避免每添加一行都触发onRequestSelected
+     *  注意：仅限EDT线程读写，不需要volatile */
+    private boolean batchAddMode = false;
+
     private TableRowSorter<DefaultTableModel> tableRowSorter;
     private int nextRequestId = 1;
 
@@ -108,7 +112,7 @@ public class RequestListPanel extends JPanel {
         });
 
         requestTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
+            if (!e.getValueIsAdjusting() && !batchAddMode) {
                 int selectedRow = requestTable.getSelectedRow();
                 if (selectedRow >= 0) {
                     int requestId = (int) tableModel.getValueAt(selectedRow, 0);
@@ -482,7 +486,37 @@ public class RequestListPanel extends JPanel {
     }
 
     /**
+     * 设置批量添加模式
+     * 开启时暂停ListSelectionListener回调，避免每添加一行都触发onRequestSelected；
+     * 关闭时恢复正常回调行为
+     *
+     * @param enabled true=批量模式（暂停回调），false=正常模式（恢复回调）
+     */
+    public void setBatchAddMode(boolean enabled) {
+        this.batchAddMode = enabled;
+        if (!enabled) {
+            // 批量添加结束后，如果有选中行则触发一次回调
+            int selectedRow = requestTable.getSelectedRow();
+            if (selectedRow >= 0) {
+                int requestId = (int) tableModel.getValueAt(selectedRow, 0);
+                byte[] requestData = requestDataMap.get(requestId);
+                if (requestData != null && requestSelectedCallback != null) {
+                    requestSelectedCallback.onRequestSelected(requestId, requestData);
+                }
+            }
+        }
+    }
+
+    /**
+     * 是否处于批量添加模式
+     */
+    public boolean isBatchAddMode() {
+        return batchAddMode;
+    }
+
+    /**
      * 添加请求（带API值和越权测试标记）
+     * 批量添加模式下自动静默（不逐条打印日志）
      */
     public void addRequest(int id, String api, String method, String protocol, String domain, String path, String query, boolean isPrivilegeTest, byte[] requestData) {
         // 添加到表格模型
@@ -502,7 +536,10 @@ public class RequestListPanel extends JPanel {
         // 保存请求数据到内存映射
         if (requestData != null) {
             requestDataMap.put(id, requestData);
-            BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
+            // 批量添加模式下不逐条打印日志，避免150+请求产生大量噪音
+            if (!batchAddMode) {
+                BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
+            }
         }
 
         // 注意：数据库保存由调用方负责（setRequest/createNewRequest/refreshAllData），
@@ -549,7 +586,9 @@ public class RequestListPanel extends JPanel {
         // 保存请求数据到内存映射
         if (record.getRequestData() != null) {
             requestDataMap.put(record.getId(), record.getRequestData());
-            BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + record.getId() + "，数据大小: " + record.getRequestData().length + " 字节");
+            if (!batchAddMode) {
+                BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + record.getId() + "，数据大小: " + record.getRequestData().length + " 字节");
+            }
         }
 
         // 更新颜色和注释映射

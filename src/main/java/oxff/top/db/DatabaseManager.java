@@ -180,6 +180,7 @@ public class DatabaseManager {
                 stmt.execute("PRAGMA journal_mode=DELETE");
                 stmt.execute("PRAGMA synchronous=NORMAL");
                 stmt.execute("PRAGMA foreign_keys=ON");
+                stmt.execute("PRAGMA busy_timeout=5000");
 
                 // 委托给SchemaInitializer进行表初始化和迁移
                 SchemaInitializer.initializeTablesWithConnection(tempConnection);
@@ -228,6 +229,7 @@ public class DatabaseManager {
             stmt.execute("PRAGMA journal_mode=DELETE");
             stmt.execute("PRAGMA synchronous=NORMAL");
             stmt.execute("PRAGMA foreign_keys=ON");
+            stmt.execute("PRAGMA busy_timeout=5000");
         }
 
         return conn;

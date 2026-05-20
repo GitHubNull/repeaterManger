@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.2] - 2026-05-20
+
+### Added
+- 越权模式切换时联动 ScopeConfigTab 自动测试复选框同步状态
+- RequestListPanel 批量添加模式（batchAddMode），批量导入时静默日志输出
+- RequestDispatchHandler 模式变更监听器（addModeChangeListener）
+
+### Fixed
+- 修复越权模式按钮切换后 ScopeConfigTab 复选框状态不同步问题
+- 修复批量添加请求时产生大量噪音日志问题
+- 修复 ScopeConfigTab 同步复选框状态时触发 ActionListener 递归调用问题
+
 ## [2.17.1] - 2026-05-20
 
 ### Changed

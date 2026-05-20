@@ -187,6 +187,18 @@ public class RepeaterManagerUI {
         // 创建权限测试配置面板
         privilegeTestPanel = new PrivilegeTestPanel();
 
+        // 注册模式变更监听器：同步ScopeConfigTab的autoTestCheckbox状态
+        // 越权模式联动代理监听器（setPrivilegeTestMode→ScopeManager.setAutoTestEnabled），
+        // ScopeConfigTab的复选框需同步反映代理监听器的开启/关闭状态
+        // 必须在privilegeTestPanel初始化后注册，否则编译器报"变量未初始化"错误
+        dispatchHandler.addModeChangeListener(mode -> {
+            SwingUtilities.invokeLater(() -> {
+                if (privilegeTestPanel != null) {
+                    privilegeTestPanel.syncScopeConfigAutoTestState();
+                }
+            });
+        });
+
         // 创建使用教程面板
         UsageTutorialPanel usageTutorialPanel = new UsageTutorialPanel();
 
@@ -370,8 +382,8 @@ public class RepeaterManagerUI {
             // 尝试加载该请求的最新响应数据
             loadLatestResponseForRequest(requestId);
 
-            // 加载相关的历史记录
-            loadHistoryForRequest(requestId);
+            // 加载相关的历史记录（批量添加模式下使用静默模式，避免"没有历史记录"噪音日志）
+            loadHistoryForRequest(requestId, requestListPanel.isBatchAddMode());
         } else {
             BurpExtender.printOutput("[!] 请求数据为空，ID: " + requestId);
             dispatchHandler.setCurrentHttpService(null);
@@ -405,12 +417,16 @@ public class RepeaterManagerUI {
 
     /**
      * 加载指定请求ID的历史记录
+     * @param requestId 请求ID
+     * @param silent true时不输出"没有历史记录"等调试日志（批量模式下新请求无历史是正常现象）
      */
-    private void loadHistoryForRequest(int requestId) {
+    private void loadHistoryForRequest(int requestId, boolean silent) {
         // 清空历史记录面板
         historyPanel.clearHistory();
 
-        BurpExtender.printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
+        if (!silent) {
+            BurpExtender.printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
+        }
 
         // 优先从数据库加载历史记录
         try {
@@ -418,9 +434,11 @@ public class RepeaterManagerUI {
             List<RequestResponseRecord> dbHistoryList = historyReadDAO.getHistoryByRequestId(requestId);
 
             if (dbHistoryList != null && !dbHistoryList.isEmpty()) {
-                BurpExtender.printOutput(
-                    String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条",
-                        requestId, dbHistoryList.size()));
+                if (!silent) {
+                    BurpExtender.printOutput(
+                        String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条",
+                            requestId, dbHistoryList.size()));
+                }
 
                 for (RequestResponseRecord record : dbHistoryList) {
                     historyPanel.addHistoryRecord(record);
@@ -428,10 +446,10 @@ public class RepeaterManagerUI {
 
                 dispatchHandler.getRequestHistoryMap().put(requestId, new ArrayList<>(dbHistoryList));
 
-                BurpExtender.printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
+                if (!silent) {
+                    BurpExtender.printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
+                }
                 return;
-            } else {
-                BurpExtender.printOutput(String.format("[*] 数据库中未找到请求ID %d 的历史记录", requestId));
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 从数据库加载历史记录失败: " + e.getMessage());
@@ -441,16 +459,21 @@ public class RepeaterManagerUI {
         List<RequestResponseRecord> historyList = dispatchHandler.getRequestHistoryMap().get(requestId);
 
         if (historyList != null && !historyList.isEmpty()) {
-            BurpExtender.printOutput(
-                String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条",
-                    requestId, historyList.size()));
+            if (!silent) {
+                BurpExtender.printOutput(
+                    String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条",
+                        requestId, historyList.size()));
+            }
 
             for (RequestResponseRecord record : historyList) {
                 historyPanel.addHistoryRecord(record);
             }
         } else {
-            BurpExtender.printOutput(
-                String.format("[*] 请求ID %d 没有历史记录", requestId));
+            // 批量模式下新请求无历史记录是正常现象，不输出噪音日志
+            if (!silent) {
+                BurpExtender.printOutput(
+                    String.format("[*] 请求ID %d 没有历史记录", requestId));
+            }
         }
 
         historyPanel.setBorderTitle("请求历史记录 - ID: " + requestId);
@@ -623,56 +646,147 @@ public class RepeaterManagerUI {
     }
 
     /**
-     * 批量设置请求并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收多条请求
+     * 批量设置请求内容并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收多条请求
      * 自动加载所有请求、切换到请求管理标签页、开启权限测试模式、批量重放
+     *
+     * 优化：将DB保存和基线存储移到后台线程，仅将添加行到UI列表的操作留在EDT上，
+     * 避免150+请求的同步DB操作阻塞EDT导致UI卡顿。
+     * 使用RequestListPanel的batchAddMode暂停每行添加时的ListSelectionListener回调，
+     * 避免每行触发onRequestSelected→loadHistoryForRequest产生"没有历史记录"噪音日志。
      */
     public void setPrivilegeTestRequests(List<HttpRequestResponse> requestResponses) {
         if (requestResponses == null || requestResponses.isEmpty()) return;
 
         try {
-            // 先关闭权限测试模式，避免 setRequest() 内部误触发重放
+            // 先关闭权限测试模式，避免误触发重放
             dispatchHandler.setPrivilegeTestMode(false);
 
-            // 批量加载请求
-            List<Integer> dbIds = new ArrayList<>();
-            for (int i = 0; i < requestResponses.size(); i++) {
-                HttpRequestResponse rr = requestResponses.get(i);
-                try {
-                    int dbId = setRequest(rr);
-                    if (dbId > 0) {
-                        dbIds.add(dbId);
-                        // 保存原始响应作为基线 history 记录（user_session_name=NULL）
-                        saveOriginalResponseAsBaseline(dbId, rr);
-                    }
-                } catch (Exception e) {
-                    BurpExtender.printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
-                }
-            }
+            // 开启批量添加模式，暂停每行添加时的ListSelectionListener回调
+            requestListPanel.setBatchAddMode(true);
 
-            if (dbIds.isEmpty()) {
-                BurpExtender.printError("[!] 批量权限测试：所有请求保存失败");
-                return;
-            }
-
-            // 标记为越权测试请求
-            for (int dbId : dbIds) {
-                new RequestDAO().markAsPrivilegeTest(dbId);
-                requestListPanel.updatePrivilegeTestFlag(dbId, true);
-            }
+            // 设置等待光标
+            dispatchHandler.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
             // 切换到请求管理标签页
             tabbedPane.setSelectedIndex(0);
 
-            // 开启权限测试模式
-            dispatchHandler.setPrivilegeTestMode(true);
-            BurpExtender.printOutput(String.format("[*] 权限测试模式已开启，准备批量重放 %d 条请求...", dbIds.size()));
+            int total = requestResponses.size();
+            BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", total));
 
-            // 批量触发权限测试重放
-            dispatchHandler.batchSendPrivilegeTestRequests(dbIds);
+            // 在后台线程中执行DB保存+基线存储，避免EDT阻塞
+            new Thread(() -> {
+                List<Integer> dbIds = new ArrayList<>();
+                RequestDAO requestDAO = new RequestDAO();
+
+                for (int i = 0; i < requestResponses.size(); i++) {
+                    HttpRequestResponse rr = requestResponses.get(i);
+                    try {
+                        if (rr == null || rr.request() == null) continue;
+
+                        byte[] request = rr.request().toByteArray().getBytes();
+                        HttpService httpService = rr.httpService();
+                        HttpRequest httpRequest = rr.request();
+
+                        // 解析URL组件
+                        String method;
+                        String protocol = "http";
+                        String domain = "";
+                        String path = "/";
+                        String query = "";
+
+                        try {
+                            method = httpRequest.method();
+                            URL parsedUrl = new URL(httpRequest.url());
+                            protocol = parsedUrl.getProtocol();
+                            domain = parsedUrl.getHost();
+                            int urlPort = parsedUrl.getPort();
+                            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
+                                domain = domain + ":" + urlPort;
+                            }
+                            path = parsedUrl.getPath();
+                            query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+                        } catch (Exception e) {
+                            BurpExtender.printError("[!] 分析请求URL时出错: " + e.getMessage());
+                            method = "UNKNOWN";
+                        }
+
+                        // DB保存（后台线程中执行，不阻塞EDT）
+                        int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
+                        if (dbId <= 0) {
+                            BurpExtender.printError("[!] 批量权限测试：保存请求到数据库失败，第 " + (i + 1) + " 条");
+                            continue;
+                        }
+
+                        // 标记为越权测试请求
+                        requestDAO.markAsPrivilegeTest(dbId);
+
+                        // 保存HttpService映射
+                        if (httpService != null) {
+                            dispatchHandler.saveHttpService(dbId, httpService);
+                        }
+
+                        // 保存原始响应基线（后台线程中执行）
+                        saveOriginalResponseAsBaseline(dbId, rr);
+
+                        // 初始化内存历史映射（ConcurrentHashMap，后台线程put与EDT上get/put均线程安全）
+                        dispatchHandler.getRequestHistoryMap().put(dbId, new ArrayList<>());
+
+                        // 计算API值
+                        String apiValue = HttpRequestHelper.computeApiFromRequest(path, query, request);
+
+                        dbIds.add(dbId);
+
+                        // 在EDT上添加行到请求列表（最小化EDT占用）
+                        final int finalDbId = dbId;
+                        final String finalApi = apiValue;
+                        final String finalMethod = method;
+                        final String finalProtocol = protocol;
+                        final String finalDomain = domain;
+                        final String finalPath = path;
+                        final String finalQuery = query;
+                        final byte[] finalRequest = request;
+                        SwingUtilities.invokeLater(() -> {
+                            requestListPanel.addRequest(finalDbId, finalApi, finalMethod, finalProtocol,
+                                    finalDomain, finalPath, finalQuery, true, finalRequest);
+                        });
+
+                    } catch (Exception e) {
+                        BurpExtender.printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
+                    }
+                }
+
+                if (dbIds.isEmpty()) {
+                    BurpExtender.printError("[!] 批量权限测试：所有请求保存失败");
+                    SwingUtilities.invokeLater(() -> {
+                        requestListPanel.setBatchAddMode(false);
+                        dispatchHandler.setCursor(Cursor.getDefaultCursor());
+                    });
+                    return;
+                }
+
+                BurpExtender.printOutput(String.format("[+] 批量权限测试：保存完成，成功 %d / %d 条，开始重放...",
+                        dbIds.size(), total));
+
+                // 全部保存完成后，在EDT上关闭批量模式、恢复光标、开启越权模式、触发批量重放
+                SwingUtilities.invokeLater(() -> {
+                    requestListPanel.setBatchAddMode(false);
+                    dispatchHandler.setCurrentRequestId(dbIds.get(dbIds.size() - 1));
+                    dispatchHandler.setCursor(Cursor.getDefaultCursor());
+
+                    // 开启权限测试模式（联动代理监听器）
+                    dispatchHandler.setPrivilegeTestMode(true);
+                    BurpExtender.printOutput(String.format("[*] 权限测试模式已开启，准备批量重放 %d 条请求...", dbIds.size()));
+
+                    // 批量触发权限测试重放
+                    dispatchHandler.batchSendPrivilegeTestRequests(dbIds);
+                });
+            }, "batch-privilege-test-setup").start();
 
         } catch (Exception e) {
             BurpExtender.printError("[!] 批量设置权限测试请求失败: " + e.getMessage());
             e.printStackTrace();
+            requestListPanel.setBatchAddMode(false);
+            dispatchHandler.setCursor(Cursor.getDefaultCursor());
         }
     }
 

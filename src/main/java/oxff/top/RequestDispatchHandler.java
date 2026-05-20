@@ -10,6 +10,7 @@ import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.privilege.ReplayEngine;
+import oxff.top.privilege.ScopeManager;
 import oxff.top.privilege.SessionManager;
 import oxff.top.privilege.model.JudgmentResult;
 import oxff.top.ui.editor.BurpRequestPanel;
@@ -110,6 +111,18 @@ public class RequestDispatchHandler {
             return; // no-op guard
         }
         this.privilegeTestMode = enabled;
+
+        // 联动代理监听器：开启越权模式时自动注册ProxyRequestHandler监听代理流量，
+        // 关闭时自动注销。ProxyRequestHandler使用continueWith()不做任何阻断，
+        // 仅将匹配Scope的流量副本提交给AutoTestEngine进行越权重放测试。
+        // 注意：批量权限测试(setPrivilegeTestRequests)会先setPrivilegeTestMode(false)再setPrivilegeTestMode(true)，
+        // 短暂注销-重注册是预期行为——避免批量处理期间代理监听器与手动触发的重放产生竞争。
+        try {
+            ScopeManager.getInstance().setAutoTestEnabled(enabled);
+        } catch (Exception e) {
+            BurpExtender.printError("[!] 联动代理监听器失败: " + e.getMessage());
+        }
+
         // 模式变更监听器在EDT上通知，避免在后台线程中直接操作Swing组件
         fireModeChanged(enabled);
     }
@@ -699,6 +712,8 @@ public class RequestDispatchHandler {
                                             rec.getQueryParameters() != null ? rec.getQueryParameters() : "",
                                             rec.getRequestData()));
 
+                                    // DB持久化：在后台线程执行，避免EDT阻塞
+                                    // （ReplayEngine的回调在EDT上执行，DB操作不应阻塞EDT）
                                     try {
                                         HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
                                         int historyId = historyWriteDAO.saveHistory(rec);

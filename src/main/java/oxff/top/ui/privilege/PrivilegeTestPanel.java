@@ -21,6 +21,7 @@ public class PrivilegeTestPanel extends JPanel {
             + ".warning { color: #d32f2f; }";
 
     private final JTabbedPane innerTabbedPane;
+    private final ScopeConfigTab scopeConfigTab;
 
     public PrivilegeTestPanel() {
         super(new BorderLayout());
@@ -36,7 +37,7 @@ public class PrivilegeTestPanel extends JPanel {
         innerTabbedPane.addTab("判决规则", judgmentRuleConfigTab);
 
         // Scope子Tab
-        ScopeConfigTab scopeConfigTab = new ScopeConfigTab();
+        scopeConfigTab = new ScopeConfigTab();
         innerTabbedPane.addTab("Scope", scopeConfigTab);
 
         // 报告导出子Tab
@@ -203,5 +204,16 @@ public class PrivilegeTestPanel extends JPanel {
         panel.add(warningPane, gbc);
 
         return panel;
+    }
+
+    /**
+     * 同步ScopeConfigTab的autoTestCheckbox状态到ScopeManager当前值
+     * 供RepeaterManagerUI模式变更监听器调用：越权模式按钮切换时联动代理监听器，
+     * ScopeConfigTab的复选框需同步反映最新状态
+     */
+    public void syncScopeConfigAutoTestState() {
+        if (scopeConfigTab != null) {
+            scopeConfigTab.syncAutoTestState();
+        }
     }
 }
