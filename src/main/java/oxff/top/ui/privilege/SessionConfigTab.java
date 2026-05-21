@@ -2,6 +2,8 @@ package oxff.top.ui.privilege;
 
 import oxff.top.privilege.SessionManager;
 import oxff.top.privilege.UserSessionYamlIO;
+import oxff.top.privilege.model.DedupKeepPolicy;
+import oxff.top.privilege.model.DedupStrategy;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.TokenLocationType;
 import oxff.top.privilege.model.UserSession;
@@ -49,6 +51,9 @@ public class SessionConfigTab extends JPanel {
     private JRadioButton realtimeRadio;
     private JRadioButton batchRadio;
     private JCheckBox dedupCheckbox;
+    private JComboBox<DedupStrategy> dedupStrategyCombo;
+    private JTextField dedupExpressionField;
+    private JComboBox<DedupKeepPolicy> dedupKeepPolicyCombo;
     private JSpinner thresholdSpinner;
 
     public SessionConfigTab() {
@@ -279,6 +284,61 @@ public class SessionConfigTab extends JPanel {
         replayConfigPanel.add(batchRadio);
         replayConfigPanel.add(Box.createHorizontalStrut(20));
         replayConfigPanel.add(dedupCheckbox);
+
+        // 去重标准配置
+        replayConfigPanel.add(Box.createHorizontalStrut(10));
+        replayConfigPanel.add(new JLabel("去重标准:"));
+        dedupStrategyCombo = new JComboBox<>(DedupStrategy.values());
+        dedupStrategyCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof DedupStrategy) {
+                    setText(((DedupStrategy) value).getDisplayName());
+                }
+                return this;
+            }
+        });
+        dedupStrategyCombo.setToolTipText("选择去重依据的标准，默认按路径去重");
+        dedupStrategyCombo.addActionListener(e -> {
+            // 仅当选择需要表达式的策略时启用表达式输入框
+            DedupStrategy selected = (DedupStrategy) dedupStrategyCombo.getSelectedItem();
+            boolean needsExpression = selected == DedupStrategy.JSON_BODY_FIELD
+                    || selected == DedupStrategy.XML_BODY_FIELD
+                    || selected == DedupStrategy.FORM_FIELD
+                    || selected == DedupStrategy.URL_PARAM;
+            dedupExpressionField.setEnabled(needsExpression);
+            if (!needsExpression) {
+                dedupExpressionField.setText("");
+            }
+        });
+        replayConfigPanel.add(dedupStrategyCombo);
+
+        // 去重表达式
+        replayConfigPanel.add(new JLabel("字段:"));
+        dedupExpressionField = new JTextField(10);
+        dedupExpressionField.setToolTipText("当去重标准为JSON/XML/表单/URL参数时，输入字段名或路径");
+        dedupExpressionField.setEnabled(false);
+        replayConfigPanel.add(dedupExpressionField);
+
+        // 保留策略
+        replayConfigPanel.add(new JLabel("保留:"));
+        dedupKeepPolicyCombo = new JComboBox<>(DedupKeepPolicy.values());
+        dedupKeepPolicyCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof DedupKeepPolicy) {
+                    setText(((DedupKeepPolicy) value).getDisplayName());
+                }
+                return this;
+            }
+        });
+        dedupKeepPolicyCombo.setToolTipText("重复请求保留哪一条");
+        replayConfigPanel.add(dedupKeepPolicyCombo);
+
         replayConfigPanel.add(Box.createHorizontalStrut(20));
         replayConfigPanel.add(new JLabel("相似度阈值:"));
         thresholdSpinner = new JSpinner(new SpinnerNumberModel(0.7, 0.0, 1.0, 0.05));
@@ -326,6 +386,16 @@ public class SessionConfigTab extends JPanel {
         realtimeRadio.setSelected(sessionManager.isRealtimeMode());
         batchRadio.setSelected(!sessionManager.isRealtimeMode());
         dedupCheckbox.setSelected(sessionManager.isDedupEnabled());
+        dedupStrategyCombo.setSelectedItem(sessionManager.getDedupStrategy());
+        dedupExpressionField.setText(sessionManager.getDedupExpression());
+        // 根据策略启用/禁用表达式输入框
+        DedupStrategy currentStrategy = sessionManager.getDedupStrategy();
+        boolean needsExpression = currentStrategy == DedupStrategy.JSON_BODY_FIELD
+                || currentStrategy == DedupStrategy.XML_BODY_FIELD
+                || currentStrategy == DedupStrategy.FORM_FIELD
+                || currentStrategy == DedupStrategy.URL_PARAM;
+        dedupExpressionField.setEnabled(needsExpression);
+        dedupKeepPolicyCombo.setSelectedItem(sessionManager.getDedupKeepPolicy());
         thresholdSpinner.setValue(sessionManager.getSimilarityThreshold());
     }
 
@@ -509,6 +579,9 @@ public class SessionConfigTab extends JPanel {
         SessionManager sm = SessionManager.getInstance();
         sm.setRealtimeMode(realtimeRadio.isSelected());
         sm.setDedupEnabled(dedupCheckbox.isSelected());
+        sm.setDedupStrategy((DedupStrategy) dedupStrategyCombo.getSelectedItem());
+        sm.setDedupExpression(dedupExpressionField.getText().trim());
+        sm.setDedupKeepPolicy((DedupKeepPolicy) dedupKeepPolicyCombo.getSelectedItem());
         sm.setSimilarityThreshold((Double) thresholdSpinner.getValue());
         JOptionPane.showMessageDialog(this, "重放配置已保存", "提示", JOptionPane.INFORMATION_MESSAGE);
     }

@@ -96,8 +96,9 @@ public class TokenReplacementEngine {
         // 替换URL参数中的令牌（在header替换之前，因为URL参数在请求行中）
         for (TokenLocation loc : urlLocations) {
             String value = session.getTokenValue(loc.getId());
+            // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应token
             if (value == null) {
-                continue;
+                value = "";
             }
             value = sanitizeNewlines(value, loc.getExpression());
             try {
@@ -110,8 +111,9 @@ public class TokenReplacementEngine {
         // 替换Header中的令牌
         for (TokenLocation loc : headerLocations) {
             String value = session.getTokenValue(loc.getId());
+            // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应header
             if (value == null) {
-                continue;
+                value = "";
             }
             // 安全过滤：将换行符替换为空格，防止HTTP header注入
             value = sanitizeNewlines(value, loc.getExpression());
@@ -126,8 +128,9 @@ public class TokenReplacementEngine {
         if (!bodyStr.isEmpty() && !bodyLocations.isEmpty()) {
             for (TokenLocation loc : bodyLocations) {
                 String value = session.getTokenValue(loc.getId());
+                // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应字段
                 if (value == null) {
-                    continue;
+                    value = "";
                 }
                 // 安全过滤：将换行符替换为空格，防止JSON/XML/body结构破坏
                 value = sanitizeNewlines(value, loc.getExpression());

@@ -686,6 +686,9 @@ public class RequestDispatchHandler {
 
         BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", requestIds.size()));
 
+        // 清除ReplayEngine的去重记录，确保新批次从干净状态开始
+        ReplayEngine.getInstance().clearProcessedApis();
+
         SwingUtilities.invokeLater(() -> setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)));
 
         int totalCount = requestIds.size();

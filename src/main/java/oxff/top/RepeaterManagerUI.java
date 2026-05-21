@@ -27,6 +27,8 @@ import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.db.RequestDAO;
 import oxff.top.db.DatabaseManager;
 import oxff.top.service.GarbageCollectorService;
+import oxff.top.privilege.ReplayEngine;
+import oxff.top.privilege.SessionManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -744,6 +746,35 @@ public class RepeaterManagerUI {
             // 先关闭权限测试模式，避免误触发重放
             dispatchHandler.setPrivilegeTestMode(false);
 
+            // 清除ReplayEngine的去重记录，确保新批次从干净状态开始
+            ReplayEngine.getInstance().clearProcessedApis();
+
+            // 前置去重：在保存到DB之前，根据配置的去重策略过滤重复请求
+            SessionManager sessionManager = SessionManager.getInstance();
+            final List<HttpRequestResponse> dedupedRequests;
+            if (sessionManager.isDedupEnabled()) {
+                int originalSize = requestResponses.size();
+                dedupedRequests = oxff.top.privilege.ApiDedupEngine.deduplicate(
+                        requestResponses,
+                        rr -> {
+                            if (rr == null || rr.request() == null) return "__NULL__";
+                            byte[] requestBytes = rr.request().toByteArray().getBytes();
+                            return oxff.top.privilege.ApiDedupEngine.computeDedupKey(
+                                    requestBytes, rr.httpService(),
+                                    sessionManager.getDedupStrategy(),
+                                    sessionManager.getDedupExpression());
+                        },
+                        sessionManager.getDedupKeepPolicy()
+                );
+                if (dedupedRequests.size() < originalSize) {
+                    BurpExtender.printOutput(String.format(
+                            "[*] 批量权限测试：去重过滤 %d -> %d 条（去除 %d 条重复）",
+                            originalSize, dedupedRequests.size(), originalSize - dedupedRequests.size()));
+                }
+            } else {
+                dedupedRequests = requestResponses;
+            }
+
             // 开启批量添加模式，暂停每行添加时的ListSelectionListener回调
             requestListPanel.setBatchAddMode(true);
 
@@ -753,7 +784,7 @@ public class RepeaterManagerUI {
             // 切换到请求管理标签页
             tabbedPane.setSelectedIndex(0);
 
-            int total = requestResponses.size();
+            int total = dedupedRequests.size();
             BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", total));
 
             // 暂停GC服务，避免批量操作期间GC抢占DB连接池资源
@@ -767,8 +798,8 @@ public class RepeaterManagerUI {
                 List<Integer> dbIds = new ArrayList<>();
                 RequestDAO requestDAO = new RequestDAO();
 
-                for (int i = 0; i < requestResponses.size(); i++) {
-                    HttpRequestResponse rr = requestResponses.get(i);
+                for (int i = 0; i < dedupedRequests.size(); i++) {
+                    HttpRequestResponse rr = dedupedRequests.get(i);
                     try {
                         if (rr == null || rr.request() == null) continue;
 

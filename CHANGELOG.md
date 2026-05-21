@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-05-21
+
+### Added
+- 新增 ApiDedupEngine API 去重引擎，支持 6 种可配置去重策略（PATH/API/JSON_BODY_FIELD/XML_BODY_FIELD/FORM_FIELD/URL_PARAM）
+- 新增 DedupStrategy 枚举，定义去重策略类型及中文显示名称
+- 新增 DedupKeepPolicy 枚举，定义重复请求保留策略（FIRST/LAST/MIDDLE）
+- SessionConfigTab 重放配置面板新增去重标准、表达式字段、保留策略三个 UI 控件
+- SessionManager 新增 dedupStrategy/dedupExpression/dedupKeepPolicy 字段及读写方法
+
+### Changed
+- ReplayEngine API 去重检查从硬编码 PATH 策略重构为调用 ApiDedupEngine 可配置策略
+- AutoTestEngine 适配新去重引擎，支持策略回退（主策略失败时回退到 PATH 策略）
+
 ## [2.18.0] - 2026-05-21
 
 ### Added

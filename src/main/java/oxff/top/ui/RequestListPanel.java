@@ -16,6 +16,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 请求列表面板组件 - 负责显示和管理HTTP请求列表
@@ -36,7 +37,7 @@ public class RequestListPanel extends JPanel {
     };
 
     private final JTable requestTable = new JTable(tableModel);
-    private final Map<Integer, byte[]> requestDataMap = new HashMap<>();
+    private final Map<Integer, byte[]> requestDataMap = new ConcurrentHashMap<>();
     private final Map<Integer, Color> requestColors = new HashMap<>();
     private final Map<Integer, String> requestComments = new HashMap<>();
 
