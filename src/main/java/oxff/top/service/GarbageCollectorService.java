@@ -25,6 +25,9 @@ public class GarbageCollectorService {
     private ScheduledExecutorService scheduler;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
+    /** 批量操作期间暂停GC，避免与高并发DB写操作竞争连接池 */
+    private final AtomicBoolean paused = new AtomicBoolean(false);
+
     /** 默认 GC 运行间隔（分钟） */
     private static final int DEFAULT_INTERVAL_MINUTES = 10;
 
@@ -93,6 +96,22 @@ public class GarbageCollectorService {
     }
 
     /**
+     * 暂停GC服务（批量操作期间调用，避免GC抢占DB连接池）
+     */
+    public void pause() {
+        paused.set(true);
+        BurpExtender.printOutput("[*] GC 服务已暂停（批量操作期间）");
+    }
+
+    /**
+     * 恢复GC服务
+     */
+    public void resume() {
+        paused.set(false);
+        BurpExtender.printOutput("[*] GC 服务已恢复");
+    }
+
+    /**
      * 立即触发一次 GC（用于批量操作后）
      */
     public void triggerNow() {
@@ -103,6 +122,11 @@ public class GarbageCollectorService {
      * 处理 GC 队列
      */
     public void processQueue() {
+        if (paused.get()) {
+            BurpExtender.printOutput("[*] GC 已暂停，跳过本次处理");
+            return;
+        }
+
         if (!DatabaseManager.getInstance().isConnectionValid()) {
             return;
         }

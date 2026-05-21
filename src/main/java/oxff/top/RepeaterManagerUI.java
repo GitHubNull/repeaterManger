@@ -25,6 +25,8 @@ import oxff.top.ui.AboutPanel;
 import oxff.top.db.history.HistoryReadDAO;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.db.RequestDAO;
+import oxff.top.db.DatabaseManager;
+import oxff.top.service.GarbageCollectorService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -673,6 +675,12 @@ public class RepeaterManagerUI {
             int total = requestResponses.size();
             BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", total));
 
+            // 暂停GC服务，避免批量操作期间GC抢占DB连接池资源
+            GarbageCollectorService gcService = DatabaseManager.getInstance().getGcService();
+            if (gcService != null) {
+                gcService.pause();
+            }
+
             // 在后台线程中执行DB保存+基线存储，避免EDT阻塞
             new Thread(() -> {
                 List<Integer> dbIds = new ArrayList<>();
@@ -757,6 +765,10 @@ public class RepeaterManagerUI {
 
                 if (dbIds.isEmpty()) {
                     BurpExtender.printError("[!] 批量权限测试：所有请求保存失败");
+                    // 恢复GC服务
+                    if (gcService != null) {
+                        gcService.resume();
+                    }
                     SwingUtilities.invokeLater(() -> {
                         requestListPanel.setBatchAddMode(false);
                         dispatchHandler.setCursor(Cursor.getDefaultCursor());
@@ -767,9 +779,16 @@ public class RepeaterManagerUI {
                 BurpExtender.printOutput(String.format("[+] 批量权限测试：保存完成，成功 %d / %d 条，开始重放...",
                         dbIds.size(), total));
 
+                // 恢复GC服务（批量保存完成，连接池压力已降低）
+                if (gcService != null) {
+                    gcService.resume();
+                }
+
                 // 全部保存完成后，在EDT上关闭批量模式、恢复光标、开启越权模式、触发批量重放
                 SwingUtilities.invokeLater(() -> {
-                    requestListPanel.setBatchAddMode(false);
+                    // 使用静默退出批量模式，避免触发onRequestSelected回调
+                    // （此时重放尚未开始，查询历史记录必然为空，会产生大量“没有历史记录”告警和无效DB查询）
+                    requestListPanel.exitBatchModeQuiet();
                     dispatchHandler.setCurrentRequestId(dbIds.get(dbIds.size() - 1));
                     dispatchHandler.setCursor(Cursor.getDefaultCursor());
 

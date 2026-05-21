@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.3] - 2026-05-21
+
+### Changed
+- 重构 RequestDispatchHandler DB 持久化为异步后台线程执行，避免 saveHistory 阻塞 EDT 导致 UI 卡顿
+- 数据库连接池大小从 5 增至 15，提升批量越权测试场景并发 DB 写能力
+- GarbageCollectorService 新增暂停/恢复机制，批量操作期间自动暂停 GC 避免抢占连接池
+- RequestListPanel 新增静默退出批量添加模式（exitBatchModeQuiet），避免无效 DB 查询和告警
+
+### Fixed
+- 修复批量越权测试时 EDT 线程被 DB 写操作阻塞导致的 UI 转圈问题
+- 修复 Maven 构建中 maven-antrun-plugin 1.8 弃用 tasks/echo 语法，升级至 3.1.0 并迁移至 target 语法
+
 ## [2.17.2] - 2026-05-20
 
 ### Added

@@ -6,7 +6,7 @@
 
     <groupId>org.oxff</groupId>
     <artifactId>repeaterManger</artifactId>
-    <version>2.17.2</version>
+    <version>2.17.3</version>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -96,6 +96,7 @@
     </dependencies>
 
     <build>
+        <finalName>repeater-manager-${project.version}</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -140,7 +141,6 @@
                             <Build-Timestamp>${timestamp}</Build-Timestamp>
                         </manifestEntries>
                     </archive>
-                    <finalName>repeater-manager-${project.version}</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                 </configuration>
                 <executions>
@@ -186,7 +186,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
-                <version>1.8</version>
+                <version>3.1.0</version>
                 <executions>
                     <execution>
                         <id>rename-jar-file</id>
@@ -195,7 +195,7 @@
                             <goal>run</goal>
                         </goals>
                         <configuration>
-                            <tasks>
+                            <target>
                                 <!-- 创建目录（如果不存在） -->
                                 <mkdir dir="${release.dir}"/>
 
@@ -205,9 +205,9 @@
                                       overwrite="true"/>
 
                                 <!-- 输出日志信息 -->
-                                <echo message="开发测试版本JAR: ${project.build.directory}/repeater-manager-${project.version}.jar"/>
-                                <echo message="带时间戳发布版本JAR: ${release.dir}/repeater-manager-${project.version}-${timestamp}.jar"/>
-                            </tasks>
+                                <echo level="info" message="开发测试版本JAR: ${project.build.directory}/repeater-manager-${project.version}.jar"/>
+                                <echo level="info" message="带时间戳发布版本JAR: ${release.dir}/repeater-manager-${project.version}-${timestamp}.jar"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>

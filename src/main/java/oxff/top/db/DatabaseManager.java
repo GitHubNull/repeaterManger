@@ -30,7 +30,7 @@ public class DatabaseManager {
     private final Object connectionLock = new Object();
 
     // 连接池：复用数据库连接，避免每次请求都新建连接
-    private static final int POOL_SIZE = 5;
+    private static final int POOL_SIZE = 15;
     private final BlockingQueue<Connection> connectionPool = new ArrayBlockingQueue<>(POOL_SIZE);
 
     // 当前会话的数据库文件路径

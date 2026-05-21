@@ -508,6 +508,15 @@ public class RequestListPanel extends JPanel {
     }
 
     /**
+     * 静默退出批量添加模式（不触发onRequestSelected回调）
+     * 用于批量权限测试场景：退出批量模式后立即开始重放，
+     * 此时历史记录尚不存在，触发回调会导致无效DB查询和"没有历史记录"告警
+     */
+    public void exitBatchModeQuiet() {
+        this.batchAddMode = false;
+    }
+
+    /**
      * 是否处于批量添加模式
      */
     public boolean isBatchAddMode() {

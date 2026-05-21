@@ -27,6 +27,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -45,6 +47,13 @@ public class RequestDispatchHandler {
 
     // 功能组件
     private final RequestManager requestManager;
+
+    // 后台持久化线程池（将DB写操作从EDT卸载到后台，避免UI阻塞）
+    private final ExecutorService dbPersistExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "PrivilegeTest-DBPersist");
+        t.setDaemon(true);
+        return t;
+    });
 
     // 当前请求状态（volatile: 后台线程写/EDT线程读，保证可见性）
     private volatile int currentRequestId = -1;
@@ -596,21 +605,24 @@ public class RequestDispatchHandler {
                                 record.getQueryParameters() != null ? record.getQueryParameters() : "",
                                 record.getRequestData()));
 
-                        // 持久化到数据库（关键：供越权测试报告查询使用）
-                        try {
-                            HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
-                            int historyId = historyWriteDAO.saveHistory(record);
-                            if (historyId > 0) {
-                                record.setId(historyId);
-                            } else {
-                                BurpExtender.printError("[!] 越权测试记录保存到数据库失败，报告将无法统计该条记录");
-                            }
-                        } catch (Exception ex) {
-                            BurpExtender.printError("[!] 保存越权测试记录异常: " + ex.getMessage());
-                        }
-
-                        // 添加到历史面板
+                        // 先更新UI历史面板（已在EDT上），再异步持久化到DB
                         historyPanel.addHistoryRecord(record);
+
+                        // DB持久化：卸载到后台线程，避免saveHistory阻塞EDT
+                        final RequestResponseRecord dbRecord = record;
+                        dbPersistExecutor.submit(() -> {
+                            try {
+                                HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
+                                int historyId = historyWriteDAO.saveHistory(dbRecord);
+                                if (historyId > 0) {
+                                    dbRecord.setId(historyId);
+                                } else {
+                                    BurpExtender.printError("[!] 越权测试记录保存到数据库失败，报告将无法统计该条记录");
+                                }
+                            } catch (Exception ex) {
+                                BurpExtender.printError("[!] 保存越权测试记录异常: " + ex.getMessage());
+                            }
+                        });
 
                         // 基准用户的响应显示在响应面板
                         if (isFirst && record.getResponseData() != null && record.getResponseData().length > 0) {
@@ -712,19 +724,22 @@ public class RequestDispatchHandler {
                                             rec.getQueryParameters() != null ? rec.getQueryParameters() : "",
                                             rec.getRequestData()));
 
-                                    // DB持久化：在后台线程执行，避免EDT阻塞
-                                    // （ReplayEngine的回调在EDT上执行，DB操作不应阻塞EDT）
-                                    try {
-                                        HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
-                                        int historyId = historyWriteDAO.saveHistory(rec);
-                                        if (historyId > 0) {
-                                            rec.setId(historyId);
-                                        }
-                                    } catch (Exception ex) {
-                                        BurpExtender.printError("[!] 批量越权测试记录保存异常: " + ex.getMessage());
-                                    }
+                                    // 先更新UI（已在EDT上），再异步持久化到DB
+                                    historyPanel.addHistoryRecord(rec);
 
-                                    SwingUtilities.invokeLater(() -> historyPanel.addHistoryRecord(rec));
+                                    // DB持久化：卸载到后台线程，避免saveHistory阻塞EDT导致UI转圈
+                                    final RequestResponseRecord dbRec = rec;
+                                    dbPersistExecutor.submit(() -> {
+                                        try {
+                                            HistoryWriteDAO historyWriteDAO = new HistoryWriteDAO();
+                                            int historyId = historyWriteDAO.saveHistory(dbRec);
+                                            if (historyId > 0) {
+                                                dbRec.setId(historyId);
+                                            }
+                                        } catch (Exception ex) {
+                                            BurpExtender.printError("[!] 批量越权测试记录保存异常: " + ex.getMessage());
+                                        }
+                                    });
 
                                     if (isFirst && rec.getResponseData() != null && rec.getResponseData().length > 0) {
                                         SwingUtilities.invokeLater(() -> {
