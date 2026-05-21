@@ -40,6 +40,10 @@ public class PrivilegeTestPanel extends JPanel {
         scopeConfigTab = new ScopeConfigTab();
         innerTabbedPane.addTab("Scope", scopeConfigTab);
 
+        // 去重配置子Tab
+        DedupConfigTab dedupConfigTab = new DedupConfigTab();
+        innerTabbedPane.addTab("去重配置", dedupConfigTab);
+
         // 报告导出子Tab
         JPanel reportExportPanel = createReportExportPanel();
         innerTabbedPane.addTab("报告导出", reportExportPanel);

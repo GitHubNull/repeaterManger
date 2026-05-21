@@ -2,8 +2,6 @@ package oxff.top.privilege;
 
 import burp.BurpExtender;
 import oxff.top.privilege.dao.SessionDAO;
-import oxff.top.privilege.model.DedupKeepPolicy;
-import oxff.top.privilege.model.DedupStrategy;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.TokenLocationType;
 import oxff.top.privilege.model.UserSession;
@@ -34,18 +32,6 @@ public class SessionManager {
 
     /** 重放模式：true=实时重放，false=批量重放 */
     private boolean realtimeMode = true;
-
-    /** API去重开关 */
-    private boolean dedupEnabled = true;
-
-    /** 去重策略：按什么标准去重 */
-    private DedupStrategy dedupStrategy = DedupStrategy.PATH;
-
-    /** 去重表达式：当策略为body/param类型时，指定字段名/路径 */
-    private String dedupExpression = "";
-
-    /** 去重保留策略：保留第一条/最后一条/中间条 */
-    private DedupKeepPolicy dedupKeepPolicy = DedupKeepPolicy.FIRST;
 
     /** 相似度阈值 */
     private double similarityThreshold = 0.7;
@@ -317,38 +303,6 @@ public class SessionManager {
 
     public void setRealtimeMode(boolean realtimeMode) {
         this.realtimeMode = realtimeMode;
-    }
-
-    public boolean isDedupEnabled() {
-        return dedupEnabled;
-    }
-
-    public void setDedupEnabled(boolean dedupEnabled) {
-        this.dedupEnabled = dedupEnabled;
-    }
-
-    public DedupStrategy getDedupStrategy() {
-        return dedupStrategy;
-    }
-
-    public void setDedupStrategy(DedupStrategy dedupStrategy) {
-        this.dedupStrategy = dedupStrategy;
-    }
-
-    public String getDedupExpression() {
-        return dedupExpression;
-    }
-
-    public void setDedupExpression(String dedupExpression) {
-        this.dedupExpression = dedupExpression != null ? dedupExpression : "";
-    }
-
-    public DedupKeepPolicy getDedupKeepPolicy() {
-        return dedupKeepPolicy;
-    }
-
-    public void setDedupKeepPolicy(DedupKeepPolicy dedupKeepPolicy) {
-        this.dedupKeepPolicy = dedupKeepPolicy;
     }
 
     public double getSimilarityThreshold() {

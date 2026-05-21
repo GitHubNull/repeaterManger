@@ -7,7 +7,6 @@ import oxff.top.db.RequestDAO;
 import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
-import oxff.top.privilege.model.DedupStrategy;
 import oxff.top.privilege.model.JudgmentResult;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.UserSession;
@@ -68,18 +67,12 @@ public class AutoTestEngine {
             return;
         }
 
-        // 去重检查：使用 ApiDedupEngine 根据配置的去重策略计算去重键
-        if (sessionManager.isDedupEnabled()) {
+        // 去重检查：使用 DedupConfigManager 按优先级链式计算去重键，失败时自动回退PATH
+        DedupConfigManager dedupConfigManager = DedupConfigManager.getInstance();
+        if (dedupConfigManager.hasActiveConfigs()) {
             byte[] requestBytes = interceptedRequest.toByteArray().getBytes();
-            DedupStrategy dedupStrategy = sessionManager.getDedupStrategy();
-            String dedupExpression = sessionManager.getDedupExpression();
-            String api = ApiDedupEngine.computeDedupKey(
-                    requestBytes, interceptedRequest.httpService(), dedupStrategy, dedupExpression);
-            // 如果主策略提取失败，回退到 PATH 策略
-            if (api == null) {
-                api = ApiDedupEngine.computeDedupKey(
-                        requestBytes, interceptedRequest.httpService(), DedupStrategy.PATH, "");
-            }
+            String api = dedupConfigManager.computeDedupKey(
+                    requestBytes, interceptedRequest.httpService());
             synchronized (processedApis) {
                 if (processedApis.contains(api)) {
                     BurpExtender.printOutput("[*] 自动化测试：API已处理过，跳过去重: " + api);

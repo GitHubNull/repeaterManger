@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.0] - 2026-05-21
+
+### Added
+- 新增 DedupConfigManager 去重配置管理器，支持多规则优先级链式去重（按优先级遍历配置列表，首个成功提取即返回）
+- 新增 DedupConfig 模型，封装去重策略/表达式/保留策略/优先级/存储类型，支持全局持久化与会话临时双存储
+- 新增 DedupConfigYamlIO YAML 序列化工具，支持去重配置的全局持久化（~/.burp/repeater_manager/dedup_configs.yaml）
+- 新增 DedupConfigTab 独立去重配置面板，从 SessionConfigTab 中拆分为独立 Tab，支持增删改查
+- 新增 DedupConfigEditDialog 去重配置编辑对话框
+
+### Changed
+- 重构 SessionManager，移除内联 dedupStrategy/dedupExpression/dedupKeepPolicy/dedupEnabled 字段，职责转移至 DedupConfigManager
+- 重构 SessionConfigTab，移除去重配置 UI 控件，重放配置面板精简为模式选择和相似度阈值
+- 重构 ReplayEngine，去重检查从 SessionManager 单规则改为 DedupConfigManager 多规则优先级链式匹配
+- BurpExtender 启动时自动加载全局去重配置
+
 ## [2.19.0] - 2026-05-21
 
 ### Added

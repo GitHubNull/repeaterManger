@@ -78,6 +78,14 @@ public class BurpExtender implements BurpExtension {
                 logManager.error("[!] 全局令牌位置加载失败: " + e.getMessage());
             }
 
+            // 阶段4.7：加载全局去重配置
+            try {
+                oxff.top.privilege.DedupConfigManager.getInstance().loadGlobalConfigs();
+                logManager.success("[+] 全局去重配置加载完成");
+            } catch (Exception e) {
+                logManager.error("[!] 全局去重配置加载失败: " + e.getMessage());
+            }
+
             // 创建UI和功能组件
             repeaterUI = new RepeaterManagerUI(api);
 

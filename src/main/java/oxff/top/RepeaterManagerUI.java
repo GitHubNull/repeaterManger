@@ -28,8 +28,6 @@ import oxff.top.db.RequestDAO;
 import oxff.top.db.DatabaseManager;
 import oxff.top.service.GarbageCollectorService;
 import oxff.top.privilege.ReplayEngine;
-import oxff.top.privilege.SessionManager;
-
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
@@ -750,21 +748,20 @@ public class RepeaterManagerUI {
             ReplayEngine.getInstance().clearProcessedApis();
 
             // 前置去重：在保存到DB之前，根据配置的去重策略过滤重复请求
-            SessionManager sessionManager = SessionManager.getInstance();
+            oxff.top.privilege.DedupConfigManager dedupConfigManager =
+                    oxff.top.privilege.DedupConfigManager.getInstance();
             final List<HttpRequestResponse> dedupedRequests;
-            if (sessionManager.isDedupEnabled()) {
+            if (dedupConfigManager.hasActiveConfigs()) {
                 int originalSize = requestResponses.size();
                 dedupedRequests = oxff.top.privilege.ApiDedupEngine.deduplicate(
                         requestResponses,
                         rr -> {
                             if (rr == null || rr.request() == null) return "__NULL__";
                             byte[] requestBytes = rr.request().toByteArray().getBytes();
-                            return oxff.top.privilege.ApiDedupEngine.computeDedupKey(
-                                    requestBytes, rr.httpService(),
-                                    sessionManager.getDedupStrategy(),
-                                    sessionManager.getDedupExpression());
+                            return dedupConfigManager.computeDedupKey(
+                                    requestBytes, rr.httpService());
                         },
-                        sessionManager.getDedupKeepPolicy()
+                        dedupConfigManager.getKeepPolicy()
                 );
                 if (dedupedRequests.size() < originalSize) {
                     BurpExtender.printOutput(String.format(

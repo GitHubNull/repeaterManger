@@ -4,10 +4,8 @@ import burp.BurpExtender;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
-import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
-import oxff.top.privilege.model.DedupStrategy;
 import oxff.top.privilege.model.JudgmentResult;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.UserSession;
@@ -92,36 +90,13 @@ public class ReplayEngine {
             return false;
         }
 
-        // API去重检查：使用 ApiDedupEngine 根据配置的去重策略计算去重键
-        String api;
-        DedupStrategy dedupStrategy = sessionManager.getDedupStrategy();
-        String dedupExpression = sessionManager.getDedupExpression();
-
-        if (sessionManager.isDedupEnabled()) {
-            api = ApiDedupEngine.computeDedupKey(originalRequest, httpService, dedupStrategy, dedupExpression);
-            // 如果主策略提取失败，回退到 PATH 策略
-            if (api == null) {
-                api = ApiDedupEngine.computeDedupKey(originalRequest, httpService, DedupStrategy.PATH, "");
-            }
+        // API去重检查：使用 DedupConfigManager 按优先级链式计算去重键，失败时自动回退PATH
+        DedupConfigManager dedupConfigManager = DedupConfigManager.getInstance();
+        if (dedupConfigManager.hasActiveConfigs()) {
+            String api = dedupConfigManager.computeDedupKey(originalRequest, httpService);
             if (ApiDedupEngine.checkAndAddKey(processedApis, api)) {
                 BurpExtender.printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
                 return true; // 返回true表示被去重跳过，调用方需据此跳过CountDownLatch等待
-            }
-        } else {
-            // 去重关闭时仍然计算API键用于日志显示
-            try {
-                HttpRequest reqInfo;
-                if (httpService != null) {
-                    reqInfo = HttpRequest.httpRequest(httpService, ByteArray.byteArray(originalRequest));
-                } else {
-                    reqInfo = HttpRequest.httpRequest(ByteArray.byteArray(originalRequest));
-                }
-                java.net.URL parsedUrl = new java.net.URL(reqInfo.url());
-                String reqPath = parsedUrl.getPath() != null ? parsedUrl.getPath() : "/";
-                String reqQuery = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-                api = HttpRequestHelper.computeApiFromRequest(reqPath, reqQuery, originalRequest);
-            } catch (Exception e) {
-                api = HttpRequestHelper.computeApiFromRequest("/", "", originalRequest);
             }
         }
 
