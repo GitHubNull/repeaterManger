@@ -180,50 +180,51 @@ public class TokenReplacementEngine {
 
     /**
      * 替换指定Header的值
-     * 如果value为空字符串，则删除该Header行
+     * 如果value为空字符串，则删除该Header行（不留空白行）
      */
     private static String replaceHeader(String headerStr, String headerName, String value) {
         String[] lines = headerStr.split("\r\n", -1);
-        StringBuilder sb = new StringBuilder();
+        List<String> keptLines = new ArrayList<>();
         boolean replaced = false;
         String headerNameLower = headerName.toLowerCase();
 
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
+        for (String line : lines) {
             int colonIdx = line.indexOf(':');
             if (colonIdx > 0) {
                 String currentName = line.substring(0, colonIdx).trim().toLowerCase();
                 if (currentName.equals(headerNameLower)) {
                     replaced = true;
                     if (!value.isEmpty()) {
-                        sb.append(headerName).append(": ").append(value);
+                        keptLines.add(headerName + ": " + value);
                     }
-                    // value为空则删除该header行（不追加）
+                    // value为空则删除该header行（不添加到keptLines，不留空白行）
                 } else {
-                    sb.append(line);
+                    keptLines.add(line);
                 }
             } else {
                 // 请求行或其他非header行，直接保留
-                sb.append(line);
-            }
-
-            // 添加行分隔符（最后一行的请求行之后也要加）
-            if (i < lines.length - 1) {
-                sb.append("\r\n");
+                keptLines.add(line);
             }
         }
 
+        // 如果目标header不存在且value非空，追加新header（在header/body分隔空行之前）
         if (!replaced && !value.isEmpty()) {
-            // Header不存在，追加新Header（在最后\r\n\r\n之前）
-            int lastDoubleCRLF = sb.lastIndexOf("\r\n\r\n");
-            if (lastDoubleCRLF > 0) {
-                sb.insert(lastDoubleCRLF, "\r\n" + headerName + ": " + value);
+            String newHeaderLine = headerName + ": " + value;
+            int emptyLineIdx = -1;
+            for (int i = 0; i < keptLines.size(); i++) {
+                if (keptLines.get(i).isEmpty()) {
+                    emptyLineIdx = i;
+                    break;
+                }
+            }
+            if (emptyLineIdx > 0) {
+                keptLines.add(emptyLineIdx, newHeaderLine);
             } else {
-                sb.append("\r\n").append(headerName).append(": ").append(value);
+                keptLines.add(newHeaderLine);
             }
         }
 
-        return sb.toString();
+        return String.join("\r\n", keptLines);
     }
 
     // ==================== JSON Body 替换 ====================
@@ -231,6 +232,7 @@ public class TokenReplacementEngine {
     /**
      * 替换JSON body中指定路径的值
      * 路径格式如 $.data.token 或 $.users[0].sessionId
+     * 如果value为空字符串，则移除该属性（未授权测试场景：模拟请求中不存在此参数）
      */
     private static String replaceJsonBody(String bodyStr, String jsonPath, String value) {
         try {
@@ -246,7 +248,12 @@ public class TokenReplacementEngine {
             }
 
             JsonElement root = JsonParser.parseString(bodyStr);
-            setJsonValueAtPath(root, path, value);
+            if (value.isEmpty()) {
+                // 空值表示移除该JSON属性，模拟请求中不存在此参数
+                removeJsonValueAtPath(root, path);
+            } else {
+                setJsonValueAtPath(root, path, value);
+            }
             return root.toString();
         } catch (Exception e) {
             BurpExtender.printError("[!] JSON body替换失败: " + e.getMessage());
@@ -288,6 +295,39 @@ public class TokenReplacementEngine {
                 JsonObject obj = current.getAsJsonObject();
                 JsonElement original = obj.has(lastSegment) ? obj.get(lastSegment) : null;
                 obj.add(lastSegment, coerceJsonValue(original, value));
+            }
+        }
+    }
+
+    /**
+     * 在JSON结构中按路径移除属性
+     * 用于未授权测试场景：空令牌值时移除对应参数，模拟请求中不存在此字段
+     */
+    private static void removeJsonValueAtPath(JsonElement root, String path) {
+        String[] segments = splitJsonPath(path);
+        if (segments.length == 0) return;
+
+        JsonElement current = root;
+        for (int i = 0; i < segments.length - 1; i++) {
+            String segment = segments[i];
+            current = navigateJsonSegment(current, segment);
+            if (current == null) return;
+        }
+
+        String lastSegment = segments[segments.length - 1];
+        if (lastSegment.startsWith("[") && lastSegment.endsWith("]")) {
+            // 数组索引：移除该元素
+            if (current.isJsonArray()) {
+                JsonArray array = current.getAsJsonArray();
+                int idx = Integer.parseInt(lastSegment.substring(1, lastSegment.length() - 1));
+                if (idx >= 0 && idx < array.size()) {
+                    array.remove(idx);
+                }
+            }
+        } else {
+            // 对象属性：移除该属性
+            if (current.isJsonObject()) {
+                current.getAsJsonObject().remove(lastSegment);
             }
         }
     }
@@ -354,6 +394,7 @@ public class TokenReplacementEngine {
 
     /**
      * 替换XML body中指定XPath节点的文本内容
+     * 如果value为空字符串，则移除该节点的文本内容（未授权测试场景）
      */
     private static String replaceXmlBody(String bodyStr, String xpathExpression, String value) {
         try {
@@ -368,7 +409,19 @@ public class TokenReplacementEngine {
             Node node = (Node) xpath.evaluate(xpathExpression, doc, XPathConstants.NODE);
 
             if (node != null) {
-                node.setTextContent(value);
+                if (value.isEmpty()) {
+                    // 空值：移除节点的所有文本内容子节点，模拟请求中不存在此参数
+                    while (node.hasChildNodes()) {
+                        Node child = node.getFirstChild();
+                        if (child.getNodeType() == Node.TEXT_NODE) {
+                            node.removeChild(child);
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    node.setTextContent(value);
+                }
             }
 
             // 序列化回字符串

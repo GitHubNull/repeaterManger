@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.0] - 2026-05-21
+
+### Added
+- TokenReplacementEngine 空值语义增强：空令牌值时移除 JSON 属性 / XML 节点，而非设置空字符串，支持未授权测试场景（模拟请求中不存在此参数）
+- 新增 removeJsonValueAtPath() 方法，支持按 JSON 路径递归移除属性或数组元素
+
+### Fixed
+- 修复 replaceHeader() 删除 Header 时遗留空白行的问题，重构为 List<String> 收集再 join 的方式
+- XML Body 替换空值时，改为移除节点的文本内容子节点而非设置空文本
+
 ## [2.17.3] - 2026-05-21
 
 ### Changed
