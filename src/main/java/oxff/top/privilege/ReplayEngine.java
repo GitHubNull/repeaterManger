@@ -79,23 +79,39 @@ public class ReplayEngine {
      * @param requestId       请求ID
      * @param requestManager  请求管理器
      * @param callback        回调
+     * @return true 如果请求因去重被跳过（未执行重放），false 如果正常执行了重放
      */
-    public void replay(byte[] originalRequest, HttpService httpService, int requestId,
+    public boolean replay(byte[] originalRequest, HttpService httpService, int requestId,
                        RequestManager requestManager, ReplayCallback callback) {
         SessionManager sessionManager = SessionManager.getInstance();
         List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
 
         if (enabledSessions.isEmpty()) {
             BurpExtender.printOutput("[*] 无已启用的用户会话，跳过权限测试重放");
-            return;
+            return false;
         }
 
-        // API去重检查
-        String api = HttpRequestHelper.computeApiFromRequest(
-                "", "", originalRequest);
+        // API去重检查：从请求字节数组中解析path和query，确保API键有意义
+        String api;
+        try {
+            HttpRequest reqInfo;
+            if (httpService != null) {
+                reqInfo = HttpRequest.httpRequest(httpService, ByteArray.byteArray(originalRequest));
+            } else {
+                reqInfo = HttpRequest.httpRequest(ByteArray.byteArray(originalRequest));
+            }
+            java.net.URL parsedUrl = new java.net.URL(reqInfo.url());
+            String reqPath = parsedUrl.getPath() != null ? parsedUrl.getPath() : "/";
+            String reqQuery = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+            api = HttpRequestHelper.computeApiFromRequest(reqPath, reqQuery, originalRequest);
+        } catch (Exception e) {
+            // 解析失败时使用整个请求URL作为fallback
+            BurpExtender.printOutput("[*] ReplayEngine: 解析请求URL失败，使用fallback计算API键: " + e.getMessage());
+            api = HttpRequestHelper.computeApiFromRequest("/", "", originalRequest);
+        }
         if (sessionManager.isDedupEnabled() && isApiProcessed(api)) {
             BurpExtender.printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
-            return;
+            return true; // 返回true表示被去重跳过，调用方需据此跳过CountDownLatch等待
         }
         if (sessionManager.isDedupEnabled()) {
             addProcessedApi(api);
@@ -220,6 +236,8 @@ public class ReplayEngine {
 
             BurpExtender.printOutput("[+] 权限测试重放完成: " + enabledSessions.size() + "个用户会话");
         });
+
+        return false; // 正常执行了重放（异步），未被去重跳过
     }
 
     /**

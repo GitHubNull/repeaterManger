@@ -592,7 +592,7 @@ public class RequestDispatchHandler {
         });
 
         ReplayEngine replayEngine = ReplayEngine.getInstance();
-        replayEngine.replay(requestBytes, currentHttpService, currentRequestId, requestManager,
+        boolean deduped = replayEngine.replay(requestBytes, currentHttpService, currentRequestId, requestManager,
                 new ReplayEngine.ReplayCallback() {
                     @Override
                     public void onReplayComplete(RequestResponseRecord record, boolean isFirst) {
@@ -647,6 +647,11 @@ public class RequestDispatchHandler {
                         BurpExtender.printOutput("[+] 权限测试重放全部完成");
                     }
                 });
+
+        // 如果请求因去重被跳过，恢复光标状态
+        if (deduped) {
+            SwingUtilities.invokeLater(() -> setCursor(Cursor.getDefaultCursor()));
+        }
     }
 
     public void loadHistoryRecord(RequestResponseRecord record) {
@@ -713,7 +718,7 @@ public class RequestDispatchHandler {
                     SwingUtilities.invokeLater(() -> responsePanel.clear());
 
                     ReplayEngine replayEngine = ReplayEngine.getInstance();
-                    replayEngine.replay(requestBytes, httpService, requestId, requestManager,
+                    boolean deduped = replayEngine.replay(requestBytes, httpService, requestId, requestManager,
                             new ReplayEngine.ReplayCallback() {
                                 @Override
                                 public void onReplayComplete(RequestResponseRecord rec, boolean isFirst) {
@@ -763,8 +768,15 @@ public class RequestDispatchHandler {
                                 }
                             });
 
-                    // 等待当前请求的所有重放完成后再处理下一条
-                    latch.await();
+                    // 如果请求因去重被跳过，直接计数并释放latch
+                    if (deduped) {
+                        int done = completedCount.incrementAndGet();
+                        statusPanel.showBatchProgress(done, totalCount, "权限测试");
+                        latch.countDown();
+                    } else {
+                        // 等待当前请求的所有重放完成后再处理下一条
+                        latch.await();
+                    }
 
                 } catch (Exception e) {
                     BurpExtender.printError("[!] 批量权限测试：请求ID " + requestId + " 处理异常: " + e.getMessage());

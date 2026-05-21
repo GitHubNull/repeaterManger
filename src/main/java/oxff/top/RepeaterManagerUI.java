@@ -471,10 +471,76 @@ public class RepeaterManagerUI {
                 historyPanel.addHistoryRecord(record);
             }
         } else {
-            // 批量模式下新请求无历史记录是正常现象，不输出噪音日志
-            if (!silent) {
-                BurpExtender.printOutput(
-                    String.format("[*] 请求ID %d 没有历史记录", requestId));
+            // 数据库和内存中均无历史记录，尝试从 requests 表加载原始响应基线
+            // 越权测试场景下，saveOriginalResponseAsBaseline 将原始响应保存到了 requests 表，
+            // 但未创建 history 记录，导致点击请求时响应区域为空白
+            try {
+                RequestDAO requestDAO = new RequestDAO();
+                byte[] baselineResponse = requestDAO.getOriginalResponseData(requestId);
+                int baselineStatusCode = requestDAO.getOriginalResponseStatusCode(requestId);
+
+                if (baselineResponse != null && baselineResponse.length > 0) {
+                    // 从 requestDataMap 获取请求数据，构造一条基线历史记录
+                    byte[] requestData = requestListPanel.getRequestData(requestId);
+                    if (requestData != null) {
+                        RequestResponseRecord baselineRecord = new RequestResponseRecord();
+                        baselineRecord.setId(-1); // 临时记录，无数据库ID
+                        baselineRecord.setRequestId(requestId);
+                        baselineRecord.setRequestData(requestData);
+                        baselineRecord.setResponseData(baselineResponse);
+                        baselineRecord.setStatusCode(baselineStatusCode);
+                        baselineRecord.setResponseLength(baselineResponse.length);
+                        baselineRecord.setResponseTime(0);
+                        baselineRecord.setUserSessionName("(原始基线)");
+                        baselineRecord.setComment("原始响应基线");
+                        baselineRecord.setTimestamp(new java.util.Date());
+
+                        // 尝试从请求字节数组解析HTTP元数据
+                        HttpService savedService = dispatchHandler.getSavedHttpService(requestId);
+                        if (savedService != null) {
+                            try {
+                                HttpRequest reqInfo = HttpRequest.httpRequest(savedService, ByteArray.byteArray(requestData));
+                                java.net.URL parsedUrl = new java.net.URL(reqInfo.url());
+                                baselineRecord.setMethod(reqInfo.method());
+                                baselineRecord.setProtocol(parsedUrl.getProtocol());
+                                String recordHost = parsedUrl.getHost();
+                                int recordPort = parsedUrl.getPort();
+                                if (recordPort != -1 && recordPort != parsedUrl.getDefaultPort()) {
+                                    recordHost = recordHost + ":" + recordPort;
+                                }
+                                baselineRecord.setDomain(recordHost);
+                                baselineRecord.setPath(parsedUrl.getPath());
+                                baselineRecord.setQueryParameters(parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "");
+                            } catch (Exception e) {
+                                baselineRecord.setMethod("UNKNOWN");
+                                baselineRecord.setProtocol(savedService.secure() ? "https" : "http");
+                                baselineRecord.setDomain(savedService.host());
+                                baselineRecord.setPath("/");
+                            }
+                        }
+
+                        historyPanel.addHistoryRecord(baselineRecord);
+                        dispatchHandler.getRequestHistoryMap().put(requestId, new ArrayList<>(List.of(baselineRecord)));
+
+                        // 显示原始响应基线到响应面板
+                        responsePanel.setResponse(baselineResponse);
+                        dispatchHandler.updateStatusFromRecord(baselineRecord);
+
+                        if (!silent) {
+                            BurpExtender.printOutput(
+                                String.format("[+] 从基线加载请求ID %d 的原始响应 (%d 字节)",
+                                    requestId, baselineResponse.length));
+                        }
+                    }
+                } else if (!silent) {
+                    BurpExtender.printOutput(
+                        String.format("[*] 请求ID %d 没有历史记录", requestId));
+                }
+            } catch (Exception e) {
+                if (!silent) {
+                    BurpExtender.printOutput(
+                        String.format("[*] 请求ID %d 没有历史记录", requestId));
+                }
             }
         }
 
@@ -546,12 +612,27 @@ public class RepeaterManagerUI {
                 // 将HttpService保存到持久化映射，避免切换请求时丢失端口信息
                 dispatchHandler.saveHttpService(dbId, httpService);
 
+                // 保存原始响应基线（如果原始请求有响应数据）
+                // 当从 Proxy History / HTTP History 等处发送请求到插件时，原始响应已存在，
+                // 保存为基线以便点击请求时显示原始响应，而不是空白
+                if (requestResponse.response() != null) {
+                    saveOriginalResponseAsBaseline(dbId, requestResponse);
+                }
+
                 // 设置请求内容
                 requestPanel.setRequest(request);
 
-                // 清空响应内容
-                responsePanel.clear();
-                statusPanel.clear();
+                // 显示原始响应（如果有），否则清空
+                if (requestResponse.response() != null) {
+                    byte[] originalResponse = requestResponse.response().toByteArray().getBytes();
+                    responsePanel.setResponse(originalResponse);
+                    int originalStatusCode = requestResponse.response().statusCode();
+                    boolean success = originalStatusCode >= 100 && originalStatusCode < 400;
+                    statusPanel.updateStatus(success, originalResponse.length, 0, 0, 0);
+                } else {
+                    responsePanel.clear();
+                    statusPanel.clear();
+                }
 
                 // 更新历史面板标题
                 historyPanel.setBorderTitle("请求历史记录 - " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
