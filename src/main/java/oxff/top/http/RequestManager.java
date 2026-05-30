@@ -136,13 +136,18 @@ public class RequestManager {
                     long responseTime = System.currentTimeMillis() - startTime;
                     if (proxyResponse != null) {
                         HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
-                        recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
-                            httpRequest, httpResponse, responseTime, service);
+                        // 仅在requestId > 0时由RequestManager记录历史（调用方会自行处理requestId<=0的场景）
+                        if (requestId > 0) {
+                            recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
+                                httpRequest, httpResponse, responseTime, service);
+                        }
                         return proxyResponse;
                     } else {
                         BurpExtender.printError("[!] 代理请求返回空响应");
-                        recordingService.recordFailure(requestId, requestBytes, httpRequest,
-                            "代理请求返回空响应", responseTime, service);
+                        if (requestId > 0) {
+                            recordingService.recordFailure(requestId, requestBytes, httpRequest,
+                                "代理请求返回空响应", responseTime, service);
+                        }
                         return null;
                     }
                 }
@@ -159,8 +164,10 @@ public class RequestManager {
                 // 检查响应是否为null（连接失败、超时等情况）
                 if (requestResponse == null || requestResponse.response() == null) {
                     BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
-                    recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                 "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    if (requestId > 0) {
+                        recordingService.recordFailure(requestId, fixedBytes, httpRequest,
+                                                     "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    }
                     return null;
                 }
 
@@ -174,24 +181,32 @@ public class RequestManager {
                         String errorMsg = String.format(
                             "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
                         BurpExtender.printError("[!] " + errorMsg);
-                        recordingService.recordFailure(requestId, fixedBytes, httpRequest,
+                        if (requestId > 0) {
+                            recordingService.recordFailure(requestId, fixedBytes, httpRequest,
                                                      errorMsg, responseTime, service);
+                        }
                         return null;
                     }
-                    recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                  httpRequest, httpResponse, responseTime, service);
+                    if (requestId > 0) {
+                        recordingService.recordSuccess(requestId, fixedBytes, response,
+                                                      httpRequest, httpResponse, responseTime, service);
+                    }
                     return response;
                 } else {
                     BurpExtender.printError("[!] 收到空响应");
-                    recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                 "收到空响应", responseTime, service);
+                    if (requestId > 0) {
+                        recordingService.recordFailure(requestId, fixedBytes, httpRequest,
+                                                     "收到空响应", responseTime, service);
+                    }
                     return null;
                 }
             } catch (Exception e) {
                 long responseTime = System.currentTimeMillis() - startTime;
                 BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
-                recordingService.recordFailure(requestId, requestBytes, httpRequest,
-                                             "请求发送失败: " + e.getMessage(), responseTime, service);
+                if (requestId > 0) {
+                    recordingService.recordFailure(requestId, requestBytes, httpRequest,
+                                                 "请求发送失败: " + e.getMessage(), responseTime, service);
+                }
                 return null;
             }
         });
@@ -289,8 +304,11 @@ public class RequestManager {
                     long responseTime = System.currentTimeMillis() - startTime;
                     if (proxyResponse != null) {
                         HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
-                        recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
-                            requestInfo, httpResponse, responseTime, service);
+                        // 仅在requestId > 0时由RequestManager记录历史（调用方会自行处理requestId<=0的场景）
+                        if (requestId > 0) {
+                            recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
+                                requestInfo, httpResponse, responseTime, service);
+                        }
                         BurpExtender.printOutput(
                             String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
                                 responseTime, proxyResponse.length));
@@ -299,8 +317,10 @@ public class RequestManager {
                         }
                     } else {
                         BurpExtender.printError("[!] 代理请求返回空响应");
-                        recordingService.recordFailure(requestId, requestBytes, requestInfo,
-                                                     "代理请求返回空响应", responseTime, service);
+                        if (requestId > 0) {
+                            recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                                                         "代理请求返回空响应", responseTime, service);
+                        }
                         if (callback != null) {
                             callback.onFailure("代理请求返回空响应", startTime, System.currentTimeMillis(), responseTime);
                         }
@@ -320,8 +340,10 @@ public class RequestManager {
                 // 检查响应是否为null（连接失败、超时等情况）
                 if (requestResponse == null || requestResponse.response() == null) {
                     BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
-                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                 "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    if (requestId > 0) {
+                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                     "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    }
                     if (callback != null) {
                         callback.onFailure("未收到响应（目标可能不可达或连接被拒绝）", startTime, System.currentTimeMillis(), responseTime);
                     }
@@ -338,15 +360,19 @@ public class RequestManager {
                         String errorMsg = String.format(
                             "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
                         BurpExtender.printError("[!] " + errorMsg);
-                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                     errorMsg, responseTime, service);
+                        if (requestId > 0) {
+                            recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                         errorMsg, responseTime, service);
+                        }
                         if (callback != null) {
                             callback.onFailure(errorMsg, startTime, System.currentTimeMillis(), responseTime);
                         }
                         return;
                     }
-                    recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                  requestInfo, httpResponse, responseTime, service);
+                    if (requestId > 0) {
+                        recordingService.recordSuccess(requestId, fixedBytes, response,
+                                                      requestInfo, httpResponse, responseTime, service);
+                    }
                     BurpExtender.printOutput(
                         String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
                             responseTime, response.length));
@@ -355,8 +381,10 @@ public class RequestManager {
                     }
                 } else {
                     BurpExtender.printError("[!] 收到空响应");
-                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                 "收到空响应", responseTime, service);
+                    if (requestId > 0) {
+                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                     "收到空响应", responseTime, service);
+                    }
                     if (callback != null) {
                         callback.onFailure("收到空响应", startTime, System.currentTimeMillis(), responseTime);
                     }
@@ -368,19 +396,21 @@ public class RequestManager {
                 
                 // 记录异常的历史记录
                 long responseTime = System.currentTimeMillis() - startTime;
-                try {
-                    // 重新构建HTTP服务信息和请求信息
-                    HttpService service = buildHttpService(requestBytes, httpService);
-                    HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-                    
-                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                 "发送请求时发生异常: " + e.getMessage(), responseTime, service);
-                } catch (Exception ex) {
-                    // 如果创建HTTP服务失败，使用基本的请求分析
-                    BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
-                    HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
-                    recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                 "发送请求时发生异常: " + e.getMessage(), responseTime);
+                if (requestId > 0) {
+                    try {
+                        // 重新构建HTTP服务信息和请求信息
+                        HttpService service = buildHttpService(requestBytes, httpService);
+                        HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+                        
+                        recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                                     "发送请求时发生异常: " + e.getMessage(), responseTime, service);
+                    } catch (Exception ex) {
+                        // 如果创建HTTP服务失败，使用基本的请求分析
+                        BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
+                        HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
+                        recordingService.recordFailure(requestId, requestBytes, requestInfo, 
+                                                     "发送请求时发生异常: " + e.getMessage(), responseTime);
+                    }
                 }
                 
                 if (callback != null) {

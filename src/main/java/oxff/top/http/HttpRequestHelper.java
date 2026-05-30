@@ -8,6 +8,7 @@ import oxff.top.api.ApiExtractionEngine;
 import oxff.top.api.ApiExtractionRule;
 import oxff.top.api.ApiRuleManager;
 
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -228,6 +229,90 @@ public class HttpRequestHelper {
      * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行
      * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取
      */
+    /**
+     * 解析域名字符串（含非标准端口）
+     * <p>
+     * 优先从HttpService获取端口（httpRequest.url()可能不含显式端口，getPort()返回-1），
+     * 否则用URL默认端口兜底。仅当端口为非标准端口时追加到域名。
+     * <p>
+     * 解决两个问题：
+     * 1. java.net.URL.getPort() 在URL不含显式端口时返回-1，导致域名丢失端口信息
+     * 2. 对IP地址，Montoya API的httpRequest.url()可能含显式端口，行为与域名场景不一致
+     *
+     * @param parsedUrl   已解析的URL对象
+     * @param httpService HTTP服务信息，可为null
+     * @return 域名字符串，非标准端口时包含端口号
+     */
+    public static String resolveDomainWithPort(URL parsedUrl, HttpService httpService) {
+        String host = parsedUrl.getHost();
+        int effectivePort;
+        if (httpService != null) {
+            effectivePort = httpService.port();
+            // 防御性处理：某些HttpService的host()可能返回"host:port"格式（如IP地址场景）
+            // 用parsedUrl.getHost()作为权威host来源，不依赖httpService.host()
+        } else {
+            effectivePort = parsedUrl.getPort();
+            if (effectivePort == -1) {
+                // URL不含显式端口时，根据协议推断默认端口
+                effectivePort = parsedUrl.getDefaultPort();
+            }
+        }
+        int defaultPort = parsedUrl.getDefaultPort();
+        if (effectivePort != -1 && effectivePort != defaultPort) {
+            host = host + ":" + effectivePort;
+        }
+        return host;
+    }
+
+    /**
+     * 从HttpService解析域名字符串（含非标准端口）
+     * 适用于没有URL对象、只有HttpService的场景（如AutoTestEngine）
+     *
+     * @param httpService HTTP服务信息，可为null
+     * @return 域名字符串，非标准端口时包含端口号；httpService为null时返回"unknown"
+     */
+    public static String resolveDomainFromService(HttpService httpService) {
+        if (httpService == null) return "unknown";
+        String host = stripPortFromHost(httpService.host());
+        int port = httpService.port();
+        int defaultPort = httpService.secure() ? 443 : 80;
+        if (port != -1 && port != defaultPort) {
+            host = host + ":" + port;
+        }
+        return host;
+    }
+
+    /**
+     * 从可能包含端口的host字符串中提取纯主机名
+     * 防御性处理：某些场景下httpService.host()可能返回"host:port"格式
+     *
+     * @param host 可能包含端口的主机名字符串
+     * @return 不含端口的主机名
+     */
+    public static String stripPortFromHost(String host) {
+        if (host == null || host.isEmpty()) return host;
+        // IPv6地址格式: [::1] 或 [::1]:port
+        if (host.startsWith("[")) {
+            int bracketEnd = host.indexOf(']');
+            if (bracketEnd > 0) {
+                return host.substring(1, bracketEnd);
+            }
+            return host;
+        }
+        // IPv4或域名: host 或 host:port
+        int lastColon = host.lastIndexOf(":");
+        if (lastColon > 0) {
+            String afterColon = host.substring(lastColon + 1);
+            try {
+                Integer.parseInt(afterColon);
+                return host.substring(0, lastColon);
+            } catch (NumberFormatException e) {
+                // 冒号后不是数字，不是端口格式，保持原样
+            }
+        }
+        return host;
+    }
+
     private static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
         List<String> result = new ArrayList<>();
         for (burp.api.montoya.http.message.HttpHeader header : rawHeaders) {

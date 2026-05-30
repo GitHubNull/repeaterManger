@@ -288,12 +288,7 @@ public class RequestDispatchHandler {
                     try {
                         URL parsedUrl = new URL(requestInfo.url());
                         protocol = parsedUrl.getProtocol();
-                        // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
-                        host = parsedUrl.getHost();
-                        int urlPort = parsedUrl.getPort();
-                        if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                            host = host + ":" + urlPort;
-                        }
+                        host = HttpRequestHelper.resolveDomainWithPort(parsedUrl, currentHttpService);
                         path = parsedUrl.getPath();
                         query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                     } catch (Exception e) {
@@ -330,12 +325,7 @@ public class RequestDispatchHandler {
                 RequestResponseRecord record;
                 try {
                     URL parsedUrl = new URL(requestInfo.url());
-                    // 保留非标准端口号
-                    String recordHost = parsedUrl.getHost();
-                    int recordPort = parsedUrl.getPort();
-                    if (recordPort != -1 && recordPort != parsedUrl.getDefaultPort()) {
-                        recordHost = recordHost + ":" + recordPort;
-                    }
+                    String recordHost = HttpRequestHelper.resolveDomainWithPort(parsedUrl, currentHttpService);
                     record = new RequestResponseRecord(
                         currentRequestId,
                         parsedUrl.getProtocol(),
@@ -443,12 +433,7 @@ public class RequestDispatchHandler {
             try {
                 URL parsedUrl = new URL(requestInfo.url());
                 protocol = parsedUrl.getProtocol();
-                // 保留非标准端口号
-                host = parsedUrl.getHost();
-                int urlPort = parsedUrl.getPort();
-                if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                    host = host + ":" + urlPort;
-                }
+                host = HttpRequestHelper.resolveDomainWithPort(parsedUrl, currentHttpService);
                 path = parsedUrl.getPath();
                 query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
             } catch (Exception e) {
@@ -525,7 +510,9 @@ public class RequestDispatchHandler {
         List<RequestResponseRecord> historyList = requestHistoryMap.computeIfAbsent(
             requestId, k -> new ArrayList<>());
 
-        historyList.add(0, record);
+        synchronized (historyList) {
+            historyList.add(0, record);
+        }
 
         BurpExtender.printOutput(
             String.format("[+] 已添加历史记录到请求ID %d，当前历史记录数量: %d",
@@ -572,6 +559,21 @@ public class RequestDispatchHandler {
      * 使用ReplayEngine遍历所有已启用用户会话，替换令牌后重放
      */
     private void sendPrivilegeTestRequest(byte[] requestBytes) {
+        // 委托给参数化版本，使用当前共享状态（仅在非并发单次调用时安全）
+        sendPrivilegeTestRequestDirect(requestBytes, currentHttpService, currentRequestId);
+    }
+
+    /**
+     * 参数化的权限测试请求发送 - 直接接收requestId和httpService
+     * 解决EDT事件队列竞态条件：当多个setPrivilegeTestRequest快速连续执行时，
+     * 通过invokeLater投递的sendRequest()会读到最后一个requestId。
+     * 此方法在调用时即确定requestId/httpService/requestBytes，不依赖volatile共享状态。
+     *
+     * @param requestBytes  请求字节数组
+     * @param httpService   HTTP服务信息（协议、主机、端口）
+     * @param requestId     请求ID（调用时已确定）
+     */
+    public void sendPrivilegeTestRequestDirect(byte[] requestBytes, HttpService httpService, int requestId) {
         SessionManager sessionManager = SessionManager.getInstance();
 
         if (!sessionManager.hasEnabledSessions()) {
@@ -584,7 +586,7 @@ public class RequestDispatchHandler {
             return;
         }
 
-        BurpExtender.printOutput("[*] 权限测试模式：开始重放请求...");
+        BurpExtender.printOutput(String.format("[*] 权限测试模式：开始重放请求 (requestId=%d)...", requestId));
         responsePanel.clear();
 
         SwingUtilities.invokeLater(() -> {
@@ -592,7 +594,7 @@ public class RequestDispatchHandler {
         });
 
         ReplayEngine replayEngine = ReplayEngine.getInstance();
-        boolean deduped = replayEngine.replay(requestBytes, currentHttpService, currentRequestId, requestManager,
+        boolean deduped = replayEngine.replay(requestBytes, httpService, requestId, requestManager,
                 new ReplayEngine.ReplayCallback() {
                     @Override
                     public void onReplayComplete(RequestResponseRecord record, boolean isFirst) {
@@ -633,7 +635,8 @@ public class RequestDispatchHandler {
                         // 打印判决结果日志
                         JudgmentResult judgment = JudgmentResult.fromString(record.getJudgment());
                         BurpExtender.printOutput(String.format(
-                                "[*] 权限测试重放完成: 用户=%s, 判决=%s, 相似度=%.2f",
+                                "[*] 权限测试重放完成: requestId=%d, 用户=%s, 判决=%s, 相似度=%.2f",
+                                record.getRequestId(),
                                 record.getUserSessionName(),
                                 judgment.getDisplayName(),
                                 record.getSimilarity()));

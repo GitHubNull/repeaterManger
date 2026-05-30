@@ -79,6 +79,12 @@ public class RequestListPanel extends JPanel {
     public RequestListPanel() {
         setLayout(new BorderLayout());
 
+        // 添加带标题的边框，突出其作为越权测试基准报文表的语义
+        setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(),
+            "基准报文表（原始报文）"
+        ));
+
         // 创建搜索面板
         JPanel searchContainer = buildSearchPanel();
         add(searchContainer, BorderLayout.NORTH);

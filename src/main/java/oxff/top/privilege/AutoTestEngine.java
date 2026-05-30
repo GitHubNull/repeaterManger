@@ -103,7 +103,7 @@ public class AutoTestEngine {
                     RequestDAO requestDAO = new RequestDAO();
                     requestId = requestDAO.saveRequest(
                             httpService.secure() ? "https" : "http",
-                            httpService.host(),
+                            HttpRequestHelper.resolveDomainFromService(httpService),
                             interceptedRequest.path(),
                             interceptedRequest.query() != null ? interceptedRequest.query() : "",
                             interceptedRequest.method(),
@@ -116,7 +116,7 @@ public class AutoTestEngine {
                             BurpExtender.addAutoTestRequestToPanel(finalRequestId, api,
                                     interceptedRequest.method(),
                                     httpService.secure() ? "https" : "http",
-                                    httpService.host(),
+                                    HttpRequestHelper.resolveDomainFromService(httpService),
                                     interceptedRequest.path(),
                                     interceptedRequest.query() != null ? interceptedRequest.query() : "",
                                     requestBytes);
@@ -129,10 +129,43 @@ public class AutoTestEngine {
                 // 存储基准用户响应
                 byte[] baselineResponse = null;
                 int baselineStatusCode = -1;
+                boolean baselineValid = false;
 
                 for (int i = 0; i < enabledSessions.size(); i++) {
                     UserSession session = enabledSessions.get(i);
                     boolean isFirst = (i == 0);
+
+                    // 非基准用户：如果基准请求失败，跳过比对判决，标记为ERROR
+                    if (!isFirst && !baselineValid) {
+                        RequestResponseRecord skipRecord = new RequestResponseRecord();
+                        skipRecord.setRequestId(requestId);
+                        skipRecord.setMethod(interceptedRequest.method());
+                        skipRecord.setProtocol(httpService.secure() ? "https" : "http");
+                        skipRecord.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
+                        skipRecord.setPath(interceptedRequest.path());
+                        skipRecord.setQueryParameters(interceptedRequest.query() != null ? interceptedRequest.query() : "");
+                        skipRecord.setApi(api);
+                        skipRecord.setStatusCode(0);
+                        skipRecord.setResponseLength(0);
+                        skipRecord.setResponseTime(0);
+                        skipRecord.setRequestData(requestBytes);
+                        skipRecord.setResponseData(new byte[0]);
+                        skipRecord.setTimestamp(new java.util.Date());
+                        skipRecord.setUserSessionName(session.getName());
+                        skipRecord.setJudgment(JudgmentResult.ERROR.name());
+                        skipRecord.setSimilarity(-1);
+                        skipRecord.setComment("基准请求失败，无法进行对比判决");
+
+                        final RequestResponseRecord finalSkipRecord = skipRecord;
+                        SwingUtilities.invokeLater(() -> {
+                            burp.BurpExtender.addPrivilegeTestRecord(finalSkipRecord);
+                        });
+
+                        BurpExtender.printOutput(String.format(
+                                "[*] 自动化测试: 用户=%s, 判决=ERROR (基准请求失败)",
+                                session.getName()));
+                        continue;
+                    }
 
                     try {
                         byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
@@ -151,6 +184,7 @@ public class AutoTestEngine {
                             if (isFirst) {
                                 baselineResponse = extractResponseBody(holder.response);
                                 baselineStatusCode = holder.statusCode;
+                                baselineValid = true;
                                 judgment = JudgmentResult.NOT_ESCALATED.name();
                             } else {
                                 String responseHeaders = extractResponseHeaders(holder.response);
@@ -166,6 +200,9 @@ public class AutoTestEngine {
                             }
                         } else {
                             judgment = JudgmentResult.ERROR.name();
+                            if (isFirst) {
+                                BurpExtender.printError("[!] 自动化测试：基准用户请求失败，后续会话将跳过判决");
+                            }
                             if (holder.errorMessage != null && !holder.errorMessage.isEmpty()) {
                                 judgmentNote = "请求失败: " + holder.errorMessage;
                                 BurpExtender.printError("[!] 自动化测试请求失败 (user=" + session.getName()
@@ -177,7 +214,7 @@ public class AutoTestEngine {
                         record.setRequestId(requestId);
                         record.setMethod(interceptedRequest.method());
                         record.setProtocol(httpService.secure() ? "https" : "http");
-                        record.setDomain(httpService.host());
+                        record.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
                         record.setPath(interceptedRequest.path());
                         record.setQueryParameters(interceptedRequest.query() != null ? interceptedRequest.query() : "");
                         record.setApi(api);
@@ -207,6 +244,11 @@ public class AutoTestEngine {
 
                     } catch (Exception e) {
                         BurpExtender.printError("[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
+
+                        // 基准用户异常时不设置baselineValid
+                        if (isFirst) {
+                            BurpExtender.printError("[!] 自动化测试：基准用户请求异常，后续会话将跳过判决");
+                        }
                     }
                 }
 

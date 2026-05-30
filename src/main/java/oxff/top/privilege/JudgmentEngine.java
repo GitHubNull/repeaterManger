@@ -62,6 +62,12 @@ public class JudgmentEngine {
                                          byte[] responseBody, byte[] baselineResponse,
                                          int baselineStatusCode, double similarityThreshold,
                                          long responseTimeMs) {
+        // 防护守卫：拒绝对无效基准进行判决，防止因基准响应丢失导致误判
+        if (baselineResponse == null && baselineStatusCode <= 0) {
+            return new JudgmentOutcome(JudgmentResult.ERROR, null,
+                    "基准响应无效，无法进行判决", -1, null);
+        }
+
         JudgmentRuleManager ruleManager = JudgmentRuleManager.getInstance();
         List<JudgmentRule> rules = ruleManager.getEnabledRules();
 

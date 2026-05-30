@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.1] - 2026-05-30
+
+### Fixed
+- 修复域名+端口解析逻辑不一致问题，统一提取为 HttpRequestHelper.resolveDomainWithPort/resolveDomainFromService 方法，消除多处重复代码
+- 修复 requestId <= 0 时 RequestManager 仍记录历史导致异常的问题，增加 requestId 守卫条件
+- 修复基准用户请求失败时后续会话仍执行比对判决导致误判的问题，AutoTestEngine/ReplayEngine 基准失败后跳过判决并标记 ERROR
+- 修复权限测试模式开启时 EDT 队列竞态导致 currentRequestId 被覆盖的问题
+
+### Changed
+- RequestListPanel 添加"基准报文表（原始报文）"标题边框，强化语义标识
+
 ## [2.20.0] - 2026-05-21
 
 ### Added

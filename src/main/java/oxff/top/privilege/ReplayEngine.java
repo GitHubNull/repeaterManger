@@ -4,6 +4,7 @@ import burp.BurpExtender;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
+import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.privilege.model.JudgmentResult;
@@ -108,10 +109,34 @@ public class ReplayEngine {
             // 存储基准用户的响应，用于后续比较
             byte[] baselineResponse = null;
             int baselineStatusCode = -1;
+            boolean baselineValid = false;
 
             for (int i = 0; i < enabledSessions.size(); i++) {
                 UserSession session = enabledSessions.get(i);
                 boolean isFirst = (i == 0);
+
+                // 非基准用户：如果基准请求失败，跳过比对判决，标记为ERROR
+                if (!isFirst && !baselineValid) {
+                    RequestResponseRecord skipRecord = new RequestResponseRecord();
+                    skipRecord.setRequestId(requestId);
+                    populateRecordFromRequest(skipRecord, originalRequest, httpService);
+                    skipRecord.setStatusCode(0);
+                    skipRecord.setResponseTime(0);
+                    skipRecord.setRequestData(originalRequest);
+                    skipRecord.setResponseData(new byte[0]);
+                    skipRecord.setTimestamp(new java.util.Date());
+                    skipRecord.setUserSessionName(session.getName());
+                    skipRecord.setJudgment(JudgmentResult.ERROR.name());
+                    skipRecord.setSimilarity(-1);
+                    skipRecord.setComment("基准请求失败，无法进行对比判决");
+
+                    SwingUtilities.invokeLater(() -> {
+                        if (callback != null) {
+                            callback.onReplayComplete(skipRecord, false);
+                        }
+                    });
+                    continue;
+                }
 
                 try {
                     // 替换令牌
@@ -132,6 +157,7 @@ public class ReplayEngine {
                             // 基准用户：保存纯响应体作为比较基准（仅响应体，不含响应头）
                             baselineResponse = extractResponseBody(holder.response);
                             baselineStatusCode = holder.statusCode;
+                            baselineValid = true;
                             judgment = JudgmentResult.NOT_ESCALATED.name(); // 基准用户默认标记为安全
                             judgmentColor = null; // 基准用户不特殊着色
                         } else {
@@ -151,6 +177,9 @@ public class ReplayEngine {
                         }
                     } else {
                         judgment = JudgmentResult.ERROR.name();
+                        if (isFirst) {
+                            BurpExtender.printError("[!] 基准用户请求失败，后续会话将跳过判决");
+                        }
                     }
 
                     // 创建历史记录
@@ -186,6 +215,11 @@ public class ReplayEngine {
 
                 } catch (Exception e) {
                     BurpExtender.printError("[!] 权限测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
+
+                    // 基准用户异常时标记baselineValid为false
+                    if (isFirst) {
+                        BurpExtender.printError("[!] 基准用户请求异常，后续会话将跳过判决");
+                    }
 
                     // 创建错误记录
                     RequestResponseRecord errorRecord = new RequestResponseRecord();
@@ -298,11 +332,7 @@ public class ReplayEngine {
             URL parsedUrl = new URL(requestInfo.url());
 
             String protocol = parsedUrl.getProtocol();
-            String domain = parsedUrl.getHost();
-            int port = parsedUrl.getPort();
-            if (port != -1 && port != parsedUrl.getDefaultPort()) {
-                domain = domain + ":" + port;
-            }
+            String domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, httpService);
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
 
@@ -315,7 +345,7 @@ public class ReplayEngine {
             BurpExtender.printOutput("[*] ReplayEngine: 解析请求URL失败，使用fallback: " + e.getMessage());
             record.setMethod("UNKNOWN");
             record.setProtocol(httpService.secure() ? "https" : "http");
-            record.setDomain(httpService.host());
+            record.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
             record.setPath("/");
             record.setQueryParameters("");
         }

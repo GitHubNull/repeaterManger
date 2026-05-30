@@ -9,6 +9,7 @@ import burp.api.montoya.http.message.requests.HttpRequest;
 import oxff.top.api.MontoyaApiHolder;
 import oxff.top.db.RequestDAO;
 import oxff.top.db.history.HistoryWriteDAO;
+import oxff.top.http.HttpRequestHelper;
 import oxff.top.http.RequestDataHelper;
 
 import javax.swing.*;
@@ -166,12 +167,7 @@ public class RequestPanelSender {
         try {
             URL parsedUrl = new URL(url);
             String protocol = parsedUrl.getProtocol();
-            // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
-            String domain = parsedUrl.getHost();
-            int urlPort = parsedUrl.getPort();
-            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                domain = domain + ":" + urlPort;
-            }
+            String domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, null);
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
             String method = requestInfo.method();
@@ -232,12 +228,7 @@ public class RequestPanelSender {
             }
 
             String protocol = parsedUrl.getProtocol();
-            // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
-            String domain = parsedUrl.getHost();
-            int urlPort = parsedUrl.getPort();
-            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                domain = domain + ":" + urlPort;
-            }
+            String domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, null);
             String path = parsedUrl.getPath();
             String query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
 

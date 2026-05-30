@@ -503,18 +503,13 @@ public class RepeaterManagerUI {
                                 java.net.URL parsedUrl = new java.net.URL(reqInfo.url());
                                 baselineRecord.setMethod(reqInfo.method());
                                 baselineRecord.setProtocol(parsedUrl.getProtocol());
-                                String recordHost = parsedUrl.getHost();
-                                int recordPort = parsedUrl.getPort();
-                                if (recordPort != -1 && recordPort != parsedUrl.getDefaultPort()) {
-                                    recordHost = recordHost + ":" + recordPort;
-                                }
-                                baselineRecord.setDomain(recordHost);
+                                baselineRecord.setDomain(HttpRequestHelper.resolveDomainWithPort(parsedUrl, savedService));
                                 baselineRecord.setPath(parsedUrl.getPath());
                                 baselineRecord.setQueryParameters(parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "");
                             } catch (Exception e) {
                                 baselineRecord.setMethod("UNKNOWN");
                                 baselineRecord.setProtocol(savedService.secure() ? "https" : "http");
-                                baselineRecord.setDomain(savedService.host());
+                                baselineRecord.setDomain(HttpRequestHelper.resolveDomainFromService(savedService));
                                 baselineRecord.setPath("/");
                             }
                         }
@@ -575,13 +570,8 @@ public class RepeaterManagerUI {
                     // 解析URL组件
                     URL parsedUrl = new URL(url);
                     protocol = parsedUrl.getProtocol();
-                    // 保留非标准端口号：HTTP非80、HTTPS非443时，domain需包含端口
-                    // 否则数据库存储的domain丢失端口，导致重建HttpService时端口错误
-                    domain = parsedUrl.getHost();
-                    int urlPort = parsedUrl.getPort();
-                    if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                        domain = domain + ":" + urlPort;
-                    }
+                    // 保留非标准端口号：优先从HttpService获取端口（url()可能不含显式端口，getPort()返回-1）
+                    domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, httpService);
                     path = parsedUrl.getPath();
                     query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                 } catch (Exception e) {
@@ -648,7 +638,12 @@ public class RepeaterManagerUI {
                     new RequestDAO().markAsPrivilegeTest(dbId);
                     requestListPanel.updatePrivilegeTestFlag(dbId, true);
                     BurpExtender.printOutput("[*] 权限测试模式已开启，自动触发越权重放...");
-                    SwingUtilities.invokeLater(() -> dispatchHandler.sendRequest());
+                    // 修复：直接使用参数化方法，避免EDT队列竞态导致currentRequestId被覆盖
+                    final int capturedId = dbId;
+                    final HttpService capturedSvc = httpService;
+                    final byte[] capturedReq = request;
+                    SwingUtilities.invokeLater(() ->
+                        dispatchHandler.sendPrivilegeTestRequestDirect(capturedReq, capturedSvc, capturedId));
                 }
 
                 return dbId;
@@ -663,6 +658,12 @@ public class RepeaterManagerUI {
     /**
      * 设置请求内容并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收请求
      * 自动加载请求、切换到请求管理标签页、开启权限测试模式、触发重放
+     *
+     * 关键修复（EDT竞态条件）：当用户快速连续发送多个请求到权限测试时，
+     * 多个setPrivilegeTestRequest调用在EDT上顺序执行，但通过invokeLater投递的
+     * sendRequest()会排到所有setPrivilegeTestRequest之后执行。此时volatile的
+     * currentRequestId已被最后一个调用覆盖为最后的ID，导致所有重放记录关联到同一个请求。
+     * 修复方案：在调用时立即捕获requestId/httpService/requestBytes，通过参数化方法直接传递。
      */
     public void setPrivilegeTestRequest(HttpRequestResponse requestResponse) {
         try {
@@ -671,6 +672,11 @@ public class RepeaterManagerUI {
                 // （setRequest() 在 privilegeTestMode=true 时会自动触发重放，
                 //   而本方法后续也会手动触发，导致双重重放）
                 dispatchHandler.setPrivilegeTestMode(false);
+
+                // 在调用setRequest之前，先捕获请求数据和HttpService
+                // 这些值在EDT队列中后续事件执行时仍然有效
+                final byte[] capturedRequestBytes = requestResponse.request().toByteArray().getBytes();
+                final HttpService capturedHttpService = requestResponse.httpService();
 
                 // 用常规方式加载请求（复用setRequest的逻辑）
                 int dbId = setRequest(requestResponse);
@@ -690,10 +696,14 @@ public class RepeaterManagerUI {
 
                 // 开启权限测试模式
                 dispatchHandler.setPrivilegeTestMode(true);
-                BurpExtender.printOutput("[*] 权限测试模式已开启，准备重放请求...");
+                BurpExtender.printOutput(String.format("[*] 权限测试模式已开启，准备重放请求 (requestId=%d)...", dbId));
 
-                // 自动触发权限测试重放
-                SwingUtilities.invokeLater(() -> dispatchHandler.sendRequest());
+                // 修复：直接使用参数化方法传递已捕获的requestId/httpService/requestBytes
+                // 不再依赖volatile共享状态currentRequestId（它可能被后续调用覆盖）
+                final int capturedRequestId = dbId;
+                SwingUtilities.invokeLater(() ->
+                    dispatchHandler.sendPrivilegeTestRequestDirect(
+                        capturedRequestBytes, capturedHttpService, capturedRequestId));
             }
         } catch (Exception e) {
             BurpExtender.printError("[!] 设置权限测试请求失败: " + e.getMessage());
@@ -815,11 +825,7 @@ public class RepeaterManagerUI {
                             method = httpRequest.method();
                             URL parsedUrl = new URL(httpRequest.url());
                             protocol = parsedUrl.getProtocol();
-                            domain = parsedUrl.getHost();
-                            int urlPort = parsedUrl.getPort();
-                            if (urlPort != -1 && urlPort != parsedUrl.getDefaultPort()) {
-                                domain = domain + ":" + urlPort;
-                            }
+                            domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, httpService);
                             path = parsedUrl.getPath();
                             query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                         } catch (Exception e) {
