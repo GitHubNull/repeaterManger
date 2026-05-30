@@ -2,6 +2,7 @@ package oxff.top.privilege;
 
 import burp.BurpExtender;
 import oxff.top.privilege.model.TokenLocation;
+import oxff.top.privilege.model.TokenScheme;
 import oxff.top.privilege.model.UserSession;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -28,9 +29,10 @@ public class UserSessionYamlIO {
      *
      * @param sessions  用户会话列表
      * @param locations 令牌位置列表（用于将tokenLocationId解析为type+expression）
+     * @param schemes   令牌方案列表（用于将schemeId解析为方案名称）
      * @return YAML格式字符串
      */
-    public static String toYaml(List<UserSession> sessions, List<TokenLocation> locations) {
+    public static String toYaml(List<UserSession> sessions, List<TokenLocation> locations, List<TokenScheme> schemes) {
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setPrettyFlow(true);
@@ -44,6 +46,12 @@ public class UserSessionYamlIO {
             locationMap.put(loc.getId(), loc);
         }
 
+        // 构建ID到TokenScheme名称的映射
+        Map<Integer, String> schemeNameMap = new HashMap<>();
+        for (TokenScheme scheme : schemes) {
+            schemeNameMap.put(scheme.getId(), scheme.getName());
+        }
+
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("version", YAML_VERSION);
 
@@ -53,6 +61,23 @@ public class UserSessionYamlIO {
             sessionMap.put("name", session.getName() != null ? session.getName() : "");
             sessionMap.put("color", session.getColorHex() != null ? session.getColorHex() : "");
             sessionMap.put("enabled", session.isEnabled());
+
+            // 方案名称
+            if (session.getSchemeId() != null) {
+                String schemeName = schemeNameMap.get(session.getSchemeId());
+                if (schemeName != null) {
+                    sessionMap.put("scheme_name", schemeName);
+                }
+            }
+
+            // 重放配置
+            Map<String, Object> replayMap = new LinkedHashMap<>();
+            replayMap.put("request_timeout", session.getRequestTimeout());
+            replayMap.put("max_concurrent", session.getMaxConcurrent());
+            replayMap.put("retry_count", session.getRetryCount());
+            replayMap.put("retry_delay", session.getRetryDelay());
+            replayMap.put("replay_delay", session.getReplayDelay());
+            sessionMap.put("replay_config", replayMap);
 
             // 序列化token_values：将ID映射的token值转换为type+expression格式
             List<Map<String, Object>> tokenValuesList = new ArrayList<>();
@@ -80,10 +105,11 @@ public class UserSessionYamlIO {
      *
      * @param yamlContent YAML格式字符串
      * @param locations   当前项目的令牌位置列表（用于将type+expression解析为tokenLocationId）
+     * @param schemes     当前项目的令牌方案列表（用于将scheme_name解析为schemeId）
      * @return 用户会话列表，解析失败返回空列表
      */
     @SuppressWarnings("unchecked")
-    public static List<UserSession> fromYaml(String yamlContent, List<TokenLocation> locations) {
+    public static List<UserSession> fromYaml(String yamlContent, List<TokenLocation> locations, List<TokenScheme> schemes) {
         List<UserSession> sessions = new ArrayList<>();
         if (yamlContent == null || yamlContent.trim().isEmpty()) {
             return sessions;
@@ -93,6 +119,12 @@ public class UserSessionYamlIO {
         Map<String, Integer> locationKeyToId = new HashMap<>();
         for (TokenLocation loc : locations) {
             locationKeyToId.put(loc.getType().name() + "|" + loc.getExpression(), loc.getId());
+        }
+
+        // 构建方案名称到schemeId的映射
+        Map<String, Integer> schemeNameToId = new HashMap<>();
+        for (TokenScheme scheme : schemes) {
+            schemeNameToId.put(scheme.getName(), scheme.getId());
         }
 
         try {
@@ -119,7 +151,7 @@ public class UserSessionYamlIO {
                 }
                 Map<String, Object> sessionMap = (Map<String, Object>) item;
                 try {
-                    UserSession session = parseSessionFromMap(sessionMap, locationKeyToId);
+                    UserSession session = parseSessionFromMap(sessionMap, locationKeyToId, schemeNameToId);
                     if (session != null) {
                         sessions.add(session);
                     }
@@ -137,7 +169,8 @@ public class UserSessionYamlIO {
      * 从Map解析单条用户会话
      */
     @SuppressWarnings("unchecked")
-    private static UserSession parseSessionFromMap(Map<String, Object> map, Map<String, Integer> locationKeyToId) {
+    private static UserSession parseSessionFromMap(Map<String, Object> map, Map<String, Integer> locationKeyToId,
+                                                   Map<String, Integer> schemeNameToId) {
         String name = getStringValue(map, "name", "");
         String colorHex = getStringValue(map, "color", "");
         boolean enabled = getBooleanValue(map, "enabled", true);
@@ -150,6 +183,28 @@ public class UserSessionYamlIO {
         session.setName(name);
         session.setColorHex(colorHex);
         session.setEnabled(enabled);
+
+        // 解析scheme_name
+        String schemeName = getStringValue(map, "scheme_name", "");
+        if (!schemeName.isEmpty()) {
+            Integer schemeId = schemeNameToId.get(schemeName);
+            if (schemeId != null) {
+                session.setSchemeId(schemeId);
+            } else {
+                BurpExtender.printOutput("[*] 用户会话 '" + name + "' 引用的方案 '" + schemeName + "' 不存在，跳过关联");
+            }
+        }
+
+        // 解析replay_config
+        Object replayConfigObj = map.get("replay_config");
+        if (replayConfigObj instanceof Map) {
+            Map<String, Object> replayMap = (Map<String, Object>) replayConfigObj;
+            session.setRequestTimeout(getIntValue(replayMap, "request_timeout", 30));
+            session.setMaxConcurrent(getIntValue(replayMap, "max_concurrent", 1));
+            session.setRetryCount(getIntValue(replayMap, "retry_count", 0));
+            session.setRetryDelay(getIntValue(replayMap, "retry_delay", 1000));
+            session.setReplayDelay(getIntValue(replayMap, "replay_delay", 0));
+        }
 
         // 解析token_values
         Object tokenValuesObj = map.get("token_values");
@@ -197,7 +252,8 @@ public class UserSessionYamlIO {
      * @param filePath  目标文件路径
      * @return 是否写入成功
      */
-    public static boolean writeToFile(List<UserSession> sessions, List<TokenLocation> locations, String filePath) {
+    public static boolean writeToFile(List<UserSession> sessions, List<TokenLocation> locations,
+                                      List<TokenScheme> schemes, String filePath) {
         File targetFile = new File(filePath);
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
@@ -210,7 +266,7 @@ public class UserSessionYamlIO {
         // 原子写入：先写临时文件
         File tempFile = new File(filePath + ".tmp");
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
-            writer.write(toYaml(sessions, locations));
+            writer.write(toYaml(sessions, locations, schemes));
             writer.flush();
         } catch (IOException e) {
             BurpExtender.printError("[!] 写入用户会话YAML临时文件失败: " + e.getMessage());
@@ -243,7 +299,8 @@ public class UserSessionYamlIO {
      * @param locations 当前项目的令牌位置列表
      * @return 用户会话列表，读取失败返回空列表
      */
-    public static List<UserSession> readFromFile(String filePath, List<TokenLocation> locations) {
+    public static List<UserSession> readFromFile(String filePath, List<TokenLocation> locations,
+                                                 List<TokenScheme> schemes) {
         File file = new File(filePath);
         if (!file.exists() || !file.canRead()) {
             return new ArrayList<>();
@@ -256,7 +313,7 @@ public class UserSessionYamlIO {
             while ((len = reader.read(buffer)) != -1) {
                 sb.append(buffer, 0, len);
             }
-            return fromYaml(sb.toString(), locations);
+            return fromYaml(sb.toString(), locations, schemes);
         } catch (IOException e) {
             BurpExtender.printError("[!] 读取用户会话YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
@@ -277,5 +334,16 @@ public class UserSessionYamlIO {
         if (value instanceof Boolean) return (Boolean) value;
         if (value instanceof Number) return ((Number) value).intValue() != 0;
         return defaultValue;
+    }
+
+    private static int getIntValue(Map<String, Object> map, String key, int defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) return ((Number) value).intValue();
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

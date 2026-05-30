@@ -2,6 +2,7 @@ package oxff.top.ui.privilege;
 
 import oxff.top.privilege.SessionManager;
 import oxff.top.privilege.model.TokenLocation;
+import oxff.top.privilege.model.TokenScheme;
 import oxff.top.privilege.model.UserSession;
 import oxff.top.utils.ScrollPaneWheelForwarder;
 import oxff.top.utils.TextLineNumber;
@@ -16,8 +17,8 @@ import java.util.Map;
 
 /**
  * 用户会话编辑对话框
- * 允许编辑用户名称、颜色、启用状态，以及为每个令牌位置设置值
- * 令牌值使用带行号的多行文本区域，支持自动折行
+ * 允许编辑用户名称、颜色、启用状态、方案选择，以及为每个令牌位置设置值
+ * 令牌值区域仅在选中方案后显示
  */
 public class UserSessionEditDialog extends JDialog {
 
@@ -28,6 +29,11 @@ public class UserSessionEditDialog extends JDialog {
     private final JLabel colorPreview;
     private Color selectedColor;
 
+    /** 方案选择下拉框 */
+    private JComboBox<String> schemeComboBox;
+    /** 方案名称到ID的映射 */
+    private Map<String, Integer> schemeNameToId = new LinkedHashMap<>();
+
     /** 令牌值输入框映射：tokenLocationId -> JTextArea */
     private final Map<Integer, JTextArea> tokenValueFields = new LinkedHashMap<>();
 
@@ -37,9 +43,21 @@ public class UserSessionEditDialog extends JDialog {
     /** 最终的令牌值 */
     private Map<Integer, String> tokenValues = new LinkedHashMap<>();
 
+    /** 令牌值容器面板 */
+    private JPanel tokenValuesPanel;
+
+    /** 令牌值区域的标签 */
+    private JLabel tokenValuesLabel;
+
+    /** 外层滚动面板 */
+    private JScrollPane outerScrollPane;
+
+    /** 当前会话已有的令牌值（编辑模式） */
+    private Map<Integer, String> existingTokenValues = new LinkedHashMap<>();
+
     public UserSessionEditDialog(Frame owner, String title, UserSession existing) {
         super(owner, title, true);
-        setSize(650, 550);
+        setSize(700, 600);
         setLocationRelativeTo(owner);
         setResizable(true);
 
@@ -83,91 +101,38 @@ public class UserSessionEditDialog extends JDialog {
         enabledCheckbox = new JCheckBox("启用此用户会话", true);
         mainPanel.add(enabledCheckbox, gbc);
 
-        // 令牌值区域
-        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
-        mainPanel.add(new JLabel("令牌值:"), gbc);
-
-        List<TokenLocation> locations = SessionManager.getInstance().getTokenLocations();
-        if (!locations.isEmpty()) {
-            // 令牌值内容面板，使用垂直BoxLayout
-            JPanel tokenValuesPanel = new JPanel();
-            tokenValuesPanel.setLayout(new BoxLayout(tokenValuesPanel, BoxLayout.Y_AXIS));
-
-            for (int i = 0; i < locations.size(); i++) {
-                TokenLocation loc = locations.get(i);
-
-                // 每个令牌位置的子面板
-                JPanel tokenPanel = new JPanel(new BorderLayout());
-                tokenPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-
-                // 标签
-                JLabel label = new JLabel(loc.getType().getDisplayName() + " [" + loc.getExpression() + "]:");
-                label.setBorder(BorderFactory.createEmptyBorder(0, 0, 3, 0));
-                tokenPanel.add(label, BorderLayout.NORTH);
-
-                // 多行文本区域
-                JTextArea textArea = new JTextArea();
-                textArea.setRows(4);
-                textArea.setLineWrap(true);
-                textArea.setWrapStyleWord(true);
-                textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-                textArea.setTabSize(4);
-
-                // Tab键焦点切换：恢复Tab在控件间的导航功能
-                textArea.setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS,
-                        Collections.singleton(AWTKeyStroke.getAWTKeyStroke("TAB")));
-                textArea.setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS,
-                        Collections.singleton(AWTKeyStroke.getAWTKeyStroke("shift TAB")));
-
-                // 行号
-                JScrollPane scrollPane = new JScrollPane(textArea);
-                TextLineNumber lineNumbers = new TextLineNumber(textArea);
-                lineNumbers.setCurrentLineForeground(new Color(44, 121, 217));
-                lineNumbers.setForeground(Color.GRAY);
-                lineNumbers.setBackground(new Color(245, 245, 245));
-                lineNumbers.setFont(new Font("Monospaced", Font.PLAIN, 12));
-                scrollPane.setRowHeaderView(lineNumbers);
-                tokenPanel.add(scrollPane, BorderLayout.CENTER);
-
-                // 收集内层 JScrollPane 引用，用于后续安装滚轮转发器
-                innerScrollPanes.add(scrollPane);
-
-                // 右键菜单
-                textArea.setComponentPopupMenu(createTextContextMenu(textArea));
-
-                tokenValuesPanel.add(tokenPanel);
-
-                // 令牌位置之间添加分隔间距（最后一个不加）
-                if (i < locations.size() - 1) {
-                    tokenValuesPanel.add(Box.createVerticalStrut(8));
-                }
-
-                tokenValueFields.put(loc.getId(), textArea);
-
-                // 如果是编辑模式，填充现有值
-                if (existing != null) {
-                    String existingValue = existing.getTokenValue(loc.getId());
-                    if (existingValue != null) {
-                        textArea.setText(existingValue);
-                        textArea.setCaretPosition(0);
-                    }
-                }
-            }
-
-            // 令牌值面板直接加入 mainPanel（移除中间层 JScrollPane，实现统一滚动）
-            gbc.gridy = 4;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            gbc.weighty = 1.0;
-            gbc.insets = new Insets(8, 10, 8, 10);
-            mainPanel.add(tokenValuesPanel, gbc);
-        } else {
-            JLabel noLocationsLabel = new JLabel("请先添加令牌位置");
-            gbc.gridy = 4;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            gbc.weighty = 0;
-            gbc.insets = new Insets(8, 10, 8, 10);
-            mainPanel.add(noLocationsLabel, gbc);
+        // 方案选择
+        gbc.gridx = 0; gbc.gridy = 3;
+        mainPanel.add(new JLabel("令牌方案:"), gbc);
+        gbc.gridx = 1;
+        SessionManager sm = SessionManager.getInstance();
+        List<TokenScheme> schemes = sm.getTokenSchemes();
+        schemeComboBox = new JComboBox<>();
+        schemeComboBox.addItem("-- 请选择令牌方案 --");
+        schemeNameToId.clear();
+        for (TokenScheme scheme : schemes) {
+            schemeComboBox.addItem(scheme.getName());
+            schemeNameToId.put(scheme.getName(), scheme.getId());
         }
+        // 选择变更时刷新令牌值区域
+        schemeComboBox.addActionListener(e -> refreshTokenValuesPanel());
+        mainPanel.add(schemeComboBox, gbc);
+
+        // 令牌值区域标签
+        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
+        tokenValuesLabel = new JLabel("令牌值:");
+        tokenValuesLabel.setVisible(false);
+        mainPanel.add(tokenValuesLabel, gbc);
+
+        // 令牌值容器面板
+        tokenValuesPanel = new JPanel();
+        tokenValuesPanel.setLayout(new BoxLayout(tokenValuesPanel, BoxLayout.Y_AXIS));
+
+        gbc.gridy = 5;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weighty = 1.0;
+        gbc.insets = new Insets(8, 10, 8, 10);
+        mainPanel.add(tokenValuesPanel, gbc);
 
         gbc.gridwidth = 1;
         gbc.weighty = 0;
@@ -201,14 +166,111 @@ public class UserSessionEditDialog extends JDialog {
                 selectedColor = existing.getColor();
                 colorPreview.setBackground(selectedColor);
             }
+            // 方案选择
+            if (existing.getSchemeId() != null) {
+                for (TokenScheme scheme : schemes) {
+                    if (scheme.getId() == existing.getSchemeId()) {
+                        schemeComboBox.setSelectedItem(scheme.getName());
+                        break;
+                    }
+                }
+            }
+            // 保存现有令牌值
+            existingTokenValues = new LinkedHashMap<>(existing.getTokenValues());
         }
 
         getContentPane().setLayout(new BorderLayout());
-        JScrollPane outerScrollPane = new JScrollPane(mainPanel);
+        outerScrollPane = new JScrollPane(mainPanel);
         getContentPane().add(outerScrollPane, BorderLayout.CENTER);
         getContentPane().add(buttonPanel, BorderLayout.SOUTH);
 
-        // 为所有内层 JScrollPane 安装滚轮转发器，实现嵌套滚动的无缝衔接
+        // 初始化令牌值区域
+        refreshTokenValuesPanel();
+    }
+
+    /**
+     * 根据当前选中的方案刷新令牌值输入区域
+     * 仅在选择方案后显示令牌值输入框
+     */
+    private void refreshTokenValuesPanel() {
+        tokenValueFields.clear();
+        innerScrollPanes.clear();
+        tokenValuesPanel.removeAll();
+
+        Integer schemeId = getSelectedSchemeId();
+
+        if (schemeId == null) {
+            // 未选择方案：隐藏令牌值区域，显示提示
+            tokenValuesLabel.setVisible(false);
+            JLabel hintLabel = new JLabel("请先选择令牌方案以配置令牌值");
+            hintLabel.setForeground(Color.GRAY);
+            tokenValuesPanel.add(hintLabel);
+        } else {
+            // 选择了方案：显示方案关联的令牌位置
+            tokenValuesLabel.setVisible(true);
+            List<TokenLocation> locations = SessionManager.getInstance().getTokenLocationsByScheme(schemeId);
+
+            if (locations.isEmpty()) {
+                JLabel noLocationsLabel = new JLabel("该方案暂无关联的令牌位置");
+                noLocationsLabel.setForeground(Color.GRAY);
+                tokenValuesPanel.add(noLocationsLabel);
+            } else {
+                for (int i = 0; i < locations.size(); i++) {
+                    TokenLocation loc = locations.get(i);
+
+                    JPanel tokenPanel = new JPanel(new BorderLayout());
+                    tokenPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
+                    JLabel label = new JLabel(loc.getType().getDisplayName() + " [" + loc.getExpression() + "]:");
+                    label.setBorder(BorderFactory.createEmptyBorder(0, 0, 3, 0));
+                    tokenPanel.add(label, BorderLayout.NORTH);
+
+                    JTextArea textArea = new JTextArea();
+                    textArea.setRows(4);
+                    textArea.setLineWrap(true);
+                    textArea.setWrapStyleWord(true);
+                    textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+                    textArea.setTabSize(4);
+
+                    textArea.setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS,
+                            Collections.singleton(AWTKeyStroke.getAWTKeyStroke("TAB")));
+                    textArea.setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS,
+                            Collections.singleton(AWTKeyStroke.getAWTKeyStroke("shift TAB")));
+
+                    JScrollPane scrollPane = new JScrollPane(textArea);
+                    TextLineNumber lineNumbers = new TextLineNumber(textArea);
+                    lineNumbers.setCurrentLineForeground(new Color(44, 121, 217));
+                    lineNumbers.setForeground(Color.GRAY);
+                    lineNumbers.setBackground(new Color(245, 245, 245));
+                    lineNumbers.setFont(new Font("Monospaced", Font.PLAIN, 12));
+                    scrollPane.setRowHeaderView(lineNumbers);
+                    tokenPanel.add(scrollPane, BorderLayout.CENTER);
+
+                    innerScrollPanes.add(scrollPane);
+                    textArea.setComponentPopupMenu(createTextContextMenu(textArea));
+
+                    tokenValuesPanel.add(tokenPanel);
+
+                    if (i < locations.size() - 1) {
+                        tokenValuesPanel.add(Box.createVerticalStrut(8));
+                    }
+
+                    tokenValueFields.put(loc.getId(), textArea);
+
+                    // 填充现有值
+                    String existingValue = existingTokenValues.get(loc.getId());
+                    if (existingValue != null) {
+                        textArea.setText(existingValue);
+                        textArea.setCaretPosition(0);
+                    }
+                }
+            }
+        }
+
+        tokenValuesPanel.revalidate();
+        tokenValuesPanel.repaint();
+
+        // 重新安装滚轮转发器
         for (JScrollPane innerPane : innerScrollPanes) {
             ScrollPaneWheelForwarder.install(innerPane, outerScrollPane);
         }
@@ -253,6 +315,20 @@ public class UserSessionEditDialog extends JDialog {
 
     public boolean isEnabled() {
         return enabledCheckbox.isSelected();
+    }
+
+    /**
+     * 获取选中的方案ID，如果选择"请选择令牌方案"则返回null
+     */
+    public Integer getSchemeId() {
+        return getSelectedSchemeId();
+    }
+
+    private Integer getSelectedSchemeId() {
+        int idx = schemeComboBox.getSelectedIndex();
+        if (idx <= 0) return null; // 0 = "请选择令牌方案"
+        String selectedName = (String) schemeComboBox.getSelectedItem();
+        return schemeNameToId.get(selectedName);
     }
 
     public Map<Integer, String> getTokenValues() {

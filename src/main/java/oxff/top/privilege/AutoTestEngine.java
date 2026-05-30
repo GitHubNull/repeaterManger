@@ -94,7 +94,6 @@ public class AutoTestEngine {
                 BurpExtender.printOutput("[*] 自动化测试：开始处理 " + api);
 
                 List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
-                List<TokenLocation> locations = sessionManager.getTokenLocations();
                 RequestManager requestManager = new RequestManager();
 
                 // 保存原始请求到 requests 表（用于报告生成时获取原始报文）
@@ -135,6 +134,27 @@ public class AutoTestEngine {
                     UserSession session = enabledSessions.get(i);
                     boolean isFirst = (i == 0);
 
+                    // 根据会话关联的方案过滤令牌位置
+                    List<TokenLocation> locations = sessionManager.getTokenLocationsByScheme(session.getSchemeId());
+
+                    // 重放延迟：使用全局配置
+                    int replayDelay = sessionManager.getReplayDelay();
+                    if (replayDelay > 0 && i > 0) {
+                        try {
+                            Thread.sleep(replayDelay);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+
+                    // 请求超时：使用全局配置
+                    int timeoutSeconds = sessionManager.getRequestTimeout();
+
+                    // 重试参数：使用全局配置
+                    int retryCount = sessionManager.getRetryCount();
+                    int retryDelayMs = sessionManager.getRetryDelay();
+
                     // 非基准用户：如果基准请求失败，跳过比对判决，标记为ERROR
                     if (!isFirst && !baselineValid) {
                         RequestResponseRecord skipRecord = new RequestResponseRecord();
@@ -171,8 +191,9 @@ public class AutoTestEngine {
                         byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
                                 requestBytes, locations, session);
 
-                        // 同步发送（内联实现，避免对 ReplayEngine 私有方法的反射依赖）
-                        ReplayResultHolder holder = sendSyncRequest(modifiedRequest, httpService, requestManager);
+                        // 带重试的同步发送（使用会话级别的超时和重试配置）
+                        ReplayResultHolder holder = sendSyncRequestWithRetry(
+                                modifiedRequest, httpService, requestManager, timeoutSeconds, retryCount, retryDelayMs);
 
                         // 判决
                         String judgment = JudgmentResult.PENDING.name();
@@ -325,13 +346,41 @@ public class AutoTestEngine {
         }
     }
 
-    private ReplayResultHolder sendSyncRequest(byte[] requestBytes, HttpService httpService,
-                                                RequestManager requestManager) {
+    /**
+     * 带重试的同步发送HTTP请求
+     */
+    private ReplayResultHolder sendSyncRequestWithRetry(byte[] requestBytes, HttpService httpService,
+                                                         RequestManager requestManager,
+                                                         int timeoutSeconds, int retryCount, int retryDelayMs) {
+        ReplayResultHolder holder = sendSyncRequestOnce(requestBytes, httpService, requestManager, timeoutSeconds);
+
+        int attempts = 0;
+        while (holder.errorMessage != null && attempts < retryCount) {
+            attempts++;
+            BurpExtender.printOutput(String.format("[*] 自动化测试重试 (%d/%d), 等待 %dms...",
+                    attempts, retryCount, retryDelayMs));
+            try {
+                Thread.sleep(retryDelayMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            holder = sendSyncRequestOnce(requestBytes, httpService, requestManager, timeoutSeconds);
+        }
+
+        return holder;
+    }
+
+    /**
+     * 单次同步发送HTTP请求
+     */
+    private ReplayResultHolder sendSyncRequestOnce(byte[] requestBytes, HttpService httpService,
+                                                    RequestManager requestManager, int timeoutSeconds) {
         ReplayResultHolder holder = new ReplayResultHolder();
         Object lock = new Object();
         boolean[] done = {false};
 
-        requestManager.makeHttpRequestAsync(requestBytes, 30, -1, httpService,
+        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService,
                 new RequestManager.RequestCallback() {
                     @Override
                     public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
@@ -366,7 +415,7 @@ public class AutoTestEngine {
 
         synchronized (lock) {
             long startTime = System.currentTimeMillis();
-            while (!done[0] && (System.currentTimeMillis() - startTime) < 60000) {
+            while (!done[0] && (System.currentTimeMillis() - startTime) < Math.max(60000, timeoutSeconds * 2000L)) {
                 try {
                     lock.wait(1000);
                 } catch (InterruptedException e) {

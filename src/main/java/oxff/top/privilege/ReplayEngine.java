@@ -101,8 +101,6 @@ public class ReplayEngine {
             }
         }
 
-        List<TokenLocation> locations = sessionManager.getTokenLocations();
-
         executor.submit(() -> {
             BurpExtender.printOutput("[*] 开始权限测试重放: " + enabledSessions.size() + "个用户会话");
 
@@ -114,6 +112,27 @@ public class ReplayEngine {
             for (int i = 0; i < enabledSessions.size(); i++) {
                 UserSession session = enabledSessions.get(i);
                 boolean isFirst = (i == 0);
+
+                // 根据会话关联的方案过滤令牌位置
+                List<TokenLocation> locations = sessionManager.getTokenLocationsByScheme(session.getSchemeId());
+
+                // 重放延迟：使用全局配置
+                int replayDelay = sessionManager.getReplayDelay();
+                if (replayDelay > 0 && i > 0) {
+                    try {
+                        Thread.sleep(replayDelay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+
+                // 请求超时：使用全局配置
+                int timeoutSeconds = sessionManager.getRequestTimeout();
+
+                // 重试参数：使用全局配置
+                int retryCount = sessionManager.getRetryCount();
+                int retryDelay = sessionManager.getRetryDelay();
 
                 // 非基准用户：如果基准请求失败，跳过比对判决，标记为ERROR
                 if (!isFirst && !baselineValid) {
@@ -139,12 +158,13 @@ public class ReplayEngine {
                 }
 
                 try {
-                    // 替换令牌
+                    // 替换令牌（使用方案过滤后的令牌位置）
                     byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
                             originalRequest, locations, session);
 
-                    // 同步发送请求（在后台线程中）
-                    ReplayResultHolder holder = sendSync(modifiedRequest, httpService, requestManager);
+                    // 带重试的同步发送请求（在后台线程中）
+                    ReplayResultHolder holder = sendSyncWithRetry(
+                            modifiedRequest, httpService, requestManager, timeoutSeconds, retryCount, retryDelay);
 
                     // 判断判决结果
                     String judgment = JudgmentResult.PENDING.name();
@@ -258,15 +278,48 @@ public class ReplayEngine {
     }
 
     /**
-     * 同步发送HTTP请求（在后台线程中调用）
+     * 带重试的同步发送HTTP请求（在后台线程中调用）
+     *
+     * @param requestBytes   请求字节数组
+     * @param httpService    HTTP服务信息
+     * @param requestManager 请求管理器
+     * @param timeoutSeconds 请求超时时间（秒）
+     * @param retryCount     失败重试次数
+     * @param retryDelayMs   重试间隔（毫秒）
      */
-    private ReplayResultHolder sendSync(byte[] requestBytes, HttpService httpService,
-                                         RequestManager requestManager) {
+    private ReplayResultHolder sendSyncWithRetry(byte[] requestBytes, HttpService httpService,
+                                                  RequestManager requestManager,
+                                                  int timeoutSeconds, int retryCount, int retryDelayMs) {
+        ReplayResultHolder holder = sendSyncOnce(requestBytes, httpService, requestManager, timeoutSeconds);
+
+        // 重试逻辑：仅在请求失败且有重试次数时执行
+        int attempts = 0;
+        while (holder.errorMessage != null && attempts < retryCount) {
+            attempts++;
+            BurpExtender.printOutput(String.format("[*] 重放重试 (%d/%d), 等待 %dms...",
+                    attempts, retryCount, retryDelayMs));
+            try {
+                Thread.sleep(retryDelayMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            holder = sendSyncOnce(requestBytes, httpService, requestManager, timeoutSeconds);
+        }
+
+        return holder;
+    }
+
+    /**
+     * 单次同步发送HTTP请求（在后台线程中调用）
+     */
+    private ReplayResultHolder sendSyncOnce(byte[] requestBytes, HttpService httpService,
+                                             RequestManager requestManager, int timeoutSeconds) {
         ReplayResultHolder holder = new ReplayResultHolder();
         Object lock = new Object();
         boolean[] done = {false};
 
-        requestManager.makeHttpRequestAsync(requestBytes, 30, -1, httpService,
+        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService,
                 new RequestManager.RequestCallback() {
                     @Override
                     public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
@@ -299,10 +352,11 @@ public class ReplayEngine {
                     }
                 });
 
-        // 等待响应（最多60秒）
+        // 等待响应（超时时间基于请求超时的2倍，最少60秒）
+        long waitTimeoutMs = Math.max(60000, timeoutSeconds * 2000L);
         synchronized (lock) {
             long startTime = System.currentTimeMillis();
-            while (!done[0] && (System.currentTimeMillis() - startTime) < 60000) {
+            while (!done[0] && (System.currentTimeMillis() - startTime) < waitTimeoutMs) {
                 try {
                     lock.wait(1000);
                 } catch (InterruptedException e) {

@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v9）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '9')");
+        // 初始化元数据（v11）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '11')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -137,7 +137,7 @@ public class SchemaInitializer {
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        BurpExtender.printOutput("[+] v9 Schema 初始化完成");
+        BurpExtender.printOutput("[+] v11 Schema 初始化完成");
     }
 
     /**
@@ -234,13 +234,43 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 用户会话表
+        // 令牌方案表（v11 新增）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS token_schemes (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "name TEXT NOT NULL, " +
+            "description TEXT DEFAULT '', " +
+            "persist_to_global INTEGER NOT NULL DEFAULT 1, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // 方案-令牌位置关联表（v11 新增）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS scheme_token_locations (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "scheme_id INTEGER NOT NULL, " +
+            "token_location_id INTEGER NOT NULL, " +
+            "FOREIGN KEY (scheme_id) REFERENCES token_schemes(id) ON DELETE CASCADE, " +
+            "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+            "UNIQUE (scheme_id, token_location_id)" +
+            ")"
+        );
+
+        // 用户会话表（v11 结构：v6 + scheme_id + 重放配置列）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS user_sessions (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "name TEXT NOT NULL, " +
             "color TEXT, " +
             "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "scheme_id INTEGER DEFAULT NULL, " +
+            "request_timeout INTEGER DEFAULT 30, " +
+            "max_concurrent INTEGER DEFAULT 1, " +
+            "retry_count INTEGER DEFAULT 0, " +
+            "retry_delay INTEGER DEFAULT 1000, " +
+            "replay_delay INTEGER DEFAULT 0, " +
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
             ")"
         );
@@ -284,6 +314,10 @@ public class SchemaInitializer {
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_judgment ON history(judgment)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_session ON history(user_session_name)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_judgment_rules_enabled ON judgment_rules(enabled, priority)");
+        // v11 新增索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_scheme ON scheme_token_locations(scheme_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_location ON scheme_token_locations(token_location_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_scheme ON user_sessions(scheme_id)");
     }
 
     /**

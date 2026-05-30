@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.0] - 2026-05-30
+
+### Added
+- 新增令牌方案（TokenScheme）系统，支持多方案管理令牌位置，每个用户会话关联一个方案
+- 新增 GlobalTokenSchemeManager 令牌方案管理器，支持方案 CRUD 及全局持久化（YAML）
+- 新增 TokenSchemeYamlIO 方案序列化工具
+- 新增 ReplayConfig 重放配置模型，从 SessionManager 中提取重放模式/相似度阈值/重试/延迟等参数
+- 新增 ReplayConfigTab 重放配置独立面板
+- 新增 TokenSchemeTab 令牌方案独立面板（含方案列表和编辑对话框）
+- 新增 TokenLocationTab 令牌位置独立面板
+- 新增 UserSessionTab 用户会话独立面板
+- 数据库 schema 升级至 v11：新增 token_schemes/scheme_token_locations 表，user_sessions 增加 scheme_id 和重放配置列
+- SchemaMigrator 新增 v10→v11 迁移逻辑，自动创建默认方案并关联现有数据
+
+### Changed
+- 重构 SessionConfigTab：拆分为 TokenSchemeTab、TokenLocationTab、UserSessionTab、ReplayConfigTab 四个独立 Tab
+- SessionManager 新增令牌方案缓存和 CRUD 方法，重放配置委托至 ReplayConfig
+- SessionDAO 扩展支持方案 CRUD、方案-令牌位置关联、用户会话 scheme_id 和重放配置字段
+- UserSession 模型新增 schemeId/requestTimeout/maxConcurrent/retryCount/retryDelay/replayDelay 字段
+- UserSessionEditDialog 支持方案选择和重放配置编辑
+- AutoTestEngine/ReplayEngine 适配新的会话-方案关联机制
+
 ## [2.20.1] - 2026-05-30
 
 ### Fixed

@@ -59,6 +59,11 @@ public class SchemaMigrator {
         if (currentVersion < 10) {
             migrateV9ToV10(conn);
         }
+
+        // v10→v11 迁移
+        if (currentVersion < 11) {
+            migrateV10ToV11(conn);
+        }
     }
 
     /**
@@ -439,6 +444,108 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '10')");
 
             BurpExtender.printOutput("[+] v9→v10 迁移完成");
+        }
+    }
+
+    /**
+     * v10→v11 迁移：新增令牌方案表、方案-令牌位置关联表，
+     * 为 user_sessions 添加 scheme_id 和重放配置列，
+     * 自动迁移旧数据（创建默认方案，关联所有现有令牌位置和用户会话）
+     */
+    private static void migrateV10ToV11(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v10→v11迁移...");
+
+            // 创建令牌方案表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS token_schemes (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL, " +
+                "description TEXT DEFAULT '', " +
+                "persist_to_global INTEGER NOT NULL DEFAULT 1, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建方案-令牌位置关联表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS scheme_token_locations (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "scheme_id INTEGER NOT NULL, " +
+                "token_location_id INTEGER NOT NULL, " +
+                "FOREIGN KEY (scheme_id) REFERENCES token_schemes(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+                "UNIQUE (scheme_id, token_location_id)" +
+                ")"
+            );
+
+            // 为 user_sessions 添加 scheme_id 列
+            try {
+                stmt.execute("ALTER TABLE user_sessions ADD COLUMN scheme_id INTEGER DEFAULT NULL");
+                BurpExtender.printOutput("[+] user_sessions表添加scheme_id列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] user_sessions表添加scheme_id列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 user_sessions 添加重放配置列
+            String[] replayColumns = {
+                "ALTER TABLE user_sessions ADD COLUMN request_timeout INTEGER DEFAULT 30",
+                "ALTER TABLE user_sessions ADD COLUMN max_concurrent INTEGER DEFAULT 1",
+                "ALTER TABLE user_sessions ADD COLUMN retry_count INTEGER DEFAULT 0",
+                "ALTER TABLE user_sessions ADD COLUMN retry_delay INTEGER DEFAULT 1000",
+                "ALTER TABLE user_sessions ADD COLUMN replay_delay INTEGER DEFAULT 0"
+            };
+
+            for (String ddl : replayColumns) {
+                try {
+                    stmt.execute(ddl);
+                } catch (SQLException e) {
+                    if (!e.getMessage().contains("duplicate column name")) {
+                        BurpExtender.printError("[!] v10→v11迁移列添加失败: " + e.getMessage());
+                    }
+                }
+            }
+            BurpExtender.printOutput("[+] user_sessions表添加重放配置列成功");
+
+            // 创建v11新增索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_scheme ON scheme_token_locations(scheme_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_location ON scheme_token_locations(token_location_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_scheme ON user_sessions(scheme_id)");
+
+            // 自动迁移：创建默认方案，关联所有现有令牌位置
+            try {
+                // 创建默认方案
+                stmt.execute("INSERT INTO token_schemes (name, description, persist_to_global, enabled) VALUES ('默认方案', '自动创建的默认令牌方案，包含所有令牌位置', 1, 1)");
+                try (ResultSet rs = stmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        int defaultSchemeId = rs.getInt(1);
+
+                        // 将所有现有令牌位置关联到默认方案
+                        int linkedLocations = stmt.executeUpdate(
+                            "INSERT INTO scheme_token_locations (scheme_id, token_location_id) " +
+                            "SELECT " + defaultSchemeId + ", id FROM token_locations"
+                        );
+                        BurpExtender.printOutput("[+] 默认方案创建成功(id=" + defaultSchemeId + ")，关联 " + linkedLocations + " 个令牌位置");
+
+                        // 将所有现有用户会话关联到默认方案
+                        int linkedSessions = stmt.executeUpdate(
+                            "UPDATE user_sessions SET scheme_id = " + defaultSchemeId + " WHERE scheme_id IS NULL"
+                        );
+                        BurpExtender.printOutput("[+] " + linkedSessions + " 个用户会话已关联到默认方案");
+                    }
+                }
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 自动迁移创建默认方案失败: " + e.getMessage());
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '11' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '11')");
+
+            BurpExtender.printOutput("[+] v10→v11 迁移完成");
         }
     }
 }

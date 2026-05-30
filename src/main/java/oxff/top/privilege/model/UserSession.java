@@ -14,6 +14,24 @@ public class UserSession {
     private String name;
     private Color color;
     private boolean enabled;
+    /** 关联的令牌方案ID（一对一） */
+    private Integer schemeId;
+
+    /** 请求超时时间（秒） */
+    private int requestTimeout;
+
+    /** 并发线程数 */
+    private int maxConcurrent;
+
+    /** 失败重试次数 */
+    private int retryCount;
+
+    /** 重试间隔（毫秒） */
+    private int retryDelay;
+
+    /** 重放间隔延迟（毫秒） */
+    private int replayDelay;
+
     /** 令牌值映射：tokenLocationId -> value */
     private Map<Integer, String> tokenValues;
     private long createdAt;
@@ -21,6 +39,12 @@ public class UserSession {
     public UserSession() {
         this.name = "";
         this.enabled = true;
+        this.schemeId = null;
+        this.requestTimeout = 30;
+        this.maxConcurrent = 1;
+        this.retryCount = 0;
+        this.retryDelay = 1000;
+        this.replayDelay = 0;
         this.tokenValues = new LinkedHashMap<>();
         this.createdAt = System.currentTimeMillis();
     }
@@ -29,6 +53,12 @@ public class UserSession {
         this.name = name;
         this.color = color;
         this.enabled = enabled;
+        this.schemeId = null;
+        this.requestTimeout = 30;
+        this.maxConcurrent = 1;
+        this.retryCount = 0;
+        this.retryDelay = 1000;
+        this.replayDelay = 0;
         this.tokenValues = new LinkedHashMap<>();
         this.createdAt = System.currentTimeMillis();
     }
@@ -38,6 +68,12 @@ public class UserSession {
         this.name = name;
         this.color = color;
         this.enabled = enabled;
+        this.schemeId = null;
+        this.requestTimeout = 30;
+        this.maxConcurrent = 1;
+        this.retryCount = 0;
+        this.retryDelay = 1000;
+        this.replayDelay = 0;
         this.tokenValues = new LinkedHashMap<>();
         this.createdAt = System.currentTimeMillis();
     }
@@ -121,6 +157,54 @@ public class UserSession {
      */
     public String getTokenValue(int tokenLocationId) {
         return tokenValues.get(tokenLocationId);
+    }
+
+    public Integer getSchemeId() {
+        return schemeId;
+    }
+
+    public void setSchemeId(Integer schemeId) {
+        this.schemeId = schemeId;
+    }
+
+    public int getRequestTimeout() {
+        return requestTimeout;
+    }
+
+    public void setRequestTimeout(int requestTimeout) {
+        this.requestTimeout = requestTimeout;
+    }
+
+    public int getMaxConcurrent() {
+        return maxConcurrent;
+    }
+
+    public void setMaxConcurrent(int maxConcurrent) {
+        this.maxConcurrent = maxConcurrent;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public int getRetryDelay() {
+        return retryDelay;
+    }
+
+    public void setRetryDelay(int retryDelay) {
+        this.retryDelay = retryDelay;
+    }
+
+    public int getReplayDelay() {
+        return replayDelay;
+    }
+
+    public void setReplayDelay(int replayDelay) {
+        this.replayDelay = replayDelay;
     }
 
     public long getCreatedAt() {

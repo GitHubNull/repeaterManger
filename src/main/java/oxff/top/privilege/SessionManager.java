@@ -2,8 +2,10 @@ package oxff.top.privilege;
 
 import burp.BurpExtender;
 import oxff.top.privilege.dao.SessionDAO;
+import oxff.top.privilege.model.ReplayConfig;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.TokenLocationType;
+import oxff.top.privilege.model.TokenScheme;
 import oxff.top.privilege.model.UserSession;
 
 import java.util.ArrayList;
@@ -13,7 +15,7 @@ import java.util.Set;
 
 /**
  * 会话管理器（单例）
- * 管理令牌位置和用户会话的CRUD操作，缓存已启用的会话列表
+ * 管理令牌位置、令牌方案和用户会话的CRUD操作，缓存已启用的会话列表
  */
 public class SessionManager {
 
@@ -24,23 +26,25 @@ public class SessionManager {
     /** 缓存的令牌位置列表 */
     private List<TokenLocation> cachedTokenLocations;
 
+    /** 缓存的令牌方案列表 */
+    private List<TokenScheme> cachedTokenSchemes;
+
     /** 缓存的用户会话列表 */
     private List<UserSession> cachedUserSessions;
 
     /** 缓存的已启用用户会话列表 */
     private List<UserSession> cachedEnabledSessions;
 
-    /** 重放模式：true=实时重放，false=批量重放 */
-    private boolean realtimeMode = true;
-
-    /** 相似度阈值 */
-    private double similarityThreshold = 0.7;
+    /** 全局重放配置 */
+    private final ReplayConfig replayConfig;
 
     private SessionManager() {
         this.sessionDAO = new SessionDAO();
         this.cachedTokenLocations = new ArrayList<>();
+        this.cachedTokenSchemes = new ArrayList<>();
         this.cachedUserSessions = new ArrayList<>();
         this.cachedEnabledSessions = new ArrayList<>();
+        this.replayConfig = new ReplayConfig();
     }
 
     /**
@@ -58,10 +62,12 @@ public class SessionManager {
      */
     public void refreshCache() {
         cachedTokenLocations = sessionDAO.getAllTokenLocations();
+        cachedTokenSchemes = sessionDAO.getAllTokenSchemes();
         cachedUserSessions = sessionDAO.getAllUserSessions();
         cachedEnabledSessions = sessionDAO.getEnabledUserSessions();
         BurpExtender.printOutput("[+] 会话缓存已刷新: " + cachedTokenLocations.size() +
-                "个令牌位置, " + cachedUserSessions.size() + "个用户会话, " +
+                "个令牌位置, " + cachedTokenSchemes.size() + "个令牌方案, " +
+                cachedUserSessions.size() + "个用户会话, " +
                 cachedEnabledSessions.size() + "个已启用");
     }
 
@@ -141,6 +147,143 @@ public class SessionManager {
         return result;
     }
 
+    /**
+     * 获取引用指定令牌位置的方案数量
+     */
+    public int getSchemeReferenceCountByTokenLocation(int tokenLocationId) {
+        return sessionDAO.getSchemeReferenceCountByTokenLocation(tokenLocationId);
+    }
+
+    // ==================== TokenScheme 操作 ====================
+
+    public List<TokenScheme> getTokenSchemes() {
+        if (cachedTokenSchemes.isEmpty()) {
+            refreshCache();
+        }
+        return cachedTokenSchemes;
+    }
+
+    public List<TokenScheme> getEnabledTokenSchemes() {
+        if (cachedTokenSchemes.isEmpty()) {
+            refreshCache();
+        }
+        List<TokenScheme> enabled = new ArrayList<>();
+        for (TokenScheme scheme : cachedTokenSchemes) {
+            if (scheme.isEnabled()) {
+                enabled.add(scheme);
+            }
+        }
+        return enabled;
+    }
+
+    public TokenScheme getTokenSchemeById(int id) {
+        for (TokenScheme scheme : cachedTokenSchemes) {
+            if (scheme.getId() == id) {
+                return scheme;
+            }
+        }
+        return null;
+    }
+
+    public int addTokenScheme(String name, String description, boolean enabled, boolean persistToGlobal, List<Integer> tokenLocationIds) {
+        int id = sessionDAO.addTokenScheme(name, description, persistToGlobal, enabled);
+        if (id > 0 && tokenLocationIds != null && !tokenLocationIds.isEmpty()) {
+            sessionDAO.saveSchemeTokenLocations(id, tokenLocationIds);
+        }
+        if (id > 0) {
+            refreshCache();
+            // 同步到全局
+            syncSchemeToGlobal(id, persistToGlobal);
+        }
+        return id;
+    }
+
+    public boolean updateTokenScheme(int id, String name, String description, boolean enabled, boolean persistToGlobal) {
+        boolean result = sessionDAO.updateTokenScheme(id, name, description, persistToGlobal, enabled);
+        if (result) {
+            refreshCache();
+            // 同步到全局
+            syncSchemeToGlobal(id, persistToGlobal);
+        }
+        return result;
+    }
+
+    public boolean deleteTokenScheme(int id) {
+        // 先获取被删除的方案（用于全局YAML同步）
+        TokenScheme toDelete = null;
+        for (TokenScheme scheme : cachedTokenSchemes) {
+            if (scheme.getId() == id) {
+                toDelete = scheme;
+                break;
+            }
+        }
+        boolean result = sessionDAO.deleteTokenScheme(id);
+        if (result) {
+            refreshCache();
+            // 从全局YAML中移除
+            if (toDelete != null && toDelete.isPersistToGlobal()) {
+                GlobalTokenSchemeManager.getInstance().removeScheme(toDelete.getName());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 将方案同步到全局YAML（添加或移除）
+     */
+    private void syncSchemeToGlobal(int schemeId, boolean persistToGlobal) {
+        TokenScheme scheme = getTokenSchemeById(schemeId);
+        if (scheme == null) return;
+
+        if (persistToGlobal) {
+            GlobalTokenSchemeManager.getInstance().addScheme(scheme);
+        } else {
+            GlobalTokenSchemeManager.getInstance().removeScheme(scheme.getName());
+        }
+    }
+
+    public boolean saveSchemeTokenLocations(int schemeId, List<Integer> tokenLocationIds) {
+        boolean result = sessionDAO.saveSchemeTokenLocations(schemeId, tokenLocationIds);
+        if (result) {
+            refreshCache();
+        }
+        return result;
+    }
+
+    /**
+     * 获取引用指定方案的会话数量
+     */
+    public int getSessionReferenceCountByScheme(int schemeId) {
+        return sessionDAO.getSessionReferenceCountByScheme(schemeId);
+    }
+
+    /**
+     * 根据方案ID获取关联的令牌位置列表
+     * 如果方案不存在或方案无关联位置，返回所有令牌位置作为回退
+     */
+    public List<TokenLocation> getTokenLocationsByScheme(Integer schemeId) {
+        if (schemeId == null) {
+            // 未关联方案时，回退到所有令牌位置
+            return getTokenLocations();
+        }
+
+        TokenScheme scheme = getTokenSchemeById(schemeId);
+        if (scheme == null || scheme.getTokenLocationIds().isEmpty()) {
+            // 方案不存在或方案无关联位置，回退到所有令牌位置
+            return getTokenLocations();
+        }
+
+        // 根据方案中的令牌位置ID筛选
+        List<TokenLocation> allLocations = getTokenLocations();
+        List<TokenLocation> filtered = new ArrayList<>();
+        for (TokenLocation loc : allLocations) {
+            if (scheme.getTokenLocationIds().contains(loc.getId())) {
+                filtered.add(loc);
+            }
+        }
+        return filtered;
+    }
+
     // ==================== UserSession 操作 ====================
 
     public List<UserSession> getUserSessions() {
@@ -167,16 +310,20 @@ public class SessionManager {
         return !cachedEnabledSessions.isEmpty();
     }
 
-    public int addUserSession(String name, String colorHex, boolean enabled) {
-        int id = sessionDAO.addUserSession(name, colorHex, enabled);
+    public int addUserSession(String name, String colorHex, boolean enabled, Integer schemeId) {
+        int id = sessionDAO.addUserSession(name, colorHex, enabled, schemeId,
+                replayConfig.getRequestTimeout(), replayConfig.getMaxConcurrent(),
+                replayConfig.getRetryCount(), replayConfig.getRetryDelay(), replayConfig.getReplayDelay());
         if (id > 0) {
             refreshCache();
         }
         return id;
     }
 
-    public boolean updateUserSession(int id, String name, String colorHex, boolean enabled) {
-        boolean result = sessionDAO.updateUserSession(id, name, colorHex, enabled);
+    public boolean updateUserSession(int id, String name, String colorHex, boolean enabled, Integer schemeId) {
+        boolean result = sessionDAO.updateUserSession(id, name, colorHex, enabled, schemeId,
+                replayConfig.getRequestTimeout(), replayConfig.getMaxConcurrent(),
+                replayConfig.getRetryCount(), replayConfig.getRetryDelay(), replayConfig.getReplayDelay());
         if (result) {
             refreshCache();
         }
@@ -217,7 +364,9 @@ public class SessionManager {
             if (existingNames.contains(session.getName())) {
                 continue;
             }
-            int id = sessionDAO.addUserSession(session.getName(), session.getColorHex(), session.isEnabled());
+            int id = sessionDAO.addUserSession(session.getName(), session.getColorHex(), session.isEnabled(),
+                    session.getSchemeId(), session.getRequestTimeout(), session.getMaxConcurrent(),
+                    session.getRetryCount(), session.getRetryDelay(), session.getReplayDelay());
             if (id > 0) {
                 if (!session.getTokenValues().isEmpty()) {
                     sessionDAO.saveTokenValues(id, session.getTokenValues());
@@ -243,7 +392,9 @@ public class SessionManager {
 
         int imported = 0;
         for (UserSession session : newSessions) {
-            int id = sessionDAO.addUserSession(session.getName(), session.getColorHex(), session.isEnabled());
+            int id = sessionDAO.addUserSession(session.getName(), session.getColorHex(), session.isEnabled(),
+                    session.getSchemeId(), session.getRequestTimeout(), session.getMaxConcurrent(),
+                    session.getRetryCount(), session.getRetryDelay(), session.getReplayDelay());
             if (id > 0) {
                 if (!session.getTokenValues().isEmpty()) {
                     sessionDAO.saveTokenValues(id, session.getTokenValues());
@@ -297,19 +448,63 @@ public class SessionManager {
 
     // ==================== 重放配置 ====================
 
+    public ReplayConfig getReplayConfig() {
+        return replayConfig;
+    }
+
     public boolean isRealtimeMode() {
-        return realtimeMode;
+        return replayConfig.isRealtimeMode();
     }
 
     public void setRealtimeMode(boolean realtimeMode) {
-        this.realtimeMode = realtimeMode;
+        replayConfig.setRealtimeMode(realtimeMode);
     }
 
     public double getSimilarityThreshold() {
-        return similarityThreshold;
+        return replayConfig.getSimilarityThreshold();
     }
 
     public void setSimilarityThreshold(double similarityThreshold) {
-        this.similarityThreshold = similarityThreshold;
+        replayConfig.setSimilarityThreshold(similarityThreshold);
+    }
+
+    public int getRequestTimeout() {
+        return replayConfig.getRequestTimeout();
+    }
+
+    public void setRequestTimeout(int requestTimeout) {
+        replayConfig.setRequestTimeout(requestTimeout);
+    }
+
+    public int getMaxConcurrent() {
+        return replayConfig.getMaxConcurrent();
+    }
+
+    public void setMaxConcurrent(int maxConcurrent) {
+        replayConfig.setMaxConcurrent(maxConcurrent);
+    }
+
+    public int getRetryCount() {
+        return replayConfig.getRetryCount();
+    }
+
+    public void setRetryCount(int retryCount) {
+        replayConfig.setRetryCount(retryCount);
+    }
+
+    public int getRetryDelay() {
+        return replayConfig.getRetryDelay();
+    }
+
+    public void setRetryDelay(int retryDelay) {
+        replayConfig.setRetryDelay(retryDelay);
+    }
+
+    public int getReplayDelay() {
+        return replayConfig.getReplayDelay();
+    }
+
+    public void setReplayDelay(int replayDelay) {
+        replayConfig.setReplayDelay(replayDelay);
     }
 }
