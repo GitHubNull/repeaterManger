@@ -160,21 +160,17 @@ public class ColumnControlDialog extends JDialog {
                 break;
             case 1: // 时间列
                 column.setPreferredWidth(150);
-                column.setMaxWidth(180);
                 break;
             case 2: // API列
                 column.setPreferredWidth(200);
-                column.setMaxWidth(400);
                 break;
             case 3: // 方法列
                 column.setPreferredWidth(60);
-                column.setMaxWidth(80);
                 break;
             case 4: // 协议列
                 column.setPreferredWidth(60);
-                column.setMaxWidth(80);
                 break;
-            case 5: // 域名列
+            case 5: // 域名/主机列
                 column.setPreferredWidth(150);
                 break;
             case 6: // 路径列
@@ -185,27 +181,21 @@ public class ColumnControlDialog extends JDialog {
                 break;
             case 8: // 状态码列
                 column.setPreferredWidth(70);
-                column.setMaxWidth(90);
                 break;
             case 9: // 响应长度列
                 column.setPreferredWidth(90);
-                column.setMaxWidth(110);
                 break;
             case 10: // 耗时列
                 column.setPreferredWidth(70);
-                column.setMaxWidth(90);
                 break;
             case 11: // 用户列
                 column.setPreferredWidth(80);
-                column.setMaxWidth(120);
                 break;
             case 12: // 判决列
                 column.setPreferredWidth(60);
-                column.setMaxWidth(80);
                 break;
             case 13: // 越权测试列
                 column.setPreferredWidth(70);
-                column.setMaxWidth(90);
                 break;
             case 14: // 备注列
                 column.setPreferredWidth(100);

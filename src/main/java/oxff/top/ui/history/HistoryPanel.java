@@ -131,7 +131,7 @@ public class HistoryPanel extends JPanel {
     private void createTable() {
         // 定义表格列名（v8新增"越权测试"列）
         String[] columnNames = {
-            "#", "时间", "API", "方法", "协议", "域名", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "用户", "判决", "越权测试", "备注"
+            "#", "时间", "API", "方法", "协议", "域名/主机", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "用户", "判决", "越权测试", "备注"
         };
 
         // 创建表格模型(不允许直接编辑)
@@ -160,28 +160,18 @@ public class HistoryPanel extends JPanel {
         historyTable.getColumnModel().getColumn(0).setPreferredWidth(40);   // 序号列
         historyTable.getColumnModel().getColumn(0).setMaxWidth(50);
         historyTable.getColumnModel().getColumn(1).setPreferredWidth(150);  // 时间列
-        historyTable.getColumnModel().getColumn(1).setMaxWidth(180);
         historyTable.getColumnModel().getColumn(2).setPreferredWidth(200);  // API列
-        historyTable.getColumnModel().getColumn(2).setMaxWidth(400);
         historyTable.getColumnModel().getColumn(3).setPreferredWidth(60);   // 方法列
-        historyTable.getColumnModel().getColumn(3).setMaxWidth(80);
         historyTable.getColumnModel().getColumn(4).setPreferredWidth(60);   // 协议列
-        historyTable.getColumnModel().getColumn(4).setMaxWidth(80);
         historyTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // 域名列
         historyTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // 路径列
         historyTable.getColumnModel().getColumn(7).setPreferredWidth(100);  // 查询参数列
         historyTable.getColumnModel().getColumn(8).setPreferredWidth(70);   // 状态码列
-        historyTable.getColumnModel().getColumn(8).setMaxWidth(90);
         historyTable.getColumnModel().getColumn(9).setPreferredWidth(90);   // 响应长度列
-        historyTable.getColumnModel().getColumn(9).setMaxWidth(110);
         historyTable.getColumnModel().getColumn(10).setPreferredWidth(70);  // 耗时列
-        historyTable.getColumnModel().getColumn(10).setMaxWidth(90);
         historyTable.getColumnModel().getColumn(11).setPreferredWidth(80);  // 用户列
-        historyTable.getColumnModel().getColumn(11).setMaxWidth(120);
         historyTable.getColumnModel().getColumn(12).setPreferredWidth(60);  // 判决列
-        historyTable.getColumnModel().getColumn(12).setMaxWidth(80);
         historyTable.getColumnModel().getColumn(13).setPreferredWidth(70);  // 越权测试列
-        historyTable.getColumnModel().getColumn(13).setMaxWidth(90);
         historyTable.getColumnModel().getColumn(14).setPreferredWidth(100); // 备注列
 
         // 创建排序器
