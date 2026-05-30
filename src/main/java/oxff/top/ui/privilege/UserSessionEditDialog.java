@@ -3,10 +3,12 @@ package oxff.top.ui.privilege;
 import oxff.top.privilege.SessionManager;
 import oxff.top.privilege.model.TokenLocation;
 import oxff.top.privilege.model.UserSession;
+import oxff.top.utils.ScrollPaneWheelForwarder;
 import oxff.top.utils.TextLineNumber;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +30,9 @@ public class UserSessionEditDialog extends JDialog {
 
     /** 令牌值输入框映射：tokenLocationId -> JTextArea */
     private final Map<Integer, JTextArea> tokenValueFields = new LinkedHashMap<>();
+
+    /** 收集所有内层 JScrollPane，用于安装滚轮转发器 */
+    private final List<JScrollPane> innerScrollPanes = new ArrayList<>();
 
     /** 最终的令牌值 */
     private Map<Integer, String> tokenValues = new LinkedHashMap<>();
@@ -124,6 +129,9 @@ public class UserSessionEditDialog extends JDialog {
                 scrollPane.setRowHeaderView(lineNumbers);
                 tokenPanel.add(scrollPane, BorderLayout.CENTER);
 
+                // 收集内层 JScrollPane 引用，用于后续安装滚轮转发器
+                innerScrollPanes.add(scrollPane);
+
                 // 右键菜单
                 textArea.setComponentPopupMenu(createTextContextMenu(textArea));
 
@@ -146,14 +154,12 @@ public class UserSessionEditDialog extends JDialog {
                 }
             }
 
-            // 外层滚动
-            JScrollPane outerScrollPane = new JScrollPane(tokenValuesPanel);
-            outerScrollPane.setBorder(BorderFactory.createEmptyBorder());
+            // 令牌值面板直接加入 mainPanel（移除中间层 JScrollPane，实现统一滚动）
             gbc.gridy = 4;
-            gbc.fill = GridBagConstraints.BOTH;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
             gbc.weighty = 1.0;
             gbc.insets = new Insets(8, 10, 8, 10);
-            mainPanel.add(outerScrollPane, gbc);
+            mainPanel.add(tokenValuesPanel, gbc);
         } else {
             JLabel noLocationsLabel = new JLabel("请先添加令牌位置");
             gbc.gridy = 4;
@@ -198,8 +204,14 @@ public class UserSessionEditDialog extends JDialog {
         }
 
         getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(new JScrollPane(mainPanel), BorderLayout.CENTER);
+        JScrollPane outerScrollPane = new JScrollPane(mainPanel);
+        getContentPane().add(outerScrollPane, BorderLayout.CENTER);
         getContentPane().add(buttonPanel, BorderLayout.SOUTH);
+
+        // 为所有内层 JScrollPane 安装滚轮转发器，实现嵌套滚动的无缝衔接
+        for (JScrollPane innerPane : innerScrollPanes) {
+            ScrollPaneWheelForwarder.install(innerPane, outerScrollPane);
+        }
     }
 
     /**
