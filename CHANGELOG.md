@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.0] - 2026-06-16
+
+### Added
+- 新增插件全链路数据流分析文档（doc/data_flow_analysis.md），涵盖 MVC 架构、连接池、异步处理、Pool 去重、Montoya SDK 集成等技术原理
+
+### Changed
+- 同步 pom.xml 版本号至 2.22.0
+- 同步 AboutPanel 版本号至 2.22.0
+- 同步 ReportData pluginVersion 至 2.22.0
+
 ## [2.21.0] - 2026-05-30
 
 ### Added
