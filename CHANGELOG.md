@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.1] - 2026-06-19
+
+### Fixed
+- 修复 Content-Length 不一致导致 DB 与 UI 数据不同步的问题（BUG-006）：统一在发送前修正 Content-Length，使 DB 与 UI 使用同一份修正后的字节
+- 修复响应头/体提取时 UTF-8 多字节字符导致字符索引与字节偏移错位的问题（BUG-007）：ReplayEngine.extractResponseHeaders/extractResponseBody 改为字节级查找分隔符
+- 修复 GarbageCollectorService 引用计数统计遗漏 api_hash、resp_header_hash、resp_body_hash 的问题，避免 GC 误删仍被引用的池条目
+- 修复 PoolManager 缓存命中但池条目已被 GC 回收时的空指针异常，增加 affected == 0 的守卫处理
+- 修复 ContentReconstructor 中缓存过期条目未正确释放引用的问题
+
+### Changed
+- 同步 pom.xml 版本号至 2.22.1
+- 同步 AboutPanel 版本号至 2.22.1
+- 同步 ReportData pluginVersion 至 2.22.1
+
 ## [2.22.0] - 2026-06-16
 
 ### Added

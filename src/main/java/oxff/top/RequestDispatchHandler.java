@@ -7,6 +7,7 @@ import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
 import oxff.top.db.history.HistoryWriteDAO;
 import oxff.top.http.HttpRequestHelper;
+import oxff.top.http.RequestDataHelper;
 import oxff.top.http.RequestManager;
 import oxff.top.http.RequestResponseRecord;
 import oxff.top.privilege.ReplayEngine;
@@ -196,9 +197,18 @@ public class RequestDispatchHandler {
                 return;
             }
 
+            // 统一在发送前修正 Content-Length，使 DB 与 UI 使用同一份修正后的字节（BUG-006）
+            // fixContentLength 为幂等操作，RequestManager 内部的重复调用不会产生副作用
+            final byte[] finalRequestBytes;
+            if (currentHttpService != null) {
+                finalRequestBytes = RequestDataHelper.fixContentLength(requestBytes, currentHttpService);
+            } else {
+                finalRequestBytes = requestBytes;
+            }
+
             // 权限测试模式：调用ReplayEngine
             if (privilegeTestMode) {
-                sendPrivilegeTestRequest(requestBytes);
+                sendPrivilegeTestRequest(finalRequestBytes);
                 return;
             }
 
@@ -211,12 +221,12 @@ public class RequestDispatchHandler {
                 setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
             });
 
-            requestManager.makeHttpRequestAsync(requestBytes, timeout, currentRequestId, currentHttpService, new RequestManager.RequestCallback() {
+            requestManager.makeHttpRequestAsync(finalRequestBytes, timeout, currentRequestId, currentHttpService, new RequestManager.RequestCallback() {
                 @Override
                 public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                     SwingUtilities.invokeLater(() -> {
                         try {
-                            handleResponseSuccess(requestBytes, response, requestTimeMs, responseTimeMs, durationMs);
+                            handleResponseSuccess(finalRequestBytes, response, requestTimeMs, responseTimeMs, durationMs);
                         } catch (Exception ex) {
                             BurpExtender.printError("[!] 处理响应时发生异常: " + ex.getMessage());
                             JOptionPane.showMessageDialog(mainPanel,
@@ -233,7 +243,7 @@ public class RequestDispatchHandler {
                 public void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
                     SwingUtilities.invokeLater(() -> {
                         try {
-                            handleResponseFailure(requestBytes, errorMessage, requestTimeMs, responseTimeMs, durationMs);
+                            handleResponseFailure(finalRequestBytes, errorMessage, requestTimeMs, responseTimeMs, durationMs);
                             BurpExtender.printError("[!] 请求失败: " + errorMessage);
                             JOptionPane.showMessageDialog(mainPanel,
                                 "请求失败或超时，未收到响应数据: " + errorMessage,
@@ -263,7 +273,6 @@ public class RequestDispatchHandler {
      */
     public void handleResponseSuccess(byte[] requestBytes, byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
         if (response != null && response.length > 0) {
-            statusPanel.updateStatus(true, response.length, requestTimeMs, responseTimeMs, durationMs);
             try {
                 responsePanel.setResponse(response);
 
@@ -278,6 +287,10 @@ public class RequestDispatchHandler {
                 String method = requestInfo.method();
                 String url = HttpRequestHelper.extractUrlFromRequest(requestBytes, requestInfo, currentHttpService);
                 int statusCode = responseInfo.statusCode();
+
+                // 状态栏使用实际状态码判断成功/失败（BUG-005：原硬编码为 true）
+                boolean success = statusCode >= 100 && statusCode < 400;
+                statusPanel.updateStatus(success, response.length, requestTimeMs, responseTimeMs, durationMs);
 
                 if (currentRequestId >= 0) {
                     String protocol = "http";

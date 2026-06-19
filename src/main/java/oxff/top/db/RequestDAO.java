@@ -501,6 +501,9 @@ public class RequestDAO {
         try (Connection conn = dbManager.getConnection()) {
             conn.setAutoCommit(false);
             try {
+                // 读取旧的响应基线引用，以便覆盖后释放
+                String[] oldRespRefs = readOldResponseRefs(conn, requestId);
+
                 // 分割响应
                 SplitResult split = poolManager.getSplitter().splitResponse(responseData);
                 String respHeaderHash = poolManager.ensureHeader(conn, split.getHeaders());
@@ -526,6 +529,8 @@ public class RequestDAO {
 
                     int affected = pstmt.executeUpdate();
                     if (affected > 0) {
+                        // 释放旧的响应基线引用
+                        releaseOldResponseRefs(conn, oldRespRefs);
                         conn.commit();
                         return true;
                     }
@@ -690,10 +695,42 @@ public class RequestDAO {
 
     /**
      * 读取请求记录的 hash 引用
-     * 返回 [domainHash, pathHash, queryHash, reqHeaderHash, reqBodyHash, reqBodyStorage, apiHash]
+     * 返回 [domainHash, pathHash, queryHash, reqHeaderHash, reqBodyHash, reqBodyStorage, apiHash,
+     *        respHeaderHash, respBodyHash, respBodyStorage]
      */
+    /**
+     * 读取旧的响应基线引用，用于覆盖时释放
+     * 返回 [respHeaderHash, respBodyHash, respBodyStorage]
+     */
+    private String[] readOldResponseRefs(Connection conn, int requestId) throws SQLException {
+        String sql = "SELECT resp_header_hash, resp_body_hash, resp_body_storage FROM requests WHERE id = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, requestId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return new String[]{
+                            rs.getString("resp_header_hash"),
+                            rs.getString("resp_body_hash"),
+                            rs.getString("resp_body_storage")
+                    };
+                }
+            }
+        }
+        return new String[3];
+    }
+
+    /**
+     * 释放旧的响应基线引用
+     */
+    private void releaseOldResponseRefs(Connection conn, String[] refs) throws SQLException {
+        if (refs == null) return;
+        poolManager.releaseHeader(conn, refs[0]);            // resp_header_hash
+        poolManager.releaseBody(conn, refs[1], refs[2]);    // resp_body_hash + storage
+    }
+
     private String[] readRequestHashRefs(Connection conn, int requestId) throws SQLException {
-        String sql = "SELECT domain_hash, path_hash, query_hash, req_header_hash, req_body_hash, req_body_storage, api_hash FROM requests WHERE id = ?";
+        String sql = "SELECT domain_hash, path_hash, query_hash, req_header_hash, req_body_hash, req_body_storage, api_hash, " +
+                     "resp_header_hash, resp_body_hash, resp_body_storage FROM requests WHERE id = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, requestId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -705,12 +742,15 @@ public class RequestDAO {
                             rs.getString("req_header_hash"),
                             rs.getString("req_body_hash"),
                             rs.getString("req_body_storage"),
-                            rs.getString("api_hash")
+                            rs.getString("api_hash"),
+                            rs.getString("resp_header_hash"),
+                            rs.getString("resp_body_hash"),
+                            rs.getString("resp_body_storage")
                     };
                 }
             }
         }
-        return new String[7];
+        return new String[10];
     }
 
     /**
@@ -732,5 +772,9 @@ public class RequestDAO {
 
         // 释放 API 引用
         poolManager.releaseString(conn, refs[6]); // api_hash
+
+        // 释放响应基线引用
+        poolManager.releaseHeader(conn, refs[7]);                    // resp_header_hash
+        poolManager.releaseBody(conn, refs[8], refs[9]);            // resp_body_hash + storage
     }
 }

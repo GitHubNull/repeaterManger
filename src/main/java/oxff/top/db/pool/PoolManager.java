@@ -59,8 +59,11 @@ public class PoolManager {
         // 检查缓存
         if (existenceCache.containsKey("string:" + hash)) {
             // 已存在，仅增加 ref_count
-            incrementRefCount(conn, "string_pool", hash);
-            return hash;
+            if (incrementRefCount(conn, "string_pool", hash)) {
+                return hash;
+            }
+            // 缓存过期（条目已被 GC 回收），清除缓存并继续执行完整 INSERT
+            existenceCache.remove("string:" + hash);
         }
 
         // INSERT OR INCREMENT
@@ -144,8 +147,11 @@ public class PoolManager {
 
         // 检查缓存
         if (existenceCache.containsKey("header:" + hash)) {
-            incrementRefCount(conn, "header_pool", hash);
-            return hash;
+            if (incrementRefCount(conn, "header_pool", hash)) {
+                return hash;
+            }
+            // 缓存过期（条目已被 GC 回收），清除缓存并继续执行完整 INSERT
+            existenceCache.remove("header:" + hash);
         }
 
         String sql = "INSERT INTO header_pool (hash, data, size, ref_count) VALUES (?, ?, ?, 1) " +
@@ -196,15 +202,13 @@ public class PoolManager {
         switch (route) {
             case INLINE:
                 ensureBodyInline(conn, hash, body);
-                break;
+                return new String[]{hash, BodyStorageRoute.INLINE.getDbValue()};
             case FILE:
-                ensureBodyFile(conn, hash, body);
-                break;
+                BodyStorageRoute actualRoute = ensureBodyFile(conn, hash, body);
+                return new String[]{hash, actualRoute.getDbValue()};
             default:
                 return new String[]{null, BodyStorageRoute.NONE.getDbValue()};
         }
-
-        return new String[]{hash, route.getDbValue()};
     }
 
     /**
@@ -266,8 +270,11 @@ public class PoolManager {
 
     private void ensureBodyInline(Connection conn, String hash, byte[] body) throws SQLException {
         if (existenceCache.containsKey("body:" + hash)) {
-            incrementRefCount(conn, "body_pool", hash);
-            return;
+            if (incrementRefCount(conn, "body_pool", hash)) {
+                return;
+            }
+            // 缓存过期（条目已被 GC 回收），清除缓存并继续执行完整 INSERT
+            existenceCache.remove("body:" + hash);
         }
 
         String sql = "INSERT INTO body_pool (hash, data, size, ref_count, is_binary) VALUES (?, ?, ?, 1, 0) " +
@@ -283,19 +290,27 @@ public class PoolManager {
         trimExistenceCacheIfNeeded();
     }
 
-    private void ensureBodyFile(Connection conn, String hash, byte[] body) throws SQLException {
-        // 先写入文件
+    /**
+     * 确保 Body 数据以文件方式存储，增加 ref_count
+     * @return 实际存储路由（FILE 成功，INLINE 表示文件写入失败已回退）
+     */
+    private BodyStorageRoute ensureBodyFile(Connection conn, String hash, byte[] body) throws SQLException {
+        // 先检查缓存，避免冗余文件写入（BUG-008）
+        if (existenceCache.containsKey("file:" + hash)) {
+            if (incrementRefCount(conn, "file_pool", hash)) {
+                return BodyStorageRoute.FILE;
+            }
+            // 缓存过期（条目已被 GC 回收），清除缓存并继续
+            existenceCache.remove("file:" + hash);
+        }
+
+        // 写入文件
         String relativePath = fileStorageManager.writeBodyFile(body, hash);
         if (relativePath == null) {
             BurpExtender.printError("[!] 写入 Body 文件失败，hash: " + hash);
             // 回退到行内存储
             ensureBodyInline(conn, hash, body);
-            return;
-        }
-
-        if (existenceCache.containsKey("file:" + hash)) {
-            incrementRefCount(conn, "file_pool", hash);
-            return;
+            return BodyStorageRoute.INLINE;
         }
 
         String sql = "INSERT INTO file_pool (hash, relative_path, size, ref_count, is_binary) VALUES (?, ?, ?, 1, 1) " +
@@ -309,16 +324,24 @@ public class PoolManager {
 
         existenceCache.put("file:" + hash, true);
         trimExistenceCacheIfNeeded();
+        return BodyStorageRoute.FILE;
     }
 
     /**
      * 增加池条目的 ref_count
+     * @return true 如果成功增加；false 如果条目不存在（可能已被 GC 回收）
      */
-    private void incrementRefCount(Connection conn, String tableName, String hash) throws SQLException {
+    private boolean incrementRefCount(Connection conn, String tableName, String hash) throws SQLException {
         String sql = "UPDATE " + tableName + " SET ref_count = ref_count + 1 WHERE hash = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, hash);
-            pstmt.executeUpdate();
+            int affected = pstmt.executeUpdate();
+            if (affected == 0) {
+                // 条目已被 GC 回收，缓存过期
+                BurpExtender.printOutput("[*] 缓存命中但池条目不存在，可能已被 GC 回收: " + tableName + "/" + hash);
+                return false;
+            }
+            return true;
         }
     }
 

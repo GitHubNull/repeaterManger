@@ -407,51 +407,62 @@ public class ReplayEngine {
 
     /**
      * 从响应字节数组中提取响应头字符串
+     * 使用字节级查找分隔符，避免 UTF-8 多字节字符导致字符索引与字节偏移错位（BUG-007）
      */
     private String extractResponseHeaders(byte[] responseBytes) {
         if (responseBytes == null || responseBytes.length == 0) return "";
         try {
-            String responseStr = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
-            int bodySeparator = responseStr.indexOf("\r\n\r\n");
-            if (bodySeparator > 0) {
-                return responseStr.substring(0, bodySeparator);
+            int separatorPos = findHeaderBodySeparator(responseBytes);
+            if (separatorPos < 0) {
+                // 未找到分隔符，返回全部内容
+                return new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
             }
-            bodySeparator = responseStr.indexOf("\n\n");
-            if (bodySeparator > 0) {
-                return responseStr.substring(0, bodySeparator);
-            }
-            return responseStr;
+            return new String(responseBytes, 0, separatorPos, java.nio.charset.StandardCharsets.UTF_8);
         } catch (Exception e) {
             return "";
         }
     }
 
     /**
+     * 字节级查找 header/body 分隔符
+     * @return 分隔符起始位置的字节偏移，未找到返回 -1
+     */
+    private static int findHeaderBodySeparator(byte[] data) {
+        // 优先查找 \r\n\r\n
+        for (int i = 0; i < data.length - 3; i++) {
+            if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
+                return i;
+            }
+        }
+        // 回退查找 \n\n
+        for (int i = 0; i < data.length - 1; i++) {
+            if (data[i] == '\n' && data[i + 1] == '\n') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * 从响应字节数组中提取纯响应体（不含响应头）
      * 相似度计算应仅基于响应体内容，排除响应头的影响
+     * 使用字节级查找分隔符，避免 UTF-8 多字节字符导致字符索引与字节偏移错位（BUG-007）
      */
     private byte[] extractResponseBody(byte[] responseBytes) {
         if (responseBytes == null || responseBytes.length == 0) return new byte[0];
         try {
-            String responseStr = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
-            int bodySeparator = responseStr.indexOf("\r\n\r\n");
-            if (bodySeparator > 0) {
-                int bodyStart = bodySeparator + 4;
-                if (bodyStart < responseBytes.length) {
-                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
-                }
-                return new byte[0];
+            int separatorPos = findHeaderBodySeparator(responseBytes);
+            if (separatorPos < 0) {
+                // 无法分离头和体时，返回完整内容作为fallback
+                return responseBytes;
             }
-            bodySeparator = responseStr.indexOf("\n\n");
-            if (bodySeparator > 0) {
-                int bodyStart = bodySeparator + 2;
-                if (bodyStart < responseBytes.length) {
-                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
-                }
-                return new byte[0];
+            // 计算分隔符长度（\r\n\r\n=4 或 \n\n=2）
+            int separatorLen = (responseBytes[separatorPos] == '\r') ? 4 : 2;
+            int bodyStart = separatorPos + separatorLen;
+            if (bodyStart < responseBytes.length) {
+                return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
             }
-            // 无法分离头和体时，返回完整内容作为fallback
-            return responseBytes;
+            return new byte[0];
         } catch (Exception e) {
             return responseBytes;
         }

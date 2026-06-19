@@ -14,7 +14,7 @@ public class ReportData {
 
     private String title = "Privilege Escalation Test Report";
     private Date generatedAt = new Date();
-    private String pluginVersion = "2.22.0";
+    private String pluginVersion = "2.22.1";
 
     private ReportSummary summary;
     private List<EndpointSection> endpoints = new ArrayList<>();

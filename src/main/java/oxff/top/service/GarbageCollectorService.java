@@ -327,14 +327,16 @@ public class GarbageCollectorService {
     }
 
     private void recalculateStringPoolRefCount(Connection conn) throws SQLException {
-        // 统计引用次数
+        // 统计引用次数（含 api_hash：来自 requests 和 history 两个表）
         String countSql = "SELECT hash, COUNT(*) as cnt FROM (" +
                 "SELECT domain_hash AS hash FROM requests WHERE domain_hash IS NOT NULL " +
                 "UNION ALL SELECT path_hash FROM requests WHERE path_hash IS NOT NULL " +
                 "UNION ALL SELECT query_hash FROM requests WHERE query_hash IS NOT NULL " +
+                "UNION ALL SELECT api_hash FROM requests WHERE api_hash IS NOT NULL " +
                 "UNION ALL SELECT domain_hash FROM history WHERE domain_hash IS NOT NULL " +
                 "UNION ALL SELECT path_hash FROM history WHERE path_hash IS NOT NULL " +
-                "UNION ALL SELECT query_hash FROM history WHERE query_hash IS NOT NULL" +
+                "UNION ALL SELECT query_hash FROM history WHERE query_hash IS NOT NULL " +
+                "UNION ALL SELECT api_hash FROM history WHERE api_hash IS NOT NULL " +
                 ") GROUP BY hash";
 
         // 重置所有 ref_count 为 0
@@ -359,6 +361,7 @@ public class GarbageCollectorService {
     private void recalculateHeaderPoolRefCount(Connection conn) throws SQLException {
         String countSql = "SELECT hash, COUNT(*) as cnt FROM (" +
                 "SELECT req_header_hash AS hash FROM requests WHERE req_header_hash IS NOT NULL " +
+                "UNION ALL SELECT resp_header_hash FROM requests WHERE resp_header_hash IS NOT NULL " +
                 "UNION ALL SELECT req_header_hash FROM history WHERE req_header_hash IS NOT NULL " +
                 "UNION ALL SELECT resp_header_hash FROM history WHERE resp_header_hash IS NOT NULL" +
                 ") GROUP BY hash";
@@ -383,6 +386,7 @@ public class GarbageCollectorService {
     private void recalculateBodyPoolRefCount(Connection conn) throws SQLException {
         String countSql = "SELECT hash, COUNT(*) as cnt FROM (" +
                 "SELECT req_body_hash AS hash FROM requests WHERE req_body_hash IS NOT NULL AND req_body_storage = 'inline' " +
+                "UNION ALL SELECT resp_body_hash FROM requests WHERE resp_body_hash IS NOT NULL AND resp_body_storage = 'inline' " +
                 "UNION ALL SELECT req_body_hash FROM history WHERE req_body_hash IS NOT NULL AND req_body_storage = 'inline' " +
                 "UNION ALL SELECT resp_body_hash FROM history WHERE resp_body_hash IS NOT NULL AND resp_body_storage = 'inline'" +
                 ") GROUP BY hash";
@@ -407,6 +411,7 @@ public class GarbageCollectorService {
     private void recalculateFilePoolRefCount(Connection conn) throws SQLException {
         String countSql = "SELECT hash, COUNT(*) as cnt FROM (" +
                 "SELECT req_body_hash AS hash FROM requests WHERE req_body_hash IS NOT NULL AND req_body_storage = 'file' " +
+                "UNION ALL SELECT resp_body_hash FROM requests WHERE resp_body_hash IS NOT NULL AND resp_body_storage = 'file' " +
                 "UNION ALL SELECT req_body_hash FROM history WHERE req_body_hash IS NOT NULL AND req_body_storage = 'file' " +
                 "UNION ALL SELECT resp_body_hash FROM history WHERE resp_body_hash IS NOT NULL AND resp_body_storage = 'file'" +
                 ") GROUP BY hash";

@@ -130,6 +130,7 @@ public class ContentReconstructor {
 
     /**
      * 从文件读取主体数据
+     * 防御性兑底：如果 file_pool 找不到，尝试从 body_pool 回退读取（BUG-001 场景）
      */
     private byte[] readBodyFromFile(Connection conn, String bodyHash) throws SQLException {
         String sql = "SELECT relative_path FROM file_pool WHERE hash = ?";
@@ -146,7 +147,14 @@ public class ContentReconstructor {
                 }
             }
         }
-        return null;
+
+        // 防御性兑底：file_pool 中找不到该 hash，尝试从 body_pool 读取
+        // （历史数据可能因 BUG-001 的路由标记不一致而误存为 file 路由）
+        byte[] fallbackData = readBodyFromPool(conn, bodyHash);
+        if (fallbackData != null) {
+            BurpExtender.printOutput("[*] 路由标记为 file 但 file_pool 未找到，从 body_pool 回退读取成功: " + bodyHash);
+        }
+        return fallbackData;
     }
 
     /**
