@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.2] - 2026-06-21
+
+### Fixed
+- 修复 HTTP/2 请求重放时降级为 HTTP/1.1 的问题：新增 httpVersionMap 跟踪每个请求的原始协议版本，重放时根据协议版本选择正确的构建方式
+- 修复 HTTP/2 请求缺少伪头部（:method, :path, :scheme, :authority）导致服务端拒绝的问题：RequestManager.buildRequestToSend() 新增 HTTP/2 专用构建逻辑，构造伪头部并过滤 HTTP/1 专有头部（Host, Connection 等）
+- 修复 RequestPanelSender 发送 HTTP/2 请求时未构造伪头部的问题：检测原始请求协议版本，HTTP/2 时使用 http2Request 重建请求
+- 修复 ReplayEngine 重放时未传递 HTTP/2 标志的问题：replay 方法新增 useHttp2 参数，确保权限测试模式下的 HTTP/2 请求正确重放
+
+### Changed
+- 同步 pom.xml 版本号至 2.22.2
+
 ## [2.22.1] - 2026-06-19
 
 ### Fixed

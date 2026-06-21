@@ -35,6 +35,9 @@ public class ReplayEngine {
     /** 当前批次已处理的API集合（用于去重，线程安全） */
     private final Set<String> processedApis = ConcurrentHashMap.newKeySet();
 
+    /** 当前重放是否使用HTTP/2（由调用方传入，默认false） */
+    private volatile boolean useHttp2 = false;
+
     private ReplayEngine() {
         this.executor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "PrivilegeTest-Replay");
@@ -82,7 +85,8 @@ public class ReplayEngine {
      * @return true 如果请求因去重被跳过（未执行重放），false 如果正常执行了重放
      */
     public boolean replay(byte[] originalRequest, HttpService httpService, int requestId,
-                       RequestManager requestManager, ReplayCallback callback) {
+                       RequestManager requestManager, boolean useHttp2, ReplayCallback callback) {
+        this.useHttp2 = useHttp2;
         SessionManager sessionManager = SessionManager.getInstance();
         List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
 
@@ -319,7 +323,7 @@ public class ReplayEngine {
         Object lock = new Object();
         boolean[] done = {false};
 
-        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService,
+        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService, this.useHttp2,
                 new RequestManager.RequestCallback() {
                     @Override
                     public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {

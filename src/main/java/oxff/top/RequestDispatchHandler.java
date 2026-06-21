@@ -81,6 +81,11 @@ public class RequestDispatchHandler {
     // ConcurrentHashMap: 后台线程和EDT线程并发访问
     private final Map<Integer, HttpService> httpServiceMap = new ConcurrentHashMap<>();
 
+    // 请求ID -> 是否使用HTTP/2映射: 跟踪每个请求的原始协议版本
+    // 避免重放HTTP/2请求时降级为HTTP/1.1
+    // ConcurrentHashMap: 后台线程和EDT线程并发访问
+    private final Map<Integer, Boolean> httpVersionMap = new ConcurrentHashMap<>();
+
     /**
      * 创建请求调度处理器
      */
@@ -183,6 +188,25 @@ public class RequestDispatchHandler {
     }
 
     /**
+     * 保存请求ID对应的HTTP协议版本标志
+     * @param requestId 请求ID
+     * @param isHttp2 是否为HTTP/2协议
+     */
+    public void saveHttpVersion(int requestId, boolean isHttp2) {
+        if (requestId >= 0) {
+            httpVersionMap.put(requestId, isHttp2);
+        }
+    }
+
+    /**
+     * 获取请求ID对应的HTTP协议版本标志
+     * @return true表示使用HTTP/2，false或不存表示HTTP/1.1
+     */
+    public boolean isHttp2(int requestId) {
+        return httpVersionMap.getOrDefault(requestId, false);
+    }
+
+    /**
      * 发送当前请求
      * 如果处于权限测试模式，调用ReplayEngine进行多用户重放
      */
@@ -221,7 +245,7 @@ public class RequestDispatchHandler {
                 setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
             });
 
-            requestManager.makeHttpRequestAsync(finalRequestBytes, timeout, currentRequestId, currentHttpService, new RequestManager.RequestCallback() {
+            requestManager.makeHttpRequestAsync(finalRequestBytes, timeout, currentRequestId, currentHttpService, isHttp2(currentRequestId), new RequestManager.RequestCallback() {
                 @Override
                 public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                     SwingUtilities.invokeLater(() -> {
@@ -607,7 +631,7 @@ public class RequestDispatchHandler {
         });
 
         ReplayEngine replayEngine = ReplayEngine.getInstance();
-        boolean deduped = replayEngine.replay(requestBytes, httpService, requestId, requestManager,
+        boolean deduped = replayEngine.replay(requestBytes, httpService, requestId, requestManager, isHttp2(requestId),
                 new ReplayEngine.ReplayCallback() {
                     @Override
                     public void onReplayComplete(RequestResponseRecord record, boolean isFirst) {
@@ -737,7 +761,7 @@ public class RequestDispatchHandler {
                     SwingUtilities.invokeLater(() -> responsePanel.clear());
 
                     ReplayEngine replayEngine = ReplayEngine.getInstance();
-                    boolean deduped = replayEngine.replay(requestBytes, httpService, requestId, requestManager,
+                    boolean deduped = replayEngine.replay(requestBytes, httpService, requestId, requestManager, isHttp2(requestId),
                             new ReplayEngine.ReplayCallback() {
                                 @Override
                                 public void onReplayComplete(RequestResponseRecord rec, boolean isFirst) {
@@ -850,7 +874,7 @@ public class RequestDispatchHandler {
                     java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
 
                     requestManager.makeHttpRequestAsync(requestBytes, requestPanel.getTimeout(),
-                            requestId, httpService, new RequestManager.RequestCallback() {
+                            requestId, httpService, isHttp2(requestId), new RequestManager.RequestCallback() {
                                 @Override
                                 public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                                     SwingUtilities.invokeLater(() -> {

@@ -602,6 +602,13 @@ public class RepeaterManagerUI {
                 // 将HttpService保存到持久化映射，避免切换请求时丢失端口信息
                 dispatchHandler.saveHttpService(dbId, httpService);
 
+                // 保存原始HTTP协议版本（HTTP/2或HTTP/1.1），用于重放时保持协议不变
+                boolean isHttp2 = "HTTP/2".equals(httpRequest.httpVersion());
+                dispatchHandler.saveHttpVersion(dbId, isHttp2);
+                if (isHttp2) {
+                    BurpExtender.printOutput("[+] 检测到 HTTP/2 请求，已记录协议版本，重放时将保持 HTTP/2");
+                }
+
                 // 保存原始响应基线（如果原始请求有响应数据）
                 // 当从 Proxy History / HTTP History 等处发送请求到插件时，原始响应已存在，
                 // 保存为基线以便点击请求时显示原始响应，而不是空白

@@ -55,8 +55,10 @@ public class RequestPanelSender {
             // 使用Montoya API解析请求以获取URL
             HttpRequest httpRequest = HttpRequest.httpRequest(ByteArray.byteArray(request));
             url = httpRequest.url();
+            // 检测原始请求是否为 HTTP/2
+            final boolean useHttp2 = "HTTP/2".equals(httpRequest.httpVersion());
 
-            BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (超时时间: " + requestPanel.getTimeout() + "秒)");
+            BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (协议: " + (useHttp2 ? "HTTP/2" : "HTTP/1.1") + ", 超时时间: " + requestPanel.getTimeout() + "秒)");
 
             sendButton.setEnabled(false);
             sendButton.setText("发送中...");
@@ -76,7 +78,37 @@ public class RequestPanelSender {
 
                     byte[] fixedRequest = RequestDataHelper.fixContentLength(finalRequest, httpService);
 
-                    HttpRequest requestToSend = HttpRequest.httpRequest(httpService, ByteArray.byteArray(fixedRequest));
+                    // 根据原始协议版本选择构建方式：HTTP/2 使用 http2Request（含伪头部）
+                    HttpRequest requestToSend;
+                    if (useHttp2) {
+                        HttpRequest tempRequest = HttpRequest.httpRequest(httpService, ByteArray.byteArray(fixedRequest));
+
+                        // 构造 HTTP/2 伪头部
+                        String scheme = useHttps ? "https" : "http";
+                        String authority = host;
+                        if ((useHttps && port != 443) || (!useHttps && port != 80)) {
+                            authority = host + ":" + port;
+                        }
+
+                        java.util.List<burp.api.montoya.http.message.HttpHeader> http2Headers = new java.util.ArrayList<>();
+                        http2Headers.add(burp.api.montoya.http.message.HttpHeader.httpHeader(":method", tempRequest.method()));
+                        http2Headers.add(burp.api.montoya.http.message.HttpHeader.httpHeader(":path", tempRequest.path()));
+                        http2Headers.add(burp.api.montoya.http.message.HttpHeader.httpHeader(":scheme", scheme));
+                        http2Headers.add(burp.api.montoya.http.message.HttpHeader.httpHeader(":authority", authority));
+
+                        // 添加普通头部（跳过 HTTP/1 专有头部）
+                        java.util.Set<String> skipHeaders = new java.util.HashSet<>(java.util.Arrays.asList(
+                                "host", "connection", "transfer-encoding", "upgrade", "keep-alive", "proxy-connection"));
+                        for (burp.api.montoya.http.message.HttpHeader header : tempRequest.headers()) {
+                            if (!skipHeaders.contains(header.name().toLowerCase())) {
+                                http2Headers.add(header);
+                            }
+                        }
+
+                        requestToSend = HttpRequest.http2Request(httpService, http2Headers, tempRequest.body());
+                    } else {
+                        requestToSend = HttpRequest.httpRequest(httpService, ByteArray.byteArray(fixedRequest));
+                    }
                     HttpRequestResponse response = api.http().sendRequest(requestToSend);
 
                     byte[] responseData = response.response().toByteArray().getBytes();

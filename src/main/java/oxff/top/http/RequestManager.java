@@ -21,7 +21,12 @@ import java.net.HttpURLConnection;
 import java.net.Proxy;
 import java.net.URL;
 import java.security.cert.X509Certificate;
+import burp.api.montoya.http.message.HttpHeader;
+
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -76,7 +81,7 @@ public class RequestManager {
      * @return 响应字节数组，失败返回null
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds) {
-        return makeHttpRequest(requestBytes, timeoutSeconds, -1, null);
+        return makeHttpRequest(requestBytes, timeoutSeconds, -1, null, false);
     }
     
     /**
@@ -88,7 +93,7 @@ public class RequestManager {
      * @return 响应字节数组，失败返回null
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId) {
-        return makeHttpRequest(requestBytes, timeoutSeconds, requestId, null);
+        return makeHttpRequest(requestBytes, timeoutSeconds, requestId, null, false);
     }
     
     /**
@@ -101,6 +106,20 @@ public class RequestManager {
      * @return 响应字节数组，失败返回null
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId, HttpService httpService) {
+        return makeHttpRequest(requestBytes, timeoutSeconds, requestId, httpService, false);
+    }
+
+    /**
+     * 发送HTTP请求并返回响应（带历史记录、HTTP服务信息和HTTP/2标志）
+     *
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @param httpService 原始HTTP服务信息（包含正确的协议、主机、端口），可为null
+     * @param useHttp2 是否使用HTTP/2协议发送请求
+     * @return 响应字节数组，失败返回null
+     */
+    public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId, HttpService httpService, boolean useHttp2) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             return null;
@@ -117,8 +136,8 @@ public class RequestManager {
         boolean isSecure = service.secure();
         
         BurpExtender.printOutput(
-            String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)", 
-                isSecure ? "https" : "http", host, port, timeoutSeconds));
+            String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)", 
+                isSecure ? "https" : "http", host, port, useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
         
         // 记录请求开始时间
         long startTime = System.currentTimeMillis();
@@ -156,7 +175,8 @@ public class RequestManager {
                 byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
 
                 // 单次发送，不重试
-                HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
+                // 根据原始协议版本选择构建方式：HTTP/2 使用 http2Request，否则使用 httpRequest
+                HttpRequest requestToSend = buildRequestToSend(service, fixedBytes, useHttp2);
                 HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
 
                 long responseTime = System.currentTimeMillis() - startTime;
@@ -239,7 +259,7 @@ public class RequestManager {
      * @param callback 请求回调接口
      */
     public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, RequestCallback callback) {
-        makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, null, callback);
+        makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, null, false, callback);
     }
     
     /**
@@ -251,7 +271,7 @@ public class RequestManager {
      * @param callback 请求回调接口
      */
     public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, RequestCallback callback) {
-        makeHttpRequestAsync(requestBytes, timeoutSeconds, requestId, null, callback);
+        makeHttpRequestAsync(requestBytes, timeoutSeconds, requestId, null, false, callback);
     }
     
     /**
@@ -265,6 +285,21 @@ public class RequestManager {
      */
     public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, 
                                       HttpService httpService, RequestCallback callback) {
+        makeHttpRequestAsync(requestBytes, timeoutSeconds, requestId, httpService, false, callback);
+    }
+
+    /**
+     * 异步发送HTTP请求（带历史记录、HTTP服务信息和HTTP/2标志）
+     *
+     * @param requestBytes 原始请求字节数组
+     * @param timeoutSeconds 超时时间(秒)
+     * @param requestId 关联的请求ID，用于历史记录
+     * @param httpService 原始HTTP服务信息（包含正确的协议、主机、端口），可为null
+     * @param useHttp2 是否使用HTTP/2协议发送请求
+     * @param callback 请求回调接口
+     */
+    public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, 
+                                      HttpService httpService, boolean useHttp2, RequestCallback callback) {
         if (requestBytes == null || requestBytes.length == 0) {
             BurpExtender.printError("[!] 请求数据为空");
             if (callback != null) {
@@ -290,8 +325,8 @@ public class RequestManager {
                 boolean isSecure = service.secure();
                 
                 BurpExtender.printOutput(
-                    String.format("[*] 正在发送请求到 %s://%s:%d (超时时间: %d秒)",
-                        isSecure ? "https" : "http", host, port, timeoutSeconds));
+                    String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)",
+                        isSecure ? "https" : "http", host, port, useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
 
                 // 检查是否启用代理模式
                 ProxyConfig proxyConfig = ProxyConfig.getInstance();
@@ -332,7 +367,8 @@ public class RequestManager {
                 byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
 
                 // 单次发送，不重试，避免请求耗时翻倍
-                HttpRequest requestToSend = HttpRequest.httpRequest(service, ByteArray.byteArray(fixedBytes));
+                // 根据原始协议版本选择构建方式：HTTP/2 使用 http2Request，否则使用 httpRequest
+                HttpRequest requestToSend = buildRequestToSend(service, fixedBytes, useHttp2);
                 HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
 
                 long responseTime = System.currentTimeMillis() - startTime;
@@ -420,6 +456,62 @@ public class RequestManager {
         });
     }
     
+    /**
+     * 根据协议版本构建要发送的HttpRequest
+     * HTTP/2请求使用 http2Request 构建，包含伪头部和独立的headers/body；
+     * HTTP/1请求使用 httpRequest 构建（现有逻辑）
+     *
+     * @param service HTTP服务信息（host/port/secure）
+     * @param requestBytes 请求数据字节数组
+     * @param useHttp2 是否使用HTTP/2协议
+     * @return 构建好的HttpRequest对象
+     */
+
+    /**
+     * HTTP/2 中不应出现的 HTTP/1 专有头部名称集合
+     * 这些头部在 HTTP/2 中被伪头部替代，需从 headers 列表中移除
+     */
+    private static final Set<String> HTTP1_EXCLUSIVE_HEADERS = new HashSet<>(Arrays.asList(
+            "host", "connection", "transfer-encoding", "upgrade", "keep-alive", "proxy-connection"));
+
+    private HttpRequest buildRequestToSend(HttpService service, byte[] requestBytes, boolean useHttp2) {
+        if (useHttp2) {
+            // HTTP/2: 先用 HTTP/1 解析出请求信息，再构造伪头部 + 普通头部，用 http2Request 重建
+            HttpRequest tempRequest = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+
+            // 提取 HTTP/2 伪头部所需的元数据
+            String method = tempRequest.method();
+            String pathWithQuery = tempRequest.path(); // 包含查询参数
+            String scheme = service.secure() ? "https" : "http";
+            String authority = service.host();
+            int port = service.port();
+            // 非标准端口需要附加到 authority 中
+            if ((service.secure() && port != 443) || (!service.secure() && port != 80)) {
+                authority = authority + ":" + port;
+            }
+
+            // 构建 HTTP/2 headers 列表：伪头部在前，然后是普通头部（移除 HTTP/1 专有头部）
+            List<HttpHeader> http2Headers = new ArrayList<>();
+            http2Headers.add(HttpHeader.httpHeader(":method", method));
+            http2Headers.add(HttpHeader.httpHeader(":path", pathWithQuery));
+            http2Headers.add(HttpHeader.httpHeader(":scheme", scheme));
+            http2Headers.add(HttpHeader.httpHeader(":authority", authority));
+
+            // 添加普通头部（跳过 HTTP/1 专有头部，如 Host 被 :authority 替代）
+            for (HttpHeader header : tempRequest.headers()) {
+                if (!HTTP1_EXCLUSIVE_HEADERS.contains(header.name().toLowerCase())) {
+                    http2Headers.add(header);
+                }
+            }
+
+            ByteArray body = tempRequest.body();
+            return HttpRequest.http2Request(service, http2Headers, body);
+        } else {
+            // HTTP/1: 使用标准 httpRequest 构建
+            return HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+        }
+    }
+
     /**
      * 构建HTTP服务对象
      * 优先使用原始HTTP服务信息（包含正确的协议），否则从请求数据中推断
