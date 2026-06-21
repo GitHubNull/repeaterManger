@@ -19,7 +19,12 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "构建成功！"
-echo "插件文件位于: $(pwd)/target/repeater-manager-2.0.0.jar"
+JAR_FILE=$(ls target/repeater-manager-*.jar 2>/dev/null | head -n 1)
+if [ -z "$JAR_FILE" ]; then
+    echo "构建失败：未找到目标JAR文件"
+    exit 1
+fi
+echo "插件文件位于: $(pwd)/$JAR_FILE"
 
 # 显示安装指南
 echo ""

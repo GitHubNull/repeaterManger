@@ -372,7 +372,7 @@ Data is persisted in session directories under `~/.burp/` (timestamp-named), eac
 1. **Java 17 compatibility**: Required by Montoya SDK; features like text blocks, sealed classes, records available
 2. **`burp` package must not be renamed**: Burp Suite requires the entry class in this package
 3. **Montoya SDK**: Use `burp.api.montoya.*` APIs exclusively; no legacy `burp.I*` interfaces
-4. **MontoyaApi access**: Prefer constructor injection; use `MontoyaApiHolder.getApi()` as fallback for static contexts (located in `oxff.top.api` package)
+4. **MontoyaApi access**: Prefer constructor injection; use `MontoyaApiHolder.getApi()` as fallback for static contexts (located in `org.oxff.repeater.api` package)
 5. **ByteArray wrapping**: Montoya API methods require `ByteArray.byteArray(bytes)` instead of raw `byte[]`
 6. **Swing threading**: All UI operations must run on EDT (`SwingUtilities.invokeLater`)
 7. **Database access**: Use DAO classes with `try-with-resources`; connections are auto-returned to pool via proxy

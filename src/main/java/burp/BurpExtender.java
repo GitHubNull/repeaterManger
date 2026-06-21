@@ -3,13 +3,13 @@ package burp;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.message.HttpRequestResponse;
-import oxff.top.RepeaterManagerUI;
-import oxff.top.api.MontoyaApiHolder;
-import oxff.top.controller.PopMenu;
-import oxff.top.logging.LogLevel;
-import oxff.top.logging.LogManager;
+import org.oxff.repeater.RepeaterManagerUI;
+import org.oxff.repeater.api.MontoyaApiHolder;
+import org.oxff.repeater.controller.PopMenu;
+import org.oxff.repeater.logging.LogLevel;
+import org.oxff.repeater.logging.LogManager;
 
-import oxff.top.http.RequestResponseRecord;
+import org.oxff.repeater.http.RequestResponseRecord;
 
 import javax.swing.SwingUtilities;
 import java.util.List;
@@ -43,7 +43,7 @@ public class BurpExtender implements BurpExtension {
 
             // 阶段3：初始化数据库（创建会话目录 + 数据库）
             logManager.info("[*] 正在初始化数据库...");
-            oxff.top.db.DatabaseManager dbManager = oxff.top.db.DatabaseManager.getInstance();
+            org.oxff.repeater.db.DatabaseManager dbManager = org.oxff.repeater.db.DatabaseManager.getInstance();
 
             if (dbManager.initialize()) {
                 logManager.success("[+] 数据库初始化成功");
@@ -63,7 +63,7 @@ public class BurpExtender implements BurpExtension {
 
             // 阶段4.5：加载全局API提取规则
             try {
-                oxff.top.api.GlobalRuleManager.getInstance().loadRules();
+                org.oxff.repeater.api.GlobalRuleManager.getInstance().loadRules();
                 logManager.success("[+] 全局API提取规则加载完成");
             } catch (Exception e) {
                 logManager.error("[!] 全局API提取规则加载失败: " + e.getMessage());
@@ -71,8 +71,8 @@ public class BurpExtender implements BurpExtension {
 
             // 阶段4.6：加载全局令牌位置
             try {
-                oxff.top.privilege.GlobalTokenLocationManager.getInstance().loadLocations();
-                oxff.top.privilege.SessionManager.getInstance().loadGlobalTokenLocations();
+                org.oxff.repeater.privilege.GlobalTokenLocationManager.getInstance().loadLocations();
+                org.oxff.repeater.privilege.SessionManager.getInstance().loadGlobalTokenLocations();
                 logManager.success("[+] 全局令牌位置加载完成");
             } catch (Exception e) {
                 logManager.error("[!] 全局令牌位置加载失败: " + e.getMessage());
@@ -80,7 +80,7 @@ public class BurpExtender implements BurpExtension {
 
             // 阶段4.7：加载全局去重配置
             try {
-                oxff.top.privilege.DedupConfigManager.getInstance().loadGlobalConfigs();
+                org.oxff.repeater.privilege.DedupConfigManager.getInstance().loadGlobalConfigs();
                 logManager.success("[+] 全局去重配置加载完成");
             } catch (Exception e) {
                 logManager.error("[!] 全局去重配置加载失败: " + e.getMessage());
@@ -106,7 +106,7 @@ public class BurpExtender implements BurpExtension {
 
                 // 2. 关闭数据库连接池和GC服务
                 try {
-                    oxff.top.db.DatabaseManager.getInstance().closeConnections();
+                    org.oxff.repeater.db.DatabaseManager.getInstance().closeConnections();
                 } catch (Exception e) {
                     logManager.printError("[!] 关闭数据库连接时异常: " + e.getMessage());
                 }
@@ -130,8 +130,8 @@ public class BurpExtender implements BurpExtension {
      */
     private void loadLogConfigEarly() {
         try {
-            oxff.top.config.DatabaseConfig config =
-                oxff.top.db.DatabaseManager.getInstance().getConfig();
+            org.oxff.repeater.config.DatabaseConfig config =
+                org.oxff.repeater.db.DatabaseManager.getInstance().getConfig();
 
             // 日志级别
             String levelStr = config.getProperty("log.level", "INFO");
@@ -150,7 +150,7 @@ public class BurpExtender implements BurpExtension {
             logManager.setBurpConsoleEnabled(burpEnabled);
 
             // 代理配置
-            oxff.top.http.ProxyConfig proxyConfig = oxff.top.http.ProxyConfig.getInstance();
+            org.oxff.repeater.http.ProxyConfig proxyConfig = org.oxff.repeater.http.ProxyConfig.getInstance();
             proxyConfig.loadFromConfig(config);
         } catch (Exception e) {
             // 配置加载失败不应阻止插件运行
@@ -164,8 +164,8 @@ public class BurpExtender implements BurpExtension {
      */
     private void loadLogConfigLate() {
         try {
-            oxff.top.config.DatabaseConfig config =
-                oxff.top.db.DatabaseManager.getInstance().getConfig();
+            org.oxff.repeater.config.DatabaseConfig config =
+                org.oxff.repeater.db.DatabaseManager.getInstance().getConfig();
 
             boolean fileEnabled = config.isLogFileEnabled();
             if (!fileEnabled) {
@@ -176,7 +176,7 @@ public class BurpExtender implements BurpExtension {
             String logDir = config.getLogFileDirectory();
             if (logDir == null || logDir.isEmpty()) {
                 // 使用会话目录的 logs/ 子目录
-                java.io.File sessionLogsDir = oxff.top.db.DatabaseManager.getInstance().getLogsDirectory();
+                java.io.File sessionLogsDir = org.oxff.repeater.db.DatabaseManager.getInstance().getLogsDirectory();
                 if (sessionLogsDir != null) {
                     logDir = sessionLogsDir.getAbsolutePath();
                 } else {

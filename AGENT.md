@@ -218,13 +218,13 @@ schema_meta (key, value)
 
 - **语言**: Java 17（可使用 Lambda、文本块、密封类、记录类等特性）
 - **API**: 使用 `burp.api.montoya.*` Montoya SDK，不使用旧的 `burp.I*` 接口
-- **包结构**: `burp` 包仅含入口点，业务代码在 `oxff.top` 下
+- **包结构**: `burp` 包仅含入口点，业务代码在 `org.oxff.repeater` 下
 - **日志**: 使用 `BurpExtender.printOutput()` / `printError()` 或 `LogManager` 方法
 - **数据库访问**: 通过 DAO 类（RequestDAO / HistoryDAO / ApiExtractionRuleDAO），使用 `try-with-resources` 管理连接
 - **UI 线程**: Swing UI 操作必须在 EDT 中执行（`SwingUtilities.invokeLater`）
 - **单例模式**: DatabaseManager / LogManager / HistoryRecordingService / ProxyConfig / GlobalRuleManager 等使用单例
 - **异步操作**: HTTP 请求发送、数据加载、历史记录保存、API 提取、越权测试均在后台线程执行
-- **MontoyaApi 访问**: 优先使用构造函数注入；静态上下文中使用 `MontoyaApiHolder.getApi()`（位于 `oxff.top.api` 包）
+- **MontoyaApi 访问**: 优先使用构造函数注入；静态上下文中使用 `MontoyaApiHolder.getApi()`（位于 `org.oxff.repeater.api` 包）
 - **ByteArray 封装**: Montoya API 方法需要 `ByteArray.byteArray(bytes)` 而非原始 `byte[]`
 - **API 规则 ID**: 全局规则使用负数 ID，项目规则使用正数 ID
 

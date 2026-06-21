@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.23.0] - 2026-06-22
+
+### Changed
+- 将项目包名从 `oxff.top` 重构为 `org.oxff.repeater`，统一包命名规范
+- 改进构建脚本（build.bat/build.sh）：使用通配符匹配 JAR 文件名，不再硬编码版本号
+- 同步 AGENT.md、CLAUDE.md 中的包名引用
+- 同步 pom.xml、AboutPanel、ReportData 版本号至 2.23.0
+
 ## [2.22.4] - 2026-06-22
 
 ### Changed

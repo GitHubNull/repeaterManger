@@ -1,0 +1,551 @@
+package org.oxff.repeater.db.schema;
+
+import burp.BurpExtender;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+/**
+ * 数据库Schema迁移器
+ * 负责处理数据库版本升级迁移逻辑
+ */
+public class SchemaMigrator {
+
+    /**
+     * 执行所有必要的数据库迁移
+     */
+    public static void migrateIfNeeded(Connection conn) throws SQLException {
+        // 获取当前schema版本
+        int currentVersion = getCurrentSchemaVersion(conn);
+
+        // v2→v3 迁移
+        if (currentVersion < 3) {
+            migrateV2ToV3(conn);
+        }
+
+        // v3→v4 迁移
+        if (currentVersion < 4) {
+            migrateV3ToV4(conn);
+        }
+
+        // v4→v5 迁移
+        if (currentVersion < 5) {
+            migrateV4ToV5(conn);
+        }
+
+        // v5→v6 迁移
+        if (currentVersion < 6) {
+            migrateV5ToV6(conn);
+        }
+
+        // v6→v7 迁移
+        if (currentVersion < 7) {
+            migrateV6ToV7(conn);
+        }
+
+        // v7→v8 迁移
+        if (currentVersion < 8) {
+            migrateV7ToV8(conn);
+        }
+
+        // v8→v9 迁移
+        if (currentVersion < 9) {
+            migrateV8ToV9(conn);
+        }
+
+        // v9→v10 迁移
+        if (currentVersion < 10) {
+            migrateV9ToV10(conn);
+        }
+
+        // v10→v11 迁移
+        if (currentVersion < 11) {
+            migrateV10ToV11(conn);
+        }
+    }
+
+    /**
+     * 获取当前schema版本
+     */
+    public static int getCurrentSchemaVersion(Connection conn) {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT value FROM schema_meta WHERE key = 'schema_version'")) {
+            if (rs.next()) {
+                try {
+                    return Integer.parseInt(rs.getString("value"));
+                } catch (NumberFormatException e) {
+                    return 2;
+                }
+            }
+        } catch (SQLException e) {
+            // schema_meta 表可能不存在（极旧版本），忽略
+        }
+        return 2;
+    }
+
+    /**
+     * v2→v3 迁移：为旧数据库添加 api_hash 列和 api_extraction_rules 表
+     */
+    private static void migrateV2ToV3(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v2→v3迁移...");
+
+            // 为 requests 表添加 api_hash 列
+            try {
+                stmt.execute("ALTER TABLE requests ADD COLUMN api_hash TEXT");
+                BurpExtender.printOutput("[+] requests表添加api_hash列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] requests表添加api_hash列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 history 表添加 api_hash 列
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN api_hash TEXT");
+                BurpExtender.printOutput("[+] history表添加api_hash列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加api_hash列失败: " + e.getMessage());
+                }
+            }
+
+            // 创建 api_extraction_rules 表（v3结构，不含name/remark，v4迁移会添加）
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS api_extraction_rules (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "source TEXT NOT NULL, " +
+                "method TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "priority INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建v3新增索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_api_hash ON requests(api_hash)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_api_hash ON history(api_hash)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '3')");
+
+            BurpExtender.printOutput("[+] v2→v3 迁移完成");
+        }
+    }
+
+    /**
+     * v3→v4 迁移：为 api_extraction_rules 表添加 name 和 remark 列
+     */
+    private static void migrateV3ToV4(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v3→v4迁移...");
+
+            // 为 api_extraction_rules 表添加 name 列
+            try {
+                stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+                BurpExtender.printOutput("[+] api_extraction_rules表添加name列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] api_extraction_rules表添加name列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 api_extraction_rules 表添加 remark 列
+            try {
+                stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN remark TEXT NOT NULL DEFAULT ''");
+                BurpExtender.printOutput("[+] api_extraction_rules表添加remark列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] api_extraction_rules表添加remark列失败: " + e.getMessage());
+                }
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '4' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4')");
+
+            BurpExtender.printOutput("[+] v3→v4 迁移完成");
+        }
+    }
+
+    /**
+     * v4→v5 迁移：为 api_extraction_rules 表添加 global 列
+     */
+    private static void migrateV4ToV5(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v4→v5迁移...");
+
+            // 为 api_extraction_rules 表添加 global 列
+            try {
+                stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN global INTEGER NOT NULL DEFAULT 1");
+                BurpExtender.printOutput("[+] api_extraction_rules表添加global列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] api_extraction_rules表添加global列失败: " + e.getMessage());
+                }
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '5')");
+
+            BurpExtender.printOutput("[+] v4→v5 迁移完成");
+        }
+    }
+
+    /**
+     * v5→v6 迁移：新增权限测试相关表和history表扩展列
+     */
+    private static void migrateV5ToV6(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v5→v6迁移...");
+
+            // 创建令牌位置表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS token_locations (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "type TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "description TEXT DEFAULT '', " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建用户会话表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS user_sessions (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL, " +
+                "color TEXT, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建令牌值关联表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS token_values (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "token_location_id INTEGER NOT NULL, " +
+                "user_session_id INTEGER NOT NULL, " +
+                "value TEXT NOT NULL, " +
+                "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (user_session_id) REFERENCES user_sessions(id) ON DELETE CASCADE, " +
+                "UNIQUE (token_location_id, user_session_id)" +
+                ")"
+            );
+
+            // 创建判决规则表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS judgment_rules (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL DEFAULT '', " +
+                "target TEXT NOT NULL, " +
+                "method TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "priority INTEGER NOT NULL DEFAULT 1, " +
+                "success_color TEXT DEFAULT '#FF0000', " +
+                "failure_color TEXT DEFAULT '#00FF00', " +
+                "success_note TEXT DEFAULT '', " +
+                "failure_note TEXT DEFAULT '', " +
+                "remark TEXT DEFAULT '', " +
+                "global INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // history表新增3列
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN user_session_name TEXT DEFAULT NULL");
+                BurpExtender.printOutput("[+] history表添加user_session_name列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加user_session_name列失败: " + e.getMessage());
+                }
+            }
+
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN judgment TEXT DEFAULT NULL");
+                BurpExtender.printOutput("[+] history表添加judgment列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加judgment列失败: " + e.getMessage());
+                }
+            }
+
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN similarity REAL DEFAULT -1");
+                BurpExtender.printOutput("[+] history表添加similarity列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] history表添加similarity列失败: " + e.getMessage());
+                }
+            }
+
+            // 创建v6新增索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_location ON token_values(token_location_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_session ON token_values(user_session_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_judgment ON history(judgment)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_session ON history(user_session_name)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_judgment_rules_enabled ON judgment_rules(enabled, priority)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '6' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '6')");
+
+            BurpExtender.printOutput("[+] v5→v6 迁移完成");
+        }
+    }
+
+    /**
+     * v6→v7 迁移：新增 scope_entries 表
+     */
+    private static void migrateV6ToV7(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v6→v7迁移...");
+
+            // 创建Scope条目表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS scope_entries (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL DEFAULT '', " +
+                "url_pattern TEXT NOT NULL, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "description TEXT DEFAULT '', " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_scope_entries_enabled ON scope_entries(enabled)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '7' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '7')");
+
+            BurpExtender.printOutput("[+] v6→v7 迁移完成");
+        }
+    }
+
+    /**
+     * v7→v8 迁移：为 requests 表添加 is_privilege_test 列
+     */
+    private static void migrateV7ToV8(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v7→v8迁移...");
+
+            // 为 requests 表添加 is_privilege_test 列
+            try {
+                stmt.execute("ALTER TABLE requests ADD COLUMN is_privilege_test INTEGER NOT NULL DEFAULT 0");
+                BurpExtender.printOutput("[+] requests表添加is_privilege_test列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] requests表添加is_privilege_test列失败: " + e.getMessage());
+                }
+            }
+
+            // 回填：将已有越权测试历史记录对应的请求标记为越权测试
+            try {
+                int updated = stmt.executeUpdate(
+                    "UPDATE requests SET is_privilege_test = 1 " +
+                    "WHERE id IN (" +
+                    "  SELECT DISTINCT request_id FROM history " +
+                    "  WHERE user_session_name IS NOT NULL AND request_id > 0" +
+                    ")"
+                );
+                BurpExtender.printOutput("[+] 回填is_privilege_test完成，更新 " + updated + " 条记录");
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 回填is_privilege_test失败: " + e.getMessage());
+            }
+
+            // 创建索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_requests_is_privilege_test ON requests(is_privilege_test)");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '8' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '8')");
+
+            BurpExtender.printOutput("[+] v7→v8 迁移完成");
+        }
+    }
+
+    /**
+     * v8→v9 迁移：为 token_locations 表添加 persist_to_global 和 enabled 列
+     */
+    private static void migrateV8ToV9(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v8→v9迁移...");
+
+            // 为 token_locations 表添加 persist_to_global 列
+            try {
+                stmt.execute("ALTER TABLE token_locations ADD COLUMN persist_to_global INTEGER NOT NULL DEFAULT 1");
+                BurpExtender.printOutput("[+] token_locations表添加persist_to_global列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] token_locations表添加persist_to_global列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 token_locations 表添加 enabled 列
+            try {
+                stmt.execute("ALTER TABLE token_locations ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
+                BurpExtender.printOutput("[+] token_locations表添加enabled列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] token_locations表添加enabled列失败: " + e.getMessage());
+                }
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '9' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '9')");
+
+            BurpExtender.printOutput("[+] v8→v9 迁移完成");
+        }
+    }
+
+    /**
+     * v9→v10 迁移：为 requests 表添加原始响应字段
+     * 用于存储"发送到权限测试"时的原始基线响应报文
+     */
+    private static void migrateV9ToV10(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v9→v10迁移...");
+
+            // 为 requests 表添加响应相关列
+            String[] columns = {
+                "ALTER TABLE requests ADD COLUMN resp_header_hash TEXT",
+                "ALTER TABLE requests ADD COLUMN resp_body_hash TEXT",
+                "ALTER TABLE requests ADD COLUMN resp_body_storage TEXT DEFAULT 'none'",
+                "ALTER TABLE requests ADD COLUMN resp_status_code INTEGER DEFAULT 0",
+                "ALTER TABLE requests ADD COLUMN resp_length INTEGER DEFAULT 0",
+                "ALTER TABLE requests ADD COLUMN resp_time INTEGER DEFAULT 0"
+            };
+
+            for (String ddl : columns) {
+                try {
+                    stmt.execute(ddl);
+                } catch (SQLException e) {
+                    if (!e.getMessage().contains("duplicate column name")) {
+                        BurpExtender.printError("[!] v9→v10迁移列添加失败: " + e.getMessage());
+                    }
+                }
+            }
+
+            BurpExtender.printOutput("[+] requests表添加响应字段成功");
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '10' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '10')");
+
+            BurpExtender.printOutput("[+] v9→v10 迁移完成");
+        }
+    }
+
+    /**
+     * v10→v11 迁移：新增令牌方案表、方案-令牌位置关联表，
+     * 为 user_sessions 添加 scheme_id 和重放配置列，
+     * 自动迁移旧数据（创建默认方案，关联所有现有令牌位置和用户会话）
+     */
+    private static void migrateV10ToV11(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            BurpExtender.printOutput("[*] 开始v10→v11迁移...");
+
+            // 创建令牌方案表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS token_schemes (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL, " +
+                "description TEXT DEFAULT '', " +
+                "persist_to_global INTEGER NOT NULL DEFAULT 1, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // 创建方案-令牌位置关联表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS scheme_token_locations (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "scheme_id INTEGER NOT NULL, " +
+                "token_location_id INTEGER NOT NULL, " +
+                "FOREIGN KEY (scheme_id) REFERENCES token_schemes(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+                "UNIQUE (scheme_id, token_location_id)" +
+                ")"
+            );
+
+            // 为 user_sessions 添加 scheme_id 列
+            try {
+                stmt.execute("ALTER TABLE user_sessions ADD COLUMN scheme_id INTEGER DEFAULT NULL");
+                BurpExtender.printOutput("[+] user_sessions表添加scheme_id列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    BurpExtender.printError("[!] user_sessions表添加scheme_id列失败: " + e.getMessage());
+                }
+            }
+
+            // 为 user_sessions 添加重放配置列
+            String[] replayColumns = {
+                "ALTER TABLE user_sessions ADD COLUMN request_timeout INTEGER DEFAULT 30",
+                "ALTER TABLE user_sessions ADD COLUMN max_concurrent INTEGER DEFAULT 1",
+                "ALTER TABLE user_sessions ADD COLUMN retry_count INTEGER DEFAULT 0",
+                "ALTER TABLE user_sessions ADD COLUMN retry_delay INTEGER DEFAULT 1000",
+                "ALTER TABLE user_sessions ADD COLUMN replay_delay INTEGER DEFAULT 0"
+            };
+
+            for (String ddl : replayColumns) {
+                try {
+                    stmt.execute(ddl);
+                } catch (SQLException e) {
+                    if (!e.getMessage().contains("duplicate column name")) {
+                        BurpExtender.printError("[!] v10→v11迁移列添加失败: " + e.getMessage());
+                    }
+                }
+            }
+            BurpExtender.printOutput("[+] user_sessions表添加重放配置列成功");
+
+            // 创建v11新增索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_scheme ON scheme_token_locations(scheme_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_location ON scheme_token_locations(token_location_id)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_scheme ON user_sessions(scheme_id)");
+
+            // 自动迁移：创建默认方案，关联所有现有令牌位置
+            try {
+                // 创建默认方案
+                stmt.execute("INSERT INTO token_schemes (name, description, persist_to_global, enabled) VALUES ('默认方案', '自动创建的默认令牌方案，包含所有令牌位置', 1, 1)");
+                try (ResultSet rs = stmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        int defaultSchemeId = rs.getInt(1);
+
+                        // 将所有现有令牌位置关联到默认方案
+                        int linkedLocations = stmt.executeUpdate(
+                            "INSERT INTO scheme_token_locations (scheme_id, token_location_id) " +
+                            "SELECT " + defaultSchemeId + ", id FROM token_locations"
+                        );
+                        BurpExtender.printOutput("[+] 默认方案创建成功(id=" + defaultSchemeId + ")，关联 " + linkedLocations + " 个令牌位置");
+
+                        // 将所有现有用户会话关联到默认方案
+                        int linkedSessions = stmt.executeUpdate(
+                            "UPDATE user_sessions SET scheme_id = " + defaultSchemeId + " WHERE scheme_id IS NULL"
+                        );
+                        BurpExtender.printOutput("[+] " + linkedSessions + " 个用户会话已关联到默认方案");
+                    }
+                }
+            } catch (SQLException e) {
+                BurpExtender.printError("[!] 自动迁移创建默认方案失败: " + e.getMessage());
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '11' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '11')");
+
+            BurpExtender.printOutput("[+] v10→v11 迁移完成");
+        }
+    }
+}
