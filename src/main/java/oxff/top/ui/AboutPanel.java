@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class AboutPanel extends JPanel {
 
-    private static final String VERSION = "2.22.1";
+    private static final String VERSION = "2.22.4";
     private static final String AUTHOR = "githubnull";
     private static final String LICENSE = "Apache License 2.0";
     private static final String GITHUB_URL = "https://github.com/githubnull/repeater-manager";

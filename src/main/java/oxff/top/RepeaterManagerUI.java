@@ -17,6 +17,7 @@ import oxff.top.ui.config.ConfigPanel;
 import oxff.top.ui.DataPanel;
 import oxff.top.ui.LogPanel;
 import oxff.top.ui.StatusPanel;
+import oxff.top.ui.SwitchButton;
 import oxff.top.ui.layout.LayoutManager;
 import oxff.top.ui.layout.LayoutManager.LayoutType;
 import oxff.top.ui.privilege.PrivilegeTestPanel;
@@ -73,7 +74,9 @@ public class RepeaterManagerUI {
     private final RequestDispatchHandler dispatchHandler;
 
     // 模式切换按钮
-    private JToggleButton modeToggleButton;
+    private SwitchButton modeToggleButton;
+    private JLabel normalModeLabel;
+    private JLabel privilegeModeLabel;
 
     /**
      * 创建 Repeater Manager 界面
@@ -124,19 +127,23 @@ public class RepeaterManagerUI {
             SwingUtilities.invokeLater(() -> statusPanel.setModeIndicator(mode));
         });
 
-        // 注册模式变更监听器：同步切换按钮状态
+        // 注册模式变更监听器：同步切换按钮与标签状态
         dispatchHandler.addModeChangeListener(mode -> {
             SwingUtilities.invokeLater(() -> {
                 if (modeToggleButton != null) {
                     modeToggleButton.setSelected(mode);
+                }
+                if (normalModeLabel != null && privilegeModeLabel != null) {
                     if (mode) {
-                        modeToggleButton.setText("权限测试");
-                        modeToggleButton.setForeground(new Color(200, 80, 0));
-                        modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.BOLD));
+                        normalModeLabel.setFont(normalModeLabel.getFont().deriveFont(Font.PLAIN));
+                        normalModeLabel.setForeground(UIManager.getColor("Label.foreground"));
+                        privilegeModeLabel.setFont(privilegeModeLabel.getFont().deriveFont(Font.BOLD));
+                        privilegeModeLabel.setForeground(new Color(200, 80, 0));
                     } else {
-                        modeToggleButton.setText("普通模式");
-                        modeToggleButton.setForeground(UIManager.getColor("Button.foreground"));
-                        modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.PLAIN));
+                        normalModeLabel.setFont(normalModeLabel.getFont().deriveFont(Font.BOLD));
+                        normalModeLabel.setForeground(new Color(0, 0, 0));
+                        privilegeModeLabel.setFont(privilegeModeLabel.getFont().deriveFont(Font.PLAIN));
+                        privilegeModeLabel.setForeground(UIManager.getColor("Label.foreground"));
                     }
                 }
             });
@@ -263,24 +270,25 @@ public class RepeaterManagerUI {
         // 分隔符
         leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
-        // 模式切换按钮
-        modeToggleButton = new JToggleButton("普通模式");
+        // 普通模式标签
+        normalModeLabel = new JLabel("普通模式");
+        normalModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
+        leftToolPanel.add(normalModeLabel);
+
+        // 模式切换开关
+        modeToggleButton = new SwitchButton();
         modeToggleButton.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
         modeToggleButton.addActionListener(e -> {
             boolean selected = modeToggleButton.isSelected();
-            if (selected) {
-                modeToggleButton.setText("权限测试");
-                modeToggleButton.setForeground(new Color(200, 80, 0));
-                modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.BOLD));
-            } else {
-                modeToggleButton.setText("普通模式");
-                modeToggleButton.setForeground(UIManager.getColor("Button.foreground"));
-                modeToggleButton.setFont(modeToggleButton.getFont().deriveFont(Font.PLAIN));
-            }
             dispatchHandler.setPrivilegeTestMode(selected);
             BurpExtender.printOutput("[*] 权限测试模式: " + (selected ? "已开启" : "已关闭"));
         });
         leftToolPanel.add(modeToggleButton);
+
+        // 权限测试标签
+        privilegeModeLabel = new JLabel("权限测试");
+        privilegeModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
+        leftToolPanel.add(privilegeModeLabel);
 
         // 右侧布局控制区
         JPanel rightToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
