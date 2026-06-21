@@ -481,6 +481,16 @@ sequenceDiagram
 
 **EDT竞态修复**：`sendPrivilegeTestRequestDirect()` 使用参数化方法直接传递 `capturedRequestBytes/capturedHttpService/capturedRequestId`，避免依赖 volatile 共享状态 `currentRequestId`（它可能被后续调用覆盖）。
 
+**批量越权测试概率性失败修复（3处根因）**：
+
+1. **`sendSyncOnce` 超时不触发重试**：原代码 `sendSyncOnce` 的 wait/notify 超时后，`holder.errorMessage` 为 null，而 `sendSyncWithRetry` 的重试条件是 `holder.errorMessage != null`，导致超时的请求永不重试。修复：超时后显式设置 `holder.errorMessage = "请求超时"`，使重试逻辑能被触发（即使 `retryCount=0`，也能正确标记为 ERROR 并记录超时原因）。
+
+2. **`makeHttpRequestAsync` 异步路径无超时控制**：原代码异步路径中 `timeoutSeconds` 参数被完全忽略，`api.http().sendRequest()` 同步阻塞调用无超时。修复：用独立线程执行 `sendRequest`，主线程用 `join(sendTimeoutMs)` 等待，超时后 `interrupt()` 中断发送线程并回调 `onFailure`，确保批量场景下不累积无限阻塞的超时线程。
+
+3. **`ReplayEngine.useHttp2` 实例字段竞态**：原代码 `useHttp2` 是单例的 volatile 实例字段，在 `replay()` 开头被覆盖。批量重放期间 `setPrivilegeTestMode(true)` 注册了代理监听器，若此时有代理流量触发 `AutoTestEngine`，两个 `replay()` 调用并发，`this.useHttp2` 会被覆盖，导致 HTTP/2 请求降级为 HTTP/1.1 或反之。修复：将 `useHttp2` 改为方法参数传递（`finalUseHttp2`），彻底消除实例字段竞态。
+
+4. **`latch.await()` 无超时**：批量重放中 `onAllComplete` 通过 `SwingUtilities.invokeLater` 在 EDT 上执行 `latch.countDown()`。批量100+请求时 EDT 队列积压大量 `onReplayComplete` 任务，`onAllComplete` 排在队尾延迟执行，导致 `batch-privilege-test` 线程无限阻塞。修复：`latch.await(timeout)` 添加基于会话数和请求超时的动态超时，超时后跳过当前请求继续下一条。
+
 ### 4.3 Token替换数据流
 
 ```mermaid

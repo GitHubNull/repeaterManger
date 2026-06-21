@@ -369,7 +369,47 @@ public class RequestManager {
                 // 单次发送，不重试，避免请求耗时翻倍
                 // 根据原始协议版本选择构建方式：HTTP/2 使用 http2Request，否则使用 httpRequest
                 HttpRequest requestToSend = buildRequestToSend(service, fixedBytes, useHttp2);
-                HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
+
+                // BUG修复：原代码直接调用 api.http().sendRequest()，无超时控制。
+                // 异步路径中 timeoutSeconds 参数被忽略，导致偶发阻塞时无限等待。
+                // 修复：用独立线程执行 sendRequest，主线程用 join(timeout) 等待，超时后中断发送线程。
+                // 确保批量场景下不会累积无限阻塞的超时线程。
+                final HttpRequestResponse[] resultHolder = {null};
+                final Exception[] errorHolder = {null};
+                Thread sendThread = new Thread(() -> {
+                    try {
+                        resultHolder[0] = api.http().sendRequest(requestToSend);
+                    } catch (Exception ex) {
+                        errorHolder[0] = ex;
+                    }
+                }, "RepeaterManager-HttpSend");
+                sendThread.setDaemon(true);
+                sendThread.start();
+                // 等待 HTTP 发送完成，超时时间基于 timeoutSeconds（额外增加10秒缓冲，避免正常请求被误杀）
+                long sendTimeoutMs = (timeoutSeconds + 10) * 1000L;
+                sendThread.join(sendTimeoutMs);
+
+                if (sendThread.isAlive()) {
+                    // 超时：中断发送线程（Montoya SDK 内部可能响应中断）
+                    sendThread.interrupt();
+                    long responseTime = System.currentTimeMillis() - startTime;
+                    String timeoutMsg = String.format("HTTP请求发送超时（%d秒）", timeoutSeconds + 10);
+                    BurpExtender.printError("[!] " + timeoutMsg);
+                    if (requestId > 0) {
+                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                timeoutMsg, responseTime, service);
+                    }
+                    if (callback != null) {
+                        callback.onFailure(timeoutMsg, startTime, System.currentTimeMillis(), responseTime);
+                    }
+                    return;
+                }
+
+                // 获取发送结果（可能为异常）
+                if (errorHolder[0] != null) {
+                    throw errorHolder[0];
+                }
+                HttpRequestResponse requestResponse = resultHolder[0];
 
                 long responseTime = System.currentTimeMillis() - startTime;
 

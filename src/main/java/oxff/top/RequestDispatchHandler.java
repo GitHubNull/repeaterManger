@@ -818,7 +818,25 @@ public class RequestDispatchHandler {
                         latch.countDown();
                     } else {
                         // 等待当前请求的所有重放完成后再处理下一条
-                        latch.await();
+                        // BUG修复：原代码 latch.await() 无超时，当 EDT 队列积压大量 onReplayComplete 任务时，
+                        // onAllComplete（通过 invokeLater 排在 EDT 队列尾部）会延迟很久才执行 latch.countDown()，
+                        // 导致 batch-privilege-test 线程无限阻塞。
+                        // 修复：添加超时（基于会话数 × 单请求超时 + 30秒缓冲），超时后跳过当前请求继续下一条。
+                        SessionManager sm = SessionManager.getInstance();
+                        int sessionCount = sm.getEnabledSessions().size();
+                        int perRequestTimeout = sm.getRequestTimeout();
+                        // 单条请求所有会话重放的最大耗时：会话数 × (请求超时+10秒缓冲) + 重放延迟 + 30秒EDT缓冲
+                        long latchTimeoutMs = (long) sessionCount * (perRequestTimeout + 10) * 1000L
+                                + (long) sessionCount * sm.getReplayDelay() + 30000L;
+                        if (!latch.await(latchTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                            BurpExtender.printError(String.format(
+                                    "[!] 批量权限测试：请求ID %d 等待重放完成超时（%d秒），跳过继续下一条",
+                                    requestId, latchTimeoutMs / 1000));
+                            if (!deduped) {
+                                completedCount.incrementAndGet();
+                                statusPanel.showBatchProgress(completedCount.get(), totalCount, "权限测试");
+                            }
+                        }
                     }
 
                 } catch (Exception e) {

@@ -35,8 +35,7 @@ public class ReplayEngine {
     /** 当前批次已处理的API集合（用于去重，线程安全） */
     private final Set<String> processedApis = ConcurrentHashMap.newKeySet();
 
-    /** 当前重放是否使用HTTP/2（由调用方传入，默认false） */
-    private volatile boolean useHttp2 = false;
+    // useHttp2 已改为方法参数传递，避免单例实例字段在并发 replay() 调用时被覆盖
 
     private ReplayEngine() {
         this.executor = Executors.newCachedThreadPool(r -> {
@@ -86,7 +85,6 @@ public class ReplayEngine {
      */
     public boolean replay(byte[] originalRequest, HttpService httpService, int requestId,
                        RequestManager requestManager, boolean useHttp2, ReplayCallback callback) {
-        this.useHttp2 = useHttp2;
         SessionManager sessionManager = SessionManager.getInstance();
         List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
 
@@ -105,6 +103,7 @@ public class ReplayEngine {
             }
         }
 
+        final boolean finalUseHttp2 = useHttp2;
         executor.submit(() -> {
             BurpExtender.printOutput("[*] 开始权限测试重放: " + enabledSessions.size() + "个用户会话");
 
@@ -167,8 +166,10 @@ public class ReplayEngine {
                             originalRequest, locations, session);
 
                     // 带重试的同步发送请求（在后台线程中）
+                    // finalUseHttp2 通过参数传递，避免单例实例字段在并发 replay() 调用时被覆盖
                     ReplayResultHolder holder = sendSyncWithRetry(
-                            modifiedRequest, httpService, requestManager, timeoutSeconds, retryCount, retryDelay);
+                            modifiedRequest, httpService, requestManager, finalUseHttp2,
+                            timeoutSeconds, retryCount, retryDelay);
 
                     // 判断判决结果
                     String judgment = JudgmentResult.PENDING.name();
@@ -287,14 +288,15 @@ public class ReplayEngine {
      * @param requestBytes   请求字节数组
      * @param httpService    HTTP服务信息
      * @param requestManager 请求管理器
+     * @param useHttp2       是否使用HTTP/2协议（参数传递，避免实例字段竞态）
      * @param timeoutSeconds 请求超时时间（秒）
      * @param retryCount     失败重试次数
      * @param retryDelayMs   重试间隔（毫秒）
      */
     private ReplayResultHolder sendSyncWithRetry(byte[] requestBytes, HttpService httpService,
-                                                  RequestManager requestManager,
+                                                  RequestManager requestManager, boolean useHttp2,
                                                   int timeoutSeconds, int retryCount, int retryDelayMs) {
-        ReplayResultHolder holder = sendSyncOnce(requestBytes, httpService, requestManager, timeoutSeconds);
+        ReplayResultHolder holder = sendSyncOnce(requestBytes, httpService, requestManager, useHttp2, timeoutSeconds);
 
         // 重试逻辑：仅在请求失败且有重试次数时执行
         int attempts = 0;
@@ -308,7 +310,7 @@ public class ReplayEngine {
                 Thread.currentThread().interrupt();
                 break;
             }
-            holder = sendSyncOnce(requestBytes, httpService, requestManager, timeoutSeconds);
+            holder = sendSyncOnce(requestBytes, httpService, requestManager, useHttp2, timeoutSeconds);
         }
 
         return holder;
@@ -316,14 +318,21 @@ public class ReplayEngine {
 
     /**
      * 单次同步发送HTTP请求（在后台线程中调用）
+     *
+     * @param requestBytes   请求字节数组
+     * @param httpService    HTTP服务信息
+     * @param requestManager 请求管理器
+     * @param useHttp2       是否使用HTTP/2协议
+     * @param timeoutSeconds 请求超时时间（秒）
      */
     private ReplayResultHolder sendSyncOnce(byte[] requestBytes, HttpService httpService,
-                                             RequestManager requestManager, int timeoutSeconds) {
+                                             RequestManager requestManager, boolean useHttp2,
+                                             int timeoutSeconds) {
         ReplayResultHolder holder = new ReplayResultHolder();
         Object lock = new Object();
         boolean[] done = {false};
 
-        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService, this.useHttp2,
+        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService, useHttp2,
                 new RequestManager.RequestCallback() {
                     @Override
                     public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
@@ -367,6 +376,13 @@ public class ReplayEngine {
                     Thread.currentThread().interrupt();
                     break;
                 }
+            }
+            // BUG修复：超时后设置 errorMessage，使 sendSyncWithRetry 的重试逻辑能被触发
+            // 原代码超时后 holder.errorMessage 为 null，导致重试条件 holder.errorMessage != null 永远为 false
+            if (!done[0] && holder.errorMessage == null) {
+                holder.errorMessage = String.format("请求超时（等待 %dms 未收到响应）", waitTimeoutMs);
+                holder.durationMs = waitTimeoutMs;
+                BurpExtender.printError(String.format("[!] 重放请求超时：等待 %dms 未收到响应", waitTimeoutMs));
             }
         }
 

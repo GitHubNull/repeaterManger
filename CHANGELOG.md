@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.22.3] - 2026-06-21
+
+### Fixed
+- 修复批量越权测试概率性失败问题：
+  - `sendSyncOnce` 超时不触发重试：超时后显式设置 `holder.errorMessage`，使 `sendSyncWithRetry` 重试逻辑正确触发
+  - `makeHttpRequestAsync` 异步路径无超时控制：使用独立线程执行 `sendRequest`，主线程 `join(timeout)` 等待，超时中断线程并回调 `onFailure`，防止批量场景下累积阻塞线程
+  - `ReplayEngine.useHttp2` 实例字段竞态：将 `useHttp2` 改为方法参数传递，避免并发 `replay()` 调用时协议标志被覆盖
+  - `latch.await()` 无超时：批量重放中添加基于会话数和请求超时的动态超时，超时后跳过当前请求继续下一条
+
+### Changed
+- 同步 pom.xml 版本号至 2.22.3
+
 ## [2.22.2] - 2026-06-21
 
 ### Fixed
