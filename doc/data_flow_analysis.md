@@ -1,6 +1,6 @@
 # Repeater Manager Burp Suite 插件 — 完整数据流分析
 
-> 版本：v2.16.x | 生成日期：2026-06-16
+> 版本：v2.22.x | 生成日期：2026-06-21
 
 本文档详细分析了 Repeater Manager 插件在不同业务操作中的完整数据流向，涵盖 MVC 架构、连接池、异步处理、Pool 去重、Montoya SDK 集成等技术原理，并使用 Mermaid 图表展示数据流。
 
@@ -198,7 +198,7 @@ sequenceDiagram
     EDT->>RDH: sendRequest()
     RDH->>RQP: getRequest() → requestBytes
     RDH->>RDH: privilegeTestMode? 否→普通模式
-    RDH->>RM: makeHttpRequestAsync(requestBytes, timeout, requestId, httpService, callback)
+    RDH->>RM: makeHttpRequestAsync(requestBytes, timeout, requestId, httpService, useHttp2, callback)
     RM->>RM: buildHttpService(requestBytes, httpService)
     RM->>MAPI: sendRequest(httpRequest)
     MAPI-->>RM: HttpRequestResponse
@@ -453,7 +453,7 @@ sequenceDiagram
     RMUI->>RMUI: 开启privilegeTestMode
     RMUI->>RDH: sendPrivilegeTestRequestDirect(requestBytes, httpService, dbId)
 
-    RDH->>RE: replay(requestBytes, httpService, requestId, requestManager, callback)
+    RDH->>RE: replay(requestBytes, httpService, requestId, requestManager, useHttp2, callback)
     RE->>SM: getEnabledSessions()
 
     loop 遍历每个启用会话
@@ -738,7 +738,7 @@ sequenceDiagram
     EAW->>FS: 写入ERM二进制格式<br/>[魔数|版本|标志|条目数|索引|数据块|尾部]
 ```
 
-**ERM存档格式**：自定义二进制格式，魔数头 `0x45 0x52 0x4D`，支持可选的 AES-256-CBC + HMAC-SHA256 加密，包含完整的 SQLite 数据库和 blobs/ 目录文件。
+**ERM存档格式**：自定义二进制格式，魔数头 `0x89 0x45 0x52 0x4D`（4字节，首字节 `0x89` 借鉴 PNG 格式检测 7-bit 传输损坏），支持可选的 AES-256-CBC + HMAC-SHA256 加密，包含完整的 SQLite 数据库和 blobs/ 目录文件。
 
 ### 6.2 ERM存档导入流程
 
@@ -803,7 +803,7 @@ graph TB
 graph LR
     A["输入文件"] --> B["FormatDetector.detectFormat()"]
     B --> C{扩展名判断}
-    C -->|.erm| D["isErmFile()<br/>魔数 0x45 0x52 0x4D"]
+    C -->|.erm| D["isErmFile()<br/>魔数 0x89 0x45 0x52 0x4D (4字节)"]
     C -->|.sqlite3/.db| E["isSQLiteFile()<br/>SQLite format 3"]
     C -->|.json| F["detectJsonFormat()"]
     D --> G["ImportFormat.ERM"]
@@ -896,8 +896,8 @@ graph TB
     end
 
     subgraph Route["存储路由 (BodyStorageRoute)"]
-        R1["小Body (<8KB)<br/>→ body_pool INLINE"]
-        R2["大Body (>=8KB)<br/>→ file_pool + blobs/目录"]
+        R1["小Body (<64KB)且非二进制<br/>→ body_pool INLINE"]
+        R2["大Body (>=64KB)或含null字节<br/>→ file_pool + blobs/目录"]
     end
 
     subgraph GC["垃圾回收"]
@@ -1072,15 +1072,15 @@ graph TB
 ```mermaid
 graph TB
     subgraph Core["核心业务表"]
-        R["requests<br/>id | protocol | domain_hash | path_hash |<br/>query_hash | method | api_hash |<br/>is_privilege_test | resp_header_hash |<br/>resp_body_hash | resp_status_code"]
-        H["history<br/>id | request_id(FK) | method |<br/>domain_hash | path_hash | status_code |<br/>user_session_name | judgment | similarity"]
+        R["requests<br/>id | protocol | domain_hash | path_hash | query_hash |<br/>method | api_hash | is_privilege_test |<br/>req_header_hash | req_body_hash | req_body_storage |<br/>resp_header_hash | resp_body_hash | resp_body_storage |<br/>resp_status_code | resp_length | resp_time"]
+        H["history<br/>id | request_id(FK) | method | protocol |<br/>domain_hash | path_hash | query_hash | status_code |<br/>req_header_hash | req_body_hash | req_body_storage |<br/>resp_header_hash | resp_body_hash | resp_body_storage |<br/>api_hash | user_session_name | judgment | similarity"]
     end
 
     subgraph Pools["去重Pool表"]
         SP["string_pool<br/>hash(PK) | value | ref_count"]
-        HP["header_pool<br/>hash(PK) | data(BLOB) | ref_count"]
-        BP["body_pool<br/>hash(PK) | data(BLOB) | ref_count | is_binary"]
-        FP["file_pool<br/>hash(PK) | relative_path | ref_count | is_binary"]
+        HP["header_pool<br/>hash(PK) | data(BLOB) | size | ref_count"]
+        BP["body_pool<br/>hash(PK) | data(BLOB) | size | ref_count | is_binary"]
+        FP["file_pool<br/>hash(PK) | relative_path | size | ref_count | is_binary"]
     end
 
     subgraph GC["垃圾回收"]
@@ -1159,7 +1159,8 @@ graph LR
 | PoolManager | `oxff/top/db/pool/PoolManager.java` | SHA-256去重存储 | INSERT-OR-INCREMENT + ConcurrentHashMap缓存 |
 | ContentSplitter | `oxff/top/db/pool/ContentSplitter.java` | HTTP报文头部/体分离 | 字节级拆分 |
 | ContentReconstructor | `oxff/top/db/pool/ContentReconstructor.java` | 从Pool重建完整报文 | hash→data反向查询 |
-| BodyStorageRoute | `oxff/top/db/pool/BodyStorageRoute.java` | Body存储路由(inline/file) | 大小阈值判断(8KB) |
+| ContentHasher | `oxff/top/db/pool/ContentHasher.java` | SHA-256哈希计算 + 存储路由决策 | SHA-256 + 64KB阈值 + 二进制检测 |
+| BodyStorageRoute | `oxff/top/db/pool/BodyStorageRoute.java` | Body存储路由(inline/file) | 大小阈值判断(64KB) + 二进制检测 |
 | FileStorageManager | `oxff/top/db/pool/FileStorageManager.java` | blobs/目录文件读写 | SHA-256哈希命名 |
 | GarbageCollectorService | `oxff/top/service/GarbageCollectorService.java` | 定期清理零引用数据 | ScheduledExecutorService + gc_queue |
 | AutoSaveService | `oxff/top/service/AutoSaveService.java` | 定时数据库检查点 | ScheduledExecutorService |
