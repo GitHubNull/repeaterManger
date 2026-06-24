@@ -50,18 +50,26 @@ public class HistoryStatsBar extends JPanel {
     private final JPanel cardPanel;
     private final CardLayout cardLayout;
 
-    // 共享标签引用（收缩和展开视图共用）
-    private JLabel lblTotalCount;
-    private JLabel lblSuccessCount;
-    private JLabel lblFailureCount;
-    private JLabel lblRetryCount;
-    private JLabel lblMaxTime;
-    private JLabel lblMinTime;
-    private JLabel lblAvgTime;
-    private JLabel lblVariance;
-    private JLabel lblModeTime;
-    private JLabel lblMedianTime;
-    private JLabel lblRequestCount;
+    // 收缩视图标签（独立实例）
+    private JLabel cTotalCount;
+    private JLabel cSuccessCount;
+    private JLabel cFailureCount;
+    private JLabel cRetryCount;
+    private JLabel cMaxTime;
+    private JLabel cMinTime;
+
+    // 展开视图标签（独立实例）
+    private JLabel eTotalCount;
+    private JLabel eSuccessCount;
+    private JLabel eFailureCount;
+    private JLabel eRetryCount;
+    private JLabel eMaxTime;
+    private JLabel eMinTime;
+    private JLabel eAvgTime;
+    private JLabel eVariance;
+    private JLabel eModeTime;
+    private JLabel eMedianTime;
+    private JLabel eRequestCount;
 
     // 动画Timer
     private Timer animationTimer;
@@ -74,8 +82,10 @@ public class HistoryStatsBar extends JPanel {
         setPreferredSize(new Dimension(Integer.MAX_VALUE, HEIGHT_COLLAPSED));
         setMaximumSize(new Dimension(Integer.MAX_VALUE, HEIGHT_EXPANDED));
 
-        // 初始化共享标签
-        initSharedLabels();
+        // 初始化收缩视图标签
+        initCollapsedLabels();
+        // 初始化展开视图标签
+        initExpandedLabels();
 
         // 创建CardLayout面板
         cardLayout = new CardLayout();
@@ -100,20 +110,32 @@ public class HistoryStatsBar extends JPanel {
     }
 
     /**
-     * 初始化共享标签
+     * 初始化收缩视图标签
      */
-    private void initSharedLabels() {
-        lblTotalCount = createValueLabel("0");
-        lblSuccessCount = createValueLabel("0", COLOR_SUCCESS);
-        lblFailureCount = createValueLabel("0", COLOR_FAILURE);
-        lblRetryCount = createValueLabel("0", COLOR_RETRY);
-        lblMaxTime = createValueLabel("0");
-        lblMinTime = createValueLabel("0");
-        lblAvgTime = createValueLabel("0");
-        lblVariance = createValueLabel("0");
-        lblModeTime = createValueLabel("0");
-        lblMedianTime = createValueLabel("0");
-        lblRequestCount = createValueLabel("0");
+    private void initCollapsedLabels() {
+        cTotalCount = createValueLabel("0");
+        cSuccessCount = createValueLabel("0", COLOR_SUCCESS);
+        cFailureCount = createValueLabel("0", COLOR_FAILURE);
+        cRetryCount = createValueLabel("0", COLOR_RETRY);
+        cMaxTime = createValueLabel("0");
+        cMinTime = createValueLabel("0");
+    }
+
+    /**
+     * 初始化展开视图标签
+     */
+    private void initExpandedLabels() {
+        eTotalCount = createValueLabel("0");
+        eSuccessCount = createValueLabel("0", COLOR_SUCCESS);
+        eFailureCount = createValueLabel("0", COLOR_FAILURE);
+        eRetryCount = createValueLabel("0", COLOR_RETRY);
+        eMaxTime = createValueLabel("0");
+        eMinTime = createValueLabel("0");
+        eAvgTime = createValueLabel("0");
+        eVariance = createValueLabel("0");
+        eModeTime = createValueLabel("0");
+        eMedianTime = createValueLabel("0");
+        eRequestCount = createValueLabel("0");
     }
 
     /**
@@ -124,28 +146,28 @@ public class HistoryStatsBar extends JPanel {
         panel.setOpaque(false);
 
         panel.add(createTitleLabel("历史:"));
-        panel.add(lblTotalCount);
+        panel.add(cTotalCount);
 
         panel.add(createSeparator());
         panel.add(createTitleLabel("成功:"));
-        panel.add(lblSuccessCount);
+        panel.add(cSuccessCount);
 
         panel.add(createSeparator());
         panel.add(createTitleLabel("失败:"));
-        panel.add(lblFailureCount);
+        panel.add(cFailureCount);
 
         panel.add(createSeparator());
         panel.add(createTitleLabel("重试:"));
-        panel.add(lblRetryCount);
+        panel.add(cRetryCount);
 
         panel.add(createSeparator());
         panel.add(createTitleLabel("最高:"));
-        panel.add(lblMaxTime);
+        panel.add(cMaxTime);
         panel.add(createUnitLabel("ms"));
 
         panel.add(createSeparator());
         panel.add(createTitleLabel("最低:"));
-        panel.add(lblMinTime);
+        panel.add(cMinTime);
         panel.add(createUnitLabel("ms"));
 
         // 右侧提示
@@ -177,52 +199,52 @@ public class HistoryStatsBar extends JPanel {
         row1.setOpaque(false);
 
         row1.add(createTitleLabel("历史总数:"));
-        row1.add(lblTotalCount);
+        row1.add(eTotalCount);
 
         row1.add(createSeparator());
         row1.add(createTitleLabel("成功:"));
-        row1.add(lblSuccessCount);
+        row1.add(eSuccessCount);
 
         row1.add(createSeparator());
         row1.add(createTitleLabel("失败:"));
-        row1.add(lblFailureCount);
+        row1.add(eFailureCount);
 
         row1.add(createSeparator());
         row1.add(createTitleLabel("重试:"));
-        row1.add(lblRetryCount);
+        row1.add(eRetryCount);
 
         row1.add(createSeparator());
         row1.add(createTitleLabel("基准请求:"));
-        row1.add(lblRequestCount);
+        row1.add(eRequestCount);
 
         // 第二行：性能统计
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
         row2.setOpaque(false);
 
         row2.add(createTitleLabel("平均:"));
-        row2.add(lblAvgTime);
+        row2.add(eAvgTime);
         row2.add(createUnitLabel("ms"));
 
         row2.add(createSeparator());
-        row2.add(createTitleLabel("方差:"));
-        row2.add(lblVariance);
+        row2.add(createTitleLabel("标准差:"));
+        row2.add(eVariance);
 
         row2.add(createSeparator());
         row2.add(createTitleLabel("众数:"));
-        row2.add(lblModeTime);
+        row2.add(eModeTime);
         row2.add(createUnitLabel("ms"));
 
         row2.add(createSeparator());
         row2.add(createTitleLabel("中位数:"));
-        row2.add(lblMedianTime);
+        row2.add(eMedianTime);
         row2.add(createUnitLabel("ms"));
 
         row2.add(createSeparator());
         row2.add(createTitleLabel("范围:"));
-        row2.add(lblMinTime);
+        row2.add(eMinTime);
         row2.add(createUnitLabel("ms"));
         row2.add(createTitleLabel("~"));
-        row2.add(lblMaxTime);
+        row2.add(eMaxTime);
         row2.add(createUnitLabel("ms"));
 
         panel.add(row1);
@@ -385,17 +407,38 @@ public class HistoryStatsBar extends JPanel {
             return;
         }
 
-        lblTotalCount.setText(String.valueOf(data.getTotalCount()));
-        lblSuccessCount.setText(String.valueOf(data.getSuccessCount()));
-        lblFailureCount.setText(String.valueOf(data.getFailureCount()));
-        lblRetryCount.setText(String.valueOf(data.getRetryCount()));
-        lblMaxTime.setText(String.valueOf(data.getMaxResponseTime()));
-        lblMinTime.setText(String.valueOf(data.getMinResponseTime()));
-        lblAvgTime.setText(DECIMAL_FMT.format(data.getAvgResponseTime()));
-        lblVariance.setText(DECIMAL_FMT.format(data.getVariance()));
-        lblModeTime.setText(String.valueOf(data.getModeResponseTime()));
-        lblMedianTime.setText(DECIMAL_FMT.format(data.getMedianResponseTime()));
-        lblRequestCount.setText(String.valueOf(data.getRequestCount()));
+        String totalCount = String.valueOf(data.getTotalCount());
+        String successCount = String.valueOf(data.getSuccessCount());
+        String failureCount = String.valueOf(data.getFailureCount());
+        String retryCount = String.valueOf(data.getRetryCount());
+        String maxTime = String.valueOf(data.getMaxResponseTime());
+        String minTime = String.valueOf(data.getMinResponseTime());
+        String avgTime = DECIMAL_FMT.format(data.getAvgResponseTime());
+        String stdDev = DECIMAL_FMT.format(Math.sqrt(data.getVariance()));
+        String modeTime = String.valueOf(data.getModeResponseTime());
+        String medianTime = DECIMAL_FMT.format(data.getMedianResponseTime());
+        String requestCount = String.valueOf(data.getRequestCount());
+
+        // 更新收缩视图标签
+        cTotalCount.setText(totalCount);
+        cSuccessCount.setText(successCount);
+        cFailureCount.setText(failureCount);
+        cRetryCount.setText(retryCount);
+        cMaxTime.setText(maxTime);
+        cMinTime.setText(minTime);
+
+        // 更新展开视图标签
+        eTotalCount.setText(totalCount);
+        eSuccessCount.setText(successCount);
+        eFailureCount.setText(failureCount);
+        eRetryCount.setText(retryCount);
+        eMaxTime.setText(maxTime);
+        eMinTime.setText(minTime);
+        eAvgTime.setText(avgTime);
+        eVariance.setText(stdDev);
+        eModeTime.setText(modeTime);
+        eMedianTime.setText(medianTime);
+        eRequestCount.setText(requestCount);
 
         revalidate();
         repaint();

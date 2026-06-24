@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.24.0] - 2026-06-24
+
+### Fixed
+- 修复 HistoryStatsBar 收缩/展开视图标签共享导致的显示异常：将共用 JLabel 拆分为独立的收缩视图和展开视图实例
+- 修复统计面板方差显示错误：将"方差"修正为"标准差"，并计算 `Math.sqrt(data.getVariance())`
+
 ## [2.23.0] - 2026-06-22
 
 ### Changed
