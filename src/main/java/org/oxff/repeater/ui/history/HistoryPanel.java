@@ -35,6 +35,7 @@ public class HistoryPanel extends JPanel {
     private TableRowSorter<DefaultTableModel> tableRowSorter;
     private HistoryContextMenu contextMenu;
     private RequestDispatchHandler dispatchHandler;
+    private HistoryStatsBar statsBar;
 
     /**
      * 创建历史记录面板
@@ -105,9 +106,13 @@ public class HistoryPanel extends JPanel {
         JScrollPane scrollPane = new JScrollPane(historyTable);
         scrollPane.setBorder(BorderFactory.createTitledBorder("重放历史"));
 
+        // 创建状态栏
+        statsBar = new HistoryStatsBar();
+
         // 添加到面板
         add(searchPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
+        add(statsBar, BorderLayout.SOUTH);
 
         // 创建右键菜单工厂（每次右键时动态生成菜单以反映选中数量）
         contextMenu = new HistoryContextMenu(this, historyTable, historyRecords, historyTableModel);
@@ -248,6 +253,11 @@ public class HistoryPanel extends JPanel {
         historyTableModel.fireTableDataChanged();
         historyTable.revalidate();
         historyTable.repaint();
+
+        // 刷新状态栏统计
+        if (statsBar != null) {
+            statsBar.refreshStats();
+        }
     }
 
     /**
@@ -346,6 +356,11 @@ public class HistoryPanel extends JPanel {
         historyTable.revalidate();
         historyTable.repaint();
         BurpExtender.printOutput("[*] 历史记录已清空");
+
+        // 刷新状态栏统计
+        if (statsBar != null) {
+            statsBar.refreshStats();
+        }
     }
 
     /**
@@ -452,6 +467,13 @@ public class HistoryPanel extends JPanel {
     }
 
     /**
+     * 获取状态栏组件
+     */
+    public HistoryStatsBar getStatsBar() {
+        return statsBar;
+    }
+
+    /**
      * 获取所有选中行的历史记录
      * @return 选中的记录列表（可能为空）
      */
@@ -512,5 +534,10 @@ public class HistoryPanel extends JPanel {
 
         updateRecordNumbers();
         BurpExtender.printOutput(String.format("[+] 已删除 %d 条历史记录", selected.size()));
+
+        // 刷新状态栏统计
+        if (statsBar != null) {
+            statsBar.refreshStats();
+        }
     }
 }

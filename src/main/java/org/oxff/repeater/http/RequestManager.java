@@ -182,16 +182,38 @@ public class RequestManager {
                 long responseTime = System.currentTimeMillis() - startTime;
 
                 // 检查响应是否为null（连接失败、超时等情况）
+                boolean needFallback = false;
                 if (requestResponse == null || requestResponse.response() == null) {
-                    BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
-                    if (requestId > 0) {
-                        recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                     "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    if (useHttp2) {
+                        BurpExtender.printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
+                        needFallback = true;
+                    } else {
+                        BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
+                        if (requestId > 0) {
+                            recordingService.recordFailure(requestId, fixedBytes, httpRequest,
+                                                         "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                        }
+                        return null;
                     }
-                    return null;
                 }
 
-                byte[] response = requestResponse.response().toByteArray().getBytes();
+                byte[] response = null;
+                if (!needFallback && requestResponse != null && requestResponse.response() != null) {
+                    response = requestResponse.response().toByteArray().getBytes();
+                }
+
+                // HTTP/2 空响应回退到 HTTP/1.1
+                if (needFallback || (response == null || response.length == 0)) {
+                    if (useHttp2) {
+                        BurpExtender.printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
+                        HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
+                        requestResponse = api.http().sendRequest(http1Request);
+                        responseTime = System.currentTimeMillis() - startTime;
+                        if (requestResponse != null && requestResponse.response() != null) {
+                            response = requestResponse.response().toByteArray().getBytes();
+                        }
+                    }
+                }
 
                 if (response != null && response.length > 0) {
                     HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
@@ -414,19 +436,58 @@ public class RequestManager {
                 long responseTime = System.currentTimeMillis() - startTime;
 
                 // 检查响应是否为null（连接失败、超时等情况）
+                boolean needFallback = false;
                 if (requestResponse == null || requestResponse.response() == null) {
-                    BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
-                    if (requestId > 0) {
-                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                     "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                    if (useHttp2) {
+                        BurpExtender.printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
+                        needFallback = true;
+                    } else {
+                        BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
+                        if (requestId > 0) {
+                            recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                                                         "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
+                        }
+                        if (callback != null) {
+                            callback.onFailure("未收到响应（目标可能不可达或连接被拒绝）", startTime, System.currentTimeMillis(), responseTime);
+                        }
+                        return;
                     }
-                    if (callback != null) {
-                        callback.onFailure("未收到响应（目标可能不可达或连接被拒绝）", startTime, System.currentTimeMillis(), responseTime);
-                    }
-                    return;
                 }
 
-                byte[] response = requestResponse.response().toByteArray().getBytes();
+                byte[] response = null;
+                if (!needFallback && requestResponse != null && requestResponse.response() != null) {
+                    response = requestResponse.response().toByteArray().getBytes();
+                }
+
+                // HTTP/2 空响应回退到 HTTP/1.1
+                if (needFallback || (response == null || response.length == 0)) {
+                    if (useHttp2) {
+                        BurpExtender.printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
+                        HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
+                        final HttpRequestResponse[] fallbackHolder = {null};
+                        final Exception[] fallbackError = {null};
+                        Thread fallbackThread = new Thread(() -> {
+                            try {
+                                fallbackHolder[0] = api.http().sendRequest(http1Request);
+                            } catch (Exception ex) {
+                                fallbackError[0] = ex;
+                            }
+                        }, "RepeaterManager-HttpSend-Fallback");
+                        fallbackThread.setDaemon(true);
+                        fallbackThread.start();
+                        fallbackThread.join(sendTimeoutMs);
+                        if (fallbackThread.isAlive()) {
+                            fallbackThread.interrupt();
+                        }
+                        if (fallbackError[0] != null) {
+                            throw fallbackError[0];
+                        }
+                        responseTime = System.currentTimeMillis() - startTime;
+                        if (fallbackHolder[0] != null && fallbackHolder[0].response() != null) {
+                            response = fallbackHolder[0].response().toByteArray().getBytes();
+                        }
+                    }
+                }
 
                 if (response != null && response.length > 0) {
                     HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));

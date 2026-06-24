@@ -192,12 +192,19 @@ public class MainUI extends JPanel {
         new Thread(() -> {
             // 清空现有历史
             historyPanel.clearHistory();
-            
+
             // 加载请求相关的历史记录
             List<RequestResponseRecord> records = historyReadDAO.getHistoryByRequestId(requestId);
             for (RequestResponseRecord record : records) {
                 historyPanel.addHistoryRecord(record);
             }
+
+            // 刷新状态栏为当前请求的统计
+            SwingUtilities.invokeLater(() -> {
+                if (historyPanel.getStatsBar() != null) {
+                    historyPanel.getStatsBar().refreshStats(requestId);
+                }
+            });
         }).start();
     }
     
