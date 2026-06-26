@@ -86,6 +86,14 @@ public class BurpExtender implements BurpExtension {
                 logManager.error("[!] 全局令牌位置加载失败: " + e.getMessage());
             }
 
+            // 阶段4.6.1：加载全局令牌方案
+            try {
+                org.oxff.repeater.privilege.SessionManager.getInstance().loadGlobalTokenSchemes();
+                logManager.success("[+] 全局令牌方案加载完成");
+            } catch (Exception e) {
+                logManager.error("[!] 全局令牌方案加载失败: " + e.getMessage());
+            }
+
             // 阶段4.7：加载全局去重配置
             try {
                 org.oxff.repeater.privilege.DedupConfigManager.getInstance().loadGlobalConfigs();

@@ -446,6 +446,51 @@ public class SessionManager {
         }
     }
 
+    // ==================== 全局令牌方案加载 ====================
+
+    /**
+     * 从全局YAML加载令牌方案到项目数据库
+     * 启动时调用，自动去重（按 name）
+     */
+    public void loadGlobalTokenSchemes() {
+        GlobalTokenSchemeManager globalMgr = GlobalTokenSchemeManager.getInstance();
+        // 先加载全局YAML到内存
+        globalMgr.loadSchemes(getTokenLocations());
+        List<TokenScheme> globalSchemes = globalMgr.getAllSchemes();
+        if (globalSchemes.isEmpty()) {
+            return;
+        }
+
+        // 获取当前项目数据库中已有的令牌方案，用于去重
+        List<TokenScheme> existingSchemes = getTokenSchemes();
+        Set<String> existingNames = new java.util.HashSet<>();
+        for (TokenScheme scheme : existingSchemes) {
+            existingNames.add(scheme.getName());
+        }
+
+        // 插入不存在于项目数据库的全局令牌方案
+        int added = 0;
+        for (TokenScheme globalScheme : globalSchemes) {
+            if (!existingNames.contains(globalScheme.getName())) {
+                int id = sessionDAO.addTokenScheme(globalScheme.getName(), globalScheme.getDescription(),
+                        globalScheme.isPersistToGlobal(), globalScheme.isEnabled());
+                if (id > 0) {
+                    // 保存关联的令牌位置
+                    List<Integer> locationIds = globalScheme.getTokenLocationIds();
+                    if (locationIds != null && !locationIds.isEmpty()) {
+                        sessionDAO.saveSchemeTokenLocations(id, locationIds);
+                    }
+                    added++;
+                }
+            }
+        }
+
+        if (added > 0) {
+            refreshCache();
+            BurpExtender.printOutput("[+] 从全局加载了 " + added + " 条令牌方案到项目数据库");
+        }
+    }
+
     // ==================== 重放配置 ====================
 
     public ReplayConfig getReplayConfig() {
