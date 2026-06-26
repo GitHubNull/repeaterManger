@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.SchemeMatch;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.SessionParseResult;
@@ -145,7 +145,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     selectedScheme.setEnabled(true);
                     sm.updateTokenScheme(selectedScheme.getId(), selectedScheme.getName(),
                             selectedScheme.getDescription(), true, selectedScheme.isPersistToGlobal());
-                    BurpExtender.printOutput("[+] 已自动启用令牌方案: " + selectedScheme.getName());
+                    LogManager.getInstance().printOutput("[+] 已自动启用令牌方案: " + selectedScheme.getName());
                 }
 
                 // 重新解析匹配（使用刚启用的方案）
@@ -183,12 +183,12 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     // 更新现有会话
                     sessionId = dialog.getExistingSessionId();
                     sm.updateUserSession(sessionId, sessionName, colorHex, enabled, schemeId);
-                    BurpExtender.printOutput("[+] 已更新用户会话: " + sessionName);
+                    LogManager.getInstance().printOutput("[+] 已更新用户会话: " + sessionName);
                 } else {
                     // 创建新会话
                     sessionId = sm.addUserSession(sessionName, colorHex, enabled, schemeId);
                     if (sessionId > 0) {
-                        BurpExtender.printOutput("[+] 已创建用户会话: " + sessionName + " (ID=" + sessionId + ")");
+                        LogManager.getInstance().printOutput("[+] 已创建用户会话: " + sessionName + " (ID=" + sessionId + ")");
                     }
                 }
 
@@ -197,7 +197,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     java.util.Map<Integer, String> extractedValues = result.getParseResult().getAllExtractedValues();
                     if (!extractedValues.isEmpty()) {
                         sm.saveTokenValues(sessionId, extractedValues);
-                        BurpExtender.printOutput("[+] 已保存 " + extractedValues.size() + " 个令牌值");
+                        LogManager.getInstance().printOutput("[+] 已保存 " + extractedValues.size() + " 个令牌值");
                     }
 
                     // 刷新UI
@@ -205,7 +205,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 解析用户会话时发生错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 解析用户会话时发生错误: " + e.getMessage());
             JOptionPane.showMessageDialog(parentComponent,
                     "解析过程中发生错误: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
         }
@@ -317,8 +317,8 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
      * 刷新用户会话标签页的表格数据
      */
     private void refreshUserSessionTab() {
-        // 通过BurpExtender的桥接方法刷新UI
-        BurpExtender.refreshPrivilegeTestData();
+        // 通过UIRequestDispatcher的桥接方法刷新UI
+        org.oxff.repeater.UIRequestDispatcher.getInstance().refreshPrivilegeTestData();
     }
 
     // ==================== Result 内部类 ====================

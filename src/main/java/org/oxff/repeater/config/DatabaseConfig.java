@@ -6,7 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Properties;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 /**
  * 数据库配置管理类 - 支持三种存储模式：自动、指定目录、指定文件
@@ -78,10 +78,10 @@ public class DatabaseConfig {
         if (configFile.exists()) {
             try (FileInputStream fis = new FileInputStream(configFile)) {
                 properties.load(fis);
-                BurpExtender.printOutput("[+] 已加载配置文件：" + configFile.getAbsolutePath());
+                LogManager.getInstance().printOutput("[+] 已加载配置文件：" + configFile.getAbsolutePath());
                 migrateOldConfig();
             } catch (IOException e) {
-                BurpExtender.printError("[!] 加载配置文件失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 加载配置文件失败: " + e.getMessage());
                 setDefaultConfig();
             }
         } else {
@@ -102,7 +102,7 @@ public class DatabaseConfig {
             if (!oldPath.isEmpty() && !oldFilename.isEmpty()) {
                 properties.setProperty(KEY_STORAGE_MODE, MODE_DIRECTORY);
                 properties.setProperty(KEY_STORAGE_BASE_DIR, oldPath);
-                BurpExtender.printOutput("[*] 已从旧版配置迁移到新版存储配置");
+                LogManager.getInstance().printOutput("[*] 已从旧版配置迁移到新版存储配置");
             }
             // 移除旧版键
             properties.remove(OLD_KEY_DB_PATH);
@@ -135,7 +135,7 @@ public class DatabaseConfig {
         properties.setProperty(KEY_PROXY_HOST, "127.0.0.1");
         properties.setProperty(KEY_PROXY_PORT, "8080");
 
-        BurpExtender.printOutput("[+] 已使用默认配置（自动模式）");
+        LogManager.getInstance().printOutput("[+] 已使用默认配置（自动模式）");
     }
 
     /**
@@ -144,10 +144,10 @@ public class DatabaseConfig {
     public boolean saveConfig() {
         try (FileOutputStream fos = new FileOutputStream(configFile)) {
             properties.store(fos, "Repeater Manager Configuration");
-            BurpExtender.printOutput("[+] 已保存配置到：" + configFile.getAbsolutePath());
+            LogManager.getInstance().printOutput("[+] 已保存配置到：" + configFile.getAbsolutePath());
             return true;
         } catch (IOException e) {
-            BurpExtender.printError("[!] 保存配置文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存配置文件失败: " + e.getMessage());
             return false;
         }
     }

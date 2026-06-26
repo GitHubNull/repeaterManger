@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.DedupConfig;
 import org.oxff.repeater.privilege.model.DedupKeepPolicy;
 import org.oxff.repeater.privilege.model.DedupStrategy;
@@ -70,7 +70,7 @@ public class DedupConfigYamlIO {
 
             Object configsObj = root.get("configs");
             if (!(configsObj instanceof List)) {
-                BurpExtender.printError("[!] 去重配置YAML格式错误：缺少configs列表");
+                LogManager.getInstance().printError("[!] 去重配置YAML格式错误：缺少configs列表");
                 return configs;
             }
 
@@ -87,11 +87,11 @@ public class DedupConfigYamlIO {
                         configs.add(config);
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析YAML去重配置条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML去重配置条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 去重配置YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 去重配置YAML解析失败: " + e.getMessage());
         }
         return configs;
     }
@@ -126,7 +126,7 @@ public class DedupConfigYamlIO {
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             if (!parentDir.mkdirs()) {
-                BurpExtender.printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
+                LogManager.getInstance().printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
                 return false;
             }
         }
@@ -137,7 +137,7 @@ public class DedupConfigYamlIO {
             writer.write(toYaml(configs));
             writer.flush();
         } catch (IOException e) {
-            BurpExtender.printError("[!] 写入去重配置YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入去重配置YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -152,7 +152,7 @@ public class DedupConfigYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                BurpExtender.printError("[!] 替换去重配置YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换去重配置YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -177,7 +177,7 @@ public class DedupConfigYamlIO {
             }
             return fromYaml(sb.toString());
         } catch (IOException e) {
-            BurpExtender.printError("[!] 读取去重配置YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取去重配置YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

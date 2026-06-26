@@ -1,6 +1,6 @@
 package org.oxff.repeater.io;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.oxff.repeater.db.DatabaseManager;
@@ -48,7 +48,7 @@ public class ErmArchiveWriter {
      */
     public boolean export(Component parent, boolean encrypted) {
         try {
-            BurpExtender.printOutput("[+] 开始ERM存档导出过程" + (encrypted ? "（加密模式）" : ""));
+            LogManager.getInstance().printOutput("[+] 开始ERM存档导出过程" + (encrypted ? "（加密模式）" : ""));
 
             // 1. 选择文件
             File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
@@ -128,7 +128,7 @@ public class ErmArchiveWriter {
                 ErmCryptoHelper.clearPassword(password);
             }
 
-            BurpExtender.printOutput("[+] ERM存档导出成功: " + outputFile.getAbsolutePath());
+            LogManager.getInstance().printOutput("[+] ERM存档导出成功: " + outputFile.getAbsolutePath());
             JOptionPane.showMessageDialog(parent,
                     "ERM存档导出成功！\n文件: " + outputFile.getAbsolutePath()
                             + "\n条目数: " + (1 + blobFiles.size()),
@@ -136,7 +136,7 @@ public class ErmArchiveWriter {
             return true;
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 导出ERM存档失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导出ERM存档失败: " + e.getMessage());
             JOptionPane.showMessageDialog(parent,
                     "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -665,7 +665,7 @@ public class ErmArchiveWriter {
                 return Integer.parseInt(rs.getString("value"));
             }
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] 无法读取schema_version，使用默认值" + ErmFormatConstants.CURRENT_SCHEMA_VERSION);
+            LogManager.getInstance().printOutput("[*] 无法读取schema_version，使用默认值" + ErmFormatConstants.CURRENT_SCHEMA_VERSION);
         }
         return ErmFormatConstants.CURRENT_SCHEMA_VERSION;
     }

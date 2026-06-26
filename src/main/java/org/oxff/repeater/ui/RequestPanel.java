@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.requests.HttpRequest;
@@ -155,7 +155,7 @@ public class RequestPanel extends JPanel {
             }
         } catch (Exception e) {
             // 如果无法创建Montoya编辑器，则使用标准文本区域
-            BurpExtender.printError("[!] 无法创建Montoya编辑器: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 无法创建Montoya编辑器: " + e.getMessage());
         }
     }
     
@@ -228,11 +228,11 @@ public class RequestPanel extends JPanel {
                         null
                     );
                 } catch (BadLocationException ex) {
-                    BurpExtender.printError("[!] 添加缩进失败: " + ex.getMessage());
+                    LogManager.getInstance().printError("[!] 添加缩进失败: " + ex.getMessage());
                 }
             });
         } catch (BadLocationException ex) {
-            BurpExtender.printError("[!] 添加缩进失败: " + ex.getMessage());
+            LogManager.getInstance().printError("[!] 添加缩进失败: " + ex.getMessage());
         }
     }
     
@@ -269,7 +269,7 @@ public class RequestPanel extends JPanel {
      */
     public void setRequestText(byte[] request) {
         if (request == null || request.length == 0) {
-            BurpExtender.printError("[!] 设置请求失败：请求数据为空");
+            LogManager.getInstance().printError("[!] 设置请求失败：请求数据为空");
             return;
         }
         
@@ -309,16 +309,16 @@ public class RequestPanel extends JPanel {
             
             // 验证请求格式
             if (!RequestDataHelper.isValidHttpRequest(requestText)) {
-                BurpExtender.printError("[!] 请求格式无效，尝试修复...");
+                LogManager.getInstance().printError("[!] 请求格式无效，尝试修复...");
                 requestText = RequestDataHelper.repairBinaryData(request);
             }
             
             // 设置文本到UI
             setRequestText(requestText);
-            BurpExtender.printOutput("[*] 已加载请求数据，大小: " + request.length + " 字节");
+            LogManager.getInstance().printOutput("[*] 已加载请求数据，大小: " + request.length + " 字节");
             
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置请求文本时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置请求文本时出错: " + e.getMessage());
             // 创建基本请求作为后备方案
             setRequestText(RequestDataHelper.createBasicRequest());
         }
@@ -375,7 +375,7 @@ public class RequestPanel extends JPanel {
      */
     public void setRequest(byte[] request) {
         if (request == null || request.length == 0) {
-            BurpExtender.printError("[!] 设置请求失败：请求为空");
+            LogManager.getInstance().printError("[!] 设置请求失败：请求为空");
             return;
         }
         
@@ -406,7 +406,7 @@ public class RequestPanel extends JPanel {
             }
             
             if (headers.isEmpty()) {
-                BurpExtender.printError("[!] 请求头为空，使用默认值");
+                LogManager.getInstance().printError("[!] 请求头为空，使用默认值");
                 setDefaultRequestParams();
                 return;
             }
@@ -480,10 +480,10 @@ public class RequestPanel extends JPanel {
             }
             contentTypeField.setText(contentType);
             
-            BurpExtender.printOutput("[+] 请求已加载: " + (isHttps ? "https://" : "http://") + host + ":" + port);
+            LogManager.getInstance().printOutput("[+] 请求已加载: " + (isHttps ? "https://" : "http://") + host + ":" + port);
             
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置请求时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置请求时出错: " + e.getMessage());
             setDefaultRequestParams();
         }
     }
@@ -515,13 +515,13 @@ public class RequestPanel extends JPanel {
             
             // 验证请求数据
             if (request == null || request.length == 0) {
-                BurpExtender.printError("[!] 请求数据为空，使用默认请求");
+                LogManager.getInstance().printError("[!] 请求数据为空，使用默认请求");
                 return RequestDataHelper.createBasicRequest().getBytes();
             }
             
             // 如果需要修改主机、端口或协议
             if (isRequestModified()) {
-                BurpExtender.printOutput("[*] 检测到请求参数已修改，正在更新请求...");
+                LogManager.getInstance().printOutput("[*] 检测到请求参数已修改，正在更新请求...");
                 
                 try {
                     // 使用Montoya API分析请求
@@ -607,16 +607,16 @@ public class RequestPanel extends JPanel {
                     
                     // 验证重建后的请求
                     if (!RequestDataHelper.isValidHttpRequest(new String(request))) {
-                        BurpExtender.printError("[!] 重建的请求格式无效，使用原始请求");
+                        LogManager.getInstance().printError("[!] 重建的请求格式无效，使用原始请求");
                         return request;
                     }
                     
-                    BurpExtender.printOutput("[+] 请求已更新: " +
+                    LogManager.getInstance().printOutput("[+] 请求已更新: " +
                                            (httpsCheckbox.isSelected() ? "https://" : "http://") +
                                            hostField.getText() + ":" + portField.getText());
                     
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 更新请求时出错: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 更新请求时出错: " + e.getMessage());
                     // 返回原始请求
                     return request;
                 }
@@ -625,7 +625,7 @@ public class RequestPanel extends JPanel {
             return request;
             
         } catch (Exception e) {
-            BurpExtender.printError("[!] 获取请求时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取请求时出错: " + e.getMessage());
             return RequestDataHelper.createBasicRequest().getBytes();
         }
     }

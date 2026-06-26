@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.schema;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -21,7 +21,7 @@ public class SchemaInitializer {
             initializeV3Schema(stmt);
             // 检查是否需要从旧版本迁移
             SchemaMigrator.migrateIfNeeded(conn);
-            BurpExtender.printOutput("[+] 数据库表结构初始化成功");
+            LogManager.getInstance().printOutput("[+] 数据库表结构初始化成功");
         }
     }
 
@@ -137,7 +137,7 @@ public class SchemaInitializer {
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        BurpExtender.printOutput("[+] v11 Schema 初始化完成");
+        LogManager.getInstance().printOutput("[+] v11 Schema 初始化完成");
     }
 
     /**

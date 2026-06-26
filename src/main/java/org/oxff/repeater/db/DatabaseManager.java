@@ -1,6 +1,6 @@
 package org.oxff.repeater.db;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.config.DatabaseConfig;
 import org.oxff.repeater.db.schema.SchemaInitializer;
 import org.oxff.repeater.service.GarbageCollectorService;
@@ -74,7 +74,7 @@ public class DatabaseManager {
      */
     public void closeConnections() {
         synchronized (connectionLock) {
-            BurpExtender.printOutput("[*] 正在关闭数据库连接管理器...");
+            LogManager.getInstance().printOutput("[*] 正在关闭数据库连接管理器...");
 
             // 停止 GC 服务
             if (gcService != null) {
@@ -97,7 +97,7 @@ public class DatabaseManager {
                 }
             }
             initialized.set(false);
-            BurpExtender.printOutput("[+] 数据库连接管理器已关闭");
+            LogManager.getInstance().printOutput("[+] 数据库连接管理器已关闭");
         }
     }
 
@@ -106,7 +106,7 @@ public class DatabaseManager {
      */
     public void resetForNewSession() {
         synchronized (connectionLock) {
-            BurpExtender.printOutput("[*] 重置数据库管理器以开始新会话...");
+            LogManager.getInstance().printOutput("[*] 重置数据库管理器以开始新会话...");
             // 先关闭现有连接池中的连接
             Connection conn;
             while ((conn = connectionPool.poll()) != null) {
@@ -122,7 +122,7 @@ public class DatabaseManager {
             currentDbPath = null;
             // 清除会话目录状态，下次初始化时将创建新的会话目录
             dbConfig.setSessionDirectory(null);
-            BurpExtender.printOutput("[+] 数据库管理器已重置，下次初始化将使用新会话目录");
+            LogManager.getInstance().printOutput("[+] 数据库管理器已重置，下次初始化将使用新会话目录");
         }
     }
 
@@ -131,7 +131,7 @@ public class DatabaseManager {
      */
     public boolean initialize() {
         if (initialized.get()) {
-            BurpExtender.printOutput("[*] 数据库已经初始化，跳过初始化过程");
+            LogManager.getInstance().printOutput("[*] 数据库已经初始化，跳过初始化过程");
             return true;
         }
 
@@ -141,17 +141,17 @@ public class DatabaseManager {
             File dbFile = new File(currentDbPath);
             File dbDir = dbFile.getParentFile();
 
-            BurpExtender.printOutput("[*] 数据库文件路径: " + currentDbPath);
+            LogManager.getInstance().printOutput("[*] 数据库文件路径: " + currentDbPath);
 
             // 确保会话目录结构完整（含 blobs/、logs/ 子目录）
             org.oxff.repeater.config.SessionDirectory sessionDir = dbConfig.getOrCreateSessionDirectory();
             if (sessionDir != null) {
                 sessionDir.ensureCreated();
-                BurpExtender.printOutput("[+] 会话目录: " + sessionDir.getAbsolutePath());
+                LogManager.getInstance().printOutput("[+] 会话目录: " + sessionDir.getAbsolutePath());
             }
 
             if (!dbDir.exists()) {
-                BurpExtender.printOutput("[*] 创建数据库目录: " + dbDir.getAbsolutePath());
+                LogManager.getInstance().printOutput("[*] 创建数据库目录: " + dbDir.getAbsolutePath());
                 if (!dbDir.mkdirs()) {
                     throw new IOException("无法创建数据库目录: " + dbDir.getAbsolutePath());
                 }
@@ -160,21 +160,21 @@ public class DatabaseManager {
             // 显式加载SQLite JDBC驱动
             try {
                 Class.forName("org.sqlite.JDBC");
-                BurpExtender.printOutput("[+] SQLite JDBC驱动加载成功");
+                LogManager.getInstance().printOutput("[+] SQLite JDBC驱动加载成功");
             } catch (ClassNotFoundException e) {
-                BurpExtender.printError("[!] SQLite JDBC驱动加载失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] SQLite JDBC驱动加载失败: " + e.getMessage());
                 throw new SQLException("SQLite JDBC驱动未找到", e);
             }
 
             // 使用简单的JDBC连接
             String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath().replace("\\", "/");
-            BurpExtender.printOutput("[*] JDBC URL: " + jdbcUrl);
+            LogManager.getInstance().printOutput("[*] JDBC URL: " + jdbcUrl);
 
             // 创建临时连接用于初始化
             try (Connection tempConnection = DriverManager.getConnection(jdbcUrl);
                  Statement stmt = tempConnection.createStatement()) {
 
-                BurpExtender.printOutput("[+] 数据库连接成功");
+                LogManager.getInstance().printOutput("[+] 数据库连接成功");
 
                 // 设置SQLite配置
                 stmt.execute("PRAGMA journal_mode=DELETE");
@@ -194,10 +194,10 @@ public class DatabaseManager {
                     connectionPool.offer(poolConn);
                 }
             }
-            BurpExtender.printOutput("[+] 数据库连接池已创建，大小: " + connectionPool.size());
+            LogManager.getInstance().printOutput("[+] 数据库连接池已创建，大小: " + connectionPool.size());
 
             initialized.set(true);
-            BurpExtender.printOutput("[+] 数据库初始化成功: " + currentDbPath);
+            LogManager.getInstance().printOutput("[+] 数据库初始化成功: " + currentDbPath);
 
             // 标记非正常关闭（启动时），正常关闭时在 closeConnections 中设置为 true
             setCleanShutdown(false);
@@ -208,7 +208,7 @@ public class DatabaseManager {
 
             return true;
         } catch (Exception e) {
-            BurpExtender.printError("[!] 数据库初始化失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 数据库初始化失败: " + e.getMessage());
             e.printStackTrace();
             initialized.set(false);
             currentDbPath = null;
@@ -266,7 +266,7 @@ public class DatabaseManager {
             // 中断时直接创建新连接
             return createPooledConnectionProxy(createNewConnection());
         } catch (Exception e) {
-            BurpExtender.printError("[!] 获取数据库连接失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取数据库连接失败: " + e.getMessage());
             throw new SQLException("获取数据库连接失败: " + e.getMessage());
         }
     }
@@ -355,7 +355,7 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 归还数据库连接失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 归还数据库连接失败: " + e.getMessage());
         }
     }
 
@@ -436,18 +436,18 @@ public class DatabaseManager {
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
 
-            BurpExtender.printOutput("[*] 正在检查数据库状态...");
+            LogManager.getInstance().printOutput("[*] 正在检查数据库状态...");
 
             // 检查requests表
             try {
                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS count FROM requests");
                 if (rs.next()) {
                     int count = rs.getInt("count");
-                    BurpExtender.printOutput("[+] 请求表(requests)存在，包含 " + count + " 条记录");
+                    LogManager.getInstance().printOutput("[+] 请求表(requests)存在，包含 " + count + " 条记录");
                 }
                 rs.close();
             } catch (SQLException e) {
-                BurpExtender.printOutput("[!] 请求表(requests)不存在或查询失败: " + e.getMessage());
+                LogManager.getInstance().printOutput("[!] 请求表(requests)不存在或查询失败: " + e.getMessage());
             }
 
             // 检查history表
@@ -455,17 +455,17 @@ public class DatabaseManager {
                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS count FROM history");
                 if (rs.next()) {
                     int count = rs.getInt("count");
-                    BurpExtender.printOutput("[+] 历史表(history)存在，包含 " + count + " 条记录");
+                    LogManager.getInstance().printOutput("[+] 历史表(history)存在，包含 " + count + " 条记录");
                 }
                 rs.close();
             } catch (SQLException e) {
-                BurpExtender.printOutput("[!] 历史表(history)不存在或查询失败: " + e.getMessage());
+                LogManager.getInstance().printOutput("[!] 历史表(history)不存在或查询失败: " + e.getMessage());
             }
 
-            BurpExtender.printOutput("[*] 数据库检查完成，数据库文件路径: " + currentDbPath);
+            LogManager.getInstance().printOutput("[*] 数据库检查完成，数据库文件路径: " + currentDbPath);
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 检查数据库状态失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 检查数据库状态失败: " + e.getMessage());
         }
     }
 
@@ -476,7 +476,7 @@ public class DatabaseManager {
      */
     public void testDatabaseWithSampleData() {
         if (!initialized.get()) {
-            BurpExtender.printError("[!] 数据库未初始化，无法进行测试");
+            LogManager.getInstance().printError("[!] 数据库未初始化，无法进行测试");
             return;
         }
 
@@ -486,19 +486,19 @@ public class DatabaseManager {
             // 使用简单查询验证数据库连接和表结构，不写入任何数据
             try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM requests")) {
                 if (rs.next()) {
-                    BurpExtender.printOutput("[*] 当前请求表记录数: " + rs.getInt(1));
+                    LogManager.getInstance().printOutput("[*] 当前请求表记录数: " + rs.getInt(1));
                 }
             }
 
             try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM history")) {
                 if (rs.next()) {
-                    BurpExtender.printOutput("[*] 当前历史记录表记录数: " + rs.getInt(1));
+                    LogManager.getInstance().printOutput("[*] 当前历史记录表记录数: " + rs.getInt(1));
                 }
             }
 
-            BurpExtender.printOutput("[+] 数据库连接测试完成");
+            LogManager.getInstance().printOutput("[+] 数据库连接测试完成");
         } catch (Exception e) {
-            BurpExtender.printError("[!] 数据库测试失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 数据库测试失败: " + e.getMessage());
         }
     }
 }

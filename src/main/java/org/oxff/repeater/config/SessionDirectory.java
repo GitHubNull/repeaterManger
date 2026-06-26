@@ -1,6 +1,6 @@
 package org.oxff.repeater.config;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -55,7 +55,7 @@ public class SessionDirectory {
                 suffix++;
             }
             sessionDir = new File(baseDir, dirName + "_" + suffix);
-            BurpExtender.printOutput("[*] 会话目录名冲突，使用: " + sessionDir.getName());
+            LogManager.getInstance().printOutput("[*] 会话目录名冲突，使用: " + sessionDir.getName());
         }
 
         return new SessionDirectory(sessionDir);
@@ -112,19 +112,19 @@ public class SessionDirectory {
      */
     public boolean ensureCreated() {
         if (!directory.exists() && !directory.mkdirs()) {
-            BurpExtender.printError("[!] 无法创建会话目录: " + directory.getAbsolutePath());
+            LogManager.getInstance().printError("[!] 无法创建会话目录: " + directory.getAbsolutePath());
             return false;
         }
 
         File blobsDir = getBlobsDir();
         if (!blobsDir.exists() && !blobsDir.mkdirs()) {
-            BurpExtender.printError("[!] 无法创建 blobs 目录: " + blobsDir.getAbsolutePath());
+            LogManager.getInstance().printError("[!] 无法创建 blobs 目录: " + blobsDir.getAbsolutePath());
             return false;
         }
 
         File logsDir = getLogsDir();
         if (!logsDir.exists() && !logsDir.mkdirs()) {
-            BurpExtender.printError("[!] 无法创建日志目录: " + logsDir.getAbsolutePath());
+            LogManager.getInstance().printError("[!] 无法创建日志目录: " + logsDir.getAbsolutePath());
             return false;
         }
 

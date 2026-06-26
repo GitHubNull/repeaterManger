@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.history.HistoryStatsDAO;
 
 import javax.swing.*;
@@ -394,7 +394,7 @@ public class HistoryStatsBar extends JPanel {
 
                 SwingUtilities.invokeLater(() -> updateLabels(data));
             } catch (Exception e) {
-                BurpExtender.printError("[!] 刷新统计失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 刷新统计失败: " + e.getMessage());
             }
         }).start();
     }

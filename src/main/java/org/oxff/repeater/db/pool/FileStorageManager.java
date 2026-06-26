@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.pool;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 
 import java.io.File;
@@ -30,7 +30,7 @@ public class FileStorageManager {
         try {
             File baseDir = getBlobsBaseDir();
             if (baseDir == null) {
-                BurpExtender.printError("[!] 无法确定 blobs 基础目录");
+                LogManager.getInstance().printError("[!] 无法确定 blobs 基础目录");
                 return null;
             }
 
@@ -48,7 +48,7 @@ public class FileStorageManager {
             // 确保子目录存在
             File parentDir = targetFile.getParentFile();
             if (!parentDir.exists() && !parentDir.mkdirs()) {
-                BurpExtender.printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
+                LogManager.getInstance().printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
                 return null;
             }
 
@@ -70,7 +70,7 @@ public class FileStorageManager {
                 }
             }
         } catch (IOException e) {
-            BurpExtender.printError("[!] 写入 Body 文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入 Body 文件失败: " + e.getMessage());
             return null;
         }
     }
@@ -94,13 +94,13 @@ public class FileStorageManager {
 
             File file = new File(baseDir, relativePath);
             if (!file.exists()) {
-                BurpExtender.printError("[!] Body 文件不存在: " + file.getAbsolutePath());
+                LogManager.getInstance().printError("[!] Body 文件不存在: " + file.getAbsolutePath());
                 return null;
             }
 
             return Files.readAllBytes(file.toPath());
         } catch (IOException e) {
-            BurpExtender.printError("[!] 读取 Body 文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取 Body 文件失败: " + e.getMessage());
             return null;
         }
     }
@@ -138,7 +138,7 @@ public class FileStorageManager {
 
             return deleted;
         } catch (IOException e) {
-            BurpExtender.printError("[!] 删除 Body 文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除 Body 文件失败: " + e.getMessage());
             return false;
         }
     }

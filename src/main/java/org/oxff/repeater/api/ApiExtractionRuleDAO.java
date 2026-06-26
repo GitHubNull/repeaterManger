@@ -1,6 +1,6 @@
 package org.oxff.repeater.api;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 
 import java.sql.Connection;
@@ -39,7 +39,7 @@ public class ApiExtractionRuleDAO {
                 rules.add(mapResultSetToRuleV5(rs));
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v5规则查询失败，尝试v4兼容查询: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v5规则查询失败，尝试v4兼容查询: " + e.getMessage());
             useV5 = false;
         }
 
@@ -53,7 +53,7 @@ public class ApiExtractionRuleDAO {
                     rules.add(mapResultSetToRule(rs));
                 }
             } catch (SQLException e) {
-                BurpExtender.printOutput("[*] v4规则查询失败，尝试v3兼容查询: " + e.getMessage());
+                LogManager.getInstance().printOutput("[*] v4规则查询失败，尝试v3兼容查询: " + e.getMessage());
                 useV4 = false;
             }
 
@@ -65,7 +65,7 @@ public class ApiExtractionRuleDAO {
                         rules.add(mapResultSetToRuleV3(rs));
                     }
                 } catch (SQLException e) {
-                    BurpExtender.printError("[!] 获取API提取规则失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 获取API提取规则失败: " + e.getMessage());
                 }
             }
         }
@@ -93,7 +93,7 @@ public class ApiExtractionRuleDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v5规则查询失败，尝试v4兼容查询: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v5规则查询失败，尝试v4兼容查询: " + e.getMessage());
         }
 
         // 尝试v4查询
@@ -106,7 +106,7 @@ public class ApiExtractionRuleDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v4规则查询失败，尝试v3兼容查询: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v4规则查询失败，尝试v3兼容查询: " + e.getMessage());
         }
 
         // 回退到v3查询
@@ -119,7 +119,7 @@ public class ApiExtractionRuleDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取API提取规则失败(id=" + id + "): " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取API提取规则失败(id=" + id + "): " + e.getMessage());
         }
         return null;
     }
@@ -158,13 +158,13 @@ public class ApiExtractionRuleDAO {
                 try (ResultSet rs = pstmt.getGeneratedKeys()) {
                     if (rs.next()) {
                         int id = rs.getInt(1);
-                        BurpExtender.printOutput("[+] API提取规则已保存，ID: " + id);
+                        LogManager.getInstance().printOutput("[+] API提取规则已保存，ID: " + id);
                         return id;
                     }
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v5规则插入失败，尝试v4兼容插入: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v5规则插入失败，尝试v4兼容插入: " + e.getMessage());
         }
 
         // 尝试v4插入
@@ -184,13 +184,13 @@ public class ApiExtractionRuleDAO {
                 try (ResultSet rs = pstmt.getGeneratedKeys()) {
                     if (rs.next()) {
                         int id = rs.getInt(1);
-                        BurpExtender.printOutput("[+] API提取规则已保存(v4)，ID: " + id);
+                        LogManager.getInstance().printOutput("[+] API提取规则已保存(v4)，ID: " + id);
                         return id;
                     }
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v4规则插入失败，尝试v3兼容插入: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v4规则插入失败，尝试v3兼容插入: " + e.getMessage());
         }
 
         // 回退到v3插入
@@ -208,13 +208,13 @@ public class ApiExtractionRuleDAO {
                 try (ResultSet rs = pstmt.getGeneratedKeys()) {
                     if (rs.next()) {
                         int id = rs.getInt(1);
-                        BurpExtender.printOutput("[+] API提取规则已保存(v3)，ID: " + id);
+                        LogManager.getInstance().printOutput("[+] API提取规则已保存(v3)，ID: " + id);
                         return id;
                     }
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存API提取规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存API提取规则失败: " + e.getMessage());
         }
         return -1;
     }
@@ -249,11 +249,11 @@ public class ApiExtractionRuleDAO {
 
             boolean result = pstmt.executeUpdate() > 0;
             if (result) {
-                BurpExtender.printOutput("[+] API提取规则已更新，ID: " + rule.getId());
+                LogManager.getInstance().printOutput("[+] API提取规则已更新，ID: " + rule.getId());
                 return result;
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v5规则更新失败，尝试v4兼容更新: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v5规则更新失败，尝试v4兼容更新: " + e.getMessage());
         }
 
         // 尝试v4更新
@@ -271,11 +271,11 @@ public class ApiExtractionRuleDAO {
 
             boolean result = pstmt.executeUpdate() > 0;
             if (result) {
-                BurpExtender.printOutput("[+] API提取规则已更新(v4)，ID: " + rule.getId());
+                LogManager.getInstance().printOutput("[+] API提取规则已更新(v4)，ID: " + rule.getId());
                 return result;
             }
         } catch (SQLException e) {
-            BurpExtender.printOutput("[*] v4规则更新失败，尝试v3兼容更新: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] v4规则更新失败，尝试v3兼容更新: " + e.getMessage());
         }
 
         // 回退到v3更新
@@ -291,11 +291,11 @@ public class ApiExtractionRuleDAO {
 
             boolean result = pstmt.executeUpdate() > 0;
             if (result) {
-                BurpExtender.printOutput("[+] API提取规则已更新(v3)，ID: " + rule.getId());
+                LogManager.getInstance().printOutput("[+] API提取规则已更新(v3)，ID: " + rule.getId());
             }
             return result;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新API提取规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新API提取规则失败: " + e.getMessage());
             return false;
         }
     }
@@ -311,11 +311,11 @@ public class ApiExtractionRuleDAO {
             pstmt.setInt(1, id);
             boolean result = pstmt.executeUpdate() > 0;
             if (result) {
-                BurpExtender.printOutput("[+] API提取规则已删除，ID: " + id);
+                LogManager.getInstance().printOutput("[+] API提取规则已删除，ID: " + id);
             }
             return result;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除API提取规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除API提取规则失败: " + e.getMessage());
             return false;
         }
     }
@@ -329,10 +329,10 @@ public class ApiExtractionRuleDAO {
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.executeUpdate();
-            BurpExtender.printOutput("[+] 所有API提取规则已删除");
+            LogManager.getInstance().printOutput("[+] 所有API提取规则已删除");
             return true;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除所有API提取规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除所有API提取规则失败: " + e.getMessage());
             return false;
         }
     }

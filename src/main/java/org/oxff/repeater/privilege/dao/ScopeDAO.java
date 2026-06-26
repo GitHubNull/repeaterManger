@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege.dao;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.privilege.model.ScopeEntry;
 
@@ -37,7 +37,7 @@ public class ScopeDAO {
                 entries.add(entry);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取Scope条目列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取Scope条目列表失败: " + e.getMessage());
         }
         return entries;
     }
@@ -61,7 +61,7 @@ public class ScopeDAO {
                 entries.add(entry);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取已启用Scope条目列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取已启用Scope条目列表失败: " + e.getMessage());
         }
         return entries;
     }
@@ -85,7 +85,7 @@ public class ScopeDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 添加Scope条目失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加Scope条目失败: " + e.getMessage());
         }
         return -1;
     }
@@ -104,7 +104,7 @@ public class ScopeDAO {
             pstmt.setInt(5, entry.getId());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新Scope条目失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新Scope条目失败: " + e.getMessage());
         }
         return false;
     }
@@ -119,7 +119,7 @@ public class ScopeDAO {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除Scope条目失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除Scope条目失败: " + e.getMessage());
         }
         return false;
     }

@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -104,7 +104,7 @@ public class TokenReplacementEngine {
             try {
                 headerStr = replaceUrlParam(headerStr, loc.getExpression(), value);
             } catch (Exception e) {
-                BurpExtender.printError("[!] URL参数令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
+                LogManager.getInstance().printError("[!] URL参数令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
             }
         }
 
@@ -120,7 +120,7 @@ public class TokenReplacementEngine {
             try {
                 headerStr = replaceHeader(headerStr, loc.getExpression(), value);
             } catch (Exception e) {
-                BurpExtender.printError("[!] Header令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
+                LogManager.getInstance().printError("[!] Header令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
             }
         }
 
@@ -160,7 +160,7 @@ public class TokenReplacementEngine {
                             break;
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] Body令牌替换失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
+                    LogManager.getInstance().printError("[!] Body令牌替换失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
                 }
             }
         }
@@ -259,7 +259,7 @@ public class TokenReplacementEngine {
             }
             return root.toString();
         } catch (Exception e) {
-            BurpExtender.printError("[!] JSON body替换失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] JSON body替换失败: " + e.getMessage());
             return bodyStr;
         }
     }
@@ -435,7 +435,7 @@ public class TokenReplacementEngine {
             transformer.transform(new DOMSource(doc), new StreamResult(writer));
             return writer.toString();
         } catch (Exception e) {
-            BurpExtender.printError("[!] XML body替换失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] XML body替换失败: " + e.getMessage());
             return bodyStr;
         }
     }
@@ -467,7 +467,7 @@ public class TokenReplacementEngine {
         // 从Content-Type中提取boundary
         String boundary = extractBoundary(contentType);
         if (boundary == null) {
-            BurpExtender.printError("[!] multipart/form-data boundary提取失败，无法替换");
+            LogManager.getInstance().printError("[!] multipart/form-data boundary提取失败，无法替换");
             return bodyStr;
         }
 
@@ -504,7 +504,7 @@ public class TokenReplacementEngine {
             if (partFieldName != null && partFieldName.equals(fieldName)) {
                 // 检查是否为二进制part（有非text/plain的Content-Type子header）
                 if (isBinaryPart(subHeaders)) {
-                    BurpExtender.printOutput("[*] 跳过二进制multipart part替换 (field=" + fieldName + ")");
+                    LogManager.getInstance().printOutput("[*] 跳过二进制multipart part替换 (field=" + fieldName + ")");
                     resultParts.add(part);
                     replaced = true;
                     continue;
@@ -633,7 +633,7 @@ public class TokenReplacementEngine {
         int firstCRLF = headerStr.indexOf("\r\n");
         if (firstCRLF < 0) {
             // 没有完整的请求行，无法替换URL参数
-            BurpExtender.printError("[!] 无法解析请求行，URL参数替换失败");
+            LogManager.getInstance().printError("[!] 无法解析请求行，URL参数替换失败");
             return headerStr;
         }
 
@@ -643,7 +643,7 @@ public class TokenReplacementEngine {
         // 解析请求行：METHOD PATH HTTP_VERSION
         String[] parts = requestLine.split("\\s+");
         if (parts.length < 2) {
-            BurpExtender.printError("[!] 请求行格式异常，URL参数替换失败: " + requestLine);
+            LogManager.getInstance().printError("[!] 请求行格式异常，URL参数替换失败: " + requestLine);
             return headerStr;
         }
 
@@ -744,7 +744,7 @@ public class TokenReplacementEngine {
      */
     private static String sanitizeNewlines(String value, String expression) {
         if (value.contains("\n") || value.contains("\r")) {
-            BurpExtender.printOutput("[*] 令牌值包含换行符，替换时已转换为空格 (location=" + expression + ")");
+            LogManager.getInstance().printOutput("[*] 令牌值包含换行符，替换时已转换为空格 (location=" + expression + ")");
             value = value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ");
         }
         return value;

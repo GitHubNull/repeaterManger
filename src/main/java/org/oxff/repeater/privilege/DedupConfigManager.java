@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.http.HttpService;
 import org.oxff.repeater.privilege.model.DedupConfig;
 import org.oxff.repeater.privilege.model.DedupKeepPolicy;
@@ -155,7 +155,7 @@ public class DedupConfigManager {
                 .max()
                 .orElse(0);
 
-        BurpExtender.printOutput("[+] 全局去重配置已加载，共 " + globalConfigs.size() + " 条，路径: " + globalConfigsPath);
+        LogManager.getInstance().printOutput("[+] 全局去重配置已加载，共 " + globalConfigs.size() + " 条，路径: " + globalConfigsPath);
     }
 
     /**
@@ -165,7 +165,7 @@ public class DedupConfigManager {
         boolean result = DedupConfigYamlIO.writeToFile(
                 new ArrayList<>(globalConfigs), globalConfigsPath);
         if (result) {
-            BurpExtender.printOutput("[+] 全局去重配置已保存，共 " + globalConfigs.size() + " 条");
+            LogManager.getInstance().printOutput("[+] 全局去重配置已保存，共 " + globalConfigs.size() + " 条");
         }
         return result;
     }
@@ -178,7 +178,7 @@ public class DedupConfigManager {
         config.setStorageType(DedupConfig.StorageType.GLOBAL);
         globalConfigs.add(config);
         saveGlobalConfigs();
-        BurpExtender.printOutput("[+] 全局去重配置已添加: " + config.getStrategy().getDisplayName()
+        LogManager.getInstance().printOutput("[+] 全局去重配置已添加: " + config.getStrategy().getDisplayName()
                 + " (优先级: " + config.getPriority() + ")");
     }
 
@@ -192,7 +192,7 @@ public class DedupConfigManager {
                 config.setStorageType(DedupConfig.StorageType.GLOBAL);
                 globalConfigs.set(i, config);
                 saveGlobalConfigs();
-                BurpExtender.printOutput("[+] 全局去重配置已更新: " + config.getStrategy().getDisplayName()
+                LogManager.getInstance().printOutput("[+] 全局去重配置已更新: " + config.getStrategy().getDisplayName()
                         + " (优先级: " + config.getPriority() + ")");
                 return;
             }
@@ -223,7 +223,7 @@ public class DedupConfigManager {
         config.setId(sessionIdCounter--);
         config.setStorageType(DedupConfig.StorageType.SESSION);
         sessionConfigs.add(config);
-        BurpExtender.printOutput("[+] 会话级去重配置已添加: " + config.getStrategy().getDisplayName()
+        LogManager.getInstance().printOutput("[+] 会话级去重配置已添加: " + config.getStrategy().getDisplayName()
                 + " (优先级: " + config.getPriority() + ")");
     }
 

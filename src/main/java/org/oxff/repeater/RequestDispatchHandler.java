@@ -1,6 +1,6 @@
 package org.oxff.repeater;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
@@ -135,7 +135,7 @@ public class RequestDispatchHandler {
         try {
             ScopeManager.getInstance().setAutoTestEnabled(enabled);
         } catch (Exception e) {
-            BurpExtender.printError("[!] 联动代理监听器失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 联动代理监听器失败: " + e.getMessage());
         }
 
         // 模式变更监听器在EDT上通知，避免在后台线程中直接操作Swing组件
@@ -161,7 +161,7 @@ public class RequestDispatchHandler {
             try {
                 listener.onModeChanged(newMode);
             } catch (Exception e) {
-                BurpExtender.printError("[!] 模式变更监听器异常: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 模式变更监听器异常: " + e.getMessage());
             }
         }
     }
@@ -236,7 +236,7 @@ public class RequestDispatchHandler {
                 return;
             }
 
-            BurpExtender.printOutput("[*] 正在发送请求...");
+            LogManager.getInstance().printOutput("[*] 正在发送请求...");
             responsePanel.clear();
 
             int timeout = requestPanel.getTimeout();
@@ -252,7 +252,7 @@ public class RequestDispatchHandler {
                         try {
                             handleResponseSuccess(finalRequestBytes, response, requestTimeMs, responseTimeMs, durationMs);
                         } catch (Exception ex) {
-                            BurpExtender.printError("[!] 处理响应时发生异常: " + ex.getMessage());
+                            LogManager.getInstance().printError("[!] 处理响应时发生异常: " + ex.getMessage());
                             JOptionPane.showMessageDialog(mainPanel,
                                 "处理响应时出错: " + ex.getMessage(),
                                 "响应处理异常",
@@ -268,7 +268,7 @@ public class RequestDispatchHandler {
                     SwingUtilities.invokeLater(() -> {
                         try {
                             handleResponseFailure(finalRequestBytes, errorMessage, requestTimeMs, responseTimeMs, durationMs);
-                            BurpExtender.printError("[!] 请求失败: " + errorMessage);
+                            LogManager.getInstance().printError("[!] 请求失败: " + errorMessage);
                             JOptionPane.showMessageDialog(mainPanel,
                                 "请求失败或超时，未收到响应数据: " + errorMessage,
                                 "请求错误",
@@ -281,7 +281,7 @@ public class RequestDispatchHandler {
             });
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 准备请求时发生错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 准备请求时发生错误: " + e.getMessage());
             SwingUtilities.invokeLater(() -> {
                 JOptionPane.showMessageDialog(mainPanel,
                     "准备请求时出错: " + e.getMessage(),
@@ -329,7 +329,7 @@ public class RequestDispatchHandler {
                         path = parsedUrl.getPath();
                         query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                     } catch (Exception e) {
-                        BurpExtender.printOutput("[*] 使用备选方法解析URL组件: " + url);
+                        LogManager.getInstance().printOutput("[*] 使用备选方法解析URL组件: " + url);
                         if (url.startsWith("https://")) {
                             protocol = "https";
                             url = url.substring(8);
@@ -372,7 +372,7 @@ public class RequestDispatchHandler {
                         method
                     );
                 } catch (Exception e) {
-                    BurpExtender.printOutput("[*] 使用备选方法解析URL: " + url);
+                    LogManager.getInstance().printOutput("[*] 使用备选方法解析URL: " + url);
 
                     String protocol = "http";
                     String host = "";
@@ -426,19 +426,19 @@ public class RequestDispatchHandler {
                         record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
                 historyPanel.addHistoryRecord(record);
 
-                BurpExtender.printOutput(String.format(
+                LogManager.getInstance().printOutput(String.format(
                     "%s 请求完成: %s %s → HTTP %d (%d 字节)",
                     statusCode > 0 && statusCode < 400 ? "[+]" : "[!]",
                     method, url, statusCode, response.length));
             } catch (Exception ex) {
-                BurpExtender.printError("[!] 处理响应时发生异常: " + ex.getMessage());
+                LogManager.getInstance().printError("[!] 处理响应时发生异常: " + ex.getMessage());
                 JOptionPane.showMessageDialog(mainPanel,
                     "处理响应时出错: " + ex.getMessage(),
                     "响应处理异常",
                     JOptionPane.ERROR_MESSAGE);
             }
         } else {
-            BurpExtender.printError("[!] 请求失败: 无响应数据");
+            LogManager.getInstance().printError("[!] 请求失败: 无响应数据");
             JOptionPane.showMessageDialog(mainPanel,
                 "请求失败或超时，未收到响应数据",
                 "请求错误",
@@ -474,7 +474,7 @@ public class RequestDispatchHandler {
                 path = parsedUrl.getPath();
                 query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
             } catch (Exception e) {
-                BurpExtender.printOutput("[*] 使用备选方法解析URL组件: " + url);
+                LogManager.getInstance().printOutput("[*] 使用备选方法解析URL组件: " + url);
                 if (url.startsWith("https://")) {
                     protocol = "https";
                     url = url.substring(8);
@@ -528,11 +528,11 @@ public class RequestDispatchHandler {
                     record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
             historyPanel.addHistoryRecord(record);
 
-            BurpExtender.printOutput(String.format(
+            LogManager.getInstance().printOutput(String.format(
                 "[+] 请求失败已记录: %s %s → 错误: %s",
                 method, url, errorMessage));
         } catch (Exception ex) {
-            BurpExtender.printError("[!] 处理失败响应时发生异常: " + ex.getMessage());
+            LogManager.getInstance().printError("[!] 处理失败响应时发生异常: " + ex.getMessage());
         }
     }
 
@@ -551,7 +551,7 @@ public class RequestDispatchHandler {
             historyList.add(0, record);
         }
 
-        BurpExtender.printOutput(
+        LogManager.getInstance().printOutput(
             String.format("[+] 已添加历史记录到请求ID %d，当前历史记录数量: %d",
                 requestId, historyList.size()));
     }
@@ -623,7 +623,7 @@ public class RequestDispatchHandler {
             return;
         }
 
-        BurpExtender.printOutput(String.format("[*] 权限测试模式：开始重放请求 (requestId=%d)...", requestId));
+        LogManager.getInstance().printOutput(String.format("[*] 权限测试模式：开始重放请求 (requestId=%d)...", requestId));
         responsePanel.clear();
 
         SwingUtilities.invokeLater(() -> {
@@ -656,10 +656,10 @@ public class RequestDispatchHandler {
                                 if (historyId > 0) {
                                     dbRecord.setId(historyId);
                                 } else {
-                                    BurpExtender.printError("[!] 越权测试记录保存到数据库失败，报告将无法统计该条记录");
+                                    LogManager.getInstance().printError("[!] 越权测试记录保存到数据库失败，报告将无法统计该条记录");
                                 }
                             } catch (Exception ex) {
-                                BurpExtender.printError("[!] 保存越权测试记录异常: " + ex.getMessage());
+                                LogManager.getInstance().printError("[!] 保存越权测试记录异常: " + ex.getMessage());
                             }
                         });
 
@@ -671,7 +671,7 @@ public class RequestDispatchHandler {
 
                         // 打印判决结果日志
                         JudgmentResult judgment = JudgmentResult.fromString(record.getJudgment());
-                        BurpExtender.printOutput(String.format(
+                        LogManager.getInstance().printOutput(String.format(
                                 "[*] 权限测试重放完成: requestId=%d, 用户=%s, 判决=%s, 相似度=%.2f",
                                 record.getRequestId(),
                                 record.getUserSessionName(),
@@ -684,7 +684,7 @@ public class RequestDispatchHandler {
                         SwingUtilities.invokeLater(() -> {
                             setCursor(Cursor.getDefaultCursor());
                         });
-                        BurpExtender.printOutput("[+] 权限测试重放全部完成");
+                        LogManager.getInstance().printOutput("[+] 权限测试重放全部完成");
                     }
                 });
 
@@ -700,7 +700,7 @@ public class RequestDispatchHandler {
             responsePanel.setResponse(record.getResponseData());
             updateStatusFromRecord(record);
 
-            BurpExtender.printOutput("[+] 已加载历史记录: " + record.toString());
+            LogManager.getInstance().printOutput("[+] 已加载历史记录: " + record.toString());
         }
     }
 
@@ -724,7 +724,7 @@ public class RequestDispatchHandler {
             return;
         }
 
-        BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", requestIds.size()));
+        LogManager.getInstance().printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", requestIds.size()));
 
         // 清除ReplayEngine的去重记录，确保新批次从干净状态开始
         ReplayEngine.getInstance().clearProcessedApis();
@@ -742,7 +742,7 @@ public class RequestDispatchHandler {
                     // 从 requestDataMap 获取请求字节数组
                     byte[] requestBytes = requestListPanel.getRequestData(requestId);
                     if (requestBytes == null || requestBytes.length == 0) {
-                        BurpExtender.printError("[!] 批量权限测试：请求ID " + requestId + " 数据为空，跳过");
+                        LogManager.getInstance().printError("[!] 批量权限测试：请求ID " + requestId + " 数据为空，跳过");
                         completedCount.incrementAndGet();
                         statusPanel.showBatchProgress(completedCount.get(), totalCount, "权限测试");
                         continue;
@@ -785,7 +785,7 @@ public class RequestDispatchHandler {
                                                 dbRec.setId(historyId);
                                             }
                                         } catch (Exception ex) {
-                                            BurpExtender.printError("[!] 批量越权测试记录保存异常: " + ex.getMessage());
+                                            LogManager.getInstance().printError("[!] 批量越权测试记录保存异常: " + ex.getMessage());
                                         }
                                     });
 
@@ -796,7 +796,7 @@ public class RequestDispatchHandler {
                                         });
                                     }
 
-                                    BurpExtender.printOutput(String.format(
+                                    LogManager.getInstance().printOutput(String.format(
                                             "[*] 批量权限测试 [%d/%d]: 用户=%s, 判决=%s",
                                             completedCount.get() + 1, totalCount,
                                             rec.getUserSessionName(),
@@ -829,7 +829,7 @@ public class RequestDispatchHandler {
                         long latchTimeoutMs = (long) sessionCount * (perRequestTimeout + 10) * 1000L
                                 + (long) sessionCount * sm.getReplayDelay() + 30000L;
                         if (!latch.await(latchTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
-                            BurpExtender.printError(String.format(
+                            LogManager.getInstance().printError(String.format(
                                     "[!] 批量权限测试：请求ID %d 等待重放完成超时（%d秒），跳过继续下一条",
                                     requestId, latchTimeoutMs / 1000));
                             if (!deduped) {
@@ -840,7 +840,7 @@ public class RequestDispatchHandler {
                     }
 
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 批量权限测试：请求ID " + requestId + " 处理异常: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 批量权限测试：请求ID " + requestId + " 处理异常: " + e.getMessage());
                     completedCount.incrementAndGet();
                     statusPanel.showBatchProgress(completedCount.get(), totalCount, "权限测试");
                 }
@@ -850,7 +850,7 @@ public class RequestDispatchHandler {
             SwingUtilities.invokeLater(() -> {
                 setCursor(Cursor.getDefaultCursor());
                 statusPanel.clearBatchProgress();
-                BurpExtender.printOutput(String.format("[+] 批量权限测试完成：共处理 %d 条请求", totalCount));
+                LogManager.getInstance().printOutput(String.format("[+] 批量权限测试完成：共处理 %d 条请求", totalCount));
             });
         }, "batch-privilege-test").start();
     }
@@ -863,7 +863,7 @@ public class RequestDispatchHandler {
     public void batchSendRequests(List<RequestResponseRecord> records) {
         if (records == null || records.isEmpty()) return;
 
-        BurpExtender.printOutput(String.format("[*] 批量重放：开始处理 %d 条请求...", records.size()));
+        LogManager.getInstance().printOutput(String.format("[*] 批量重放：开始处理 %d 条请求...", records.size()));
 
         SwingUtilities.invokeLater(() -> setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)));
 
@@ -876,7 +876,7 @@ public class RequestDispatchHandler {
                 try {
                     byte[] requestBytes = record.getRequestData();
                     if (requestBytes == null || requestBytes.length == 0) {
-                        BurpExtender.printError("[!] 批量重放：请求数据为空，跳过");
+                        LogManager.getInstance().printError("[!] 批量重放：请求数据为空，跳过");
                         completedCount.incrementAndGet();
                         statusPanel.showBatchProgress(completedCount.get(), totalCount, "重放");
                         continue;
@@ -899,7 +899,7 @@ public class RequestDispatchHandler {
                                         try {
                                             handleResponseSuccess(requestBytes, response, requestTimeMs, responseTimeMs, durationMs);
                                         } catch (Exception ex) {
-                                            BurpExtender.printError("[!] 批量重放处理响应异常: " + ex.getMessage());
+                                            LogManager.getInstance().printError("[!] 批量重放处理响应异常: " + ex.getMessage());
                                         }
                                     });
                                     latch.countDown();
@@ -919,7 +919,7 @@ public class RequestDispatchHandler {
                     statusPanel.showBatchProgress(done, totalCount, "重放");
 
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 批量重放：处理异常: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 批量重放：处理异常: " + e.getMessage());
                     completedCount.incrementAndGet();
                     statusPanel.showBatchProgress(completedCount.get(), totalCount, "重放");
                 }
@@ -928,7 +928,7 @@ public class RequestDispatchHandler {
             SwingUtilities.invokeLater(() -> {
                 setCursor(Cursor.getDefaultCursor());
                 statusPanel.clearBatchProgress();
-                BurpExtender.printOutput(String.format("[+] 批量重放完成：共处理 %d 条请求", totalCount));
+                LogManager.getInstance().printOutput(String.format("[+] 批量重放完成：共处理 %d 条请求", totalCount));
             });
         }, "batch-replay").start();
     }

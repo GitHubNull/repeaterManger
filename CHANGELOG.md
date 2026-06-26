@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.25.3] - 2026-06-26
+
+### Changed
+- 重构 BurpExtender 入口类，消除 God Class 反模式：
+  - 将插件生命周期逻辑提取到 `RepeaterManagerExtension`，`BurpExtender` 仅作为空壳代理
+  - 将 UI 桥接方法提取到 `UIRequestDispatcher`，解耦入口类与 UI 操作
+  - 将会话解析逻辑提取到 `SessionParser`，集中管理会话解析流程
+- 删除 `burp.BurpExtender.java` 空壳文件：Montoya SDK 不强制要求类名/包名，直接以 `RepeaterManagerExtension` 作为插件入口
+- 统一替换 `BurpExtender.printOutput/printError` 静态调用为 `LogManager.getInstance()` 实例调用
+
+### Fixed
+- `LogManager.printError` 新增已知无害错误信息过滤（IntelliJ 剪贴板相关 ClassNotFoundException）
+
 ## [2.25.2] - 2026-06-26
 
 ### Fixed

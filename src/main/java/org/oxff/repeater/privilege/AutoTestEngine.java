@@ -1,15 +1,16 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.proxy.http.InterceptedRequest;
 import org.oxff.repeater.db.RequestDAO;
 import org.oxff.repeater.http.HttpRequestHelper;
 import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.JudgmentResult;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.privilege.model.UserSession;
+import org.oxff.repeater.UIRequestDispatcher;
 
 import javax.swing.SwingUtilities;
 import java.util.HashSet;
@@ -63,7 +64,7 @@ public class AutoTestEngine {
     public void submitRequest(InterceptedRequest interceptedRequest) {
         SessionManager sessionManager = SessionManager.getInstance();
         if (!sessionManager.hasEnabledSessions()) {
-            BurpExtender.printOutput("[*] 自动化测试：无已启用用户会话，跳过");
+            LogManager.getInstance().printOutput("[*] 自动化测试：无已启用用户会话，跳过");
             return;
         }
 
@@ -75,7 +76,7 @@ public class AutoTestEngine {
                     requestBytes, interceptedRequest.httpService());
             synchronized (processedApis) {
                 if (processedApis.contains(api)) {
-                    BurpExtender.printOutput("[*] 自动化测试：API已处理过，跳过去重: " + api);
+                    LogManager.getInstance().printOutput("[*] 自动化测试：API已处理过，跳过去重: " + api);
                     return;
                 }
                 processedApis.add(api);
@@ -91,7 +92,7 @@ public class AutoTestEngine {
                         interceptedRequest.query() != null ? interceptedRequest.query() : "",
                         requestBytes);
 
-                BurpExtender.printOutput("[*] 自动化测试：开始处理 " + api);
+                LogManager.getInstance().printOutput("[*] 自动化测试：开始处理 " + api);
 
                 List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
                 RequestManager requestManager = new RequestManager();
@@ -112,7 +113,7 @@ public class AutoTestEngine {
                     if (requestId > 0) {
                         final int finalRequestId = requestId;
                         SwingUtilities.invokeLater(() -> {
-                            BurpExtender.addAutoTestRequestToPanel(finalRequestId, api,
+                            UIRequestDispatcher.getInstance().addAutoTestRequestToPanel(finalRequestId, api,
                                     interceptedRequest.method(),
                                     httpService.secure() ? "https" : "http",
                                     HttpRequestHelper.resolveDomainFromService(httpService),
@@ -122,7 +123,7 @@ public class AutoTestEngine {
                         });
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 保存自动化测试原始请求失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 保存自动化测试原始请求失败: " + e.getMessage());
                 }
 
                 // 存储基准用户响应
@@ -178,10 +179,10 @@ public class AutoTestEngine {
 
                         final RequestResponseRecord finalSkipRecord = skipRecord;
                         SwingUtilities.invokeLater(() -> {
-                            burp.BurpExtender.addPrivilegeTestRecord(finalSkipRecord);
+                            UIRequestDispatcher.getInstance().addPrivilegeTestRecord(finalSkipRecord);
                         });
 
-                        BurpExtender.printOutput(String.format(
+                        LogManager.getInstance().printOutput(String.format(
                                 "[*] 自动化测试: 用户=%s, 判决=ERROR (基准请求失败)",
                                 session.getName()));
                         continue;
@@ -222,11 +223,11 @@ public class AutoTestEngine {
                         } else {
                             judgment = JudgmentResult.ERROR.name();
                             if (isFirst) {
-                                BurpExtender.printError("[!] 自动化测试：基准用户请求失败，后续会话将跳过判决");
+                                LogManager.getInstance().printError("[!] 自动化测试：基准用户请求失败，后续会话将跳过判决");
                             }
                             if (holder.errorMessage != null && !holder.errorMessage.isEmpty()) {
                                 judgmentNote = "请求失败: " + holder.errorMessage;
-                                BurpExtender.printError("[!] 自动化测试请求失败 (user=" + session.getName()
+                                LogManager.getInstance().printError("[!] 自动化测试请求失败 (user=" + session.getName()
                                         + "): " + holder.errorMessage);
                             }
                         }
@@ -256,27 +257,27 @@ public class AutoTestEngine {
                         // 通过 RepeaterManagerUI 回传
                         final RequestResponseRecord finalRecord = record;
                         SwingUtilities.invokeLater(() -> {
-                            burp.BurpExtender.addPrivilegeTestRecord(finalRecord);
+                            UIRequestDispatcher.getInstance().addPrivilegeTestRecord(finalRecord);
                         });
 
-                        BurpExtender.printOutput(String.format(
+                        LogManager.getInstance().printOutput(String.format(
                                 "[*] 自动化测试: 用户=%s, 判决=%s, 相似度=%.2f",
                                 session.getName(), judgment, similarity));
 
                     } catch (Exception e) {
-                        BurpExtender.printError("[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
+                        LogManager.getInstance().printError("[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
 
                         // 基准用户异常时不设置baselineValid
                         if (isFirst) {
-                            BurpExtender.printError("[!] 自动化测试：基准用户请求异常，后续会话将跳过判决");
+                            LogManager.getInstance().printError("[!] 自动化测试：基准用户请求异常，后续会话将跳过判决");
                         }
                     }
                 }
 
-                BurpExtender.printOutput("[+] 自动化测试完成: " + api);
+                LogManager.getInstance().printOutput("[+] 自动化测试完成: " + api);
 
             } catch (Exception e) {
-                BurpExtender.printError("[!] 自动化测试处理请求异常: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 自动化测试处理请求异常: " + e.getMessage());
             }
         });
     }
@@ -357,7 +358,7 @@ public class AutoTestEngine {
         int attempts = 0;
         while (holder.errorMessage != null && attempts < retryCount) {
             attempts++;
-            BurpExtender.printOutput(String.format("[*] 自动化测试重试 (%d/%d), 等待 %dms...",
+            LogManager.getInstance().printOutput(String.format("[*] 自动化测试重试 (%d/%d), 等待 %dms...",
                     attempts, retryCount, retryDelayMs));
             try {
                 Thread.sleep(retryDelayMs);

@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.api.ApiExtractionEngine;
 import org.oxff.repeater.api.ApiRuleManager;
 import org.oxff.repeater.api.ApiExtractionRule;
@@ -48,11 +48,11 @@ public class HistoryWriteDAO {
 
                 if (historyId > 0) {
                     conn.commit();
-                    BurpExtender.printOutput("[+] 历史记录已保存，ID: " + historyId);
+                    LogManager.getInstance().printOutput("[+] 历史记录已保存，ID: " + historyId);
                     return historyId;
                 } else {
                     conn.rollback();
-                    BurpExtender.printError("[!] 保存历史记录失败：没有受影响的行");
+                    LogManager.getInstance().printError("[!] 保存历史记录失败：没有受影响的行");
                     return -1;
                 }
             } catch (SQLException e) {
@@ -60,11 +60,11 @@ public class HistoryWriteDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存历史记录失败: " + e.getMessage());
 
             // 特殊处理外键约束错误
             if (e.getMessage().contains("FOREIGN KEY constraint failed")) {
-                BurpExtender.printError("[!] 外键约束失败，尝试使用NULL请求ID重新保存");
+                LogManager.getInstance().printError("[!] 外键约束失败，尝试使用NULL请求ID重新保存");
 
                 RequestResponseRecord fallbackRecord = new RequestResponseRecord();
                 fallbackRecord.setRequestId(-1);
@@ -91,7 +91,7 @@ public class HistoryWriteDAO {
                 try {
                     conn.close();
                 } catch (SQLException e) {
-                    BurpExtender.printError("[!] 关闭数据库连接失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 关闭数据库连接失败: " + e.getMessage());
                 }
             }
         }
@@ -105,7 +105,7 @@ public class HistoryWriteDAO {
         // 验证request_id是否存在
         int requestId = record.getRequestId();
         if (requestId > 0 && !requestDAO.isValidRequestId(requestId)) {
-            BurpExtender.printOutput("[*] 请求ID " + requestId + " 不存在，将使用NULL作为外键");
+            LogManager.getInstance().printOutput("[*] 请求ID " + requestId + " 不存在，将使用NULL作为外键");
             requestId = -1;
         }
 

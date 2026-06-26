@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
@@ -89,7 +89,7 @@ public class ReplayEngine {
         List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
 
         if (enabledSessions.isEmpty()) {
-            BurpExtender.printOutput("[*] 无已启用的用户会话，跳过权限测试重放");
+            LogManager.getInstance().printOutput("[*] 无已启用的用户会话，跳过权限测试重放");
             return false;
         }
 
@@ -98,14 +98,14 @@ public class ReplayEngine {
         if (dedupConfigManager.hasActiveConfigs()) {
             String api = dedupConfigManager.computeDedupKey(originalRequest, httpService);
             if (ApiDedupEngine.checkAndAddKey(processedApis, api)) {
-                BurpExtender.printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
+                LogManager.getInstance().printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
                 return true; // 返回true表示被去重跳过，调用方需据此跳过CountDownLatch等待
             }
         }
 
         final boolean finalUseHttp2 = useHttp2;
         executor.submit(() -> {
-            BurpExtender.printOutput("[*] 开始权限测试重放: " + enabledSessions.size() + "个用户会话");
+            LogManager.getInstance().printOutput("[*] 开始权限测试重放: " + enabledSessions.size() + "个用户会话");
 
             // 存储基准用户的响应，用于后续比较
             byte[] baselineResponse = null;
@@ -203,7 +203,7 @@ public class ReplayEngine {
                     } else {
                         judgment = JudgmentResult.ERROR.name();
                         if (isFirst) {
-                            BurpExtender.printError("[!] 基准用户请求失败，后续会话将跳过判决");
+                            LogManager.getInstance().printError("[!] 基准用户请求失败，后续会话将跳过判决");
                         }
                     }
 
@@ -239,11 +239,11 @@ public class ReplayEngine {
                     });
 
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 权限测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 权限测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
 
                     // 基准用户异常时标记baselineValid为false
                     if (isFirst) {
-                        BurpExtender.printError("[!] 基准用户请求异常，后续会话将跳过判决");
+                        LogManager.getInstance().printError("[!] 基准用户请求异常，后续会话将跳过判决");
                     }
 
                     // 创建错误记录
@@ -276,7 +276,7 @@ public class ReplayEngine {
                 }
             });
 
-            BurpExtender.printOutput("[+] 权限测试重放完成: " + enabledSessions.size() + "个用户会话");
+            LogManager.getInstance().printOutput("[+] 权限测试重放完成: " + enabledSessions.size() + "个用户会话");
         });
 
         return false; // 正常执行了重放（异步），未被去重跳过
@@ -302,7 +302,7 @@ public class ReplayEngine {
         int attempts = 0;
         while (holder.errorMessage != null && attempts < retryCount) {
             attempts++;
-            BurpExtender.printOutput(String.format("[*] 重放重试 (%d/%d), 等待 %dms...",
+            LogManager.getInstance().printOutput(String.format("[*] 重放重试 (%d/%d), 等待 %dms...",
                     attempts, retryCount, retryDelayMs));
             try {
                 Thread.sleep(retryDelayMs);
@@ -382,7 +382,7 @@ public class ReplayEngine {
             if (!done[0] && holder.errorMessage == null) {
                 holder.errorMessage = String.format("请求超时（等待 %dms 未收到响应）", waitTimeoutMs);
                 holder.durationMs = waitTimeoutMs;
-                BurpExtender.printError(String.format("[!] 重放请求超时：等待 %dms 未收到响应", waitTimeoutMs));
+                LogManager.getInstance().printError(String.format("[!] 重放请求超时：等待 %dms 未收到响应", waitTimeoutMs));
             }
         }
 
@@ -416,7 +416,7 @@ public class ReplayEngine {
             record.setPath(path);
             record.setQueryParameters(query);
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] ReplayEngine: 解析请求URL失败，使用fallback: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] ReplayEngine: 解析请求URL失败，使用fallback: " + e.getMessage());
             record.setMethod("UNKNOWN");
             record.setProtocol(httpService.secure() ? "https" : "http");
             record.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));

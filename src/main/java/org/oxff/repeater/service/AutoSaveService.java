@@ -1,6 +1,6 @@
 package org.oxff.repeater.service;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.config.DatabaseConfig;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.ui.MainUI;
@@ -47,7 +47,7 @@ public class AutoSaveService {
         
         DatabaseConfig config = dbManager.getConfig();
         if (!config.isAutoSaveEnabled()) {
-            BurpExtender.printOutput("[*] 自动保存功能已禁用");
+            LogManager.getInstance().printOutput("[*] 自动保存功能已禁用");
             return;
         }
         
@@ -56,7 +56,7 @@ public class AutoSaveService {
             intervalMinutes = 5; // 默认5分钟
         }
         
-        BurpExtender.printOutput("[+] 启动自动保存服务，间隔: " + intervalMinutes + "分钟");
+        LogManager.getInstance().printOutput("[+] 启动自动保存服务，间隔: " + intervalMinutes + "分钟");
         
         // 关闭已存在的调度器
         stop();
@@ -76,7 +76,7 @@ public class AutoSaveService {
         if (mainUI != null) {
             lastRequestCount = mainUI.getRequestListPanel().getRequestCount();
             lastHistoryCount = mainUI.getHistoryPanel().getHistoryCount();
-            BurpExtender.printOutput("[*] 初始数据状态: 请求数 " + lastRequestCount + 
+            LogManager.getInstance().printOutput("[*] 初始数据状态: 请求数 " + lastRequestCount + 
                                   ", 历史记录数 " + lastHistoryCount);
         }
     }
@@ -98,7 +98,7 @@ public class AutoSaveService {
         }
         
         running.set(false);
-        BurpExtender.printOutput("[*] 自动保存服务已停止");
+        LogManager.getInstance().printOutput("[*] 自动保存服务已停止");
     }
     
     /**
@@ -106,11 +106,11 @@ public class AutoSaveService {
      */
     private void performSave() {
         try {
-            BurpExtender.printOutput("[*] 执行自动保存操作...");
+            LogManager.getInstance().printOutput("[*] 执行自动保存操作...");
             
             // 确保数据库已初始化
             if (!dbManager.initialize()) {
-                BurpExtender.printError("[!] 数据库初始化失败，无法执行自动保存");
+                LogManager.getInstance().printError("[!] 数据库初始化失败，无法执行自动保存");
                 return;
             }
             
@@ -122,16 +122,16 @@ public class AutoSaveService {
                 currentRequestCount = mainUI.getRequestListPanel().getRequestCount();
                 currentHistoryCount = mainUI.getHistoryPanel().getHistoryCount();
                 
-                BurpExtender.printOutput("[*] 当前数据状态: 请求数 " + currentRequestCount + 
+                LogManager.getInstance().printOutput("[*] 当前数据状态: 请求数 " + currentRequestCount + 
                                      ", 历史记录数 " + currentHistoryCount);
                 
                 boolean hasNewData = currentRequestCount > lastRequestCount || 
                                   currentHistoryCount > lastHistoryCount;
                 
                 if (hasNewData) {
-                    BurpExtender.printOutput("[+] 检测到新数据，需要保存");
+                    LogManager.getInstance().printOutput("[+] 检测到新数据，需要保存");
                 } else {
-                    BurpExtender.printOutput("[*] 未检测到新数据");
+                    LogManager.getInstance().printOutput("[*] 未检测到新数据");
                 }
                 
                 // 更新上次记录的计数
@@ -155,17 +155,17 @@ public class AutoSaveService {
                     stmt.execute("PRAGMA wal_checkpoint(TRUNCATE)");
                 } catch (java.sql.SQLException e) {
                     // 如果不是WAL模式，忽略此错误，DELETE模式下数据已实时写入
-                    BurpExtender.printOutput("[*] 非WAL模式，跳过WAL检查点");
+                    LogManager.getInstance().printOutput("[*] 非WAL模式，跳过WAL检查点");
                 }
-                BurpExtender.printOutput("[+] 已执行数据库检查点操作，确保数据已持久化");
+                LogManager.getInstance().printOutput("[+] 已执行数据库检查点操作，确保数据已持久化");
             } catch (java.sql.SQLException e) {
-                BurpExtender.printError("[!] 执行数据库检查点时出错: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 执行数据库检查点时出错: " + e.getMessage());
             }
             
-            BurpExtender.printOutput("[+] 自动保存完成");
+            LogManager.getInstance().printOutput("[+] 自动保存完成");
             
         } catch (Exception e) {
-            BurpExtender.printError("[!] 执行自动保存时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 执行自动保存时出错: " + e.getMessage());
         }
     }
     

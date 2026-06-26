@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege.dao;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.privilege.model.TokenLocationType;
@@ -46,7 +46,7 @@ public class SessionDAO {
                 locations.add(location);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取令牌位置列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取令牌位置列表失败: " + e.getMessage());
         }
         return locations;
     }
@@ -72,7 +72,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 添加令牌位置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加令牌位置失败: " + e.getMessage());
         }
         return -1;
     }
@@ -93,7 +93,7 @@ public class SessionDAO {
             pstmt.setInt(6, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新令牌位置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新令牌位置失败: " + e.getMessage());
         }
         return false;
     }
@@ -108,7 +108,7 @@ public class SessionDAO {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除令牌位置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除令牌位置失败: " + e.getMessage());
         }
         return false;
     }
@@ -127,7 +127,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取令牌位置引用方案数失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取令牌位置引用方案数失败: " + e.getMessage());
         }
         return 0;
     }
@@ -154,7 +154,7 @@ public class SessionDAO {
                 schemes.add(scheme);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取令牌方案列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取令牌方案列表失败: " + e.getMessage());
         }
         return schemes;
     }
@@ -179,7 +179,7 @@ public class SessionDAO {
                 schemes.add(scheme);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取已启用令牌方案列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取已启用令牌方案列表失败: " + e.getMessage());
         }
         return schemes;
     }
@@ -203,7 +203,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 添加令牌方案失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加令牌方案失败: " + e.getMessage());
         }
         return -1;
     }
@@ -222,7 +222,7 @@ public class SessionDAO {
             pstmt.setInt(5, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新令牌方案失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新令牌方案失败: " + e.getMessage());
         }
         return false;
     }
@@ -237,7 +237,7 @@ public class SessionDAO {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除令牌方案失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除令牌方案失败: " + e.getMessage());
         }
         return false;
     }
@@ -270,10 +270,10 @@ public class SessionDAO {
                 return true;
             } catch (SQLException e) {
                 conn.rollback();
-                BurpExtender.printError("[!] 保存方案令牌位置关联失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 保存方案令牌位置关联失败: " + e.getMessage());
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存方案令牌位置关联数据库操作失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存方案令牌位置关联数据库操作失败: " + e.getMessage());
         }
         return false;
     }
@@ -292,7 +292,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 加载方案令牌位置关联失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 加载方案令牌位置关联失败: " + e.getMessage());
         }
         return locationIds;
     }
@@ -311,7 +311,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取方案引用会话数失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取方案引用会话数失败: " + e.getMessage());
         }
         return 0;
     }
@@ -353,7 +353,7 @@ public class SessionDAO {
                 sessions.add(session);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取用户会话列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取用户会话列表失败: " + e.getMessage());
         }
         return sessions;
     }
@@ -391,7 +391,7 @@ public class SessionDAO {
                 sessions.add(session);
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取已启用用户会话列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取已启用用户会话列表失败: " + e.getMessage());
         }
         return sessions;
     }
@@ -425,7 +425,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 添加用户会话失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加用户会话失败: " + e.getMessage());
         }
         return -1;
     }
@@ -454,7 +454,7 @@ public class SessionDAO {
             pstmt.setInt(10, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新用户会话失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新用户会话失败: " + e.getMessage());
         }
         return false;
     }
@@ -469,7 +469,7 @@ public class SessionDAO {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除用户会话失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除用户会话失败: " + e.getMessage());
         }
         return false;
     }
@@ -484,7 +484,7 @@ public class SessionDAO {
             pstmt.executeUpdate();
             return true;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除所有用户会话失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除所有用户会话失败: " + e.getMessage());
         }
         return false;
     }
@@ -505,7 +505,7 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 加载令牌值失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 加载令牌值失败: " + e.getMessage());
         }
         return values;
     }
@@ -539,10 +539,10 @@ public class SessionDAO {
                 return true;
             } catch (SQLException e) {
                 conn.rollback();
-                BurpExtender.printError("[!] 保存令牌值失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 保存令牌值失败: " + e.getMessage());
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存令牌值数据库操作失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存令牌值数据库操作失败: " + e.getMessage());
         }
         return false;
     }

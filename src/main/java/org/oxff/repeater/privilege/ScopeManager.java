@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.Registration;
 import burp.api.montoya.proxy.http.InterceptedRequest;
@@ -61,7 +61,7 @@ public class ScopeManager {
     public void refreshCache() {
         cachedEntries = scopeDAO.getAllEntries();
         cachedEnabledEntries = scopeDAO.getEnabledEntries();
-        BurpExtender.printOutput("[+] Scope缓存已刷新: " + cachedEntries.size() +
+        LogManager.getInstance().printOutput("[+] Scope缓存已刷新: " + cachedEntries.size() +
                 "条目, " + cachedEnabledEntries.size() + "条已启用");
     }
 
@@ -176,10 +176,10 @@ public class ScopeManager {
 
         if (autoTestEnabled && !wasEnabled) {
             registerProxyHandler();
-            BurpExtender.printOutput("[+] 自动化测试已开启，监听代理流量");
+            LogManager.getInstance().printOutput("[+] 自动化测试已开启，监听代理流量");
         } else if (!autoTestEnabled && wasEnabled) {
             unregisterProxyHandler();
-            BurpExtender.printOutput("[*] 自动化测试已关闭");
+            LogManager.getInstance().printOutput("[*] 自动化测试已关闭");
         }
     }
 
@@ -208,7 +208,7 @@ public class ScopeManager {
                 }
             });
         } catch (Exception e) {
-            BurpExtender.printError("[!] 注册代理处理器失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 注册代理处理器失败: " + e.getMessage());
         }
     }
 

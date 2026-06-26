@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.privilege.model.TokenScheme;
 
@@ -51,7 +51,7 @@ public class GlobalTokenSchemeManager {
      */
     public void loadSchemes(List<TokenLocation> locations) {
         globalSchemes = TokenSchemeYamlIO.readFromFile(globalSchemesPath, locations);
-        BurpExtender.printOutput("[+] 全局令牌方案已加载，共 " + globalSchemes.size() + " 条，路径: " + globalSchemesPath);
+        LogManager.getInstance().printOutput("[+] 全局令牌方案已加载，共 " + globalSchemes.size() + " 条，路径: " + globalSchemesPath);
     }
 
     /**
@@ -59,7 +59,7 @@ public class GlobalTokenSchemeManager {
      */
     public void loadSchemes() {
         globalSchemes = TokenSchemeYamlIO.readFromFile(globalSchemesPath, new ArrayList<>());
-        BurpExtender.printOutput("[+] 全局令牌方案已加载，共 " + globalSchemes.size() + " 条，路径: " + globalSchemesPath);
+        LogManager.getInstance().printOutput("[+] 全局令牌方案已加载，共 " + globalSchemes.size() + " 条，路径: " + globalSchemesPath);
     }
 
     /**
@@ -69,7 +69,7 @@ public class GlobalTokenSchemeManager {
     public boolean saveSchemes(List<TokenLocation> locations) {
         boolean result = TokenSchemeYamlIO.writeToFile(globalSchemes, locations, globalSchemesPath);
         if (result) {
-            BurpExtender.printOutput("[+] 全局令牌方案已保存，共 " + globalSchemes.size() + " 条");
+            LogManager.getInstance().printOutput("[+] 全局令牌方案已保存，共 " + globalSchemes.size() + " 条");
         }
         return result;
     }
@@ -95,7 +95,7 @@ public class GlobalTokenSchemeManager {
                 existing.setEnabled(scheme.isEnabled());
                 existing.setTokenLocationIds(scheme.getTokenLocationIds());
                 saveSchemes(locations);
-                BurpExtender.printOutput("[+] 全局令牌方案已更新: " + scheme.getName());
+                LogManager.getInstance().printOutput("[+] 全局令牌方案已更新: " + scheme.getName());
                 return;
             }
         }
@@ -108,7 +108,7 @@ public class GlobalTokenSchemeManager {
         newScheme.setTokenLocationIds(scheme.getTokenLocationIds());
         globalSchemes.add(newScheme);
         saveSchemes(locations);
-        BurpExtender.printOutput("[+] 全局令牌方案已添加: " + scheme.getName());
+        LogManager.getInstance().printOutput("[+] 全局令牌方案已添加: " + scheme.getName());
     }
 
     /**
@@ -119,7 +119,7 @@ public class GlobalTokenSchemeManager {
         boolean removed = globalSchemes.removeIf(s -> s.getName().equals(name));
         if (removed) {
             saveSchemes(locations);
-            BurpExtender.printOutput("[+] 全局令牌方案已移除: " + name);
+            LogManager.getInstance().printOutput("[+] 全局令牌方案已移除: " + name);
         }
     }
 

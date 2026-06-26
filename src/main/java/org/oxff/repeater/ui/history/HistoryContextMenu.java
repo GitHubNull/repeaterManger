@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.RequestDispatchHandler;
 import org.oxff.repeater.db.RequestDAO;
 import org.oxff.repeater.db.history.HistoryReadDAO;
@@ -155,7 +155,7 @@ public class HistoryContextMenu {
 
         RequestDispatchHandler dispatchHandler = historyPanel.getDispatchHandler();
         if (dispatchHandler == null) {
-            BurpExtender.printError("[!] 批量重放：调度处理器未初始化");
+            LogManager.getInstance().printError("[!] 批量重放：调度处理器未初始化");
             return;
         }
 
@@ -171,7 +171,7 @@ public class HistoryContextMenu {
 
         RequestDispatchHandler dispatchHandler = historyPanel.getDispatchHandler();
         if (dispatchHandler == null) {
-            BurpExtender.printError("[!] 权限测试：调度处理器未初始化");
+            LogManager.getInstance().printError("[!] 权限测试：调度处理器未初始化");
             return;
         }
 
@@ -184,7 +184,7 @@ public class HistoryContextMenu {
         }
 
         if (requestIds.isEmpty()) {
-            BurpExtender.printError("[!] 权限测试：选中的记录没有有效的请求ID");
+            LogManager.getInstance().printError("[!] 权限测试：选中的记录没有有效的请求ID");
             return;
         }
 
@@ -247,7 +247,7 @@ public class HistoryContextMenu {
                         try {
                             historyUpdateDAO.updateHistoryColor(record.getId(), finalColor);
                         } catch (Exception ex) {
-                            BurpExtender.printError("[!] 更新历史记录颜色失败: " + ex.getMessage());
+                            LogManager.getInstance().printError("[!] 更新历史记录颜色失败: " + ex.getMessage());
                         }
                     }
                 }
@@ -415,7 +415,7 @@ public class HistoryContextMenu {
 
             return baseline;
         } catch (Exception e) {
-            BurpExtender.printError("[!] 从requests表构造基线记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 从requests表构造基线记录失败: " + e.getMessage());
             return null;
         }
     }

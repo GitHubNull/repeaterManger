@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.editor;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.ui.editor.HttpRequestEditor;
@@ -93,23 +93,23 @@ public class BurpRequestPanel extends JPanel {
      */
     public void setRequest(byte[] request) {
         if (request == null) {
-            BurpExtender.printError("[!] 设置请求失败：请求为空");
+            LogManager.getInstance().printError("[!] 设置请求失败：请求为空");
             return;
         }
 
         try {
             byte[] fixedRequest = validateAndFixRequest(request);
             requestEditor.setRequest(HttpRequest.httpRequest(ByteArray.byteArray(fixedRequest)));
-            BurpExtender.printOutput("[*] 已加载请求数据到Burp编辑器，大小: " + request.length + " 字节");
+            LogManager.getInstance().printOutput("[*] 已加载请求数据到Burp编辑器，大小: " + request.length + " 字节");
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置请求到Burp编辑器失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置请求到Burp编辑器失败: " + e.getMessage());
 
             try {
                 String basicRequest = createBasicHttpRequest(request);
                 requestEditor.setRequest(HttpRequest.httpRequest(ByteArray.byteArray(basicRequest.getBytes())));
-                BurpExtender.printOutput("[*] 已创建基本HTTP请求作为替代");
+                LogManager.getInstance().printOutput("[*] 已创建基本HTTP请求作为替代");
             } catch (Exception ex) {
-                BurpExtender.printError("[!] 无法创建替代请求: " + ex.getMessage());
+                LogManager.getInstance().printError("[!] 无法创建替代请求: " + ex.getMessage());
             }
         }
     }
@@ -135,7 +135,7 @@ public class BurpRequestPanel extends JPanel {
             return request;
         }
 
-        BurpExtender.printOutput("[*] 请求数据格式无效，尝试修复...");
+        LogManager.getInstance().printOutput("[*] 请求数据格式无效，尝试修复...");
 
         if (!requestStr.contains("HTTP/1.") && !requestStr.contains("Host:")) {
             String method = "POST";
@@ -147,7 +147,7 @@ public class BurpRequestPanel extends JPanel {
             fixedRequest.append("\r\n");
             fixedRequest.append(requestStr);
 
-            BurpExtender.printOutput("[+] 已添加基本HTTP头到请求数据");
+            LogManager.getInstance().printOutput("[+] 已添加基本HTTP头到请求数据");
             return fixedRequest.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
         }
 
@@ -172,7 +172,7 @@ public class BurpRequestPanel extends JPanel {
             System.arraycopy(header, 0, fixed, 0, header.length);
             System.arraycopy(request, 0, fixed, header.length, request.length);
 
-            BurpExtender.printOutput("[+] 已创建包含二进制数据的HTTP请求");
+            LogManager.getInstance().printOutput("[+] 已创建包含二进制数据的HTTP请求");
             return fixed;
         }
 

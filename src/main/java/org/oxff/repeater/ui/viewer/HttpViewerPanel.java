@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.viewer;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.utils.TextLineNumber;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
@@ -174,7 +174,7 @@ public class HttpViewerPanel extends JPanel implements HttpViewer {
             );
             theme.apply(textArea);
         } catch (IOException e) {
-            BurpExtender.printError("[!] 无法加载编辑器主题: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 无法加载编辑器主题: " + e.getMessage());
         }
         
         return textArea;

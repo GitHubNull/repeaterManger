@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege.dao;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.privilege.model.JudgmentRule;
 import org.oxff.repeater.privilege.model.RuleMethod;
@@ -35,7 +35,7 @@ public class JudgmentRuleDAO {
                 rules.add(mapRowToRule(rs));
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取判决规则列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取判决规则列表失败: " + e.getMessage());
         }
         return rules;
     }
@@ -55,7 +55,7 @@ public class JudgmentRuleDAO {
                 rules.add(mapRowToRule(rs));
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取已启用判决规则列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取已启用判决规则列表失败: " + e.getMessage());
         }
         return rules;
     }
@@ -76,7 +76,7 @@ public class JudgmentRuleDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取判决规则失败 (id=" + id + "): " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取判决规则失败 (id=" + id + "): " + e.getMessage());
         }
         return null;
     }
@@ -99,7 +99,7 @@ public class JudgmentRuleDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 添加判决规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加判决规则失败: " + e.getMessage());
         }
         return -1;
     }
@@ -117,7 +117,7 @@ public class JudgmentRuleDAO {
             pstmt.setInt(13, rule.getId());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新判决规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新判决规则失败: " + e.getMessage());
         }
         return false;
     }
@@ -132,7 +132,7 @@ public class JudgmentRuleDAO {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除判决规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除判决规则失败: " + e.getMessage());
         }
         return false;
     }
@@ -147,7 +147,7 @@ public class JudgmentRuleDAO {
             pstmt.executeUpdate();
             return true;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除所有判决规则失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除所有判决规则失败: " + e.getMessage());
         }
         return false;
     }

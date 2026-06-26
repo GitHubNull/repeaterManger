@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.pool;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -67,7 +67,7 @@ public class ContentReconstructor {
 
             return result;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 重构数据失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 重构数据失败: " + e.getMessage());
             return null;
         }
     }
@@ -141,7 +141,7 @@ public class ContentReconstructor {
                     String relativePath = rs.getString("relative_path");
                     byte[] data = fileStorageManager.readBodyFile(relativePath);
                     if (data == null) {
-                        BurpExtender.printError("[!] 文件读取失败: " + relativePath);
+                        LogManager.getInstance().printError("[!] 文件读取失败: " + relativePath);
                     }
                     return data;
                 }
@@ -152,7 +152,7 @@ public class ContentReconstructor {
         // （历史数据可能因 BUG-001 的路由标记不一致而误存为 file 路由）
         byte[] fallbackData = readBodyFromPool(conn, bodyHash);
         if (fallbackData != null) {
-            BurpExtender.printOutput("[*] 路由标记为 file 但 file_pool 未找到，从 body_pool 回退读取成功: " + bodyHash);
+            LogManager.getInstance().printOutput("[*] 路由标记为 file 但 file_pool 未找到，从 body_pool 回退读取成功: " + bodyHash);
         }
         return fallbackData;
     }

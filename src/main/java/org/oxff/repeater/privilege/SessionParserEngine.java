@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -112,7 +112,7 @@ public class SessionParserEngine {
                         break;
                 }
             } catch (Exception e) {
-                BurpExtender.printError("[!] 令牌提取失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
+                LogManager.getInstance().printError("[!] 令牌提取失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
             }
             if (value != null) {
                 extractedValues.put(loc.getId(), value);
@@ -238,7 +238,7 @@ public class SessionParserEngine {
             }
             return null;
         } catch (Exception e) {
-            BurpExtender.printError("[!] JSON body提取失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] JSON body提取失败: " + e.getMessage());
             return null;
         }
     }
@@ -272,7 +272,7 @@ public class SessionParserEngine {
             }
             return null;
         } catch (Exception e) {
-            BurpExtender.printError("[!] XML body提取失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] XML body提取失败: " + e.getMessage());
             return null;
         }
     }

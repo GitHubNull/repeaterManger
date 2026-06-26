@@ -1,6 +1,6 @@
 package org.oxff.repeater.api;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -57,7 +57,7 @@ public class GlobalRuleManager {
             rule.setPersistent(false); // 全局规则不持久化到项目SQLite
             rule.setGlobal(true);
         }
-        BurpExtender.printOutput("[+] 全局API提取规则已加载，共 " + globalRules.size() + " 条，路径: " + globalRulesPath);
+        LogManager.getInstance().printOutput("[+] 全局API提取规则已加载，共 " + globalRules.size() + " 条，路径: " + globalRulesPath);
     }
 
     /**
@@ -66,7 +66,7 @@ public class GlobalRuleManager {
     public boolean saveRules() {
         boolean result = ApiRuleYamlIO.writeToFile(globalRules, globalRulesPath);
         if (result) {
-            BurpExtender.printOutput("[+] 全局API提取规则已保存，共 " + globalRules.size() + " 条");
+            LogManager.getInstance().printOutput("[+] 全局API提取规则已保存，共 " + globalRules.size() + " 条");
         }
         return result;
     }
@@ -90,7 +90,7 @@ public class GlobalRuleManager {
         rule.setGlobal(true);
         globalRules.add(rule);
         saveRules();
-        BurpExtender.printOutput("[+] 全局规则已添加，ID: " + id + "，名称: " + rule.getName());
+        LogManager.getInstance().printOutput("[+] 全局规则已添加，ID: " + id + "，名称: " + rule.getName());
         return id;
     }
 
@@ -104,11 +104,11 @@ public class GlobalRuleManager {
                 rule.setGlobal(true);
                 globalRules.set(i, rule);
                 saveRules();
-                BurpExtender.printOutput("[+] 全局规则已更新，ID: " + rule.getId());
+                LogManager.getInstance().printOutput("[+] 全局规则已更新，ID: " + rule.getId());
                 return true;
             }
         }
-        BurpExtender.printError("[!] 全局规则更新失败，未找到ID: " + rule.getId());
+        LogManager.getInstance().printError("[!] 全局规则更新失败，未找到ID: " + rule.getId());
         return false;
     }
 
@@ -119,9 +119,9 @@ public class GlobalRuleManager {
         boolean removed = globalRules.removeIf(rule -> rule.getId() == id);
         if (removed) {
             saveRules();
-            BurpExtender.printOutput("[+] 全局规则已删除，ID: " + id);
+            LogManager.getInstance().printOutput("[+] 全局规则已删除，ID: " + id);
         } else {
-            BurpExtender.printError("[!] 全局规则删除失败，未找到ID: " + id);
+            LogManager.getInstance().printError("[!] 全局规则删除失败，未找到ID: " + id);
         }
         return removed;
     }
@@ -151,7 +151,7 @@ public class GlobalRuleManager {
             globalRules.add(rule);
         }
         saveRules();
-        BurpExtender.printOutput("[+] 全局规则已替换，共 " + globalRules.size() + " 条");
+        LogManager.getInstance().printOutput("[+] 全局规则已替换，共 " + globalRules.size() + " 条");
     }
 
     /**
@@ -184,7 +184,7 @@ public class GlobalRuleManager {
         if (added > 0) {
             saveRules();
         }
-        BurpExtender.printOutput("[+] 全局规则合并完成，新增 " + added + " 条，总计 " + globalRules.size() + " 条");
+        LogManager.getInstance().printOutput("[+] 全局规则合并完成，新增 " + added + " 条，总计 " + globalRules.size() + " 条");
         return added;
     }
 

@@ -1,6 +1,6 @@
 package org.oxff.repeater.io;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -129,7 +129,7 @@ public class PostmanImporter {
                 doImport(selectedFile, isReplace);
                 JOptionPane.showMessageDialog(parent, "Postman Collection导入成功", "导入成功", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
-                BurpExtender.printError("[!] 导入Postman Collection失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 导入Postman Collection失败: " + e.getMessage());
                 JOptionPane.showMessageDialog(parent,
                     "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
             } finally {
@@ -147,7 +147,7 @@ public class PostmanImporter {
         if (replace) {
             requestDAO.clearAllRequests();
             historyUpdateDAO.clearAllHistory();
-            BurpExtender.printOutput("[+] 已清空现有数据，准备导入Postman Collection");
+            LogManager.getInstance().printOutput("[+] 已清空现有数据，准备导入Postman Collection");
         }
 
         try (FileInputStream fis = new FileInputStream(jsonFile);
@@ -157,7 +157,7 @@ public class PostmanImporter {
             JsonArray items = collection.getAsJsonArray("item");
 
             List<JsonObject> flatItems = flattenItems(items, "");
-            BurpExtender.printOutput("[*] 发现 " + flatItems.size() + " 个Postman item");
+            LogManager.getInstance().printOutput("[*] 发现 " + flatItems.size() + " 个Postman item");
 
             int requestCount = 0;
             int historyCount = 0;
@@ -243,7 +243,7 @@ public class PostmanImporter {
                 }
             }
 
-            BurpExtender.printOutput("[+] Postman Collection导入完成: " + requestCount + " 条请求, " + historyCount + " 条历史记录");
+            LogManager.getInstance().printOutput("[+] Postman Collection导入完成: " + requestCount + " 条请求, " + historyCount + " 条历史记录");
         }
     }
 

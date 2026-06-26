@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.RequestDispatchHandler;
 import org.oxff.repeater.db.history.HistoryUpdateDAO;
 import org.oxff.repeater.db.history.HistoryWriteDAO;
@@ -298,12 +298,12 @@ public class HistoryPanel extends JPanel {
             if (historyId > 0) {
                 // 添加到UI
                 addHistoryRecord(record);
-                BurpExtender.printOutput("[+] 历史记录已保存到数据库，ID: " + historyId);
+                LogManager.getInstance().printOutput("[+] 历史记录已保存到数据库，ID: " + historyId);
             } else {
-                BurpExtender.printError("[!] 保存历史记录到数据库失败");
+                LogManager.getInstance().printError("[!] 保存历史记录到数据库失败");
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 添加历史记录时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加历史记录时出错: " + e.getMessage());
         }
     }
 
@@ -355,7 +355,7 @@ public class HistoryPanel extends JPanel {
         historyTableModel.fireTableDataChanged();
         historyTable.revalidate();
         historyTable.repaint();
-        BurpExtender.printOutput("[*] 历史记录已清空");
+        LogManager.getInstance().printOutput("[*] 历史记录已清空");
 
         // 刷新状态栏统计
         if (statsBar != null) {
@@ -440,7 +440,7 @@ public class HistoryPanel extends JPanel {
         // 清空数据映射
         historyRecords.clear();
 
-        BurpExtender.printOutput("[*] 已清除所有历史记录数据");
+        LogManager.getInstance().printOutput("[*] 已清除所有历史记录数据");
     }
 
     /**
@@ -512,7 +512,7 @@ public class HistoryPanel extends JPanel {
                 try {
                     historyUpdateDAO.deleteHistory(record.getId());
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 删除历史记录失败 ID=" + record.getId() + ": " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 删除历史记录失败 ID=" + record.getId() + ": " + e.getMessage());
                 }
             }
         }
@@ -533,7 +533,7 @@ public class HistoryPanel extends JPanel {
         }
 
         updateRecordNumbers();
-        BurpExtender.printOutput(String.format("[+] 已删除 %d 条历史记录", selected.size()));
+        LogManager.getInstance().printOutput(String.format("[+] 已删除 %d 条历史记录", selected.size()));
 
         // 刷新状态栏统计
         if (statsBar != null) {

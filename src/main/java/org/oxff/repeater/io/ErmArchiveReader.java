@@ -1,7 +1,8 @@
 package org.oxff.repeater.io;
 
-import burp.BurpExtender;
 import com.google.gson.Gson;
+import org.oxff.repeater.logging.LogManager;
+import org.oxff.repeater.UIRequestDispatcher;
 import com.google.gson.JsonObject;
 import org.oxff.repeater.db.DatabaseManager;
 
@@ -95,7 +96,7 @@ public class ErmArchiveReader {
                         JOptionPane.showMessageDialog(parent, "ERM存档导入成功", "导入成功",
                                 JOptionPane.INFORMATION_MESSAGE));
             } catch (Exception e) {
-                BurpExtender.printError("[!] 导入ERM存档失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 导入ERM存档失败: " + e.getMessage());
                 javax.swing.SwingUtilities.invokeLater(() ->
                         JOptionPane.showMessageDialog(parent,
                                 "导入数据失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE));
@@ -130,7 +131,7 @@ public class ErmArchiveReader {
                         JOptionPane.showMessageDialog(parent, "ERM存档导入成功", "导入成功",
                                 JOptionPane.INFORMATION_MESSAGE));
             } catch (Exception e) {
-                BurpExtender.printError("[!] 导入ERM存档失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 导入ERM存档失败: " + e.getMessage());
                 javax.swing.SwingUtilities.invokeLater(() ->
                         JOptionPane.showMessageDialog(parent,
                                 "导入数据失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE));
@@ -148,7 +149,7 @@ public class ErmArchiveReader {
      * 执行导入操作
      */
     private void doImport(File ermFile, Component parent) throws Exception {
-        BurpExtender.printOutput("[*] 开始ERM存档导入...");
+        LogManager.getInstance().printOutput("[*] 开始ERM存档导入...");
 
         RandomAccessFile raf = null;
         try {
@@ -156,14 +157,14 @@ public class ErmArchiveReader {
 
             // 1. 读取并验证文件头
             HeaderData header = readHeader(raf);
-            BurpExtender.printOutput("[+] 文件头验证通过: format_version=" + header.formatVersion
+            LogManager.getInstance().printOutput("[+] 文件头验证通过: format_version=" + header.formatVersion
                     + ", encrypted=" + header.isEncrypted + ", entries=" + header.entryCount
                     + ", schema_version=" + header.schemaVersion);
 
             // 2. 验证文件尾
             boolean footerValid = verifyFooter(raf);
             if (!footerValid) {
-                BurpExtender.printOutput("[!] 文件尾校验失败，存档可能被截断");
+                LogManager.getInstance().printOutput("[!] 文件尾校验失败，存档可能被截断");
             }
 
             // 3. 如果加密，获取密码并解密
@@ -187,7 +188,7 @@ public class ErmArchiveReader {
 
             // 4. 解析清单
             ManifestInfo manifestInfo = parseManifest(entriesData, header);
-            BurpExtender.printOutput("[+] 清单解析成功: app_version=" + manifestInfo.appVersion
+            LogManager.getInstance().printOutput("[+] 清单解析成功: app_version=" + manifestInfo.appVersion
                     + ", format_version=" + manifestInfo.formatVersion
                     + ", schema_version=" + manifestInfo.schemaVersion
                     + ", blob_count=" + manifestInfo.blobCount
@@ -195,7 +196,7 @@ public class ErmArchiveReader {
 
             // 4.1 校验清单格式版本一致性
             if (manifestInfo.formatVersion != header.formatVersion) {
-                BurpExtender.printOutput("[!] 清单格式版本(" + manifestInfo.formatVersion
+                LogManager.getInstance().printOutput("[!] 清单格式版本(" + manifestInfo.formatVersion
                         + ")与文件头(" + header.formatVersion + ")不一致，以文件头为准");
             }
 
@@ -245,7 +246,7 @@ public class ErmArchiveReader {
             int successCount = results[0];
             int failCount = results[1];
 
-            BurpExtender.printOutput("[+] 条目提取完成: 成功=" + successCount + ", 失败=" + failCount);
+            LogManager.getInstance().printOutput("[+] 条目提取完成: 成功=" + successCount + ", 失败=" + failCount);
 
             // 8. 检查关键条目
             if (!targetFile.exists()) {
@@ -265,7 +266,7 @@ public class ErmArchiveReader {
             org.oxff.repeater.logging.LogManager.getInstance().relocateFileHandler(
                 dbManager.getLogsDirectory().getAbsolutePath());
 
-            BurpExtender.printOutput("[+] ERM存档导入成功，新数据库: " + newDbPath);
+            LogManager.getInstance().printOutput("[+] ERM存档导入成功，新数据库: " + newDbPath);
 
             // 10. 刷新 UI
             refreshUIAfterImport();
@@ -314,7 +315,7 @@ public class ErmArchiveReader {
 
         // 版本检查
         if (header.formatVersion > ErmFormatConstants.FORMAT_VERSION) {
-            BurpExtender.printOutput("[!] 格式版本 " + header.formatVersion
+            LogManager.getInstance().printOutput("[!] 格式版本 " + header.formatVersion
                     + " 高于当前支持的版本 " + ErmFormatConstants.FORMAT_VERSION + "，尝试继续读取");
         }
 
@@ -416,7 +417,7 @@ public class ErmArchiveReader {
             byte[] plaintext = ErmCryptoHelper.decrypt(ciphertext, iv, expectedHmac,
                     keyPair.aesKey, keyPair.hmacKey);
 
-            BurpExtender.printOutput("[+] 解密成功，数据长度: " + plaintext.length);
+            LogManager.getInstance().printOutput("[+] 解密成功，数据长度: " + plaintext.length);
             return plaintext;
 
         } finally {
@@ -523,7 +524,7 @@ public class ErmArchiveReader {
             try {
                 entryHeader = readEntryHeader(dis);
             } catch (Exception e) {
-                BurpExtender.printError("[!] 解析条目头失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 解析条目头失败: " + e.getMessage());
                 failCount++;
                 break;
             }
@@ -545,7 +546,7 @@ public class ErmArchiveReader {
                 CRC32 crc32 = new CRC32();
                 crc32.update(uncompressedData);
                 if ((int) crc32.getValue() != (int) entryHeader.entryCrc) {
-                    BurpExtender.printError("[!] 条目 '" + entryHeader.path + "' CRC校验失败");
+                    LogManager.getInstance().printError("[!] 条目 '" + entryHeader.path + "' CRC校验失败");
                     failCount++;
                     continue;
                 }
@@ -566,11 +567,11 @@ public class ErmArchiveReader {
 
                 Files.write(targetFile.toPath(), uncompressedData);
                 successCount++;
-                BurpExtender.printOutput("[+] 提取条目: " + entryHeader.path
+                LogManager.getInstance().printOutput("[+] 提取条目: " + entryHeader.path
                         + " (" + uncompressedData.length + " bytes)");
 
             } catch (Exception e) {
-                BurpExtender.printError("[!] 提取条目失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 提取条目失败: " + e.getMessage());
                 failCount++;
             }
 
@@ -654,10 +655,10 @@ public class ErmArchiveReader {
 
     private void refreshUIAfterImport() {
         try {
-            burp.BurpExtender.refreshUIData();
-            BurpExtender.printOutput("[+] 界面数据刷新成功");
+            UIRequestDispatcher.getInstance().refreshUIData();
+            LogManager.getInstance().printOutput("[+] 界面数据刷新成功");
         } catch (Exception e) {
-            BurpExtender.printError("[!] 刷新界面数据时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 刷新界面数据时出错: " + e.getMessage());
         }
     }
 

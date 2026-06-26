@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.JudgmentResult;
 import org.oxff.repeater.privilege.model.JudgmentRule;
 import org.oxff.repeater.privilege.model.RuleMethod;
@@ -207,7 +207,7 @@ public class JudgmentEngine {
                         Pattern pattern = Pattern.compile(expression);
                         yield pattern.matcher(targetValue).find();
                     } catch (PatternSyntaxException e) {
-                        BurpExtender.printError("[!] 判决规则正则表达式无效: " + expression);
+                        LogManager.getInstance().printError("[!] 判决规则正则表达式无效: " + expression);
                         yield false;
                     }
                 }
@@ -248,7 +248,7 @@ public class JudgmentEngine {
                 }
             };
         } catch (Exception e) {
-            BurpExtender.printError("[!] 判决规则匹配异常: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 判决规则匹配异常: " + e.getMessage());
             return false;
         }
     }

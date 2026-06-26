@@ -1,7 +1,7 @@
 package org.oxff.repeater.ui;
 
 import org.oxff.repeater.model.RequestRecord;
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -554,7 +554,7 @@ public class RequestListPanel extends JPanel {
             requestDataMap.put(id, requestData);
             // 批量添加模式下不逐条打印日志，避免150+请求产生大量噪音
             if (!batchAddMode) {
-                BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
+                LogManager.getInstance().printOutput("[+] 请求数据已保存到内存映射，ID: " + id + "，数据大小: " + requestData.length + " 字节");
             }
         }
 
@@ -603,7 +603,7 @@ public class RequestListPanel extends JPanel {
         if (record.getRequestData() != null) {
             requestDataMap.put(record.getId(), record.getRequestData());
             if (!batchAddMode) {
-                BurpExtender.printOutput("[+] 请求数据已保存到内存映射，ID: " + record.getId() + "，数据大小: " + record.getRequestData().length + " 字节");
+                LogManager.getInstance().printOutput("[+] 请求数据已保存到内存映射，ID: " + record.getId() + "，数据大小: " + record.getRequestData().length + " 字节");
             }
         }
 

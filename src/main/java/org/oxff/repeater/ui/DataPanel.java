@@ -2,7 +2,7 @@ package org.oxff.repeater.ui;
 
 import org.oxff.repeater.io.DataExporter;
 import org.oxff.repeater.io.DataImporter;
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -82,64 +82,64 @@ public class DataPanel extends JPanel {
 
     private void exportErm(boolean encrypted) {
         try {
-            BurpExtender.printOutput("[*] 正在启动ERM存档导出...");
+            LogManager.getInstance().printOutput("[*] 正在启动ERM存档导出...");
             DataExporter exporter = new DataExporter();
             exporter.exportToErm(this, encrypted);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导出操作发生错误: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导出错误: " + e.getMessage());
         }
     }
 
     private void importErm() {
         try {
-            BurpExtender.printOutput("[*] 正在启动ERM存档导入...");
+            LogManager.getInstance().printOutput("[*] 正在启动ERM存档导入...");
             DataImporter importer = new DataImporter();
             importer.importFromErm(this);
             notifyDataChanged();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导入错误: " + e.getMessage());
         }
     }
 
     private void exportToPostman() {
         try {
-            BurpExtender.printOutput("[*] 正在启动Postman Collection导出...");
+            LogManager.getInstance().printOutput("[*] 正在启动Postman Collection导出...");
             DataExporter exporter = new DataExporter();
             exporter.exportToPostman(this);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导出操作发生错误: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导出错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导出错误: " + e.getMessage());
         }
     }
 
     private void importFromPostman() {
         try {
-            BurpExtender.printOutput("[*] 正在启动Postman Collection导入...");
+            LogManager.getInstance().printOutput("[*] 正在启动Postman Collection导入...");
             DataImporter importer = new DataImporter();
             importer.importFromPostman(this);
             notifyDataChanged();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导入错误: " + e.getMessage());
         }
     }
 
     private void smartImport() {
         try {
-            BurpExtender.printOutput("[*] 正在启动智能导入...");
+            LogManager.getInstance().printOutput("[*] 正在启动智能导入...");
             DataImporter importer = new DataImporter();
             importer.smartImport(this);
             notifyDataChanged();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "导入操作发生错误: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
-            BurpExtender.printError("[!] 导入错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导入错误: " + e.getMessage());
         }
     }
 

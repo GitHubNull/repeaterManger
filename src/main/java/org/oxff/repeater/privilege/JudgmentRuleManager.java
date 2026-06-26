@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.dao.JudgmentRuleDAO;
 import org.oxff.repeater.privilege.model.JudgmentRule;
 
@@ -45,7 +45,7 @@ public class JudgmentRuleManager {
     public void refreshCache() {
         cachedAllRules = ruleDAO.getAllRules();
         cachedEnabledRules = ruleDAO.getEnabledRules();
-        BurpExtender.printOutput("[+] 判决规则缓存已刷新: " + cachedAllRules.size() +
+        LogManager.getInstance().printOutput("[+] 判决规则缓存已刷新: " + cachedAllRules.size() +
                 "条规则, " + cachedEnabledRules.size() + "条已启用");
     }
 

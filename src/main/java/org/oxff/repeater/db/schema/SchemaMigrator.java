@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.schema;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -90,25 +90,25 @@ public class SchemaMigrator {
      */
     private static void migrateV2ToV3(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v2→v3迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v2→v3迁移...");
 
             // 为 requests 表添加 api_hash 列
             try {
                 stmt.execute("ALTER TABLE requests ADD COLUMN api_hash TEXT");
-                BurpExtender.printOutput("[+] requests表添加api_hash列成功");
+                LogManager.getInstance().printOutput("[+] requests表添加api_hash列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] requests表添加api_hash列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] requests表添加api_hash列失败: " + e.getMessage());
                 }
             }
 
             // 为 history 表添加 api_hash 列
             try {
                 stmt.execute("ALTER TABLE history ADD COLUMN api_hash TEXT");
-                BurpExtender.printOutput("[+] history表添加api_hash列成功");
+                LogManager.getInstance().printOutput("[+] history表添加api_hash列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] history表添加api_hash列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] history表添加api_hash列失败: " + e.getMessage());
                 }
             }
 
@@ -133,7 +133,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '3')");
 
-            BurpExtender.printOutput("[+] v2→v3 迁移完成");
+            LogManager.getInstance().printOutput("[+] v2→v3 迁移完成");
         }
     }
 
@@ -142,25 +142,25 @@ public class SchemaMigrator {
      */
     private static void migrateV3ToV4(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v3→v4迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v3→v4迁移...");
 
             // 为 api_extraction_rules 表添加 name 列
             try {
                 stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN name TEXT NOT NULL DEFAULT ''");
-                BurpExtender.printOutput("[+] api_extraction_rules表添加name列成功");
+                LogManager.getInstance().printOutput("[+] api_extraction_rules表添加name列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] api_extraction_rules表添加name列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] api_extraction_rules表添加name列失败: " + e.getMessage());
                 }
             }
 
             // 为 api_extraction_rules 表添加 remark 列
             try {
                 stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN remark TEXT NOT NULL DEFAULT ''");
-                BurpExtender.printOutput("[+] api_extraction_rules表添加remark列成功");
+                LogManager.getInstance().printOutput("[+] api_extraction_rules表添加remark列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] api_extraction_rules表添加remark列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] api_extraction_rules表添加remark列失败: " + e.getMessage());
                 }
             }
 
@@ -168,7 +168,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '4' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '4')");
 
-            BurpExtender.printOutput("[+] v3→v4 迁移完成");
+            LogManager.getInstance().printOutput("[+] v3→v4 迁移完成");
         }
     }
 
@@ -177,15 +177,15 @@ public class SchemaMigrator {
      */
     private static void migrateV4ToV5(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v4→v5迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v4→v5迁移...");
 
             // 为 api_extraction_rules 表添加 global 列
             try {
                 stmt.execute("ALTER TABLE api_extraction_rules ADD COLUMN global INTEGER NOT NULL DEFAULT 1");
-                BurpExtender.printOutput("[+] api_extraction_rules表添加global列成功");
+                LogManager.getInstance().printOutput("[+] api_extraction_rules表添加global列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] api_extraction_rules表添加global列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] api_extraction_rules表添加global列失败: " + e.getMessage());
                 }
             }
 
@@ -193,7 +193,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '5')");
 
-            BurpExtender.printOutput("[+] v4→v5 迁移完成");
+            LogManager.getInstance().printOutput("[+] v4→v5 迁移完成");
         }
     }
 
@@ -202,7 +202,7 @@ public class SchemaMigrator {
      */
     private static void migrateV5ToV6(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v5→v6迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v5→v6迁移...");
 
             // 创建令牌位置表
             stmt.execute(
@@ -262,28 +262,28 @@ public class SchemaMigrator {
             // history表新增3列
             try {
                 stmt.execute("ALTER TABLE history ADD COLUMN user_session_name TEXT DEFAULT NULL");
-                BurpExtender.printOutput("[+] history表添加user_session_name列成功");
+                LogManager.getInstance().printOutput("[+] history表添加user_session_name列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] history表添加user_session_name列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] history表添加user_session_name列失败: " + e.getMessage());
                 }
             }
 
             try {
                 stmt.execute("ALTER TABLE history ADD COLUMN judgment TEXT DEFAULT NULL");
-                BurpExtender.printOutput("[+] history表添加judgment列成功");
+                LogManager.getInstance().printOutput("[+] history表添加judgment列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] history表添加judgment列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] history表添加judgment列失败: " + e.getMessage());
                 }
             }
 
             try {
                 stmt.execute("ALTER TABLE history ADD COLUMN similarity REAL DEFAULT -1");
-                BurpExtender.printOutput("[+] history表添加similarity列成功");
+                LogManager.getInstance().printOutput("[+] history表添加similarity列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] history表添加similarity列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] history表添加similarity列失败: " + e.getMessage());
                 }
             }
 
@@ -298,7 +298,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '6' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '6')");
 
-            BurpExtender.printOutput("[+] v5→v6 迁移完成");
+            LogManager.getInstance().printOutput("[+] v5→v6 迁移完成");
         }
     }
 
@@ -307,7 +307,7 @@ public class SchemaMigrator {
      */
     private static void migrateV6ToV7(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v6→v7迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v6→v7迁移...");
 
             // 创建Scope条目表
             stmt.execute(
@@ -328,7 +328,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '7' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '7')");
 
-            BurpExtender.printOutput("[+] v6→v7 迁移完成");
+            LogManager.getInstance().printOutput("[+] v6→v7 迁移完成");
         }
     }
 
@@ -337,15 +337,15 @@ public class SchemaMigrator {
      */
     private static void migrateV7ToV8(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v7→v8迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v7→v8迁移...");
 
             // 为 requests 表添加 is_privilege_test 列
             try {
                 stmt.execute("ALTER TABLE requests ADD COLUMN is_privilege_test INTEGER NOT NULL DEFAULT 0");
-                BurpExtender.printOutput("[+] requests表添加is_privilege_test列成功");
+                LogManager.getInstance().printOutput("[+] requests表添加is_privilege_test列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] requests表添加is_privilege_test列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] requests表添加is_privilege_test列失败: " + e.getMessage());
                 }
             }
 
@@ -358,9 +358,9 @@ public class SchemaMigrator {
                     "  WHERE user_session_name IS NOT NULL AND request_id > 0" +
                     ")"
                 );
-                BurpExtender.printOutput("[+] 回填is_privilege_test完成，更新 " + updated + " 条记录");
+                LogManager.getInstance().printOutput("[+] 回填is_privilege_test完成，更新 " + updated + " 条记录");
             } catch (SQLException e) {
-                BurpExtender.printError("[!] 回填is_privilege_test失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 回填is_privilege_test失败: " + e.getMessage());
             }
 
             // 创建索引
@@ -370,7 +370,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '8' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '8')");
 
-            BurpExtender.printOutput("[+] v7→v8 迁移完成");
+            LogManager.getInstance().printOutput("[+] v7→v8 迁移完成");
         }
     }
 
@@ -379,25 +379,25 @@ public class SchemaMigrator {
      */
     private static void migrateV8ToV9(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v8→v9迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v8→v9迁移...");
 
             // 为 token_locations 表添加 persist_to_global 列
             try {
                 stmt.execute("ALTER TABLE token_locations ADD COLUMN persist_to_global INTEGER NOT NULL DEFAULT 1");
-                BurpExtender.printOutput("[+] token_locations表添加persist_to_global列成功");
+                LogManager.getInstance().printOutput("[+] token_locations表添加persist_to_global列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] token_locations表添加persist_to_global列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] token_locations表添加persist_to_global列失败: " + e.getMessage());
                 }
             }
 
             // 为 token_locations 表添加 enabled 列
             try {
                 stmt.execute("ALTER TABLE token_locations ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
-                BurpExtender.printOutput("[+] token_locations表添加enabled列成功");
+                LogManager.getInstance().printOutput("[+] token_locations表添加enabled列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] token_locations表添加enabled列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] token_locations表添加enabled列失败: " + e.getMessage());
                 }
             }
 
@@ -405,7 +405,7 @@ public class SchemaMigrator {
             stmt.execute("UPDATE schema_meta SET value = '9' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '9')");
 
-            BurpExtender.printOutput("[+] v8→v9 迁移完成");
+            LogManager.getInstance().printOutput("[+] v8→v9 迁移完成");
         }
     }
 
@@ -415,7 +415,7 @@ public class SchemaMigrator {
      */
     private static void migrateV9ToV10(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v9→v10迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v9→v10迁移...");
 
             // 为 requests 表添加响应相关列
             String[] columns = {
@@ -432,18 +432,18 @@ public class SchemaMigrator {
                     stmt.execute(ddl);
                 } catch (SQLException e) {
                     if (!e.getMessage().contains("duplicate column name")) {
-                        BurpExtender.printError("[!] v9→v10迁移列添加失败: " + e.getMessage());
+                        LogManager.getInstance().printError("[!] v9→v10迁移列添加失败: " + e.getMessage());
                     }
                 }
             }
 
-            BurpExtender.printOutput("[+] requests表添加响应字段成功");
+            LogManager.getInstance().printOutput("[+] requests表添加响应字段成功");
 
             // 更新schema版本
             stmt.execute("UPDATE schema_meta SET value = '10' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '10')");
 
-            BurpExtender.printOutput("[+] v9→v10 迁移完成");
+            LogManager.getInstance().printOutput("[+] v9→v10 迁移完成");
         }
     }
 
@@ -454,7 +454,7 @@ public class SchemaMigrator {
      */
     private static void migrateV10ToV11(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            BurpExtender.printOutput("[*] 开始v10→v11迁移...");
+            LogManager.getInstance().printOutput("[*] 开始v10→v11迁移...");
 
             // 创建令牌方案表
             stmt.execute(
@@ -483,10 +483,10 @@ public class SchemaMigrator {
             // 为 user_sessions 添加 scheme_id 列
             try {
                 stmt.execute("ALTER TABLE user_sessions ADD COLUMN scheme_id INTEGER DEFAULT NULL");
-                BurpExtender.printOutput("[+] user_sessions表添加scheme_id列成功");
+                LogManager.getInstance().printOutput("[+] user_sessions表添加scheme_id列成功");
             } catch (SQLException e) {
                 if (!e.getMessage().contains("duplicate column name")) {
-                    BurpExtender.printError("[!] user_sessions表添加scheme_id列失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] user_sessions表添加scheme_id列失败: " + e.getMessage());
                 }
             }
 
@@ -504,11 +504,11 @@ public class SchemaMigrator {
                     stmt.execute(ddl);
                 } catch (SQLException e) {
                     if (!e.getMessage().contains("duplicate column name")) {
-                        BurpExtender.printError("[!] v10→v11迁移列添加失败: " + e.getMessage());
+                        LogManager.getInstance().printError("[!] v10→v11迁移列添加失败: " + e.getMessage());
                     }
                 }
             }
-            BurpExtender.printOutput("[+] user_sessions表添加重放配置列成功");
+            LogManager.getInstance().printOutput("[+] user_sessions表添加重放配置列成功");
 
             // 创建v11新增索引
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_scheme ON scheme_token_locations(scheme_id)");
@@ -528,24 +528,24 @@ public class SchemaMigrator {
                             "INSERT INTO scheme_token_locations (scheme_id, token_location_id) " +
                             "SELECT " + defaultSchemeId + ", id FROM token_locations"
                         );
-                        BurpExtender.printOutput("[+] 默认方案创建成功(id=" + defaultSchemeId + ")，关联 " + linkedLocations + " 个令牌位置");
+                        LogManager.getInstance().printOutput("[+] 默认方案创建成功(id=" + defaultSchemeId + ")，关联 " + linkedLocations + " 个令牌位置");
 
                         // 将所有现有用户会话关联到默认方案
                         int linkedSessions = stmt.executeUpdate(
                             "UPDATE user_sessions SET scheme_id = " + defaultSchemeId + " WHERE scheme_id IS NULL"
                         );
-                        BurpExtender.printOutput("[+] " + linkedSessions + " 个用户会话已关联到默认方案");
+                        LogManager.getInstance().printOutput("[+] " + linkedSessions + " 个用户会话已关联到默认方案");
                     }
                 }
             } catch (SQLException e) {
-                BurpExtender.printError("[!] 自动迁移创建默认方案失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 自动迁移创建默认方案失败: " + e.getMessage());
             }
 
             // 更新schema版本
             stmt.execute("UPDATE schema_meta SET value = '11' WHERE key = 'schema_version'");
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '11')");
 
-            BurpExtender.printOutput("[+] v10→v11 迁移完成");
+            LogManager.getInstance().printOutput("[+] v10→v11 迁移完成");
         }
     }
 }

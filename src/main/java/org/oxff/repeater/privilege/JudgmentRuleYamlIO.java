@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.oxff.repeater.privilege.model.JudgmentRule;
@@ -77,7 +77,7 @@ public class JudgmentRuleYamlIO {
                 rulesObj = root.get("rules");
             }
             if (!(rulesObj instanceof List)) {
-                BurpExtender.printError("[!] YAML格式错误：缺少judgment_rules列表");
+                LogManager.getInstance().printError("[!] YAML格式错误：缺少judgment_rules列表");
                 return rules;
             }
 
@@ -91,11 +91,11 @@ public class JudgmentRuleYamlIO {
                         rules.add(rule);
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析YAML规则条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML规则条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] YAML解析失败: " + e.getMessage());
         }
         return rules;
     }
@@ -141,7 +141,7 @@ public class JudgmentRuleYamlIO {
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             if (!parentDir.mkdirs()) {
-                BurpExtender.printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
+                LogManager.getInstance().printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
                 return false;
             }
         }
@@ -151,7 +151,7 @@ public class JudgmentRuleYamlIO {
             writer.write(toYaml(rules));
             writer.flush();
         } catch (IOException e) {
-            BurpExtender.printError("[!] 写入YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -165,7 +165,7 @@ public class JudgmentRuleYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                BurpExtender.printError("[!] 替换YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -188,7 +188,7 @@ public class JudgmentRuleYamlIO {
             }
             return fromYaml(sb.toString());
         } catch (IOException e) {
-            BurpExtender.printError("[!] 读取YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

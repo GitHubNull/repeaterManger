@@ -1,6 +1,6 @@
 package org.oxff.repeater.utils;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.config.DatabaseConfig;
 
@@ -237,9 +237,9 @@ public class FileChooserHelper {
             DatabaseConfig config = getConfig();
             config.setProperty(CONFIG_KEY_PREFIX + operationType, dirPath);
             config.saveConfig();
-            BurpExtender.printOutput("[+] 已记住文件对话框目录 (" + operationType + "): " + dirPath);
+            LogManager.getInstance().printOutput("[+] 已记住文件对话框目录 (" + operationType + "): " + dirPath);
         } catch (Exception e) {
-            BurpExtender.printError("[!] 保存文件对话框目录配置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存文件对话框目录配置失败: " + e.getMessage());
         }
     }
 

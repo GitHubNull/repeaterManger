@@ -1,6 +1,6 @@
 package org.oxff.repeater.io;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -42,7 +42,7 @@ public class PostmanExporter {
      */
     public boolean export(Component parent) {
         try {
-            BurpExtender.printOutput("[+] 开始Postman Collection v2.1.0导出过程");
+            LogManager.getInstance().printOutput("[+] 开始Postman Collection v2.1.0导出过程");
 
             File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
                     org.oxff.repeater.utils.FileChooserHelper.OP_POSTMAN_EXPORT, "导出Postman Collection", parent,
@@ -70,7 +70,7 @@ public class PostmanExporter {
             return true;
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 导出Postman Collection失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 导出Postman Collection失败: " + e.getMessage());
             JOptionPane.showMessageDialog(parent,
                 "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -83,7 +83,7 @@ public class PostmanExporter {
         List<Map<String, Object>> requests = requestDAO.getAllRequests();
         List<RequestResponseRecord> history = historyReadDAO.getAllHistory();
 
-        BurpExtender.printOutput("[*] 从数据库获取到 " + requests.size() + " 条请求记录和 " +
+        LogManager.getInstance().printOutput("[*] 从数据库获取到 " + requests.size() + " 条请求记录和 " +
                               history.size() + " 条历史记录");
 
         // 构建Postman Collection
@@ -119,7 +119,7 @@ public class PostmanExporter {
         }
 
         int totalItems = requests.size() + history.size();
-        BurpExtender.printOutput("[+] Postman Collection导出成功: " + outputFile.getAbsolutePath() +
+        LogManager.getInstance().printOutput("[+] Postman Collection导出成功: " + outputFile.getAbsolutePath() +
                               "，包含 " + totalItems + " 个item");
 
         JOptionPane.showMessageDialog(parent,

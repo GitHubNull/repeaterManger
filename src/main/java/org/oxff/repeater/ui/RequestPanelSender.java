@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
@@ -48,7 +48,7 @@ public class RequestPanelSender {
         try {
             request = requestPanel.getRequest();
             if (request == null || request.length == 0) {
-                BurpExtender.printError("[!] 请求数据为空");
+                LogManager.getInstance().printError("[!] 请求数据为空");
                 return;
             }
 
@@ -58,7 +58,7 @@ public class RequestPanelSender {
             // 检测原始请求是否为 HTTP/2
             final boolean useHttp2 = "HTTP/2".equals(httpRequest.httpVersion());
 
-            BurpExtender.printOutput("[*] 正在发送请求到 " + url + " (协议: " + (useHttp2 ? "HTTP/2" : "HTTP/1.1") + ", 超时时间: " + requestPanel.getTimeout() + "秒)");
+            LogManager.getInstance().printOutput("[*] 正在发送请求到 " + url + " (协议: " + (useHttp2 ? "HTTP/2" : "HTTP/1.1") + ", 超时时间: " + requestPanel.getTimeout() + "秒)");
 
             sendButton.setEnabled(false);
             sendButton.setText("发送中...");
@@ -127,7 +127,7 @@ public class RequestPanelSender {
 
                     if (isBurpError) {
                         SwingUtilities.invokeLater(() -> {
-                            BurpExtender.printError(String.format(
+                            LogManager.getInstance().printError(String.format(
                                 "[!] 服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode));
                             JOptionPane.showMessageDialog(requestPanel,
                                 String.format("服务器返回异常响应 (HTTP %d)，\n可能是请求格式错误或目标服务不支持", statusCode),
@@ -140,12 +140,12 @@ public class RequestPanelSender {
                             try {
                                 handleSuccessfulResponse(finalRequest, requestToSend, responseData, finalStatusCode, finalUrl, elapsedMs);
                             } catch (Exception e) {
-                                BurpExtender.printError("[!] 处理响应时出错: " + e.getMessage());
+                                LogManager.getInstance().printError("[!] 处理响应时出错: " + e.getMessage());
                             }
                         });
                     } else {
                         SwingUtilities.invokeLater(() -> {
-                            BurpExtender.printError("[!] 请求发送失败");
+                            LogManager.getInstance().printError("[!] 请求发送失败");
                             JOptionPane.showMessageDialog(requestPanel,
                                 "请求发送失败，未收到响应",
                                 "错误",
@@ -154,7 +154,7 @@ public class RequestPanelSender {
                     }
                 } catch (Exception e) {
                     SwingUtilities.invokeLater(() -> {
-                        BurpExtender.printError("[!] 发送请求时出错: " + e.getMessage());
+                        LogManager.getInstance().printError("[!] 发送请求时出错: " + e.getMessage());
                         JOptionPane.showMessageDialog(requestPanel,
                             "发送请求失败: " + e.getMessage(),
                             "错误",
@@ -171,7 +171,7 @@ public class RequestPanelSender {
             }, "RepeaterManager-SendRequest").start();
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 准备请求时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 准备请求时出错: " + e.getMessage());
             sendButton.setEnabled(true);
             sendButton.setText("发送请求");
             SwingUtilities.invokeLater(() -> {
@@ -226,15 +226,15 @@ public class RequestPanelSender {
                         mainUI.getHistoryPanel().addHistoryRecord(record);
                     }
 
-                    BurpExtender.printOutput("[+] 请求和响应已保存到数据库，请求ID: " + requestId + ", 历史ID: " + historyId);
+                    LogManager.getInstance().printOutput("[+] 请求和响应已保存到数据库，请求ID: " + requestId + ", 历史ID: " + historyId);
                 } else {
-                    BurpExtender.printError("[!] 保存响应到数据库失败");
+                    LogManager.getInstance().printError("[!] 保存响应到数据库失败");
                 }
             } else {
-                BurpExtender.printError("[!] 保存请求到数据库失败");
+                LogManager.getInstance().printError("[!] 保存请求到数据库失败");
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 处理响应数据时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 处理响应数据时出错: " + e.getMessage());
         }
     }
 
@@ -244,7 +244,7 @@ public class RequestPanelSender {
     private void saveHistoryRecord(byte[] request, String url, long responseTime) {
         try {
             if (request == null) {
-                BurpExtender.printError("[!] 无法保存历史记录：请求数据为空");
+                LogManager.getInstance().printError("[!] 无法保存历史记录：请求数据为空");
                 return;
             }
 
@@ -255,7 +255,7 @@ public class RequestPanelSender {
             try {
                 parsedUrl = new URL(url);
             } catch (Exception e) {
-                BurpExtender.printError("[!] 保存历史记录时URL解析失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 保存历史记录时URL解析失败: " + e.getMessage());
                 return;
             }
 
@@ -284,16 +284,16 @@ public class RequestPanelSender {
             int historyId = historyWriteDAO.saveHistory(record);
 
             if (historyId > 0) {
-                BurpExtender.printOutput("[+] 历史记录已保存到数据库，历史ID: " + historyId);
+                LogManager.getInstance().printOutput("[+] 历史记录已保存到数据库，历史ID: " + historyId);
 
                 if (mainUI != null && mainUI.getHistoryPanel() != null) {
                     mainUI.getHistoryPanel().addHistoryRecord(record);
                 }
             } else {
-                BurpExtender.printError("[!] 保存历史记录到数据库失败");
+                LogManager.getInstance().printError("[!] 保存历史记录到数据库失败");
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 保存历史记录时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存历史记录时出错: " + e.getMessage());
         }
     }
 }

@@ -1,6 +1,6 @@
 package org.oxff.repeater.http;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.http.HttpService;
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +60,7 @@ public class RequestDataHelper {
             return hasHost && hasContentLength;
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 验证HTTP请求时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 验证HTTP请求时出错: " + e.getMessage());
             return false;
         }
     }
@@ -74,7 +74,7 @@ public class RequestDataHelper {
         }
 
         // 记录原始数据用于调试
-        BurpExtender.printOutput("[*] 尝试修复请求数据，大小: " + data.length + " 字节");
+        LogManager.getInstance().printOutput("[*] 尝试修复请求数据，大小: " + data.length + " 字节");
 
         StringBuilder sb = new StringBuilder();
 
@@ -271,7 +271,7 @@ public class RequestDataHelper {
             System.arraycopy(body, 0, result, headerBytes.length, body.length);
             return result;
         } catch (Exception e) {
-            BurpExtender.printError("[!] 修正 Content-Length 失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 修正 Content-Length 失败: " + e.getMessage());
             return requestBytes;
         }
     }

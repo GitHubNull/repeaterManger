@@ -1,6 +1,6 @@
 package org.oxff.repeater.http;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
@@ -80,7 +80,7 @@ public class HttpRequestHelper {
 
                 return "未知URL (从路径获取失败)";
             } catch (Exception ex) {
-                BurpExtender.printError("[!] 提取URL失败: " + ex.getMessage());
+                LogManager.getInstance().printError("[!] 提取URL失败: " + ex.getMessage());
                 return "未知URL";
             }
         }
@@ -153,7 +153,7 @@ public class HttpRequestHelper {
                     }
                 }
             } catch (Exception e) {
-                BurpExtender.printOutput("[*] 从数据库获取协议信息失败，使用请求数据推断: " + e.getMessage());
+                LogManager.getInstance().printOutput("[*] 从数据库获取协议信息失败，使用请求数据推断: " + e.getMessage());
             }
 
             // 综合判断HTTPS：优先数据库协议，再结合请求头判断
@@ -187,7 +187,7 @@ public class HttpRequestHelper {
 
             return HttpService.httpService(host, port, isSecure);
         } catch (Exception e) {
-            BurpExtender.printError("[!] 重建HttpService失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 重建HttpService失败: " + e.getMessage());
             // 返回一个默认的HTTP服务
             return HttpService.httpService("unknown", 80, false);
         }
@@ -219,7 +219,7 @@ public class HttpRequestHelper {
                     path, (query == null || query.isEmpty()) ? null : query,
                     headerList, body, contentType, activeRules);
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] 计算API值失败，使用路径作为默认值: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] 计算API值失败，使用路径作为默认值: " + e.getMessage());
             return path != null ? path : "/";
         }
     }

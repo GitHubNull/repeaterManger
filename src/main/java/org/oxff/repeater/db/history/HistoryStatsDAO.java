@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.ui.history.HistoryStatsData;
 
@@ -48,7 +48,7 @@ public class HistoryStatsDAO {
             stats.setRequestCount(queryRequestCount(conn));
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取全局统计失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取全局统计失败: " + e.getMessage());
         }
 
         return stats;
@@ -77,7 +77,7 @@ public class HistoryStatsDAO {
             stats.setRequestCount(queryRequestCount(conn));
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取请求统计失败 (requestId=" + requestId + "): " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取请求统计失败 (requestId=" + requestId + "): " + e.getMessage());
         }
 
         return stats;

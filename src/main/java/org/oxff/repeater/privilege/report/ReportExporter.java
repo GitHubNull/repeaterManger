@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege.report;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -115,7 +115,7 @@ public class ReportExporter {
             try {
                 SwingUtilities.invokeLater(() -> progressDialog.setVisible(true));
 
-                BurpExtender.printOutput("[*] 开始生成越权测试报告...");
+                LogManager.getInstance().printOutput("[*] 开始生成越权测试报告...");
                 ReportData data = finalGenerator.collectData();
 
                 // 生成报告内容为 byte[]
@@ -154,7 +154,7 @@ public class ReportExporter {
                             "报告导出成功！\n" + finalFile.getAbsolutePath() + modeDesc,
                             "导出成功", JOptionPane.INFORMATION_MESSAGE);
                 });
-                BurpExtender.printOutput("[+] 越权测试报告导出成功: " + finalFile.getAbsolutePath());
+                LogManager.getInstance().printOutput("[+] 越权测试报告导出成功: " + finalFile.getAbsolutePath());
             } catch (Exception e) {
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
@@ -162,7 +162,7 @@ public class ReportExporter {
                             "导出失败: " + e.getMessage(),
                             "导出错误", JOptionPane.ERROR_MESSAGE);
                 });
-                BurpExtender.printError("[!] 越权测试报告导出失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 越权测试报告导出失败: " + e.getMessage());
             }
         }).start();
     }

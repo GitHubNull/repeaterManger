@@ -1,6 +1,6 @@
 package org.oxff.repeater.http;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
@@ -121,7 +121,7 @@ public class RequestManager {
      */
     public byte[] makeHttpRequest(byte[] requestBytes, int timeoutSeconds, int requestId, HttpService httpService, boolean useHttp2) {
         if (requestBytes == null || requestBytes.length == 0) {
-            BurpExtender.printError("[!] 请求数据为空");
+            LogManager.getInstance().printError("[!] 请求数据为空");
             return null;
         }
         
@@ -135,7 +135,7 @@ public class RequestManager {
         int port = service.port();
         boolean isSecure = service.secure();
         
-        BurpExtender.printOutput(
+        LogManager.getInstance().printOutput(
             String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)", 
                 isSecure ? "https" : "http", host, port, useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
         
@@ -148,7 +148,7 @@ public class RequestManager {
                 // 检查是否启用代理模式（同步路径也需要支持代理）
                 ProxyConfig proxyConfig = ProxyConfig.getInstance();
                 if (proxyConfig.isProxyEnabled()) {
-                    BurpExtender.printOutput(
+                    LogManager.getInstance().printOutput(
                         String.format("[D] 通过代理 %s:%d 发送请求",
                             proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
                     byte[] proxyResponse = makeHttpRequestWithProxy(requestBytes, service, timeoutSeconds);
@@ -162,7 +162,7 @@ public class RequestManager {
                         }
                         return proxyResponse;
                     } else {
-                        BurpExtender.printError("[!] 代理请求返回空响应");
+                        LogManager.getInstance().printError("[!] 代理请求返回空响应");
                         if (requestId > 0) {
                             recordingService.recordFailure(requestId, requestBytes, httpRequest,
                                 "代理请求返回空响应", responseTime, service);
@@ -185,10 +185,10 @@ public class RequestManager {
                 boolean needFallback = false;
                 if (requestResponse == null || requestResponse.response() == null) {
                     if (useHttp2) {
-                        BurpExtender.printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
+                        LogManager.getInstance().printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
                         needFallback = true;
                     } else {
-                        BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
+                        LogManager.getInstance().printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
                         if (requestId > 0) {
                             recordingService.recordFailure(requestId, fixedBytes, httpRequest,
                                                          "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
@@ -205,7 +205,7 @@ public class RequestManager {
                 // HTTP/2 空响应回退到 HTTP/1.1
                 if (needFallback || (response == null || response.length == 0)) {
                     if (useHttp2) {
-                        BurpExtender.printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
+                        LogManager.getInstance().printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
                         HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
                         requestResponse = api.http().sendRequest(http1Request);
                         responseTime = System.currentTimeMillis() - startTime;
@@ -222,7 +222,7 @@ public class RequestManager {
                     if (isBurpErrorResponse(statusCode, response)) {
                         String errorMsg = String.format(
                             "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
-                        BurpExtender.printError("[!] " + errorMsg);
+                        LogManager.getInstance().printError("[!] " + errorMsg);
                         if (requestId > 0) {
                             recordingService.recordFailure(requestId, fixedBytes, httpRequest,
                                                      errorMsg, responseTime, service);
@@ -235,7 +235,7 @@ public class RequestManager {
                     }
                     return response;
                 } else {
-                    BurpExtender.printError("[!] 收到空响应");
+                    LogManager.getInstance().printError("[!] 收到空响应");
                     if (requestId > 0) {
                         recordingService.recordFailure(requestId, fixedBytes, httpRequest,
                                                      "收到空响应", responseTime, service);
@@ -244,7 +244,7 @@ public class RequestManager {
                 }
             } catch (Exception e) {
                 long responseTime = System.currentTimeMillis() - startTime;
-                BurpExtender.printError("[!] 请求发送失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 请求发送失败: " + e.getMessage());
                 if (requestId > 0) {
                     recordingService.recordFailure(requestId, requestBytes, httpRequest,
                                                  "请求发送失败: " + e.getMessage(), responseTime, service);
@@ -258,17 +258,17 @@ public class RequestManager {
             return future.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            BurpExtender.printError("[!] 请求超时 (" + timeoutSeconds + "秒)");
+            LogManager.getInstance().printError("[!] 请求超时 (" + timeoutSeconds + "秒)");
             return null;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            BurpExtender.printError("[!] 请求被中断: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 请求被中断: " + e.getMessage());
             return null;
         } catch (ExecutionException e) {
-            BurpExtender.printError("[!] 执行请求时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 执行请求时出错: " + e.getMessage());
             return null;
         } catch (Exception e) {
-            BurpExtender.printError("[!] 未知错误: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 未知错误: " + e.getMessage());
             return null;
         }
     }
@@ -323,7 +323,7 @@ public class RequestManager {
     public void makeHttpRequestAsync(byte[] requestBytes, int timeoutSeconds, int requestId, 
                                       HttpService httpService, boolean useHttp2, RequestCallback callback) {
         if (requestBytes == null || requestBytes.length == 0) {
-            BurpExtender.printError("[!] 请求数据为空");
+            LogManager.getInstance().printError("[!] 请求数据为空");
             if (callback != null) {
                 callback.onFailure("请求数据为空", 0, 0, 0);
             }
@@ -346,14 +346,14 @@ public class RequestManager {
                 int port = service.port();
                 boolean isSecure = service.secure();
                 
-                BurpExtender.printOutput(
+                LogManager.getInstance().printOutput(
                     String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)",
                         isSecure ? "https" : "http", host, port, useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
 
                 // 检查是否启用代理模式
                 ProxyConfig proxyConfig = ProxyConfig.getInstance();
                 if (proxyConfig.isProxyEnabled()) {
-                    BurpExtender.printOutput(
+                    LogManager.getInstance().printOutput(
                         String.format("[D] 通过代理 %s:%d 发送请求",
                             proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
                     byte[] proxyResponse = makeHttpRequestWithProxy(
@@ -366,14 +366,14 @@ public class RequestManager {
                             recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
                                 requestInfo, httpResponse, responseTime, service);
                         }
-                        BurpExtender.printOutput(
+                        LogManager.getInstance().printOutput(
                             String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
                                 responseTime, proxyResponse.length));
                         if (callback != null) {
                             callback.onSuccess(proxyResponse, startTime, System.currentTimeMillis(), responseTime);
                         }
                     } else {
-                        BurpExtender.printError("[!] 代理请求返回空响应");
+                        LogManager.getInstance().printError("[!] 代理请求返回空响应");
                         if (requestId > 0) {
                             recordingService.recordFailure(requestId, requestBytes, requestInfo,
                                                          "代理请求返回空响应", responseTime, service);
@@ -416,7 +416,7 @@ public class RequestManager {
                     sendThread.interrupt();
                     long responseTime = System.currentTimeMillis() - startTime;
                     String timeoutMsg = String.format("HTTP请求发送超时（%d秒）", timeoutSeconds + 10);
-                    BurpExtender.printError("[!] " + timeoutMsg);
+                    LogManager.getInstance().printError("[!] " + timeoutMsg);
                     if (requestId > 0) {
                         recordingService.recordFailure(requestId, fixedBytes, requestInfo,
                                 timeoutMsg, responseTime, service);
@@ -439,10 +439,10 @@ public class RequestManager {
                 boolean needFallback = false;
                 if (requestResponse == null || requestResponse.response() == null) {
                     if (useHttp2) {
-                        BurpExtender.printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
+                        LogManager.getInstance().printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
                         needFallback = true;
                     } else {
-                        BurpExtender.printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
+                        LogManager.getInstance().printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
                         if (requestId > 0) {
                             recordingService.recordFailure(requestId, fixedBytes, requestInfo,
                                                          "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
@@ -462,7 +462,7 @@ public class RequestManager {
                 // HTTP/2 空响应回退到 HTTP/1.1
                 if (needFallback || (response == null || response.length == 0)) {
                     if (useHttp2) {
-                        BurpExtender.printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
+                        LogManager.getInstance().printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
                         HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
                         final HttpRequestResponse[] fallbackHolder = {null};
                         final Exception[] fallbackError = {null};
@@ -496,7 +496,7 @@ public class RequestManager {
                     if (isBurpErrorResponse(statusCode, response)) {
                         String errorMsg = String.format(
                             "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
-                        BurpExtender.printError("[!] " + errorMsg);
+                        LogManager.getInstance().printError("[!] " + errorMsg);
                         if (requestId > 0) {
                             recordingService.recordFailure(requestId, fixedBytes, requestInfo,
                                                          errorMsg, responseTime, service);
@@ -510,14 +510,14 @@ public class RequestManager {
                         recordingService.recordSuccess(requestId, fixedBytes, response,
                                                       requestInfo, httpResponse, responseTime, service);
                     }
-                    BurpExtender.printOutput(
+                    LogManager.getInstance().printOutput(
                         String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
                             responseTime, response.length));
                     if (callback != null) {
                         callback.onSuccess(response, startTime, System.currentTimeMillis(), responseTime);
                     }
                 } else {
-                    BurpExtender.printError("[!] 收到空响应");
+                    LogManager.getInstance().printError("[!] 收到空响应");
                     if (requestId > 0) {
                         recordingService.recordFailure(requestId, fixedBytes, requestInfo,
                                                      "收到空响应", responseTime, service);
@@ -527,7 +527,7 @@ public class RequestManager {
                     }
                 }
             } catch (Exception e) {
-                BurpExtender.printError("[!] 发送请求时发生异常: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 发送请求时发生异常: " + e.getMessage());
                 // 记录异常堆栈信息
                 e.printStackTrace();
                 
@@ -543,7 +543,7 @@ public class RequestManager {
                                                      "发送请求时发生异常: " + e.getMessage(), responseTime, service);
                     } catch (Exception ex) {
                         // 如果创建HTTP服务失败，使用基本的请求分析
-                        BurpExtender.printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
+                        LogManager.getInstance().printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
                         HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
                         recordingService.recordFailure(requestId, requestBytes, requestInfo, 
                                                      "发送请求时发生异常: " + e.getMessage(), responseTime);
@@ -833,12 +833,12 @@ public class RequestManager {
             }
 
             byte[] response = baos.toByteArray();
-            BurpExtender.printOutput(
+            LogManager.getInstance().printOutput(
                 String.format("[D] 代理响应: HTTP %d, 响应总大小: %d 字节", responseCode, response.length));
             return response;
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 代理请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 代理请求失败: " + e.getMessage());
             return null;
         } finally {
             if (conn != null) {
@@ -890,7 +890,7 @@ public class RequestManager {
             conn.setSSLSocketFactory(sslContext.getSocketFactory());
             conn.setHostnameVerifier((hostname, session) -> true);
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置SSL信任失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置SSL信任失败: " + e.getMessage());
         }
     }
 

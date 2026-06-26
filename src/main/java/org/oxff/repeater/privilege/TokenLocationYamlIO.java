@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.privilege.model.TokenLocationType;
 import org.yaml.snakeyaml.DumperOptions;
@@ -74,7 +74,7 @@ public class TokenLocationYamlIO {
 
             Object locationsObj = root.get("locations");
             if (!(locationsObj instanceof List)) {
-                BurpExtender.printError("[!] 令牌位置YAML格式错误：缺少locations列表");
+                LogManager.getInstance().printError("[!] 令牌位置YAML格式错误：缺少locations列表");
                 return locations;
             }
 
@@ -90,11 +90,11 @@ public class TokenLocationYamlIO {
                         locations.add(loc);
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析YAML令牌位置条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML令牌位置条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 令牌位置YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 令牌位置YAML解析失败: " + e.getMessage());
         }
         return locations;
     }
@@ -134,7 +134,7 @@ public class TokenLocationYamlIO {
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             if (!parentDir.mkdirs()) {
-                BurpExtender.printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
+                LogManager.getInstance().printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
                 return false;
             }
         }
@@ -145,7 +145,7 @@ public class TokenLocationYamlIO {
             writer.write(toYaml(locations));
             writer.flush();
         } catch (IOException e) {
-            BurpExtender.printError("[!] 写入令牌位置YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入令牌位置YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -161,7 +161,7 @@ public class TokenLocationYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                BurpExtender.printError("[!] 替换令牌位置YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换令牌位置YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -189,7 +189,7 @@ public class TokenLocationYamlIO {
             }
             return fromYaml(sb.toString());
         } catch (IOException e) {
-            BurpExtender.printError("[!] 读取令牌位置YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取令牌位置YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

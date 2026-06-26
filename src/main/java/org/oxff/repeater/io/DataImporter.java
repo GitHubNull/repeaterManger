@@ -1,6 +1,6 @@
 package org.oxff.repeater.io;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 
 import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -40,7 +40,7 @@ public class DataImporter {
 
         // 自动检测格式
         FormatDetector.ImportFormat format = FormatDetector.detectFormat(selectedFile);
-        BurpExtender.printOutput("[*] 检测到文件格式: " + format);
+        LogManager.getInstance().printOutput("[*] 检测到文件格式: " + format);
 
         switch (format) {
             case ERM:

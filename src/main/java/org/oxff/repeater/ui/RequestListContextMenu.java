@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.RequestDAO;
 
 import javax.swing.*;
@@ -116,7 +116,7 @@ public class RequestListContextMenu {
                     try {
                         requestDAO.updateRequestColor(requestId, finalColor);
                     } catch (Exception ex) {
-                        BurpExtender.printError("[!] 更新请求颜色失败: " + ex.getMessage());
+                        LogManager.getInstance().printError("[!] 更新请求颜色失败: " + ex.getMessage());
                     }
                 }
             }
@@ -186,7 +186,7 @@ public class RequestListContextMenu {
                 try {
                     requestDAO.updateRequestComment(requestId, trimmed);
                 } catch (Exception ex) {
-                    BurpExtender.printError("[!] 更新请求备注失败: " + ex.getMessage());
+                    LogManager.getInstance().printError("[!] 更新请求备注失败: " + ex.getMessage());
                 }
             }
         }
@@ -228,7 +228,7 @@ public class RequestListContextMenu {
                 try {
                     requestDAO.deleteRequest(requestId);
                 } catch (Exception ex) {
-                    BurpExtender.printError("[!] 删除请求失败: " + ex.getMessage());
+                    LogManager.getInstance().printError("[!] 删除请求失败: " + ex.getMessage());
                 }
 
                 // 从内存映射删除

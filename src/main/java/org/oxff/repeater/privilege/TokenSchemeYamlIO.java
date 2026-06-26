@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.privilege.model.TokenScheme;
 import org.yaml.snakeyaml.DumperOptions;
@@ -107,7 +107,7 @@ public class TokenSchemeYamlIO {
                 schemesObj = root.get("schemes");
             }
             if (!(schemesObj instanceof List)) {
-                BurpExtender.printError("[!] 令牌方案YAML格式错误：缺少token_schemes列表");
+                LogManager.getInstance().printError("[!] 令牌方案YAML格式错误：缺少token_schemes列表");
                 return schemes;
             }
 
@@ -123,11 +123,11 @@ public class TokenSchemeYamlIO {
                         schemes.add(scheme);
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析YAML令牌方案条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML令牌方案条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 令牌方案YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 令牌方案YAML解析失败: " + e.getMessage());
         }
         return schemes;
     }
@@ -175,14 +175,14 @@ public class TokenSchemeYamlIO {
                     matched++;
                 } else {
                     unmatched++;
-                    BurpExtender.printError("[!] 导入令牌方案时未匹配的令牌位置: " + type + " [" + expression + "]");
+                    LogManager.getInstance().printError("[!] 导入令牌方案时未匹配的令牌位置: " + type + " [" + expression + "]");
                 }
             }
 
             scheme.setTokenLocationIds(locationIds);
 
             if (unmatched > 0) {
-                BurpExtender.printOutput("[*] 令牌方案 '" + name + "' 导入: " + matched + " 个令牌位置匹配, " + unmatched + " 个未匹配（已跳过）");
+                LogManager.getInstance().printOutput("[*] 令牌方案 '" + name + "' 导入: " + matched + " 个令牌位置匹配, " + unmatched + " 个未匹配（已跳过）");
             }
         }
 
@@ -197,7 +197,7 @@ public class TokenSchemeYamlIO {
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             if (!parentDir.mkdirs()) {
-                BurpExtender.printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
+                LogManager.getInstance().printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
                 return false;
             }
         }
@@ -207,7 +207,7 @@ public class TokenSchemeYamlIO {
             writer.write(toYaml(schemes, locations));
             writer.flush();
         } catch (IOException e) {
-            BurpExtender.printError("[!] 写入令牌方案YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入令牌方案YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -221,7 +221,7 @@ public class TokenSchemeYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                BurpExtender.printError("[!] 替换令牌方案YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换令牌方案YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -246,7 +246,7 @@ public class TokenSchemeYamlIO {
             }
             return fromYaml(sb.toString(), locations);
         } catch (IOException e) {
-            BurpExtender.printError("[!] 读取令牌方案YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取令牌方案YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

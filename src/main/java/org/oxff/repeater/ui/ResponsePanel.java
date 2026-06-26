@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.responses.HttpResponse;
 import org.oxff.repeater.utils.TextLineNumber;
@@ -185,7 +185,7 @@ public class ResponsePanel extends JPanel {
      */
     public void setResponse(byte[] response) {
         if (response == null || response.length == 0) {
-            BurpExtender.printError("[!] 设置响应失败：响应为空");
+            LogManager.getInstance().printError("[!] 设置响应失败：响应为空");
             return;
         }
         
@@ -209,10 +209,10 @@ public class ResponsePanel extends JPanel {
             // 设置响应长度
             responseLengthField.setText(String.valueOf(response.length));
             
-            BurpExtender.printOutput("[+] 响应已加载: HTTP " + httpResponse.statusCode() + 
+            LogManager.getInstance().printOutput("[+] 响应已加载: HTTP " + httpResponse.statusCode() + 
                              " (" + response.length + " 字节)");
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置响应时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置响应时出错: " + e.getMessage());
         }
     }
 } 

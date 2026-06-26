@@ -1,10 +1,10 @@
 package org.oxff.repeater.controller;
 
-import burp.BurpExtender;
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent;
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
 import burp.api.montoya.http.message.HttpRequestResponse;
 
+import org.oxff.repeater.UIRequestDispatcher;
 import org.oxff.repeater.privilege.SessionManager;
 
 import javax.swing.*;
@@ -38,12 +38,12 @@ public class PopMenu implements ContextMenuItemsProvider {
 
                 JMenuItem sendToRepeater = new JMenuItem("发送到 Repeater Manager");
                 sendToRepeater.addActionListener(e -> {
-                    BurpExtender.setRepeaterUIRequest(requestResponse);
+                    UIRequestDispatcher.getInstance().setRepeaterUIRequest(requestResponse);
                 });
 
                 JMenuItem sendToPrivilegeTest = new JMenuItem("发送到权限测试");
                 sendToPrivilegeTest.addActionListener(e -> {
-                    BurpExtender.setPrivilegeTestRequest(requestResponse);
+                    UIRequestDispatcher.getInstance().setPrivilegeTestRequest(requestResponse);
                 });
 
                 JMenuItem parseSessionItem = new JMenuItem("解析为用户会话");
@@ -53,7 +53,7 @@ public class PopMenu implements ContextMenuItemsProvider {
                     parseSessionItem.setToolTipText("请先配置令牌方案");
                 }
                 parseSessionItem.addActionListener(e -> {
-                    BurpExtender.parseSessionFromRequest(requestResponse.request());
+                    UIRequestDispatcher.getInstance().parseSessionFromRequest(requestResponse.request());
                 });
 
                 menuItems.add(sendToRepeater);
@@ -63,12 +63,12 @@ public class PopMenu implements ContextMenuItemsProvider {
                 // 多条选中：使用批量方法，菜单文案附带数量
                 JMenuItem sendToRepeater = new JMenuItem(String.format("发送到 Repeater Manager (%d条)", count));
                 sendToRepeater.addActionListener(e -> {
-                    BurpExtender.setRepeaterUIRequests(validResponses);
+                    UIRequestDispatcher.getInstance().setRepeaterUIRequests(validResponses);
                 });
 
                 JMenuItem sendToPrivilegeTest = new JMenuItem(String.format("发送到权限测试 (%d条)", count));
                 sendToPrivilegeTest.addActionListener(e -> {
-                    BurpExtender.setPrivilegeTestRequests(validResponses);
+                    UIRequestDispatcher.getInstance().setPrivilegeTestRequests(validResponses);
                 });
 
                 menuItems.add(sendToRepeater);

@@ -1,6 +1,6 @@
 package org.oxff.repeater.api;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -79,7 +79,7 @@ public class ApiExtractionEngine {
                     return result;
                 }
             } catch (Exception e) {
-                BurpExtender.printError("[!] API提取规则执行异常 (id=" + rule.getId()
+                LogManager.getInstance().printError("[!] API提取规则执行异常 (id=" + rule.getId()
                         + ", source=" + rule.getSource() + ", method=" + rule.getMethod()
                         + "): " + e.getMessage());
             }
@@ -170,7 +170,7 @@ public class ApiExtractionEngine {
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] Header正则提取失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] Header正则提取失败: " + e.getMessage());
         }
         return null;
     }
@@ -263,7 +263,7 @@ public class ApiExtractionEngine {
                 return matcher.group(0);
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 正则提取失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 正则提取失败: " + e.getMessage());
         }
         return null;
     }
@@ -308,7 +308,7 @@ public class ApiExtractionEngine {
 
             return input.substring(start, end);
         } catch (NumberFormatException e) {
-            BurpExtender.printError("[!] substr表达式格式错误: " + expression);
+            LogManager.getInstance().printError("[!] substr表达式格式错误: " + expression);
             return null;
         }
     }
@@ -367,7 +367,7 @@ public class ApiExtractionEngine {
             }
             return current.toString();
         } catch (Exception e) {
-            BurpExtender.printError("[!] JSON路径提取失败 (path=" + jsonPath + "): " + e.getMessage());
+            LogManager.getInstance().printError("[!] JSON路径提取失败 (path=" + jsonPath + "): " + e.getMessage());
             return null;
         }
     }
@@ -429,7 +429,7 @@ public class ApiExtractionEngine {
             String result = (String) xpath.evaluate(xpathExpr, doc, XPathConstants.STRING);
             return (result != null && !result.trim().isEmpty()) ? result.trim() : null;
         } catch (Exception e) {
-            BurpExtender.printError("[!] XPath提取失败 (expr=" + xpathExpr + "): " + e.getMessage());
+            LogManager.getInstance().printError("[!] XPath提取失败 (expr=" + xpathExpr + "): " + e.getMessage());
             return null;
         }
     }

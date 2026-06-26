@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.editor;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import javax.swing.*;
 import javax.swing.text.JTextComponent;
 import java.awt.*;
@@ -71,7 +71,7 @@ public class HttpViewerPanel extends JPanel {
      */
     private void showRawData() {
         if (this.data == null || this.data.length == 0) {
-            BurpExtender.printError("[!] 没有数据可显示");
+            LogManager.getInstance().printError("[!] 没有数据可显示");
             return;
         }
         
@@ -84,7 +84,7 @@ public class HttpViewerPanel extends JPanel {
         // 将模式设置为文本
         setMode(Mode.TEXT);
         
-        BurpExtender.printOutput("[*] 已切换到原始文本视图");
+        LogManager.getInstance().printOutput("[*] 已切换到原始文本视图");
     }
     
     /**
@@ -92,7 +92,7 @@ public class HttpViewerPanel extends JPanel {
      */
     private void showHexView() {
         if (data == null || data.length == 0) {
-            BurpExtender.printError("[!] 没有数据可显示");
+            LogManager.getInstance().printError("[!] 没有数据可显示");
             return;
         }
         
@@ -113,6 +113,6 @@ public class HttpViewerPanel extends JPanel {
         // 将模式设置为十六进制
         setMode(Mode.HEX);
         
-        BurpExtender.printOutput("[*] 已切换到十六进制视图");
+        LogManager.getInstance().printOutput("[*] 已切换到十六进制视图");
     }
 } 

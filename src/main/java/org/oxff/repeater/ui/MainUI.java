@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.db.RequestDAO;
 import org.oxff.repeater.db.history.HistoryReadDAO;
@@ -42,7 +42,7 @@ public class MainUI extends JPanel {
         this.dbManager = DatabaseManager.getInstance();
         boolean dbInitialized = dbManager.initialize();
         if (!dbInitialized) {
-            BurpExtender.printError("[!] 无法初始化数据库，持久化功能将不可用");
+            LogManager.getInstance().printError("[!] 无法初始化数据库，持久化功能将不可用");
         }
         
         // 创建数据访问对象
@@ -151,7 +151,7 @@ public class MainUI extends JPanel {
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
         this.autoSaveService = new AutoSaveService();
         
-        BurpExtender.printOutput("[*] 使用 Repeater Manager 面板创建临时MainUI实例，用于数据刷新");
+        LogManager.getInstance().printOutput("[*] 使用 Repeater Manager 面板创建临时MainUI实例，用于数据刷新");
     }
     
     /**
@@ -178,10 +178,10 @@ public class MainUI extends JPanel {
         
         // 启动自动保存服务
         if (dbManager != null && autoSaveService != null) {
-            BurpExtender.printOutput("[*] 准备启动自动保存服务...");
+            LogManager.getInstance().printOutput("[*] 准备启动自动保存服务...");
             autoSaveService.start();
         } else {
-            BurpExtender.printError("[!] 无法启动自动保存服务，组件未正确初始化");
+            LogManager.getInstance().printError("[!] 无法启动自动保存服务，组件未正确初始化");
         }
     }
     
@@ -216,7 +216,7 @@ public class MainUI extends JPanel {
             try {
                 // 加载请求数据
                 List<Map<String, Object>> requests = requestDAO.getAllRequests();
-                BurpExtender.printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
+                LogManager.getInstance().printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
                 
                 for (Map<String, Object> request : requests) {
                     // 获取数据库ID（用于保持与历史记录的关联一致性）
@@ -248,10 +248,10 @@ public class MainUI extends JPanel {
                     }
                 }
                 
-                BurpExtender.printOutput("[+] 请求数据加载完成");
+                LogManager.getInstance().printOutput("[+] 请求数据加载完成");
                 
             } catch (Exception e) {
-                BurpExtender.printError("[!] 加载持久化数据失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 加载持久化数据失败: " + e.getMessage());
             }
         }).start();
     }

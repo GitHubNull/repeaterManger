@@ -1,6 +1,6 @@
 package org.oxff.repeater.db;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.api.ApiExtractionEngine;
 import org.oxff.repeater.api.ApiRuleManager;
 import org.oxff.repeater.api.ApiExtractionRule;
@@ -122,14 +122,14 @@ public class RequestDAO {
                             if (rs.next()) {
                                 int id = rs.getInt(1);
                                 conn.commit();
-                                BurpExtender.printOutput("[+] 请求数据已保存，ID: " + id);
+                                LogManager.getInstance().printOutput("[+] 请求数据已保存，ID: " + id);
                                 return id;
                             }
                         }
                     }
 
                     conn.rollback();
-                    BurpExtender.printError("[!] 保存请求数据失败：未生成ID");
+                    LogManager.getInstance().printError("[!] 保存请求数据失败：未生成ID");
                     return -1;
                 }
             } catch (SQLException e) {
@@ -137,7 +137,7 @@ public class RequestDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存请求数据失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存请求数据失败: " + e.getMessage());
             return -1;
         }
     }
@@ -227,7 +227,7 @@ public class RequestDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新请求失败: " + e.getMessage());
             return false;
         }
     }
@@ -262,7 +262,7 @@ public class RequestDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除请求失败: " + e.getMessage());
             return false;
         }
     }
@@ -343,12 +343,12 @@ public class RequestDAO {
 
                     requests.add(request);
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 处理请求记录时出错: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 处理请求记录时出错: " + e.getMessage());
                 }
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取请求列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取请求列表失败: " + e.getMessage());
         }
 
         return requests;
@@ -423,13 +423,13 @@ public class RequestDAO {
 
                         return request;
                     } catch (Exception e) {
-                        BurpExtender.printError("[!] 处理请求ID: " + requestId + " 时出错: " + e.getMessage());
+                        LogManager.getInstance().printError("[!] 处理请求ID: " + requestId + " 时出错: " + e.getMessage());
                     }
                 }
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取请求失败: " + e.getMessage());
         }
 
         return null;
@@ -446,7 +446,7 @@ public class RequestDAO {
             pstmt.setInt(2, requestId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新请求备注失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新请求备注失败: " + e.getMessage());
             return false;
         }
     }
@@ -466,7 +466,7 @@ public class RequestDAO {
             pstmt.setInt(2, requestId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新请求颜色失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新请求颜色失败: " + e.getMessage());
             return false;
         }
     }
@@ -481,7 +481,7 @@ public class RequestDAO {
             pstmt.setInt(1, requestId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 标记越权测试失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 标记越权测试失败: " + e.getMessage());
             return false;
         }
     }
@@ -542,7 +542,7 @@ public class RequestDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 保存原始响应失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存原始响应失败: " + e.getMessage());
             return false;
         }
     }
@@ -571,7 +571,7 @@ public class RequestDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取原始响应失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取原始响应失败: " + e.getMessage());
         }
         return null;
     }
@@ -590,7 +590,7 @@ public class RequestDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取原始响应状态码失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取原始响应状态码失败: " + e.getMessage());
         }
         return 0;
     }
@@ -619,7 +619,7 @@ public class RequestDAO {
 
             return true;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 清空请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 清空请求失败: " + e.getMessage());
             return false;
         }
     }
@@ -646,7 +646,7 @@ public class RequestDAO {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 验证请求ID失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 验证请求ID失败: " + e.getMessage());
         }
         return false;
     }

@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.db.pool.PoolManager;
 import org.oxff.repeater.service.GarbageCollectorService;
@@ -36,7 +36,7 @@ public class HistoryUpdateDAO {
             pstmt.setInt(2, historyId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新历史记录备注失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新历史记录备注失败: " + e.getMessage());
             return false;
         }
     }
@@ -56,7 +56,7 @@ public class HistoryUpdateDAO {
             pstmt.setInt(2, historyId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 更新历史记录颜色失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新历史记录颜色失败: " + e.getMessage());
             return false;
         }
     }
@@ -90,7 +90,7 @@ public class HistoryUpdateDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 删除历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除历史记录失败: " + e.getMessage());
             return false;
         }
     }
@@ -118,7 +118,7 @@ public class HistoryUpdateDAO {
 
             return true;
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 清空历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 清空历史记录失败: " + e.getMessage());
             return false;
         }
     }

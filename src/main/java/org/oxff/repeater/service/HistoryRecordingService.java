@@ -1,6 +1,6 @@
 package org.oxff.repeater.service;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.message.responses.HttpResponse;
@@ -86,7 +86,7 @@ public class HistoryRecordingService {
                     Thread.currentThread().interrupt();
                     break;
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 录制任务处理异常: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 录制任务处理异常: " + e.getMessage());
                 }
             }
         });
@@ -106,13 +106,13 @@ public class HistoryRecordingService {
                     task.callback.onSuccess(historyId);
                 }
             } else {
-                BurpExtender.printError("[!] 历史记录保存失败");
+                LogManager.getInstance().printError("[!] 历史记录保存失败");
                 if (task.callback != null) {
                     task.callback.onFailure("保存失败");
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 处理录制任务失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 处理录制任务失败: " + e.getMessage());
             if (task.callback != null) {
                 task.callback.onFailure("处理失败: " + e.getMessage());
             }
@@ -148,23 +148,23 @@ public class HistoryRecordingService {
                 @Override
                 public void onSuccess(int historyId) {
                     if (requestId <= 0) {
-                        BurpExtender.printOutput("[+] HTTP请求历史记录已保存（未保存请求），ID: " + historyId);
+                        LogManager.getInstance().printOutput("[+] HTTP请求历史记录已保存（未保存请求），ID: " + historyId);
                     } else {
-                        BurpExtender.printOutput("[+] HTTP请求历史记录已保存（关联请求ID: " + requestId + "），ID: " + historyId);
+                        LogManager.getInstance().printOutput("[+] HTTP请求历史记录已保存（关联请求ID: " + requestId + "），ID: " + historyId);
                     }
                 }
                 
                 @Override
                 public void onFailure(String error) {
-                    BurpExtender.printError("[!] HTTP请求历史记录保存失败: " + error);
+                    LogManager.getInstance().printError("[!] HTTP请求历史记录保存失败: " + error);
                 }
             });
             
             if (!pendingTasks.offer(task)) {
-                BurpExtender.printError("[!] 历史记录任务队列已满，无法添加任务");
+                LogManager.getInstance().printError("[!] 历史记录任务队列已满，无法添加任务");
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 创建HTTP成功历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 创建HTTP成功历史记录失败: " + e.getMessage());
         }
     }
     
@@ -197,23 +197,23 @@ public class HistoryRecordingService {
                 @Override
                 public void onSuccess(int historyId) {
                     if (requestId <= 0) {
-                        BurpExtender.printOutput("[+] HTTP失败请求历史记录已保存（未保存请求），ID: " + historyId);
+                        LogManager.getInstance().printOutput("[+] HTTP失败请求历史记录已保存（未保存请求），ID: " + historyId);
                     } else {
-                        BurpExtender.printOutput("[+] HTTP失败请求历史记录已保存（关联请求ID: " + requestId + "），ID: " + historyId);
+                        LogManager.getInstance().printOutput("[+] HTTP失败请求历史记录已保存（关联请求ID: " + requestId + "），ID: " + historyId);
                     }
                 }
                 
                 @Override
                 public void onFailure(String error) {
-                    BurpExtender.printError("[!] HTTP失败请求历史记录保存失败: " + error);
+                    LogManager.getInstance().printError("[!] HTTP失败请求历史记录保存失败: " + error);
                 }
             });
             
             if (!pendingTasks.offer(task)) {
-                BurpExtender.printError("[!] 历史记录任务队列已满，无法添加任务");
+                LogManager.getInstance().printError("[!] 历史记录任务队列已满，无法添加任务");
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 创建HTTP失败历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 创建HTTP失败历史记录失败: " + e.getMessage());
         }
     }
     
@@ -246,18 +246,18 @@ public class HistoryRecordingService {
                     String query = url.getQuery() != null ? url.getQuery() : "";
                     String method = requestInfo.method();
                     
-                    BurpExtender.printOutput("[+] 成功解析URL: " + protocol + "://" + host + path + (query.isEmpty() ? "" : "?" + query));
+                    LogManager.getInstance().printOutput("[+] 成功解析URL: " + protocol + "://" + host + path + (query.isEmpty() ? "" : "?" + query));
                     return new RequestResponseRecord(requestId, protocol, host, path, query, method);
                 }
             }
             
             // 如果URL解析不完整，使用增强的备用方法
-            BurpExtender.printOutput("[*] URL解析不完整，使用备用方法");
+            LogManager.getInstance().printOutput("[*] URL解析不完整，使用备用方法");
             return createRecordFromRequestFallback(requestId, requestInfo);
             
         } catch (Exception e) {
             // 如果标准URL解析失败，使用备用方法
-            BurpExtender.printOutput("[*] 使用备用方法解析URL创建历史记录: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] 使用备用方法解析URL创建历史记录: " + e.getMessage());
             return createRecordFromRequestFallback(requestId, requestInfo);
         }
     }
@@ -270,7 +270,7 @@ public class HistoryRecordingService {
         List<String> headers = convertHeadersToStringList(requestInfo.headers());
         
         if (headers == null || headers.isEmpty()) {
-            BurpExtender.printOutput("[!] 无法获取请求头，使用默认值");
+            LogManager.getInstance().printOutput("[!] 无法获取请求头，使用默认值");
             return new RequestResponseRecord(requestId, "http", "unknown", "/", "", method);
         }
         
@@ -278,7 +278,7 @@ public class HistoryRecordingService {
         String[] parts = firstLine.split("\\s+");
         
         if (parts.length < 2) {
-            BurpExtender.printOutput("[!] 请求行格式错误: " + firstLine);
+            LogManager.getInstance().printOutput("[!] 请求行格式错误: " + firstLine);
             return new RequestResponseRecord(requestId, "http", "unknown", "/", "", method);
         }
         
@@ -288,7 +288,7 @@ public class HistoryRecordingService {
         String path = "/";
         String query = "";
         
-        BurpExtender.printOutput("[*] 使用备用方法解析URL: " + urlPart);
+        LogManager.getInstance().printOutput("[*] 使用备用方法解析URL: " + urlPart);
         
         // 尝试解析完整URL
         if (urlPart.startsWith("http://") || urlPart.startsWith("https://")) {
@@ -310,7 +310,7 @@ public class HistoryRecordingService {
                 }
             } catch (Exception ex) {
                 // 解析失败，继续尝试其他方法
-                BurpExtender.printOutput("[*] 完整URL解析失败，尝试从Host头解析: " + ex.getMessage());
+                LogManager.getInstance().printOutput("[*] 完整URL解析失败，尝试从Host头解析: " + ex.getMessage());
             }
         }
         

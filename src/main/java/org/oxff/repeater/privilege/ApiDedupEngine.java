@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
@@ -75,7 +75,7 @@ public class ApiDedupEngine {
                     return extractPath(reqInfo);
             }
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] ApiDedupEngine: 计算去重键失败: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] ApiDedupEngine: 计算去重键失败: " + e.getMessage());
             return null;
         }
     }
@@ -248,7 +248,7 @@ public class ApiDedupEngine {
             }
             return null;
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] ApiDedupEngine: XML字段提取失败: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] ApiDedupEngine: XML字段提取失败: " + e.getMessage());
             return null;
         }
     }
@@ -323,7 +323,7 @@ public class ApiDedupEngine {
             JsonElement value = navigateJsonPath(root, path);
             return value != null && !value.isJsonNull() ? value.getAsString() : null;
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] ApiDedupEngine: JSON字段提取失败: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] ApiDedupEngine: JSON字段提取失败: " + e.getMessage());
             return null;
         }
     }

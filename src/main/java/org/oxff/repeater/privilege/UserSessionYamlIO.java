@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.privilege.model.TokenScheme;
 import org.oxff.repeater.privilege.model.UserSession;
@@ -140,7 +140,7 @@ public class UserSessionYamlIO {
                 sessionsObj = root.get("sessions");
             }
             if (!(sessionsObj instanceof List)) {
-                BurpExtender.printError("[!] 用户会话YAML格式错误：缺少user_sessions列表");
+                LogManager.getInstance().printError("[!] 用户会话YAML格式错误：缺少user_sessions列表");
                 return sessions;
             }
 
@@ -156,11 +156,11 @@ public class UserSessionYamlIO {
                         sessions.add(session);
                     }
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 解析YAML用户会话条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML用户会话条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 用户会话YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 用户会话YAML解析失败: " + e.getMessage());
         }
         return sessions;
     }
@@ -191,7 +191,7 @@ public class UserSessionYamlIO {
             if (schemeId != null) {
                 session.setSchemeId(schemeId);
             } else {
-                BurpExtender.printOutput("[*] 用户会话 '" + name + "' 引用的方案 '" + schemeName + "' 不存在，跳过关联");
+                LogManager.getInstance().printOutput("[*] 用户会话 '" + name + "' 引用的方案 '" + schemeName + "' 不存在，跳过关联");
             }
         }
 
@@ -230,14 +230,14 @@ public class UserSessionYamlIO {
                     matched++;
                 } else {
                     unmatched++;
-                    BurpExtender.printError("[!] 导入用户会话时未匹配的令牌位置: " + type + " [" + expression + "]");
+                    LogManager.getInstance().printError("[!] 导入用户会话时未匹配的令牌位置: " + type + " [" + expression + "]");
                 }
             }
 
             session.setTokenValues(tokenValues);
 
             if (unmatched > 0) {
-                BurpExtender.printOutput("[*] 用户会话 '" + name + "' 导入: " + matched + " 个令牌值匹配, " + unmatched + " 个未匹配（已跳过）");
+                LogManager.getInstance().printOutput("[*] 用户会话 '" + name + "' 导入: " + matched + " 个令牌值匹配, " + unmatched + " 个未匹配（已跳过）");
             }
         }
 
@@ -258,7 +258,7 @@ public class UserSessionYamlIO {
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             if (!parentDir.mkdirs()) {
-                BurpExtender.printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
+                LogManager.getInstance().printError("[!] 无法创建目录: " + parentDir.getAbsolutePath());
                 return false;
             }
         }
@@ -269,7 +269,7 @@ public class UserSessionYamlIO {
             writer.write(toYaml(sessions, locations, schemes));
             writer.flush();
         } catch (IOException e) {
-            BurpExtender.printError("[!] 写入用户会话YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入用户会话YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -285,7 +285,7 @@ public class UserSessionYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                BurpExtender.printError("[!] 替换用户会话YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换用户会话YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -315,7 +315,7 @@ public class UserSessionYamlIO {
             }
             return fromYaml(sb.toString(), locations, schemes);
         } catch (IOException e) {
-            BurpExtender.printError("[!] 读取用户会话YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取用户会话YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

@@ -1,6 +1,6 @@
 package org.oxff.repeater.service;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.db.pool.FileStorageManager;
 
@@ -66,9 +66,9 @@ public class GarbageCollectorService {
             );
 
             running.set(true);
-            BurpExtender.printOutput("[+] 垃圾回收服务已启动，间隔: " + DEFAULT_INTERVAL_MINUTES + " 分钟");
+            LogManager.getInstance().printOutput("[+] 垃圾回收服务已启动，间隔: " + DEFAULT_INTERVAL_MINUTES + " 分钟");
         } catch (Exception e) {
-            BurpExtender.printError("[!] 垃圾回收服务启动失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 垃圾回收服务启动失败: " + e.getMessage());
         }
     }
 
@@ -92,7 +92,7 @@ public class GarbageCollectorService {
         }
 
         running.set(false);
-        BurpExtender.printOutput("[*] 垃圾回收服务已停止");
+        LogManager.getInstance().printOutput("[*] 垃圾回收服务已停止");
     }
 
     /**
@@ -100,7 +100,7 @@ public class GarbageCollectorService {
      */
     public void pause() {
         paused.set(true);
-        BurpExtender.printOutput("[*] GC 服务已暂停（批量操作期间）");
+        LogManager.getInstance().printOutput("[*] GC 服务已暂停（批量操作期间）");
     }
 
     /**
@@ -108,7 +108,7 @@ public class GarbageCollectorService {
      */
     public void resume() {
         paused.set(false);
-        BurpExtender.printOutput("[*] GC 服务已恢复");
+        LogManager.getInstance().printOutput("[*] GC 服务已恢复");
     }
 
     /**
@@ -123,7 +123,7 @@ public class GarbageCollectorService {
      */
     public void processQueue() {
         if (paused.get()) {
-            BurpExtender.printOutput("[*] GC 已暂停，跳过本次处理");
+            LogManager.getInstance().printOutput("[*] GC 已暂停，跳过本次处理");
             return;
         }
 
@@ -147,10 +147,10 @@ public class GarbageCollectorService {
             }
 
             if (totalProcessed > 0) {
-                BurpExtender.printOutput("[*] GC 完成: 处理 " + totalProcessed + " 条，删除 " + totalDeleted + " 条");
+                LogManager.getInstance().printOutput("[*] GC 完成: 处理 " + totalProcessed + " 条，删除 " + totalDeleted + " 条");
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] GC 处理失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] GC 处理失败: " + e.getMessage());
         }
     }
 
@@ -186,13 +186,13 @@ public class GarbageCollectorService {
                 // 立即处理 GC 队列
                 processQueue();
 
-                BurpExtender.printOutput("[+] 全量 ref_count 重算完成");
+                LogManager.getInstance().printOutput("[+] 全量 ref_count 重算完成");
             } catch (SQLException e) {
                 conn.rollback();
                 throw e;
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 全量 ref_count 重算失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 全量 ref_count 重算失败: " + e.getMessage());
         }
     }
 
@@ -216,7 +216,7 @@ public class GarbageCollectorService {
                 }
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] GC 队列读取失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] GC 队列读取失败: " + e.getMessage());
         }
 
         return entries;
@@ -244,7 +244,7 @@ public class GarbageCollectorService {
                 throw e;
             }
         } catch (SQLException e) {
-            BurpExtender.printError("[!] GC 批处理失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] GC 批处理失败: " + e.getMessage());
         }
 
         return deleted;

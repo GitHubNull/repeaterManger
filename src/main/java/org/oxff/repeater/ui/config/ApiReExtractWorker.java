@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.config;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.api.ApiExtractionEngine;
 import org.oxff.repeater.api.ApiExtractionRule;
 import org.oxff.repeater.api.ApiRuleManager;
@@ -36,7 +36,7 @@ public class ApiReExtractWorker {
     public static void reExtractSilently(final Runnable onComplete) {
         Thread worker = new Thread(() -> {
             try {
-                BurpExtender.printOutput("[*] 规则变更，自动重新提取所有API值...");
+                LogManager.getInstance().printOutput("[*] 规则变更，自动重新提取所有API值...");
                 List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getActiveRules();
                 PoolManager poolMgr = new PoolManager();
                 ContentSplitter splitter = new ContentSplitter();
@@ -44,14 +44,14 @@ public class ApiReExtractWorker {
                 int reqUpdated = reExtractRequests(rules, poolMgr, splitter);
                 int histUpdated = reExtractHistory(rules, poolMgr, splitter);
 
-                BurpExtender.printOutput("[+] 自动重新提取API完成：请求 " + reqUpdated + " 条，历史 " + histUpdated + " 条");
+                LogManager.getInstance().printOutput("[+] 自动重新提取API完成：请求 " + reqUpdated + " 条，历史 " + histUpdated + " 条");
                 SwingUtilities.invokeLater(() -> {
                     if (onComplete != null) {
                         onComplete.run();
                     }
                 });
             } catch (Exception e) {
-                BurpExtender.printError("[!] 自动重新提取API异常: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 自动重新提取API异常: " + e.getMessage());
             }
         }, "api-reextract-auto");
         worker.setDaemon(true);
@@ -117,7 +117,7 @@ public class ApiReExtractWorker {
                     }
                 });
             } catch (Exception e) {
-                BurpExtender.printError("[!] 重新提取API异常: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 重新提取API异常: " + e.getMessage());
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
                     JOptionPane.showMessageDialog(parent,
@@ -190,11 +190,11 @@ public class ApiReExtractWorker {
                         updated++;
                     } catch (SQLException ex) {
                         conn.rollback();
-                        BurpExtender.printError("[!] 重提取API失败(reqId=" + reqId + "): " + ex.getMessage());
+                        LogManager.getInstance().printError("[!] 重提取API失败(reqId=" + reqId + "): " + ex.getMessage());
                     }
                 }
             } catch (Exception e) {
-                BurpExtender.printError("[!] 重提取请求API出错: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 重提取请求API出错: " + e.getMessage());
             }
         }
         return updated;
@@ -258,11 +258,11 @@ public class ApiReExtractWorker {
                         updated++;
                     } catch (SQLException ex) {
                         conn.rollback();
-                        BurpExtender.printError("[!] 重提取历史API失败(histId=" + histId + "): " + ex.getMessage());
+                        LogManager.getInstance().printError("[!] 重提取历史API失败(histId=" + histId + "): " + ex.getMessage());
                     }
                 }
             } catch (Exception e) {
-                BurpExtender.printError("[!] 重提取历史API出错: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 重提取历史API出错: " + e.getMessage());
             }
         }
         return updated;

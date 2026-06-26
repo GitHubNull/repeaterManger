@@ -186,8 +186,38 @@ public class LogManager {
      * 替代 BurpExtender.printError()
      */
     public void printError(String message) {
+        // 过滤掉已知的无害错误信息
+        if (shouldFilterError(message)) {
+            return;
+        }
         // printError 中的消息统一视为 ERROR 级别
         log(LogLevel.ERROR, message);
+    }
+
+    /**
+     * 判断是否应该过滤掉特定的错误信息
+     *
+     * @param message 错误消息
+     * @return 是否应该过滤
+     */
+    private boolean shouldFilterError(String message) {
+        if (message == null) {
+            return false;
+        }
+
+        if (message.contains("ClassNotFoundException") &&
+            (message.contains("com.intellij.") ||
+             message.contains("EditorCopyPasteHelperImpl") ||
+             message.contains("CopyPasteOptionsTransferableData"))) {
+            return true;
+        }
+
+        if (message.contains("DataFlavor for: application/x-java-serialized-object") &&
+            message.contains("com.intellij.openapi.editor.impl")) {
+            return true;
+        }
+
+        return false;
     }
 
     // ========== 级别和开关控制 ==========

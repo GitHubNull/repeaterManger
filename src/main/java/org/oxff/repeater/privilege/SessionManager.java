@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.dao.SessionDAO;
 import org.oxff.repeater.privilege.model.ReplayConfig;
 import org.oxff.repeater.privilege.model.TokenLocation;
@@ -65,7 +65,7 @@ public class SessionManager {
         cachedTokenSchemes = sessionDAO.getAllTokenSchemes();
         cachedUserSessions = sessionDAO.getAllUserSessions();
         cachedEnabledSessions = sessionDAO.getEnabledUserSessions();
-        BurpExtender.printOutput("[+] 会话缓存已刷新: " + cachedTokenLocations.size() +
+        LogManager.getInstance().printOutput("[+] 会话缓存已刷新: " + cachedTokenLocations.size() +
                 "个令牌位置, " + cachedTokenSchemes.size() + "个令牌方案, " +
                 cachedUserSessions.size() + "个用户会话, " +
                 cachedEnabledSessions.size() + "个已启用");
@@ -448,7 +448,7 @@ public class SessionManager {
 
         if (added > 0) {
             refreshCache();
-            BurpExtender.printOutput("[+] 从全局加载了 " + added + " 条令牌位置到项目数据库");
+            LogManager.getInstance().printOutput("[+] 从全局加载了 " + added + " 条令牌位置到项目数据库");
         }
     }
 
@@ -493,7 +493,7 @@ public class SessionManager {
 
         if (added > 0) {
             refreshCache();
-            BurpExtender.printOutput("[+] 从全局加载了 " + added + " 条令牌方案到项目数据库");
+            LogManager.getInstance().printOutput("[+] 从全局加载了 " + added + " 条令牌方案到项目数据库");
         }
     }
 

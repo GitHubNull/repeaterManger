@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.editor;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.fife.ui.rsyntaxtextarea.*;
 import org.fife.ui.rtextarea.*;
 
@@ -73,7 +73,7 @@ public class HttpEditorPanel extends JPanel {
             );
             theme.apply(textArea);
         } catch (IOException e) {
-            BurpExtender.printError("[!] 无法加载编辑器主题: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 无法加载编辑器主题: " + e.getMessage());
         }
         
         // 添加按键监听器，用于快捷键和缩进处理

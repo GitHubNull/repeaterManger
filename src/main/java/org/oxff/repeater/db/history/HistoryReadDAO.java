@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.history;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.db.pool.ContentReconstructor;
 import org.oxff.repeater.db.pool.HttpEnum;
@@ -49,7 +49,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取历史记录失败: " + e.getMessage());
         }
 
         return records;
@@ -73,7 +73,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取历史记录失败: " + e.getMessage());
         }
 
         return null;
@@ -102,7 +102,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取历史记录失败: " + e.getMessage());
         }
 
         return records;
@@ -132,7 +132,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取最新历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取最新历史记录失败: " + e.getMessage());
         }
 
         return records;
@@ -161,7 +161,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取基线记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取基线记录失败: " + e.getMessage());
         }
 
         // 没有找到基线记录，尝试返回第一条记录
@@ -180,7 +180,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取基线记录（回退查询）失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取基线记录（回退查询）失败: " + e.getMessage());
         }
 
         return null;
@@ -207,7 +207,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取基线记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取基线记录失败: " + e.getMessage());
         }
 
         return null;
@@ -327,7 +327,7 @@ public class HistoryReadDAO {
 
             return record;
         } catch (Exception e) {
-            BurpExtender.printError("[!] 映射历史记录时出错: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 映射历史记录时出错: " + e.getMessage());
             return null;
         }
     }
@@ -378,11 +378,11 @@ public class HistoryReadDAO {
                         record.setQueryParameters(query != null ? query : "");
                     }
                 } catch (Exception e) {
-                    BurpExtender.printOutput("[*] 从请求数据解析URL失败，跳过补充: " + e.getMessage());
+                    LogManager.getInstance().printOutput("[*] 从请求数据解析URL失败，跳过补充: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printOutput("[*] 从请求数据补充元数据失败: " + e.getMessage());
+            LogManager.getInstance().printOutput("[*] 从请求数据补充元数据失败: " + e.getMessage());
         }
     }
 
@@ -415,7 +415,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取越权测试结果失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取越权测试结果失败: " + e.getMessage());
         }
 
         return records;
@@ -440,7 +440,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取越权测试统计失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取越权测试统计失败: " + e.getMessage());
         }
 
         return stats;
@@ -470,7 +470,7 @@ public class HistoryReadDAO {
             }
 
         } catch (SQLException e) {
-            BurpExtender.printError("[!] 获取越权测试会话统计失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取越权测试会话统计失败: " + e.getMessage());
         }
 
         return stats;

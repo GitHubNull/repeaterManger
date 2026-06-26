@@ -1,6 +1,6 @@
 package org.oxff.repeater.db.pool;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -307,7 +307,7 @@ public class PoolManager {
         // 写入文件
         String relativePath = fileStorageManager.writeBodyFile(body, hash);
         if (relativePath == null) {
-            BurpExtender.printError("[!] 写入 Body 文件失败，hash: " + hash);
+            LogManager.getInstance().printError("[!] 写入 Body 文件失败，hash: " + hash);
             // 回退到行内存储
             ensureBodyInline(conn, hash, body);
             return BodyStorageRoute.INLINE;
@@ -338,7 +338,7 @@ public class PoolManager {
             int affected = pstmt.executeUpdate();
             if (affected == 0) {
                 // 条目已被 GC 回收，缓存过期
-                BurpExtender.printOutput("[*] 缓存命中但池条目不存在，可能已被 GC 回收: " + tableName + "/" + hash);
+                LogManager.getInstance().printOutput("[*] 缓存命中但池条目不存在，可能已被 GC 回收: " + tableName + "/" + hash);
                 return false;
             }
             return true;

@@ -1,6 +1,6 @@
 package org.oxff.repeater;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.HttpRequestResponse;
@@ -281,7 +281,7 @@ public class RepeaterManagerUI {
         modeToggleButton.addActionListener(e -> {
             boolean selected = modeToggleButton.isSelected();
             dispatchHandler.setPrivilegeTestMode(selected);
-            BurpExtender.printOutput("[*] 权限测试模式: " + (selected ? "已开启" : "已关闭"));
+            LogManager.getInstance().printOutput("[*] 权限测试模式: " + (selected ? "已开启" : "已关闭"));
         });
         leftToolPanel.add(modeToggleButton);
 
@@ -337,7 +337,7 @@ public class RepeaterManagerUI {
         int dbId = requestDAO.saveRequest("http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
 
         if (dbId <= 0) {
-            BurpExtender.printError("[!] 创建新请求时保存到数据库失败");
+            LogManager.getInstance().printError("[!] 创建新请求时保存到数据库失败");
             return;
         }
 
@@ -356,7 +356,7 @@ public class RepeaterManagerUI {
      * 请求列表选中回调
      */
     private void onRequestSelected(int requestId, byte[] requestData) {
-        BurpExtender.printOutput("[*] 请求选中回调触发，请求ID: " + requestId);
+        LogManager.getInstance().printOutput("[*] 请求选中回调触发，请求ID: " + requestId);
 
         dispatchHandler.setCurrentRequestId(requestId);
 
@@ -368,7 +368,7 @@ public class RepeaterManagerUI {
         // 设置请求内容
         if (requestData != null && requestData.length > 0) {
             requestPanel.setRequest(requestData);
-            BurpExtender.printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
+            LogManager.getInstance().printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
 
             // 从请求列表的表格数据中获取协议、主机、端口信息，重建HttpService
             // 优先使用已保存的原始HttpService（包含正确的非标准端口如9527）
@@ -395,7 +395,7 @@ public class RepeaterManagerUI {
             // 加载相关的历史记录（批量添加模式下使用静默模式，避免"没有历史记录"噪音日志）
             loadHistoryForRequest(requestId, requestListPanel.isBatchAddMode());
         } else {
-            BurpExtender.printOutput("[!] 请求数据为空，ID: " + requestId);
+            LogManager.getInstance().printOutput("[!] 请求数据为空，ID: " + requestId);
             dispatchHandler.setCurrentHttpService(null);
             historyPanel.setBorderTitle("请求历史记录");
             historyPanel.clearHistory();
@@ -417,11 +417,11 @@ public class RepeaterManagerUI {
                 if (responseData != null && responseData.length > 0) {
                     responsePanel.setResponse(responseData);
                     dispatchHandler.updateStatusFromRecord(latestRecord);
-                    BurpExtender.printOutput("[+] 已加载请求ID " + requestId + " 的最新响应数据");
+                    LogManager.getInstance().printOutput("[+] 已加载请求ID " + requestId + " 的最新响应数据");
                 }
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 加载最新响应数据失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 加载最新响应数据失败: " + e.getMessage());
         }
     }
 
@@ -435,7 +435,7 @@ public class RepeaterManagerUI {
         historyPanel.clearHistory();
 
         if (!silent) {
-            BurpExtender.printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
+            LogManager.getInstance().printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
         }
 
         // 优先从数据库加载历史记录
@@ -445,7 +445,7 @@ public class RepeaterManagerUI {
 
             if (dbHistoryList != null && !dbHistoryList.isEmpty()) {
                 if (!silent) {
-                    BurpExtender.printOutput(
+                    LogManager.getInstance().printOutput(
                         String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条",
                             requestId, dbHistoryList.size()));
                 }
@@ -457,12 +457,12 @@ public class RepeaterManagerUI {
                 dispatchHandler.getRequestHistoryMap().put(requestId, new ArrayList<>(dbHistoryList));
 
                 if (!silent) {
-                    BurpExtender.printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
+                    LogManager.getInstance().printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
                 }
                 return;
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 从数据库加载历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 从数据库加载历史记录失败: " + e.getMessage());
         }
 
         // 如果数据库中没有或加载失败，尝试从内存映射中获取
@@ -470,7 +470,7 @@ public class RepeaterManagerUI {
 
         if (historyList != null && !historyList.isEmpty()) {
             if (!silent) {
-                BurpExtender.printOutput(
+                LogManager.getInstance().printOutput(
                     String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条",
                         requestId, historyList.size()));
             }
@@ -530,18 +530,18 @@ public class RepeaterManagerUI {
                         dispatchHandler.updateStatusFromRecord(baselineRecord);
 
                         if (!silent) {
-                            BurpExtender.printOutput(
+                            LogManager.getInstance().printOutput(
                                 String.format("[+] 从基线加载请求ID %d 的原始响应 (%d 字节)",
                                     requestId, baselineResponse.length));
                         }
                     }
                 } else if (!silent) {
-                    BurpExtender.printOutput(
+                    LogManager.getInstance().printOutput(
                         String.format("[*] 请求ID %d 没有历史记录", requestId));
                 }
             } catch (Exception e) {
                 if (!silent) {
-                    BurpExtender.printOutput(
+                    LogManager.getInstance().printOutput(
                         String.format("[*] 请求ID %d 没有历史记录", requestId));
                 }
             }
@@ -583,7 +583,7 @@ public class RepeaterManagerUI {
                     path = parsedUrl.getPath();
                     query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                 } catch (Exception e) {
-                    BurpExtender.printError("[!] 分析请求时出错: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 分析请求时出错: " + e.getMessage());
                     method = "UNKNOWN";
                     url = "分析请求出错";
                 }
@@ -593,7 +593,7 @@ public class RepeaterManagerUI {
                 int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
 
                 if (dbId <= 0) {
-                    BurpExtender.printError("[!] 保存请求到数据库失败");
+                    LogManager.getInstance().printError("[!] 保存请求到数据库失败");
                     return -1;
                 }
 
@@ -614,7 +614,7 @@ public class RepeaterManagerUI {
                 boolean isHttp2 = "HTTP/2".equals(httpRequest.httpVersion());
                 dispatchHandler.saveHttpVersion(dbId, isHttp2);
                 if (isHttp2) {
-                    BurpExtender.printOutput("[+] 检测到 HTTP/2 请求，已记录协议版本，重放时将保持 HTTP/2");
+                    LogManager.getInstance().printOutput("[+] 检测到 HTTP/2 请求，已记录协议版本，重放时将保持 HTTP/2");
                 }
 
                 // 保存原始响应基线（如果原始请求有响应数据）
@@ -646,13 +646,13 @@ public class RepeaterManagerUI {
                 historyPanel.clearHistory();
                 dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
 
-                BurpExtender.printOutput("[+] 请求已加载到 Repeater Manager: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
+                LogManager.getInstance().printOutput("[+] 请求已加载到 Repeater Manager: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
 
                 // 越权测试模式下自动触发越权重放
                 if (dispatchHandler.isPrivilegeTestMode()) {
                     new RequestDAO().markAsPrivilegeTest(dbId);
                     requestListPanel.updatePrivilegeTestFlag(dbId, true);
-                    BurpExtender.printOutput("[*] 权限测试模式已开启，自动触发越权重放...");
+                    LogManager.getInstance().printOutput("[*] 权限测试模式已开启，自动触发越权重放...");
                     // 修复：直接使用参数化方法，避免EDT队列竞态导致currentRequestId被覆盖
                     final int capturedId = dbId;
                     final HttpService capturedSvc = httpService;
@@ -664,7 +664,7 @@ public class RepeaterManagerUI {
                 return dbId;
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置请求失败: " + e.getMessage());
             e.printStackTrace();
         }
         return -1;
@@ -711,7 +711,7 @@ public class RepeaterManagerUI {
 
                 // 开启权限测试模式
                 dispatchHandler.setPrivilegeTestMode(true);
-                BurpExtender.printOutput(String.format("[*] 权限测试模式已开启，准备重放请求 (requestId=%d)...", dbId));
+                LogManager.getInstance().printOutput(String.format("[*] 权限测试模式已开启，准备重放请求 (requestId=%d)...", dbId));
 
                 // 修复：直接使用参数化方法传递已捕获的requestId/httpService/requestBytes
                 // 不再依赖volatile共享状态currentRequestId（它可能被后续调用覆盖）
@@ -721,7 +721,7 @@ public class RepeaterManagerUI {
                         capturedRequestBytes, capturedHttpService, capturedRequestId));
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 设置权限测试请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 设置权限测试请求失败: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -742,12 +742,12 @@ public class RepeaterManagerUI {
                     dbIds.add(dbId);
                 }
             } catch (Exception e) {
-                BurpExtender.printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
             }
         }
 
         if (!dbIds.isEmpty()) {
-            BurpExtender.printOutput(String.format("[+] 批量加载完成：成功 %d / %d 条", dbIds.size(), requestResponses.size()));
+            LogManager.getInstance().printOutput(String.format("[+] 批量加载完成：成功 %d / %d 条", dbIds.size(), requestResponses.size()));
         }
 
         return dbIds;
@@ -789,7 +789,7 @@ public class RepeaterManagerUI {
                         dedupConfigManager.getKeepPolicy()
                 );
                 if (dedupedRequests.size() < originalSize) {
-                    BurpExtender.printOutput(String.format(
+                    LogManager.getInstance().printOutput(String.format(
                             "[*] 批量权限测试：去重过滤 %d -> %d 条（去除 %d 条重复）",
                             originalSize, dedupedRequests.size(), originalSize - dedupedRequests.size()));
                 }
@@ -807,7 +807,7 @@ public class RepeaterManagerUI {
             tabbedPane.setSelectedIndex(0);
 
             int total = dedupedRequests.size();
-            BurpExtender.printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", total));
+            LogManager.getInstance().printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", total));
 
             // 暂停GC服务，避免批量操作期间GC抢占DB连接池资源
             GarbageCollectorService gcService = DatabaseManager.getInstance().getGcService();
@@ -844,14 +844,14 @@ public class RepeaterManagerUI {
                             path = parsedUrl.getPath();
                             query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
                         } catch (Exception e) {
-                            BurpExtender.printError("[!] 分析请求URL时出错: " + e.getMessage());
+                            LogManager.getInstance().printError("[!] 分析请求URL时出错: " + e.getMessage());
                             method = "UNKNOWN";
                         }
 
                         // DB保存（后台线程中执行，不阻塞EDT）
                         int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
                         if (dbId <= 0) {
-                            BurpExtender.printError("[!] 批量权限测试：保存请求到数据库失败，第 " + (i + 1) + " 条");
+                            LogManager.getInstance().printError("[!] 批量权限测试：保存请求到数据库失败，第 " + (i + 1) + " 条");
                             continue;
                         }
 
@@ -889,12 +889,12 @@ public class RepeaterManagerUI {
                         });
 
                     } catch (Exception e) {
-                        BurpExtender.printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
+                        LogManager.getInstance().printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
                     }
                 }
 
                 if (dbIds.isEmpty()) {
-                    BurpExtender.printError("[!] 批量权限测试：所有请求保存失败");
+                    LogManager.getInstance().printError("[!] 批量权限测试：所有请求保存失败");
                     // 恢复GC服务
                     if (gcService != null) {
                         gcService.resume();
@@ -906,7 +906,7 @@ public class RepeaterManagerUI {
                     return;
                 }
 
-                BurpExtender.printOutput(String.format("[+] 批量权限测试：保存完成，成功 %d / %d 条，开始重放...",
+                LogManager.getInstance().printOutput(String.format("[+] 批量权限测试：保存完成，成功 %d / %d 条，开始重放...",
                         dbIds.size(), total));
 
                 // 恢复GC服务（批量保存完成，连接池压力已降低）
@@ -924,7 +924,7 @@ public class RepeaterManagerUI {
 
                     // 开启权限测试模式（联动代理监听器）
                     dispatchHandler.setPrivilegeTestMode(true);
-                    BurpExtender.printOutput(String.format("[*] 权限测试模式已开启，准备批量重放 %d 条请求...", dbIds.size()));
+                    LogManager.getInstance().printOutput(String.format("[*] 权限测试模式已开启，准备批量重放 %d 条请求...", dbIds.size()));
 
                     // 批量触发权限测试重放
                     dispatchHandler.batchSendPrivilegeTestRequests(dbIds);
@@ -932,7 +932,7 @@ public class RepeaterManagerUI {
             }, "batch-privilege-test-setup").start();
 
         } catch (Exception e) {
-            BurpExtender.printError("[!] 批量设置权限测试请求失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 批量设置权限测试请求失败: " + e.getMessage());
             e.printStackTrace();
             requestListPanel.setBatchAddMode(false);
             dispatchHandler.setCursor(Cursor.getDefaultCursor());
@@ -951,9 +951,9 @@ public class RepeaterManagerUI {
         int historyId = historyWriteDAO.saveHistory(record);
         if (historyId > 0) {
             record.setId(historyId);
-            BurpExtender.printOutput("[+] 越权测试记录已保存到数据库，ID: " + historyId);
+            LogManager.getInstance().printOutput("[+] 越权测试记录已保存到数据库，ID: " + historyId);
         } else {
-            BurpExtender.printError("[!] 越权测试记录保存到数据库失败");
+            LogManager.getInstance().printError("[!] 越权测试记录保存到数据库失败");
         }
 
         // 添加到历史面板
@@ -990,7 +990,7 @@ public class RepeaterManagerUI {
         try {
             // 无原始响应则跳过（例如从 Proxy Intercept 直接 Forward 的情况）
             if (requestResponse.response() == null) {
-                BurpExtender.printOutput("[*] 原始报文无响应数据，跳过基线保存");
+                LogManager.getInstance().printOutput("[*] 原始报文无响应数据，跳过基线保存");
                 return;
             }
 
@@ -1001,12 +1001,12 @@ public class RepeaterManagerUI {
             RequestDAO requestDAO = new RequestDAO();
             boolean saved = requestDAO.saveOriginalResponse(requestId, responseData, statusCode, 0);
             if (saved) {
-                BurpExtender.printOutput("[+] 原始响应基线已保存到 requests 表，requestId: " + requestId);
+                LogManager.getInstance().printOutput("[+] 原始响应基线已保存到 requests 表，requestId: " + requestId);
             } else {
-                BurpExtender.printError("[!] 保存原始响应基线失败，requestId: " + requestId);
+                LogManager.getInstance().printError("[!] 保存原始响应基线失败，requestId: " + requestId);
             }
         } catch (Exception e) {
-            BurpExtender.printError("[!] 保存原始响应基线异常: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存原始响应基线异常: " + e.getMessage());
         }
     }
 
@@ -1040,7 +1040,7 @@ public class RepeaterManagerUI {
      * 在数据库导入后调用，用于重新加载UI中显示的数据
      */
     public void refreshAllData() {
-        BurpExtender.printOutput("[*] 开始刷新界面数据...");
+        LogManager.getInstance().printOutput("[*] 开始刷新界面数据...");
 
         requestListPanel.clearAllRequests();
         historyPanel.clearAllHistory();
@@ -1051,7 +1051,7 @@ public class RepeaterManagerUI {
             try {
                 RequestDAO requestDAO = new RequestDAO();
                 java.util.List<java.util.Map<String, Object>> requests = requestDAO.getAllRequests();
-                BurpExtender.printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
+                LogManager.getInstance().printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
 
                 for (java.util.Map<String, Object> request : requests) {
                     int dbId = (Integer) request.get("id");
@@ -1078,7 +1078,7 @@ public class RepeaterManagerUI {
 
                 HistoryReadDAO historyReadDAO = new HistoryReadDAO();
                 java.util.List<RequestResponseRecord> allHistory = historyReadDAO.getAllHistory();
-                BurpExtender.printOutput("[+] 从数据库加载 " + allHistory.size() + " 条历史记录");
+                LogManager.getInstance().printOutput("[+] 从数据库加载 " + allHistory.size() + " 条历史记录");
 
                 for (RequestResponseRecord record : allHistory) {
                     int requestId = record.getRequestId();
@@ -1087,9 +1087,9 @@ public class RepeaterManagerUI {
                     }
                 }
 
-                BurpExtender.printOutput("[+] 数据刷新完成");
+                LogManager.getInstance().printOutput("[+] 数据刷新完成");
             } catch (Exception e) {
-                BurpExtender.printError("[!] 刷新数据时出错: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 刷新数据时出错: " + e.getMessage());
             }
         }).start();
     }

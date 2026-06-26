@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import burp.BurpExtender;
+import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.TokenLocation;
 
 import java.io.File;
@@ -48,7 +48,7 @@ public class GlobalTokenLocationManager {
      */
     public void loadLocations() {
         globalLocations = TokenLocationYamlIO.readFromFile(globalLocationsPath);
-        BurpExtender.printOutput("[+] 全局令牌位置已加载，共 " + globalLocations.size() + " 条，路径: " + globalLocationsPath);
+        LogManager.getInstance().printOutput("[+] 全局令牌位置已加载，共 " + globalLocations.size() + " 条，路径: " + globalLocationsPath);
     }
 
     /**
@@ -57,7 +57,7 @@ public class GlobalTokenLocationManager {
     public boolean saveLocations() {
         boolean result = TokenLocationYamlIO.writeToFile(globalLocations, globalLocationsPath);
         if (result) {
-            BurpExtender.printOutput("[+] 全局令牌位置已保存，共 " + globalLocations.size() + " 条");
+            LogManager.getInstance().printOutput("[+] 全局令牌位置已保存，共 " + globalLocations.size() + " 条");
         }
         return result;
     }
@@ -83,7 +83,7 @@ public class GlobalTokenLocationManager {
                 existing.setPersistToGlobal(true);
                 existing.setEnabled(location.isEnabled());
                 saveLocations();
-                BurpExtender.printOutput("[+] 全局令牌位置已更新: " + location.getType().name() + " - " + location.getExpression());
+                LogManager.getInstance().printOutput("[+] 全局令牌位置已更新: " + location.getType().name() + " - " + location.getExpression());
                 return;
             }
         }
@@ -92,7 +92,7 @@ public class GlobalTokenLocationManager {
                 location.getDescription(), true, location.isEnabled());
         globalLocations.add(newLoc);
         saveLocations();
-        BurpExtender.printOutput("[+] 全局令牌位置已添加: " + location.getType().name() + " - " + location.getExpression());
+        LogManager.getInstance().printOutput("[+] 全局令牌位置已添加: " + location.getType().name() + " - " + location.getExpression());
     }
 
     /**
@@ -114,7 +114,7 @@ public class GlobalTokenLocationManager {
                 existing.setPersistToGlobal(true);
                 existing.setEnabled(newLocation.isEnabled());
                 saveLocations();
-                BurpExtender.printOutput("[+] 全局令牌位置已更新: " + newLocation.getType().name() + " - " + newLocation.getExpression());
+                LogManager.getInstance().printOutput("[+] 全局令牌位置已更新: " + newLocation.getType().name() + " - " + newLocation.getExpression());
                 return;
             }
         }
@@ -133,7 +133,7 @@ public class GlobalTokenLocationManager {
                 loc.getType().name().equals(type) && loc.getExpression().equals(expression));
         if (removed) {
             saveLocations();
-            BurpExtender.printOutput("[+] 全局令牌位置已移除: " + type + " - " + expression);
+            LogManager.getInstance().printOutput("[+] 全局令牌位置已移除: " + type + " - " + expression);
         }
     }
 
