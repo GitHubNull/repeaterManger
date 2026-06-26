@@ -22,6 +22,7 @@ public class PrivilegeTestPanel extends JPanel {
 
     private final JTabbedPane innerTabbedPane;
     private final ScopeConfigTab scopeConfigTab;
+    private final SessionConfigTab sessionConfigTab;
 
     public PrivilegeTestPanel() {
         super(new BorderLayout());
@@ -29,7 +30,7 @@ public class PrivilegeTestPanel extends JPanel {
         innerTabbedPane = new JTabbedPane();
 
         // 会话配置子Tab
-        SessionConfigTab sessionConfigTab = new SessionConfigTab();
+        sessionConfigTab = new SessionConfigTab();
         innerTabbedPane.addTab("会话配置", sessionConfigTab);
 
         // 判决规则子Tab（Phase 2）
@@ -218,6 +219,16 @@ public class PrivilegeTestPanel extends JPanel {
     public void syncScopeConfigAutoTestState() {
         if (scopeConfigTab != null) {
             scopeConfigTab.syncAutoTestState();
+        }
+    }
+
+    /**
+     * 刷新会话配置数据（用户会话表格等）
+     * 供BurpExtender在解析用户会话后调用
+     */
+    public void refreshSessionConfigData() {
+        if (sessionConfigTab != null) {
+            sessionConfigTab.refreshData();
         }
     }
 }

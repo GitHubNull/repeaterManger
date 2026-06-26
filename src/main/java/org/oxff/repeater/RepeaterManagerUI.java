@@ -1026,6 +1026,16 @@ public class RepeaterManagerUI {
     }
 
     /**
+     * 刷新权限测试数据（用户会话表格等）
+     * 供BurpExtender在解析用户会话后调用
+     */
+    public void refreshPrivilegeTestData() {
+        if (privilegeTestPanel != null) {
+            SwingUtilities.invokeLater(() -> privilegeTestPanel.refreshSessionConfigData());
+        }
+    }
+
+    /**
      * 刷新所有数据
      * 在数据库导入后调用，用于重新加载UI中显示的数据
      */

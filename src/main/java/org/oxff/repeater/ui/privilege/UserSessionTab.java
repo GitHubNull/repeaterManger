@@ -102,6 +102,7 @@ public class UserSessionTab extends JPanel {
         JButton toggleEnableBtn = new JButton("启用/禁用");
         JButton importSessionBtn = new JButton("导入");
         JButton exportSessionBtn = new JButton("导出");
+        JButton parseFromClipboardBtn = new JButton("从报文解析");
 
         addSessionBtn.addActionListener(e -> addUserSession());
         editSessionBtn.addActionListener(e -> editUserSession());
@@ -109,8 +110,10 @@ public class UserSessionTab extends JPanel {
         toggleEnableBtn.addActionListener(e -> toggleUserSessionEnabled());
         importSessionBtn.addActionListener(e -> importUserSessions());
         exportSessionBtn.addActionListener(e -> exportUserSessions());
+        parseFromClipboardBtn.addActionListener(e -> parseSessionFromClipboard());
 
         sessionButtonPanel.add(addSessionBtn);
+        sessionButtonPanel.add(parseFromClipboardBtn);
         sessionButtonPanel.add(editSessionBtn);
         sessionButtonPanel.add(deleteSessionBtn);
         sessionButtonPanel.add(toggleEnableBtn);
@@ -118,6 +121,22 @@ public class UserSessionTab extends JPanel {
         sessionButtonPanel.add(exportSessionBtn);
 
         add(sessionButtonPanel, BorderLayout.SOUTH);
+    }
+
+    private void parseSessionFromClipboard() {
+        // 检查是否配置了TokenScheme
+        SessionManager sm = SessionManager.getInstance();
+        List<TokenScheme> schemes = sm.getTokenSchemes();
+        if (schemes.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "未配置任何令牌方案，请先配置令牌方案后再使用此功能。",
+                    "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 启动后台解析Worker
+        ParseSessionWorker worker = new ParseSessionWorker(this);
+        worker.start();
     }
 
     private void selectRowOnRightClick(MouseEvent e) {

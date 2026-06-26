@@ -5,6 +5,8 @@ import burp.api.montoya.ui.contextmenu.ContextMenuEvent;
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
 import burp.api.montoya.http.message.HttpRequestResponse;
 
+import org.oxff.repeater.privilege.SessionManager;
+
 import javax.swing.*;
 import java.awt.Component;
 import java.util.ArrayList;
@@ -44,8 +46,19 @@ public class PopMenu implements ContextMenuItemsProvider {
                     BurpExtender.setPrivilegeTestRequest(requestResponse);
                 });
 
+                JMenuItem parseSessionItem = new JMenuItem("解析为用户会话");
+                boolean hasSchemes = !SessionManager.getInstance().getTokenSchemes().isEmpty();
+                parseSessionItem.setEnabled(hasSchemes);
+                if (!hasSchemes) {
+                    parseSessionItem.setToolTipText("请先配置令牌方案");
+                }
+                parseSessionItem.addActionListener(e -> {
+                    BurpExtender.parseSessionFromRequest(requestResponse.request());
+                });
+
                 menuItems.add(sendToRepeater);
                 menuItems.add(sendToPrivilegeTest);
+                menuItems.add(parseSessionItem);
             } else {
                 // 多条选中：使用批量方法，菜单文案附带数量
                 JMenuItem sendToRepeater = new JMenuItem(String.format("发送到 Repeater Manager (%d条)", count));

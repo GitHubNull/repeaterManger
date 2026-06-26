@@ -3,6 +3,7 @@ package burp;
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.http.message.HttpRequestResponse;
+import burp.api.montoya.http.message.requests.HttpRequest;
 import org.oxff.repeater.RepeaterManagerUI;
 import org.oxff.repeater.api.MontoyaApiHolder;
 import org.oxff.repeater.controller.PopMenu;
@@ -10,8 +11,15 @@ import org.oxff.repeater.logging.LogLevel;
 import org.oxff.repeater.logging.LogManager;
 
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.privilege.SessionManager;
+import org.oxff.repeater.privilege.SessionParseResult;
+import org.oxff.repeater.privilege.SessionParserEngine;
+import org.oxff.repeater.privilege.SchemeMatch;
+import org.oxff.repeater.privilege.model.TokenLocation;
+import org.oxff.repeater.ui.privilege.ParseSessionFromClipboardDialog;
 
-import javax.swing.SwingUtilities;
+import javax.swing.*;
+import java.awt.*;
 import java.util.List;
 
 /**
@@ -323,6 +331,152 @@ public class BurpExtender implements BurpExtension {
      */
     public static LogManager getLogManager() {
         return logManager;
+    }
+
+    /**
+     * 从HTTP请求解析用户会话
+     * 供PopMenu右键菜单调用
+     *
+     * @param request Burp HTTP请求对象
+     */
+    public static void parseSessionFromRequest(HttpRequest request) {
+        if (request == null || repeaterUI == null) {
+            return;
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // 获取请求字节数组
+                byte[] httpMessage = request.toByteArray().getBytes();
+
+                // 获取令牌位置和方案
+                SessionManager sm = SessionManager.getInstance();
+                List<TokenLocation> locations = sm.getTokenLocations();
+                List<org.oxff.repeater.privilege.model.TokenScheme> schemes = sm.getTokenSchemes();
+
+                if (locations.isEmpty()) {
+                    JOptionPane.showMessageDialog(repeaterUI.getUiComponent(),
+                            "未配置任何令牌位置，请先配置令牌位置",
+                            "提示", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+
+                // 解析报文
+                SessionParseResult parseResult = SessionParserEngine.parse(httpMessage, locations);
+                List<SchemeMatch> schemeMatches = SessionParserEngine.matchSchemes(parseResult, schemes);
+
+                // 生成建议名称
+                String suggestedName = generateSuggestedName(parseResult, request);
+
+                // 显示确认对话框
+                Frame owner = (Frame) SwingUtilities.getWindowAncestor(repeaterUI.getUiComponent());
+                ParseSessionFromClipboardDialog dialog = new ParseSessionFromClipboardDialog(
+                        owner, parseResult, schemeMatches, locations, suggestedName);
+                dialog.setVisible(true);
+
+                if (dialog.isConfirmed()) {
+                    String sessionName = dialog.getSessionName();
+                    String colorHex = dialog.getColorHex();
+                    boolean enabled = dialog.isEnabled();
+                    Integer schemeId = dialog.getSelectedSchemeId();
+
+                    int sessionId;
+                    if (dialog.isUpdateExisting() && dialog.getExistingSessionId() != null) {
+                        sessionId = dialog.getExistingSessionId();
+                        sm.updateUserSession(sessionId, sessionName, colorHex, enabled, schemeId);
+                        logManager.success("[+] 已更新用户会话: " + sessionName);
+                    } else {
+                        sessionId = sm.addUserSession(sessionName, colorHex, enabled, schemeId);
+                        if (sessionId > 0) {
+                            logManager.success("[+] 已创建用户会话: " + sessionName + " (ID=" + sessionId + ")");
+                        }
+                    }
+
+                    if (sessionId > 0) {
+                        java.util.Map<Integer, String> extractedValues = parseResult.getAllExtractedValues();
+                        if (!extractedValues.isEmpty()) {
+                            sm.saveTokenValues(sessionId, extractedValues);
+                            logManager.success("[+] 已保存 " + extractedValues.size() + " 个令牌值");
+                        }
+                        refreshPrivilegeTestData();
+                    }
+                }
+            } catch (Exception e) {
+                logManager.error("[!] 解析用户会话时发生错误: " + e.getMessage());
+                JOptionPane.showMessageDialog(repeaterUI.getUiComponent(),
+                        "解析过程中发生错误: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    /**
+     * 生成建议的会话名称（从请求）
+     */
+    private static String generateSuggestedName(SessionParseResult parseResult, HttpRequest request) {
+        // 1. 尝试从Authorization header提取JWT中的sub/username
+        String authHeader = parseResult.getExtractedValueByHeaderName("Authorization");
+        if (authHeader != null && authHeader.toLowerCase().startsWith("bearer ")) {
+            String jwt = authHeader.substring(7).trim();
+            String username = extractJwtSubject(jwt);
+            if (username != null && !username.isEmpty()) {
+                return username;
+            }
+        }
+
+        // 2. 从Host header推断
+        String host = request.httpService() != null ? request.httpService().host() : null;
+        if (host != null && !host.isEmpty() && !host.equalsIgnoreCase("localhost")
+                && !host.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
+            String[] hostParts = host.split("\\.");
+            if (hostParts.length > 0) {
+                return hostParts[0];
+            }
+        }
+
+        // 3. 默认使用时间戳
+        return "Session_" + System.currentTimeMillis();
+    }
+
+    /**
+     * 从JWT token中提取subject（sub字段）
+     */
+    private static String extractJwtSubject(String jwt) {
+        try {
+            String[] parts = jwt.split("\\.");
+            if (parts.length != 3) {
+                return null;
+            }
+            String payload = parts[1].replace('-', '+').replace('_', '/');
+            int padding = 4 - (payload.length() % 4);
+            if (padding != 4) {
+                payload += "=".repeat(padding);
+            }
+            byte[] decoded = java.util.Base64.getDecoder().decode(payload);
+            String payloadJson = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+
+            com.google.gson.JsonObject jsonObj = com.google.gson.JsonParser.parseString(payloadJson).getAsJsonObject();
+            String[] userFields = {"sub", "username", "user_name", "name", "email", "user", "id", "uid"};
+            for (String field : userFields) {
+                if (jsonObj.has(field)) {
+                    String value = jsonObj.get(field).getAsString();
+                    if (value != null && !value.isEmpty()) {
+                        return value;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // JWT解析失败，忽略
+        }
+        return null;
+    }
+
+    /**
+     * 刷新权限测试数据（用户会话表格等）
+     */
+    public static void refreshPrivilegeTestData() {
+        if (repeaterUI != null) {
+            SwingUtilities.invokeLater(() -> repeaterUI.refreshPrivilegeTestData());
+        }
     }
 
     /**
