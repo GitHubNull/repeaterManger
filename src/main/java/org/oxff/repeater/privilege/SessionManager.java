@@ -222,7 +222,7 @@ public class SessionManager {
             refreshCache();
             // 从全局YAML中移除
             if (toDelete != null && toDelete.isPersistToGlobal()) {
-                GlobalTokenSchemeManager.getInstance().removeScheme(toDelete.getName());
+                GlobalTokenSchemeManager.getInstance().removeScheme(toDelete.getName(), getTokenLocations());
             }
         }
         return result;
@@ -235,10 +235,11 @@ public class SessionManager {
         TokenScheme scheme = getTokenSchemeById(schemeId);
         if (scheme == null) return;
 
+        List<TokenLocation> locations = getTokenLocations();
         if (persistToGlobal) {
-            GlobalTokenSchemeManager.getInstance().addScheme(scheme);
+            GlobalTokenSchemeManager.getInstance().addScheme(scheme, locations);
         } else {
-            GlobalTokenSchemeManager.getInstance().removeScheme(scheme.getName());
+            GlobalTokenSchemeManager.getInstance().removeScheme(scheme.getName(), locations);
         }
     }
 
@@ -246,6 +247,11 @@ public class SessionManager {
         boolean result = sessionDAO.saveSchemeTokenLocations(schemeId, tokenLocationIds);
         if (result) {
             refreshCache();
+            // 如果方案持久化到全局，同步更新全局YAML中的位置关联
+            TokenScheme scheme = getTokenSchemeById(schemeId);
+            if (scheme != null && scheme.isPersistToGlobal()) {
+                GlobalTokenSchemeManager.getInstance().addScheme(scheme, getTokenLocations());
+            }
         }
         return result;
     }

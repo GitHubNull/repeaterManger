@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.25.2] - 2026-06-26
+
+### Fixed
+- 修复全局令牌方案持久化时未同步令牌位置信息的问题：
+  - `GlobalTokenSchemeManager.saveSchemes/addScheme/removeScheme/syncScheme` 新增 `List<TokenLocation>` 参数，用于将 `tokenLocationId` 解析为 `type+expression` 写入全局 YAML
+  - `SessionManager` 在删除/同步/保存方案令牌位置时，传入当前项目的令牌位置列表，确保全局 YAML 中持久化的方案包含完整的位置关联信息
+
 ## [2.25.1] - 2026-06-26
 
 ### Fixed

@@ -64,10 +64,10 @@ public class GlobalTokenSchemeManager {
 
     /**
      * 保存全局令牌方案到磁盘
+     * @param locations 当前项目的令牌位置列表，用于将tokenLocationId解析为type+expression
      */
-    public boolean saveSchemes() {
-        // 全局保存时无需映射ID到位置（仅保存名称和描述等基本信息）
-        boolean result = TokenSchemeYamlIO.writeToFile(globalSchemes, new ArrayList<>(), globalSchemesPath);
+    public boolean saveSchemes(List<TokenLocation> locations) {
+        boolean result = TokenSchemeYamlIO.writeToFile(globalSchemes, locations, globalSchemesPath);
         if (result) {
             BurpExtender.printOutput("[+] 全局令牌方案已保存，共 " + globalSchemes.size() + " 条");
         }
@@ -83,8 +83,9 @@ public class GlobalTokenSchemeManager {
 
     /**
      * 添加全局令牌方案（按名称去重，同名更新）
+     * @param locations 当前项目的令牌位置列表，用于将tokenLocationId解析为type+expression
      */
-    public void addScheme(TokenScheme scheme) {
+    public void addScheme(TokenScheme scheme, List<TokenLocation> locations) {
         // 去重：如果已存在相同名称，则更新
         for (int i = 0; i < globalSchemes.size(); i++) {
             TokenScheme existing = globalSchemes.get(i);
@@ -93,7 +94,7 @@ public class GlobalTokenSchemeManager {
                 existing.setPersistToGlobal(true);
                 existing.setEnabled(scheme.isEnabled());
                 existing.setTokenLocationIds(scheme.getTokenLocationIds());
-                saveSchemes();
+                saveSchemes(locations);
                 BurpExtender.printOutput("[+] 全局令牌方案已更新: " + scheme.getName());
                 return;
             }
@@ -106,17 +107,18 @@ public class GlobalTokenSchemeManager {
         newScheme.setEnabled(scheme.isEnabled());
         newScheme.setTokenLocationIds(scheme.getTokenLocationIds());
         globalSchemes.add(newScheme);
-        saveSchemes();
+        saveSchemes(locations);
         BurpExtender.printOutput("[+] 全局令牌方案已添加: " + scheme.getName());
     }
 
     /**
      * 移除全局令牌方案
+     * @param locations 当前项目的令牌位置列表，用于将tokenLocationId解析为type+expression
      */
-    public void removeScheme(String name) {
+    public void removeScheme(String name, List<TokenLocation> locations) {
         boolean removed = globalSchemes.removeIf(s -> s.getName().equals(name));
         if (removed) {
-            saveSchemes();
+            saveSchemes(locations);
             BurpExtender.printOutput("[+] 全局令牌方案已移除: " + name);
         }
     }
@@ -125,12 +127,13 @@ public class GlobalTokenSchemeManager {
      * 根据持久化标志同步令牌方案
      * persistToGlobal=true: 添加或更新到全局
      * persistToGlobal=false: 从全局中移除（如果存在）
+     * @param locations 当前项目的令牌位置列表，用于将tokenLocationId解析为type+expression
      */
-    public void syncScheme(TokenScheme scheme, boolean persistToGlobal) {
+    public void syncScheme(TokenScheme scheme, boolean persistToGlobal, List<TokenLocation> locations) {
         if (persistToGlobal) {
-            addScheme(scheme);
+            addScheme(scheme, locations);
         } else {
-            removeScheme(scheme.getName());
+            removeScheme(scheme.getName(), locations);
         }
     }
 
