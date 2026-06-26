@@ -14,12 +14,16 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * 用户会话管理子标签页
  * 管理用户会话的CRUD操作，含方案关联和重放配置
  */
 public class UserSessionTab extends JPanel {
+
+    private static final Logger LOGGER = Logger.getLogger(UserSessionTab.class.getName());
 
     private final JTable userSessionTable;
     private final UserSessionTableModel userSessionModel;
@@ -187,15 +191,54 @@ public class UserSessionTab extends JPanel {
         }
         int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
         UserSession selected = userSessionModel.getUserSession(modelRow);
-        UserSessionEditDialog dialog = new UserSessionEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑用户会话", selected);
+        if (selected == null) {
+            JOptionPane.showMessageDialog(this, "无法获取选中的用户会话数据", "错误", JOptionPane.ERROR_MESSAGE);
+            LOGGER.warning("editUserSession: getUserSession returned null for model row " + modelRow);
+            return;
+        }
+
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        if (!(owner instanceof Frame)) {
+            JOptionPane.showMessageDialog(this, "无法确定父窗口，请重试", "错误", JOptionPane.ERROR_MESSAGE);
+            LOGGER.warning("editUserSession: owner is not a Frame, got " + (owner != null ? owner.getClass().getName() : "null"));
+            return;
+        }
+
+        UserSessionEditDialog dialog = null;
+        try {
+            dialog = new UserSessionEditDialog((Frame) owner, "编辑用户会话", selected);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "创建编辑对话框失败", e);
+            JOptionPane.showMessageDialog(this,
+                    "创建编辑对话框失败: " + e.getMessage(),
+                    "错误", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
-            SessionManager sm = SessionManager.getInstance();
-            sm.updateUserSession(selected.getId(), dialog.getName(), dialog.getColorHex(), dialog.isEnabled(),
-                    dialog.getSchemeId());
-            sm.saveTokenValues(selected.getId(), dialog.getTokenValues());
-            refreshData();
+            try {
+                SessionManager sm = SessionManager.getInstance();
+                boolean updated = sm.updateUserSession(selected.getId(), dialog.getName(), dialog.getColorHex(),
+                        dialog.isEnabled(), dialog.getSchemeId());
+                if (!updated) {
+                    JOptionPane.showMessageDialog(this,
+                            "更新用户会话失败，请检查日志", "错误", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                boolean saved = sm.saveTokenValues(selected.getId(), dialog.getTokenValues());
+                if (!saved) {
+                    JOptionPane.showMessageDialog(this,
+                            "保存令牌值失败，请检查日志", "警告", JOptionPane.WARNING_MESSAGE);
+                }
+                refreshData();
+                JOptionPane.showMessageDialog(this,
+                        "用户会话 \"" + dialog.getName() + "\" 更新成功", "成功", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "保存用户会话失败", e);
+                JOptionPane.showMessageDialog(this,
+                        "保存用户会话失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 

@@ -158,6 +158,11 @@ public class UserSessionEditDialog extends JDialog {
         buttonPanel.add(okBtn);
         buttonPanel.add(cancelBtn);
 
+        getContentPane().setLayout(new BorderLayout());
+        outerScrollPane = new JScrollPane(mainPanel);
+        getContentPane().add(outerScrollPane, BorderLayout.CENTER);
+        getContentPane().add(buttonPanel, BorderLayout.SOUTH);
+
         // 填充现有数据
         if (existing != null) {
             nameField.setText(existing.getName());
@@ -166,7 +171,10 @@ public class UserSessionEditDialog extends JDialog {
                 selectedColor = existing.getColor();
                 colorPreview.setBackground(selectedColor);
             }
-            // 方案选择
+            // 保存现有令牌值
+            Map<Integer, String> existingTokens = existing.getTokenValues();
+            existingTokenValues = existingTokens != null ? new LinkedHashMap<>(existingTokens) : new LinkedHashMap<>();
+            // 方案选择（最后执行，因为会触发 refreshTokenValuesPanel() 使用 outerScrollPane）
             if (existing.getSchemeId() != null) {
                 for (TokenScheme scheme : schemes) {
                     if (scheme.getId() == existing.getSchemeId()) {
@@ -175,17 +183,10 @@ public class UserSessionEditDialog extends JDialog {
                     }
                 }
             }
-            // 保存现有令牌值
-            existingTokenValues = new LinkedHashMap<>(existing.getTokenValues());
+        } else {
+            // 初始化令牌值区域（仅新建模式需要，编辑模式已在 setSelectedItem 触发）
+            refreshTokenValuesPanel();
         }
-
-        getContentPane().setLayout(new BorderLayout());
-        outerScrollPane = new JScrollPane(mainPanel);
-        getContentPane().add(outerScrollPane, BorderLayout.CENTER);
-        getContentPane().add(buttonPanel, BorderLayout.SOUTH);
-
-        // 初始化令牌值区域
-        refreshTokenValuesPanel();
     }
 
     /**
