@@ -60,33 +60,15 @@ public class ParseSessionFromClipboardDialog extends JDialog {
 
         // 匹配到的Scheme
         if (schemeMatches != null && !schemeMatches.isEmpty()) {
-            SchemeMatch bestMatch = schemeMatches.get(0);
-            JLabel schemeLabel = new JLabel(String.format("最佳匹配方案: %s (%d/%d 令牌匹配, %.0f%%)",
-                    bestMatch.getScheme().getName(),
-                    bestMatch.getMatchedCount(),
-                    bestMatch.getTotalCount(),
-                    bestMatch.getMatchRate() * 100));
+            SchemeMatch selectedMatch = schemeMatches.get(0);
+            JLabel schemeLabel = new JLabel(String.format("已选方案: %s (%d/%d 令牌匹配, %.0f%%)",
+                    selectedMatch.getScheme().getName(),
+                    selectedMatch.getMatchedCount(),
+                    selectedMatch.getTotalCount(),
+                    selectedMatch.getMatchRate() * 100));
             schemeLabel.setFont(schemeLabel.getFont().deriveFont(Font.BOLD));
             summaryPanel.add(schemeLabel);
             summaryPanel.add(Box.createVerticalStrut(5));
-
-            // 其他匹配方案
-            if (schemeMatches.size() > 1) {
-                JLabel otherLabel = new JLabel("其他匹配方案:");
-                otherLabel.setFont(otherLabel.getFont().deriveFont(Font.ITALIC));
-                summaryPanel.add(otherLabel);
-                for (int i = 1; i < Math.min(schemeMatches.size(), 4); i++) {
-                    SchemeMatch match = schemeMatches.get(i);
-                    JLabel matchLabel = new JLabel(String.format("  - %s (%d/%d, %.0f%%)",
-                            match.getScheme().getName(),
-                            match.getMatchedCount(),
-                            match.getTotalCount(),
-                            match.getMatchRate() * 100));
-                    matchLabel.setForeground(Color.DARK_GRAY);
-                    summaryPanel.add(matchLabel);
-                }
-                summaryPanel.add(Box.createVerticalStrut(5));
-            }
         } else {
             JLabel noSchemeLabel = new JLabel("未匹配到任何令牌方案");
             noSchemeLabel.setForeground(Color.RED);
@@ -181,27 +163,19 @@ public class ParseSessionFromClipboardDialog extends JDialog {
         configPanel.add(new JLabel("令牌方案:"), gbc);
         gbc.gridx = 1;
         schemeComboBox = new JComboBox<>();
-        schemeComboBox.addItem("-- 自动选择最佳方案 --");
         schemeNameToId.clear();
-        if (schemeMatches != null) {
-            for (SchemeMatch match : schemeMatches) {
-                schemeComboBox.addItem(match.getScheme().getName());
-                schemeNameToId.put(match.getScheme().getName(), match.getScheme().getId());
-            }
+
+        // 加载所有方案到下拉框
+        List<TokenScheme> allSchemes = SessionManager.getInstance().getTokenSchemes();
+        for (TokenScheme scheme : allSchemes) {
+            schemeComboBox.addItem(scheme.getName());
+            schemeNameToId.put(scheme.getName(), scheme.getId());
         }
-        // 如果没有匹配方案，也加载所有可用方案
-        if (schemeMatches == null || schemeMatches.isEmpty()) {
-            List<TokenScheme> allSchemes = SessionManager.getInstance().getTokenSchemes();
-            for (TokenScheme scheme : allSchemes) {
-                if (scheme.isEnabled() && !schemeNameToId.containsKey(scheme.getName())) {
-                    schemeComboBox.addItem(scheme.getName());
-                    schemeNameToId.put(scheme.getName(), scheme.getId());
-                }
-            }
-        }
-        // 默认选中第一个匹配方案
-        if (schemeComboBox.getItemCount() > 1) {
-            schemeComboBox.setSelectedIndex(1);
+
+        // 默认选中已确定的匹配方案
+        if (schemeMatches != null && !schemeMatches.isEmpty()) {
+            SchemeMatch selectedMatch = schemeMatches.get(0);
+            schemeComboBox.setSelectedItem(selectedMatch.getScheme().getName());
         }
         configPanel.add(schemeComboBox, gbc);
 
@@ -303,18 +277,17 @@ public class ParseSessionFromClipboardDialog extends JDialog {
     }
 
     /**
-     * 获取选中的方案ID，如果自动选择则返回最佳匹配方案
+     * 获取选中的方案ID
      */
     public Integer getSelectedSchemeId() {
-        int idx = schemeComboBox.getSelectedIndex();
-        if (idx <= 0) {
-            // 自动选择：返回最佳匹配方案
+        String selectedName = (String) schemeComboBox.getSelectedItem();
+        if (selectedName == null || selectedName.isEmpty()) {
+            // 默认返回已确定的匹配方案
             if (schemeMatches != null && !schemeMatches.isEmpty()) {
                 return schemeMatches.get(0).getScheme().getId();
             }
             return null;
         }
-        String selectedName = (String) schemeComboBox.getSelectedItem();
         return schemeNameToId.get(selectedName);
     }
 

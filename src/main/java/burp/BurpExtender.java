@@ -17,6 +17,7 @@ import org.oxff.repeater.privilege.SessionParserEngine;
 import org.oxff.repeater.privilege.SchemeMatch;
 import org.oxff.repeater.privilege.model.TokenLocation;
 import org.oxff.repeater.ui.privilege.ParseSessionFromClipboardDialog;
+import org.oxff.repeater.ui.privilege.SelectSchemeDialog;
 
 import javax.swing.*;
 import java.awt.*;
@@ -372,6 +373,50 @@ public class BurpExtender implements BurpExtension {
                 // 解析报文
                 SessionParseResult parseResult = SessionParserEngine.parse(httpMessage, locations);
                 List<SchemeMatch> schemeMatches = SessionParserEngine.matchSchemes(parseResult, schemes);
+
+                // 检查是否有启用的方案
+                boolean hasEnabledScheme = schemes.stream().anyMatch(org.oxff.repeater.privilege.model.TokenScheme::isEnabled);
+
+                // 如果没有匹配到任何方案，或者没有任何启用的方案，让用户选择
+                if (schemeMatches.isEmpty() || !hasEnabledScheme) {
+                    Frame owner = (Frame) SwingUtilities.getWindowAncestor(repeaterUI.getUiComponent());
+                    String message;
+                    if (!hasEnabledScheme) {
+                        message = "<html>没有任何启用的令牌方案。<br>请选择一个方案，选中后将自动启用。</html>";
+                    } else {
+                        message = "<html>没有启用的方案匹配当前报文。<br>请选择一个方案，选中后将自动启用。</html>";
+                    }
+
+                    SelectSchemeDialog selectDialog = new SelectSchemeDialog(owner, schemes, message);
+                    selectDialog.setVisible(true);
+
+                    if (!selectDialog.isConfirmed()) {
+                        return; // 用户取消
+                    }
+
+                    org.oxff.repeater.privilege.model.TokenScheme selectedScheme = selectDialog.getSelectedScheme();
+                    if (selectedScheme == null) {
+                        return;
+                    }
+
+                    // 自动启用用户选择的方案
+                    if (!selectedScheme.isEnabled()) {
+                        selectedScheme.setEnabled(true);
+                        sm.updateTokenScheme(selectedScheme.getId(), selectedScheme.getName(),
+                                selectedScheme.getDescription(), true, selectedScheme.isPersistToGlobal());
+                        logManager.success("[+] 已自动启用令牌方案: " + selectedScheme.getName());
+                    }
+
+                    // 重新解析匹配（使用刚启用的方案）
+                    SessionParseResult newParseResult = SessionParserEngine.parse(httpMessage, locations);
+                    schemeMatches = SessionParserEngine.matchSchemes(newParseResult, schemes);
+
+                    // 如果重新匹配后仍然没有匹配，构造一个手动匹配结果
+                    if (schemeMatches.isEmpty()) {
+                        schemeMatches = java.util.Collections.singletonList(
+                                new SchemeMatch(selectedScheme, 0, selectedScheme.getTokenLocationCount()));
+                    }
+                }
 
                 // 生成建议名称
                 String suggestedName = generateSuggestedName(parseResult, request);

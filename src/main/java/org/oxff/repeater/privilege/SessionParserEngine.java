@@ -123,11 +123,11 @@ public class SessionParserEngine {
     }
 
     /**
-     * 将解析结果与所有TokenScheme进行匹配，按匹配率排序
+     * 将解析结果与启用的TokenScheme进行匹配，返回第一个匹配的方案
      *
      * @param result   解析结果
      * @param schemes  TokenScheme列表
-     * @return 按匹配率降序排列的SchemeMatch列表
+     * @return 包含第一个匹配SchemeMatch的列表（单元素），无匹配返回空列表
      */
     public static List<SchemeMatch> matchSchemes(SessionParseResult result, List<TokenScheme> schemes) {
         List<SchemeMatch> matches = new ArrayList<>();
@@ -151,17 +151,12 @@ public class SessionParserEngine {
                 }
             }
 
-            matches.add(new SchemeMatch(scheme, matchedCount, locationIds.size()));
-        }
-
-        // 按匹配率降序排序，匹配率相同则按matchedCount降序
-        matches.sort((a, b) -> {
-            int rateCompare = Double.compare(b.getMatchRate(), a.getMatchRate());
-            if (rateCompare != 0) {
-                return rateCompare;
+            // 返回第一个匹配率大于0的方案
+            if (matchedCount > 0) {
+                matches.add(new SchemeMatch(scheme, matchedCount, locationIds.size()));
+                break;
             }
-            return Integer.compare(b.getMatchedCount(), a.getMatchedCount());
-        });
+        }
 
         return matches;
     }

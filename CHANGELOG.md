@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.25.1] - 2026-06-26
+
+### Fixed
+- 修复会话解析时无启用方案或方案不匹配导致无法继续的问题：新增 SelectSchemeDialog 对话框，允许用户手动选择并自动启用方案
+- 修复 ParseSessionFromClipboardDialog 下拉框逻辑：移除"自动选择最佳方案"占位项，改为加载所有方案并默认选中已匹配方案
+- 修复 ParseSessionWorker 在无匹配方案时直接跳过确认对话框的问题，增加用户交互选择流程
+
 ## [2.25.0] - 2026-06-26
 
 ### Added

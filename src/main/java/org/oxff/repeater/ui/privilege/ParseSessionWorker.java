@@ -111,16 +111,68 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 return;
             }
 
+            SessionManager sm = SessionManager.getInstance();
+            List<SchemeMatch> schemeMatches = result.getSchemeMatches();
+            List<TokenScheme> allSchemes = sm.getTokenSchemes();
+
+            // 检查是否有启用的方案
+            boolean hasEnabledScheme = allSchemes.stream().anyMatch(TokenScheme::isEnabled);
+
+            // 如果没有匹配到任何方案，或者没有任何启用的方案，让用户选择
+            if (schemeMatches.isEmpty() || !hasEnabledScheme) {
+                Frame owner = (Frame) SwingUtilities.getWindowAncestor(parentComponent);
+                String message;
+                if (!hasEnabledScheme) {
+                    message = "<html>没有任何启用的令牌方案。<br>请选择一个方案，选中后将自动启用。</html>";
+                } else {
+                    message = "<html>没有启用的方案匹配当前报文。<br>请选择一个方案，选中后将自动启用。</html>";
+                }
+
+                SelectSchemeDialog selectDialog = new SelectSchemeDialog(owner, allSchemes, message);
+                selectDialog.setVisible(true);
+
+                if (!selectDialog.isConfirmed()) {
+                    return; // 用户取消
+                }
+
+                TokenScheme selectedScheme = selectDialog.getSelectedScheme();
+                if (selectedScheme == null) {
+                    return;
+                }
+
+                // 自动启用用户选择的方案
+                if (!selectedScheme.isEnabled()) {
+                    selectedScheme.setEnabled(true);
+                    sm.updateTokenScheme(selectedScheme.getId(), selectedScheme.getName(),
+                            selectedScheme.getDescription(), true, selectedScheme.isPersistToGlobal());
+                    BurpExtender.printOutput("[+] 已自动启用令牌方案: " + selectedScheme.getName());
+                }
+
+                // 重新解析匹配（使用刚启用的方案）
+                byte[] httpMessage = result.getParseResult().getRawHeader() != null
+                        ? (result.getParseResult().getRawHeader() + "\r\n\r\n"
+                           + (result.getParseResult().getRawBody() != null ? result.getParseResult().getRawBody() : ""))
+                           .getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                        : new byte[0];
+                SessionParseResult newParseResult = SessionParserEngine.parse(httpMessage, result.getAllLocations());
+                schemeMatches = SessionParserEngine.matchSchemes(newParseResult, allSchemes);
+
+                // 如果重新匹配后仍然没有匹配，构造一个手动匹配结果
+                if (schemeMatches.isEmpty()) {
+                    schemeMatches = java.util.Collections.singletonList(
+                            new SchemeMatch(selectedScheme, 0, selectedScheme.getTokenLocationCount()));
+                }
+            }
+
             // 显示确认对话框
             Frame owner = (Frame) SwingUtilities.getWindowAncestor(parentComponent);
             ParseSessionFromClipboardDialog dialog = new ParseSessionFromClipboardDialog(
-                    owner, result.getParseResult(), result.getSchemeMatches(),
+                    owner, result.getParseResult(), schemeMatches,
                     result.getAllLocations(), result.getSuggestedName());
             dialog.setVisible(true);
 
             if (dialog.isConfirmed()) {
                 // 用户确认，创建或更新会话
-                SessionManager sm = SessionManager.getInstance();
                 String sessionName = dialog.getSessionName();
                 String colorHex = dialog.getColorHex();
                 boolean enabled = dialog.isEnabled();
