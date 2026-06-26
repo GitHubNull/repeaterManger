@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.0] - 2026-06-26
+
+### Added
+- 新增 Chrome DevTools fetch 格式报文解析支持：
+  - 新增 `FetchRequestParser` 工具类，支持识别和转换 Chrome "Copy as fetch" / "Copy as fetch (Node.js)" 格式为原始 HTTP 报文
+  - 支持自动检测剪贴板内容格式（原始 HTTP / fetch browser / fetch Node.js）
+  - 支持单双引号、转义序列、嵌套对象等复杂 JS 语法解析
+  - `ParseSessionWorker` 集成格式检测与转换流程，用户可直接粘贴 fetch 代码片段进行会话解析
+- 新增 JUnit 5 单元测试依赖（`junit-jupiter` 5.10.0），为 `FetchRequestParser` 提供测试覆盖
+
 ## [2.25.3] - 2026-06-26
 
 ### Changed
