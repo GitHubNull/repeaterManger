@@ -38,49 +38,50 @@ public class TokenSchemeEditDialog extends JDialog {
 
     public TokenSchemeEditDialog(Frame owner, String title, TokenScheme existing) {
         super(owner, title, true);
-        setSize(750, 550);
+        setSize(1052, 684);
         setLocationRelativeTo(owner);
         setResizable(true);
 
-        JPanel mainPanel = new JPanel(new GridBagLayout());
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 5));
+
+        // 表单面板（顶部）
+        JPanel formPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(5, 5, 0, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // 名称
         gbc.gridx = 0; gbc.gridy = 0;
-        mainPanel.add(new JLabel("名称:"), gbc);
+        formPanel.add(new JLabel("名称:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         nameField = new JTextField(20);
-        mainPanel.add(nameField, gbc);
+        formPanel.add(nameField, gbc);
 
         // 描述
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        mainPanel.add(new JLabel("描述:"), gbc);
+        formPanel.add(new JLabel("描述:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         descriptionArea = new JTextArea(2, 20);
         descriptionArea.setLineWrap(true);
         descriptionArea.setWrapStyleWord(true);
         JScrollPane descScroll = new JScrollPane(descriptionArea);
-        mainPanel.add(descScroll, gbc);
+        formPanel.add(descScroll, gbc);
 
         // 启用
         gbc.gridx = 0; gbc.gridy = 2;
-        mainPanel.add(new JLabel("启用:"), gbc);
+        formPanel.add(new JLabel("启用:"), gbc);
         gbc.gridx = 1;
         enabledCheckbox = new JCheckBox("启用此令牌方案", true);
-        mainPanel.add(enabledCheckbox, gbc);
+        formPanel.add(enabledCheckbox, gbc);
 
         // 持久化到全局
         gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
-        mainPanel.add(new JLabel("全局存储:"), gbc);
+        formPanel.add(new JLabel("全局存储:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         persistToGlobalCheckbox = new JCheckBox("持久化到全局（方便后续项目复用）", true);
-        mainPanel.add(persistToGlobalCheckbox, gbc);
+        formPanel.add(persistToGlobalCheckbox, gbc);
 
-        // 穿梭框：令牌位置选择
-        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
-        mainPanel.add(new JLabel("令牌位置选择:"), gbc);
+        mainPanel.add(formPanel, BorderLayout.NORTH);
 
         // 获取所有令牌位置
         List<TokenLocation> allLocations = SessionManager.getInstance().getTokenLocations();
@@ -117,9 +118,9 @@ public class TokenSchemeEditDialog extends JDialog {
         selectedTable.getColumnModel().getColumn(2).setPreferredWidth(150);
 
         JScrollPane availableScroll = new JScrollPane(availableTable);
-        availableScroll.setPreferredSize(new Dimension(280, 200));
+        availableScroll.setMinimumSize(new Dimension(150, 150));
         JScrollPane selectedScroll = new JScrollPane(selectedTable);
-        selectedScroll.setPreferredSize(new Dimension(280, 200));
+        selectedScroll.setMinimumSize(new Dimension(150, 150));
 
         // 中间按钮面板
         JPanel shuttleButtonPanel = new JPanel();
@@ -143,8 +144,8 @@ public class TokenSchemeEditDialog extends JDialog {
         shuttleButtonPanel.add(Box.createVerticalStrut(5));
         shuttleButtonPanel.add(removeAllBtn);
 
-        // 穿梭框整体布局
-        JPanel shuttlePanel = new JPanel(new BorderLayout(5, 0));
+        // 穿梭框整体布局 - 使用 GridBagLayout 实现左右等比例伸缩 + 按钮居中
+        JPanel shuttlePanel = new JPanel(new GridBagLayout());
         JPanel availablePanel = new JPanel(new BorderLayout());
         availablePanel.add(new JLabel("可用令牌位置"), BorderLayout.NORTH);
         availablePanel.add(availableScroll, BorderLayout.CENTER);
@@ -152,17 +153,29 @@ public class TokenSchemeEditDialog extends JDialog {
         selectedPanel.add(new JLabel("已选令牌位置"), BorderLayout.NORTH);
         selectedPanel.add(selectedScroll, BorderLayout.CENTER);
 
-        shuttlePanel.add(availablePanel, BorderLayout.WEST);
-        shuttlePanel.add(shuttleButtonPanel, BorderLayout.CENTER);
-        shuttlePanel.add(selectedPanel, BorderLayout.EAST);
+        GridBagConstraints sgbc = new GridBagConstraints();
+        sgbc.fill = GridBagConstraints.BOTH;
+        sgbc.weighty = 1.0;
 
-        gbc.gridy = 4; gbc.gridwidth = 2;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weighty = 1.0;
-        mainPanel.add(shuttlePanel, gbc);
+        // 左侧：可用令牌位置
+        sgbc.gridx = 0; sgbc.weightx = 1.0;
+        sgbc.insets = new Insets(0, 0, 0, 5);
+        shuttlePanel.add(availablePanel, sgbc);
 
-        gbc.weighty = 0;
-        gbc.gridwidth = 1;
+        // 中间：操作按钮（固定宽度，居中）
+        sgbc.gridx = 1; sgbc.weightx = 0;
+        sgbc.fill = GridBagConstraints.NONE;
+        sgbc.anchor = GridBagConstraints.CENTER;
+        sgbc.insets = new Insets(0, 8, 0, 8);
+        shuttlePanel.add(shuttleButtonPanel, sgbc);
+
+        // 右侧：已选令牌位置
+        sgbc.gridx = 2; sgbc.weightx = 1.0;
+        sgbc.fill = GridBagConstraints.BOTH;
+        sgbc.insets = new Insets(0, 0, 0, 0);
+        shuttlePanel.add(selectedPanel, sgbc);
+
+        mainPanel.add(shuttlePanel, BorderLayout.CENTER);
 
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));

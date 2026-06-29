@@ -202,15 +202,19 @@ public class HistoryPanel extends JPanel {
 
         // 设置状态码列的颜色渲染器
         historyTable.getColumnModel().getColumn(8).setCellRenderer(
-            HistoryTableRenderer.createStatusCodeRenderer());
+            HistoryTableRenderer.createStatusCodeRenderer(historyRecords));
 
         // 设置越权测试列的渲染器
         historyTable.getColumnModel().getColumn(13).setCellRenderer(
-            HistoryTableRenderer.createPrivilegeTestRenderer());
+            HistoryTableRenderer.createPrivilegeTestRenderer(historyRecords));
 
         // 设置表格行背景颜色的渲染器（基于历史记录的颜色标记）
+        // 分别注册 Object.class（覆盖 String 列）和 Number.class（覆盖 Integer 列），
+        // 因 Swing 的 NumberRenderer 会绕过 Object.class 的默认渲染器
         historyTable.setDefaultRenderer(Object.class,
             HistoryTableRenderer.createRowColorRenderer(historyRecords));
+        historyTable.setDefaultRenderer(Number.class,
+            HistoryTableRenderer.createRowColorRendererForNumber(historyRecords));
     }
 
     /**

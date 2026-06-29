@@ -18,9 +18,9 @@ import java.util.regex.PatternSyntaxException;
  * 根据判决规则对响应进行越权判断
  *
  * 判决逻辑：
- * 1. 如果有已启用的规则，按优先级逐一匹配，匹配到第一条规则即决定结果
+ * 1. 如果有已启用的规则，按优先级逐一匹配，首个匹配成功的规则决定结果
  *    - 规则匹配成功 → ESCALATED（越权），使用 success_color + success_note
- *    - 规则匹配失败 → NOT_ESCALATED（安全），使用 failure_color + failure_note
+ *    - 所有规则都不匹配 → 回退到默认判决（状态码+相似度）
  * 2. 如果没有规则，回退到默认判决：状态码+相似度
  */
 public class JudgmentEngine {
@@ -83,7 +83,7 @@ public class JudgmentEngine {
         // 有规则时：按优先级匹配
         if (!rules.isEmpty()) {
             return judgeWithRules(rules, statusCode, responseHeaders, responseBody,
-                    baselineResponse, similarity, similarityThreshold, responseTimeMs);
+                    baselineResponse, baselineStatusCode, similarity, similarityThreshold, responseTimeMs);
         }
 
         // 无规则时：回退到默认判决
@@ -92,11 +92,13 @@ public class JudgmentEngine {
 
     /**
      * 使用规则进行判决
-     * 按优先级逐一匹配，第一条规则即决定结果
+     * 按优先级逐一匹配，首个匹配成功的规则返回 ESCALATED；
+     * 若所有规则都不匹配，回退到默认判决
      */
     private static JudgmentOutcome judgeWithRules(List<JudgmentRule> rules, int statusCode,
                                                    String responseHeaders, byte[] responseBody,
                                                    byte[] baselineResponse,
+                                                   int baselineStatusCode,
                                                    double similarity, double similarityThreshold,
                                                    long responseTimeMs) {
         String bodyStr = responseBody != null ? new String(responseBody, StandardCharsets.UTF_8) : "";
@@ -110,26 +112,19 @@ public class JudgmentEngine {
                     targetValue, statusCode, responseBody, baselineResponse);
 
             if (matched) {
-                // 规则匹配成功 → 表示越权
+                // 规则匹配成功 → 表示越权，使用成功颜色和备注
                 String note = rule.getSuccessNote();
                 if (note == null || note.isEmpty()) {
                     note = "规则匹配: " + rule.getName();
                 }
                 return new JudgmentOutcome(JudgmentResult.ESCALATED, rule.getSuccessColor(),
                         note, similarity, rule.getName());
-            } else {
-                // 规则匹配失败 → 表示安全
-                String note = rule.getFailureNote();
-                if (note == null || note.isEmpty()) {
-                    note = "规则不匹配: " + rule.getName();
-                }
-                return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, rule.getFailureColor(),
-                        note, similarity, rule.getName());
             }
+            // 规则不匹配 → 继续检查下一条规则，不提前返回
         }
 
-        // 所有规则都无效，回退到默认判决
-        return new JudgmentOutcome(JudgmentResult.PENDING, null, "", similarity, null);
+        // 所有规则都不匹配，回退到默认判决
+        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold);
     }
 
     /**

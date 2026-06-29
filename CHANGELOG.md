@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.3] - 2026-06-29
+
+### Fixed
+- 判决引擎规则回退逻辑修正：所有规则不匹配时回退到默认判决（状态码+相似度），而非错误标记为安全
+- 表格行颜色渲染器覆盖 Number 列：补充 `Number.class` 渲染器注册，修复 Swing `NumberRenderer` 绕过默认渲染器导致整数列无背景色的问题
+
+### Changed
+- 表格渲染器增强：新增透明背景色支持（alpha blending），基于行颜色标记生成半透明底色
+- `TokenSchemeEditDialog` 布局重构：从 `GridBagLayout` 升级为 `BorderLayout`+`GridBagLayout` 组合，修复穿梭框左右面板等比例伸缩问题，窗口尺寸调整为 1052×684
+
 ## [2.26.2] - 2026-06-29
 
 ### Changed
