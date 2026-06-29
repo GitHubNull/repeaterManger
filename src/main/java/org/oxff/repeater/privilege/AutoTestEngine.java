@@ -80,12 +80,7 @@ public class AutoTestEngine {
 
         executor.submit(() -> {
             try {
-                byte[] requestBytes = interceptedRequest.toByteArray().getBytes();
                 HttpService httpService = interceptedRequest.httpService();
-                String api = HttpRequestHelper.computeApiFromRequest(
-                        interceptedRequest.path(),
-                        interceptedRequest.query() != null ? interceptedRequest.query() : "",
-                        requestBytes);
 
                 LogManager.getInstance().printOutput("[*] 自动化测试：开始处理 " + api);
 

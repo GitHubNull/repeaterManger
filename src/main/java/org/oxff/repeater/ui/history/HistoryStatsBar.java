@@ -4,7 +4,6 @@ import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.history.HistoryStatsDAO;
 
 import javax.swing.*;
-import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;

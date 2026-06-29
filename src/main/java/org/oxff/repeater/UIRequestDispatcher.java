@@ -7,7 +7,6 @@ import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.SessionParser;
 
 import javax.swing.*;
-import java.awt.*;
 import java.util.List;
 
 /**

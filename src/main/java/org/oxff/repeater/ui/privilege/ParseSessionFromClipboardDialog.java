@@ -34,6 +34,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
 
     private final SessionParseResult parseResult;
     private final List<SchemeMatch> schemeMatches;
+    @SuppressWarnings("unused")
     private final List<TokenLocation> allLocations;
 
     private Integer existingSessionId = null;

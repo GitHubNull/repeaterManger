@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.2] - 2026-06-29
+
+### Changed
+- 清理未使用的 import 和局部变量：
+  - `UIRequestDispatcher` 删除未使用的 `java.awt.*` import
+  - `AutoTestEngine` 删除未使用的局部变量 `requestBytes`、`api`
+  - `FetchRequestParser` 删除未使用的局部变量 `quote`
+  - `SessionParserEngine` 删除未使用的 `TokenLocationType`、`NodeList` import
+  - `HistoryStatsBar` 删除未使用的 `javax.swing.border.Border` import
+  - `ParseSessionFromClipboardDialog` 添加 `@SuppressWarnings("unused")` 注解
+
 ## [2.26.1] - 2026-06-29
 
 ### Fixed

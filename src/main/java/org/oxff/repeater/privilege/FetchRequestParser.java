@@ -355,7 +355,6 @@ public class FetchRequestParser {
 
         // Extract string value
         if (afterKey.startsWith("\"") || afterKey.startsWith("'")) {
-            char quote = afterKey.charAt(0);
             return parseQuotedString(afterKey, 0);
         }
 
