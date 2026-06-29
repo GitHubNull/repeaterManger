@@ -25,6 +25,7 @@ public class FreeMarkerConfig {
         // HTML 配置：HTMLOutputFormat 自动转义
         htmlConfig = new Configuration(version);
         htmlConfig.setTemplateLoader(new ClassTemplateLoader(getClass(), "/templates/report"));
+        htmlConfig.setDefaultEncoding("UTF-8");
         htmlConfig.setOutputFormat(freemarker.core.HTMLOutputFormat.INSTANCE);
         htmlConfig.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
         htmlConfig.setLogTemplateExceptions(false);
@@ -33,6 +34,7 @@ public class FreeMarkerConfig {
         // Markdown 配置：PlainTextOutputFormat 不做自动转义
         mdConfig = new Configuration(version);
         mdConfig.setTemplateLoader(new ClassTemplateLoader(getClass(), "/templates/report"));
+        mdConfig.setDefaultEncoding("UTF-8");
         mdConfig.setOutputFormat(PlainTextOutputFormat.INSTANCE);
         mdConfig.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
         mdConfig.setLogTemplateExceptions(false);

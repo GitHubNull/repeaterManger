@@ -776,25 +776,21 @@ public class RepeaterManagerUI {
             org.oxff.repeater.privilege.DedupConfigManager dedupConfigManager =
                     org.oxff.repeater.privilege.DedupConfigManager.getInstance();
             final List<HttpRequestResponse> dedupedRequests;
-            if (dedupConfigManager.hasActiveConfigs()) {
-                int originalSize = requestResponses.size();
-                dedupedRequests = org.oxff.repeater.privilege.ApiDedupEngine.deduplicate(
-                        requestResponses,
-                        rr -> {
-                            if (rr == null || rr.request() == null) return "__NULL__";
-                            byte[] requestBytes = rr.request().toByteArray().getBytes();
-                            return dedupConfigManager.computeDedupKey(
-                                    requestBytes, rr.httpService());
-                        },
-                        dedupConfigManager.getKeepPolicy()
-                );
-                if (dedupedRequests.size() < originalSize) {
-                    LogManager.getInstance().printOutput(String.format(
-                            "[*] 批量权限测试：去重过滤 %d -> %d 条（去除 %d 条重复）",
-                            originalSize, dedupedRequests.size(), originalSize - dedupedRequests.size()));
-                }
-            } else {
-                dedupedRequests = requestResponses;
+            int originalSize = requestResponses.size();
+            dedupedRequests = org.oxff.repeater.privilege.ApiDedupEngine.deduplicate(
+                    requestResponses,
+                    rr -> {
+                        if (rr == null || rr.request() == null) return "__NULL__";
+                        byte[] requestBytes = rr.request().toByteArray().getBytes();
+                        return dedupConfigManager.computeDedupKey(
+                                requestBytes, rr.httpService());
+                    },
+                    dedupConfigManager.getKeepPolicy()
+            );
+            if (dedupedRequests.size() < originalSize) {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 批量权限测试：去重过滤 %d -> %d 条（去除 %d 条重复）",
+                        originalSize, dedupedRequests.size(), originalSize - dedupedRequests.size()));
             }
 
             // 开启批量添加模式，暂停每行添加时的ListSelectionListener回调

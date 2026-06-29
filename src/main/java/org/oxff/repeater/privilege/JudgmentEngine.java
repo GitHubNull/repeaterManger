@@ -144,17 +144,23 @@ public class JudgmentEngine {
                     similarity, null);
         }
 
-        if (similarity >= 0 && similarity < similarityThreshold) {
-            // 相似度低于阈值 → 越权
+        if (similarity < 0) {
+            // 无法计算相似度 → 挂起，需人工确认
+            return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                    "无法计算相似度", similarity, null);
+        }
+
+        if (similarity >= similarityThreshold) {
+            // 相似度超过阈值 → 越权
             return new JudgmentOutcome(JudgmentResult.ESCALATED, Color.RED,
-                    String.format("相似度低: %.2f < %.2f", similarity, similarityThreshold),
+                    String.format("相似度超过阈值: %.2f >= %.2f", similarity, similarityThreshold),
                     similarity, null);
         }
 
-        // 相似度高于阈值 → 安全
+        // 相似度低于阈值 → 安全
         Color safeColor = new Color(144, 238, 144);
         return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, safeColor,
-                similarity >= 0 ? String.format("相似度: %.2f", similarity) : "",
+                String.format("相似度: %.2f", similarity),
                 similarity, null);
     }
 

@@ -95,12 +95,10 @@ public class ReplayEngine {
 
         // API去重检查：使用 DedupConfigManager 按优先级链式计算去重键，失败时自动回退PATH
         DedupConfigManager dedupConfigManager = DedupConfigManager.getInstance();
-        if (dedupConfigManager.hasActiveConfigs()) {
-            String api = dedupConfigManager.computeDedupKey(originalRequest, httpService);
-            if (ApiDedupEngine.checkAndAddKey(processedApis, api)) {
-                LogManager.getInstance().printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
-                return true; // 返回true表示被去重跳过，调用方需据此跳过CountDownLatch等待
-            }
+        String api = dedupConfigManager.computeDedupKey(originalRequest, httpService);
+        if (ApiDedupEngine.checkAndAddKey(processedApis, api)) {
+            LogManager.getInstance().printOutput("[*] 权限测试重放：API已处理过，跳过去重: " + api);
+            return true; // 返回true表示被去重跳过，调用方需据此跳过CountDownLatch等待
         }
 
         final boolean finalUseHttp2 = useHttp2;

@@ -13,9 +13,9 @@ import org.oxff.repeater.privilege.model.UserSession;
 import org.oxff.repeater.UIRequestDispatcher;
 
 import javax.swing.SwingUtilities;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,8 +35,8 @@ public class AutoTestEngine {
 
     private final ExecutorService executor;
 
-    /** 已处理的API集合（用于去重） */
-    private final Set<String> processedApis = new HashSet<>();
+    /** 已处理的API集合（用于去重，线程安全） */
+    private final Set<String> processedApis = ConcurrentHashMap.newKeySet();
 
     private AutoTestEngine() {
         this.executor = Executors.newCachedThreadPool(r -> {
@@ -70,17 +70,12 @@ public class AutoTestEngine {
 
         // 去重检查：使用 DedupConfigManager 按优先级链式计算去重键，失败时自动回退PATH
         DedupConfigManager dedupConfigManager = DedupConfigManager.getInstance();
-        if (dedupConfigManager.hasActiveConfigs()) {
-            byte[] requestBytes = interceptedRequest.toByteArray().getBytes();
-            String api = dedupConfigManager.computeDedupKey(
-                    requestBytes, interceptedRequest.httpService());
-            synchronized (processedApis) {
-                if (processedApis.contains(api)) {
-                    LogManager.getInstance().printOutput("[*] 自动化测试：API已处理过，跳过去重: " + api);
-                    return;
-                }
-                processedApis.add(api);
-            }
+        byte[] requestBytes = interceptedRequest.toByteArray().getBytes();
+        String api = dedupConfigManager.computeDedupKey(
+                requestBytes, interceptedRequest.httpService());
+        if (ApiDedupEngine.checkAndAddKey(processedApis, api)) {
+            LogManager.getInstance().printOutput("[*] 自动化测试：API已处理过，跳过去重: " + api);
+            return;
         }
 
         executor.submit(() -> {
@@ -286,18 +281,14 @@ public class AutoTestEngine {
      * 清除去重记录
      */
     public void clearProcessedApis() {
-        synchronized (processedApis) {
-            processedApis.clear();
-        }
+        processedApis.clear();
     }
 
     /**
      * 获取已处理API数量
      */
     public int getProcessedApiCount() {
-        synchronized (processedApis) {
-            return processedApis.size();
-        }
+        return processedApis.size();
     }
 
     // ==================== 内部方法 ====================

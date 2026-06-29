@@ -56,7 +56,7 @@ public class ReplayConfigTab extends JPanel {
         thresholdSpinner = new JSpinner(new SpinnerNumberModel(0.7, 0.0, 1.0, 0.05));
         thresholdSpinner.setPreferredSize(new Dimension(70, 25));
         thresholdPanel.add(thresholdSpinner);
-        thresholdPanel.add(new JLabel("(0.0~1.0, 低于此值判定为越权)"));
+        thresholdPanel.add(new JLabel("(0.0~1.0, 超过此值判定为越权)"));
         configPanel.add(thresholdPanel, gbc);
 
         // 请求超时

@@ -93,7 +93,7 @@ public class JudgmentRuleConfigTab extends JPanel {
         infoArea.setText(
             "• 规则按优先级升序匹配，匹配到第一条规则即决定判决结果\n" +
             "• 规则匹配成功 → 标记为越权（红色），匹配失败 → 标记为安全（绿色）\n" +
-            "• 无规则时使用默认判决：状态码不同或响应相似度低于阈值则判定为越权"
+            "• 无规则时使用默认判决：状态码不同或响应相似度超过阈值则判定为越权"
         );
         infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
 

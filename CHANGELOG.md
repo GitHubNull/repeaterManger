@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.26.1] - 2026-06-29
+
+### Fixed
+- 优化越权测试引擎与UI配置：
+  - `AutoTestEngine` 精简重复逻辑，优化变量命名与流程控制
+  - `JudgmentEngine` 增强判空与异常处理健壮性
+  - `ReplayEngine` 优化重放逻辑与资源管理
+  - `FreeMarkerConfig` 修复模板配置初始化问题
+  - `JudgmentRuleConfigTab` 和 `ReplayConfigTab` 修正UI配置项绑定
+- `RepeaterManagerUI` 优化面板布局与交互逻辑
+
+### Changed
+- 更新中文使用文档 (`usage_quick_zh.md`, `usage_detailed_zh.md`) 补充最新功能说明
+
 ## [2.26.0] - 2026-06-26
 
 ### Added
