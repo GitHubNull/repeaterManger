@@ -1,91 +1,87 @@
 # Repeater Manager 分离式架构产品需求文档 (PRD)
 
-> 版本: v1.0
-> 日期: 2026-06-26
-> 状态: 草案
-> 基于: Repeater Manager v2.24.0
+> 版本: v2.0
+> 日期: 2026-06-30
+> 状态: 已更新
+> 基于: Repeater Manager v2.24.0 实际功能
 
 ---
 
 ## 目录
 
 1. [项目概述](#1-项目概述)
-2. [系统整体架构设计](#2-系统整体架构设计)
-3. [通信协议与接口定义](#3-通信协议与接口定义)
-4. [各组件功能规格说明](#4-各组件功能规格说明)
-5. [数据流向与处理流程](#5-数据流向与处理流程)
-6. [性能要求与异步操作设计](#6-性能要求与异步操作设计)
+2. [系统整体架构](#2-系统整体架构)
+3. [组件间通信概述](#3-组件间通信概述)
+4. [功能规格说明](#4-功能规格说明)
+5. [核心业务流程](#5-核心业务流程)
+6. [非功能需求](#6-非功能需求)
 7. [附录](#7-附录)
 
 ---
 
 ## 1. 项目概述
 
-### 1.1 背景与目标
+### 1.1 产品定位
 
-现有 Repeater Manager 是一个基于 Java Swing + Montoya SDK 的 Burp Suite 插件，所有功能（UI 渲染、业务逻辑、数据持久化、HTTP 请求发送）均在一个 JAR 包内运行。随着功能不断扩展，单体架构面临以下问题：
+Repeater Manager 是一款面向安全测试人员的 Burp Suite 高级插件，提供 HTTP 请求重放管理、自动化越权检测、报文比对分析等能力。本产品从现有单体 Swing 插件演进而来的分离式架构版本，旨在解决单体架构在 UI 体验、扩展性和部署灵活性方面的瓶颈。
 
-- **UI 体验受限**: Java Swing 界面老旧，交互体验差，难以实现现代化 UI 效果
-- **内存占用高**: JVM 堆内存占用大，Burp Suite 本身已消耗大量资源
-- **扩展性差**: 新功能开发受限于 Swing 组件和单线程模型
-- **部署耦合**: 所有逻辑绑定在 Burp 插件中，无法独立使用
+### 1.2 产品目标
 
-**本项目目标**: 将现有 Repeater Manager 重构为分离式三组件架构：
-- **Burp Suite 插件端**: 仅负责 HTTP 请求/响应报文的捕获和转发
-- **后端服务**: 承担所有业务逻辑、数据持久化、异步任务处理
-- **前端应用**: 提供现代化的 Web 用户界面，由后端托管静态资源
+将现有单体 Burp Suite 插件重构为分离式三组件架构，在完整继承现有功能的基础上实现：
 
-### 1.2 功能范围
+- **现代化交互体验**: 前端应用提供媲美主流开发工具的 Web 界面，替代传统 Swing UI
+- **独立可部署**: 后端服务与 Burp Suite 解耦，可独立运行、独立升级
+- **轻量化插件端**: Burp 插件仅保留请求捕获和转发职责，降低对 Burp 的资源占用
+- **可扩展**: 新功能可在后端或前端独立开发，不依赖 Burp 插件框架
 
-完整保留现有 v2.24.0 所有功能特性，包括但不限于：
+**三组件分工**:
+- **Burp Suite 插件端**: HTTP 请求/响应报文的捕获、转发和回显
+- **后端服务**: 所有业务逻辑、数据持久化、HTTP 请求发送、异步任务处理
+- **前端应用**: Web 用户界面，负责交互展示和本地 UI 逻辑
+
+### 1.3 功能范围
+
+本产品完整继承现有 Repeater Manager 全部功能特性，按模块划分如下：
 
 | 功能模块 | 功能说明 |
 |----------|----------|
-| 请求管理 | 请求列表展示、搜索过滤、颜色标记、备注、列显示控制 |
-| 请求编辑与重放 | 请求内容编辑、语法高亮、异步发送、超时控制、HTTP/2 支持 |
-| 响应管理 | 响应展示、布局切换（左右/上下/仅请求/仅响应） |
-| 历史记录 | 自动记录每次重放的响应、历史回放、高级搜索（多条件复合筛选） |
-| 报文比对 | 字符串级/字节级差异对比、语法高亮差异展示、同步滚动、差异导航 |
-| API 规则提取 | 可配置规则引擎（4 种提取源 x 4 种提取方法）、全局规则 + 项目规则、自动重提取 |
-| 越权测试 | 多用户会话管理、Token 位置配置、Token 自动替换、判断规则配置、自动化检测引擎、报告生成 |
-| 数据持久化 | SQLite 存储、Pool 去重架构（SHA-256 哈希 + 引用计数）、文件外置存储 |
-| 导入导出 | ERM 加密存档（AES-256-CBC + HMAC-SHA256）、Postman Collection v2.1、智能格式检测 |
-| 后台服务 | 自动保存、垃圾回收（Pool 零引用清理）、历史记录录制 |
-| 日志系统 | 多通道日志（控制台/文件/UI）、级别过滤 |
-| 配置管理 | 存储配置、日志配置、代理配置、API 规则配置、越权测试配置 |
+| 请求管理 | 请求列表展示、多维度搜索过滤（关键字/方法/域名/颜色/API路径）、颜色标记、备注编辑、列显示控制、分页加载 |
+| 请求编辑与重放 | 请求报文编辑、语法高亮、异步发送、超时控制、HTTP/2 支持、空白请求模板创建 |
+| 响应管理 | 响应状态/耗时/长度展示、响应报文字段级查看、4 种布局切换（左右分栏/上下分栏/仅请求/仅响应） |
+| 历史记录 | 自动录制每次重放响应、历史列表分页查询、高级搜索（9 种过滤条件组合）、统计信息栏 |
+| 报文比对 | 请求/响应双模式比对、字符串级行内差异高亮、双栏同步滚动、差异导航（上一处/下一处）、差异数量统计 |
+| API 规则提取 | 可配置规则引擎（4 种提取源 x 4 种提取方法）、全局规则 + 项目规则、首匹配优先策略、规则变更后自动静默重提取 |
+| 越权测试 | 多用户会话管理、Token 方案配置、6 种 Token 位置类型、Token 自动替换、AND/OR/NOT 条件组合判决、5 种目标 x 9 种方法的判断规则、Scope 自动拦截、API 去重引擎、4 种相似度算法、实时进度展示 |
+| 数据持久化 | Pool 内容寻址去重架构（string/header/body/file 四类池）、引用计数管理、大内容外置存储、Schema 版本自动迁移 |
+| 导入导出 | ERM 加密存档格式（AES-256-CBC + HMAC-SHA256）、Postman Collection v2.1 导入导出、智能格式检测 |
+| 后台服务 | 定时自动保存、垃圾回收（Pool 零引用清理）、历史记录自动录制 |
+| 日志系统 | 多通道日志输出（Burp 控制台/滚动文件/UI 面板）、5 级日志级别过滤 |
+| 配置管理 | 存储模式配置、会话目录管理、日志配置、代理配置、API 规则配置、越权测试全项配置 |
 | 批量操作 | 批量重放、批量越权测试、批量删除 |
-| 报告生成 | PDF / HTML / Markdown 格式报告，含 cURL/Postman 代码片段 |
-
-### 1.3 非功能需求
-
-| 类别 | 要求 |
-|------|------|
-| 性能 | 请求重放延迟 < 100ms（不含网络传输）；历史记录加载 < 500ms（1000 条）；越权测试并发 >= 10 |
-| 资源 | 后端内存占用 < 200MB（常规使用）；前端页面首屏加载 < 2s |
-| 兼容性 | 支持 Burp Suite Professional 2024+；Chrome 浏览器 |
-| 安全 | 后端 API 无认证（本地运行假设）；WebSocket 仅监听 localhost |
-| 可靠性 | 数据自动保存间隔可配置；异常崩溃后数据不丢失 |
+| 报告生成 | PDF / HTML / Markdown 三种格式，含 cURL 命令片段和 Postman 代码片段 |
+| 使用引导 | 内置使用教程面板、关于面板 |
 
 ---
 
-## 2. 系统整体架构设计
+## 2. 系统整体架构
 
 ### 2.1 架构概览
+
+产品采用分离式三组件架构，各组件通过标准网络协议通信：
 
 ```mermaid
 graph TB
     subgraph "Burp Suite 插件端"
-        BP["请求捕获"]
-        BP2["响应转发"]
-        BP3["报文序列化"]
+        BP["请求捕获与转发"]
+        BP2["代理流量拦截"]
+        BP3["心跳检测"]
     end
 
     subgraph "后端服务"
-        BE["HTTP 服务端"]
-        BE2["业务逻辑引擎"]
-        BE3["数据持久化"]
-        BE4["异步任务调度"]
-        BE5["WebSocket 推送"]
+        BE["业务逻辑引擎"]
+        BE2["数据持久化"]
+        BE3["异步任务调度"]
+        BE4["实时推送"]
     end
 
     subgraph "前端应用"
@@ -96,378 +92,106 @@ graph TB
         FE5["日志面板"]
     end
 
-    BP -->|"HTTP/WebSocket"| BE
-    BE -->|"托管静态资源"| FE
-    FE -->|"HTTP/WebSocket"| BE
-    BE2 --> BE3
-    BE4 --> BE5
-    BE5 --> FE
+    BP -->|"HTTP"| BE
+    FE -->|"HTTP + 实时通道"| BE
+    BE -->|"实时推送"| FE
+    BE -->|"静态资源"| FE
 ```
 
 ### 2.2 组件职责边界
 
 #### 2.2.1 Burp Suite 插件端
 
-| 职责 | 说明 |
-|------|------|
-| 请求捕获 | 拦截右键"发送到 Repeater Manager"操作 |
-| 请求转发 | 将原始 HTTP 请求字节数组 + 服务信息（host/port/secure/protocol）转发给后端 |
-| 响应接收 | 接收后端返回的响应数据，回显到 Burp 的原生编辑器（可选，仅用于调试） |
-| 代理拦截 | 拦截匹配 Scope 的流量，转发给后端进行越权测试 |
-| 心跳检测 | 定期检测后端服务是否存活，失联时提示用户 |
+**职责范围**:
+- 拦截 Burp Suite 右键"发送到 Repeater Manager"操作，捕获 HTTP 请求报文及服务信息并转发至后端
+- 代理拦截匹配 Scope 规则的流量，转发至后端触发越权测试
+- 接收后端返回的响应数据，可选回显至 Burp 原生编辑器
+- 定期检测后端服务存活状态，失联时提示用户
 
-**明确不做的事**:
-- 不处理任何业务逻辑（请求存储、历史记录、API 提取、越权判断等）
-- 不直接操作数据库
-- 不渲染任何 UI 界面（除 Burp 原生编辑器外）
-- 不执行任何异步任务
+**不负责**: 任何业务逻辑处理、数据库操作、UI 渲染（除 Burp 原生编辑器外）、异步任务执行
 
 #### 2.2.2 后端服务
 
-| 职责 | 说明 |
-|------|------|
-| HTTP 服务端 | 提供标准 HTTP 接口，处理前端和插件端的请求 |
-| WebSocket 服务端 | 提供实时推送通道（越权测试进度、日志流、通知） |
-| 业务逻辑引擎 | 请求管理、历史记录、API 提取、越权测试、报文比对、报告生成 |
-| 数据持久化 | 数据库操作、Pool 去重架构、Schema 迁移 |
-| 异步任务调度 | 请求重放、批量越权测试、垃圾回收、自动保存 |
-| 静态资源托管 | 托管编译后的前端静态文件 |
-| 报文发送 | 发送 HTTP 请求到目标服务器 |
+**职责范围**:
+- 全部业务逻辑：请求管理、历史记录、API 规则提取、越权测试、报文比对、报告生成
+- 数据持久化：数据库操作、Pool 内容寻址去重、Schema 版本管理
+- HTTP 请求发送：向目标服务器发送 HTTP/1.1 和 HTTP/2 请求
+- 异步任务调度：请求重放、批量越权测试、垃圾回收、自动保存
+- 实时数据推送：越权测试进度、日志流、系统通知
+- 前端静态资源托管
 
 #### 2.2.3 前端应用
 
-| 职责 | 说明 |
-|------|------|
-| 用户界面渲染 | 使用现代化 UI 组件库构建界面 |
-| 状态管理 | 管理全局状态（请求列表、历史记录、配置等） |
-| API 调用 | 调用后端 HTTP 接口 |
-| 实时通信 | 接收后端推送的实时数据 |
-| 本地交互 | 请求编辑、报文比对、差异导航、搜索过滤等纯前端逻辑 |
-| 数据展示 | 表格、树形、图表、代码高亮 |
+**职责范围**:
+- 全部用户界面渲染和交互
+- 全局状态管理（请求列表、历史记录、配置等）
+- 请求报文编辑、报文比对、差异导航、搜索过滤等本地交互逻辑
+- 数据展示：表格、代码高亮、差异标注、进度条
+- 与后端的 HTTP 请求/响应通信和实时数据接收
 
 ### 2.3 部署形态
 
+三组件部署于安全测试人员的本地工作站，通过 localhost 网络通信：
+
 ```mermaid
 graph TB
-    subgraph "开发者/安全测试人员的工作站"
-        BURP["Burp Suite Professional"]
-        CHROME["Chrome 浏览器"]
-        BACKEND["后端进程"]
-        DB[(SQLite 数据库)]
-        BLOBS["blobs/ 目录"]
+    subgraph "本地工作站"
+        BURP["Burp Suite"]
+        BROWSER["浏览器"]
+        BACKEND["后端服务进程"]
+        STORAGE[("数据存储")]
     end
 
-    BURP -->|"捕获请求 -> 转发到 localhost:PORT"| BACKEND
-    BURP -->|"接收响应 <- 从 localhost:PORT"| BACKEND
-    CHROME -->|"http://localhost:PORT/"| BACKEND
-    BACKEND --> DB
-    BACKEND --> BLOBS
+    BURP -->|"请求转发"| BACKEND
+    BROWSER -->|"Web 界面"| BACKEND
+    BACKEND --> STORAGE
 ```
-
-### 2.4 技术栈总览
-
-| 组件 | 技术选型 | 版本要求 |
-|------|----------|----------|
-| Burp 插件 | Java 17 + Montoya SDK | JDK 17+, Montoya 2025.12+ |
-| 后端 | Go + Gin + GORM + SQLite | Go 1.22+ |
-| 前端 | Vite + Vue3 + PrimeVue 4.x + Pinia | Node 18+ |
-| 构建工具 | pnpm (前端) / go mod (后端) / Maven (插件) | - |
 
 ---
 
-## 3. 通信协议与接口定义
+## 3. 组件间通信概述
 
-### 3.1 通信协议总览
+### 3.1 通信方式
 
-| 协议 | 用途 | 连接方 | 说明 |
-|------|------|--------|------|
-| HTTP (标准服务端) | 请求/响应式 API 调用 | 前端 <-> 后端, 插件 <-> 后端 | 所有接口使用查询参数风格，JSON 数据交换 |
-| WebSocket | 实时推送 | 前端 <-> 后端 | 单向/双向推送：越权测试进度、日志流、系统通知 |
-
-### 3.2 HTTP 接口设计规范
-
-**接口风格**: 标准 HTTP 服务端风格，所有参数通过查询参数或请求体传递，**不使用 RESTful 路径参数**。
-
-**URL 格式**:
-```
-GET  /api/?module=<模块>&action=<动作>&<参数>=<值>
-POST /api/?module=<模块>&action=<动作>
-```
-
-**示例对比**:
-
-| 操作 | RESTful 风格 (禁用) | 本项目风格 (采用) |
-|------|---------------------|-----------------|
-| 获取请求详情 | `GET /api/requests/123` | `GET /api/?module=request&action=get&id=123` |
-| 删除历史记录 | `DELETE /api/history/456` | `POST /api/?module=history&action=delete&id=456` |
-| 更新用户会话 | `PUT /api/sessions/789` | `POST /api/?module=session&action=update&id=789` |
-| 搜索请求 | `GET /api/requests?keyword=test` | `GET /api/?module=request&action=search&keyword=test` |
-
-**通用响应格式**:
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": { ... }
-}
-```
-
-**错误码定义**:
-
-| code | 含义 | 说明 |
+| 通道 | 用途 | 说明 |
 |------|------|------|
-| 0 | 成功 | 请求处理成功 |
-| 1001 | 参数错误 | 缺少必要参数或参数格式错误 |
-| 1002 | 资源不存在 | 请求的数据不存在 |
-| 1003 | 数据库错误 | SQLite 操作失败 |
-| 1004 | 请求发送失败 | HTTP 请求发送异常 |
-| 1005 | 超时 | 操作超时 |
-| 1006 | 内部错误 | 服务端未预期异常 |
-| 1007 | 服务未就绪 | 后端未启动或连接失败 |
+| HTTP | 请求/响应式数据交互 | 前端与后端、插件与后端之间的增删改查操作，JSON 格式数据交换 |
+| 实时通道 | 服务端主动推送 | 越权测试进度、重放结果通知、日志流、系统通知等实时数据推送 |
 
-### 3.3 HTTP 接口清单
+### 3.2 实时推送场景
 
-#### 3.3.1 请求管理模块 (module=request)
+| 推送事件 | 触发时机 |
+|----------|----------|
+| 越权测试进度 | 测试任务执行过程中，实时更新当前进度、正在测试的请求和会话 |
+| 越权测试结果 | 每条测试完成时，推送判断结果、相似度、响应时间 |
+| 越权测试完成 | 全部测试完成后，推送汇总数据 |
+| 请求发送完成 | 每次重放完成后，推送状态码、响应长度、耗时 |
+| 日志推送 | 后端日志实时输出至前端面板 |
+| 系统通知 | 垃圾回收完成、自动保存完成、配置变更等 |
 
-| action | 方法 | 参数 | 说明 |
-|--------|------|------|------|
-| list | GET | `page`, `pageSize`, `keyword`, `method`, `domain`, `color`, `api` | 获取请求列表 |
-| get | GET | `id` | 获取单个请求详情 |
-| create | POST | `protocol`, `domain`, `path`, `query`, `method`, `requestData`, `comment`, `color` | 创建新请求 |
-| update | POST | `id`, `comment`, `color`, `requestData` | 更新请求 |
-| delete | POST | `id` | 删除请求 |
-| deleteBatch | POST | `ids` (JSON 数组) | 批量删除请求 |
-| updateApi | POST | `id`, `api` | 手动更新 API 路径 |
-| reExtractApi | POST | `id` 或 `ids` | 重新执行 API 规则提取 |
-| send | POST | `id`, `requestData`, `timeout`, `useHttp2` | 发送请求（重放） |
-| createBlank | POST | 无 | 创建空白 GET 请求模板 |
-| import | POST | `format`, `data` | 导入数据（ERM/Postman） |
-| export | POST | `format`, `ids`, `password` | 导出数据（ERM/Postman） |
+### 3.3 核心数据概念
 
-#### 3.3.2 历史记录模块 (module=history)
+产品涉及以下核心数据实体（概念层面，非数据库 Schema）：
 
-| action | 方法 | 参数 | 说明 |
-|--------|------|------|------|
-| list | GET | `requestId`, `page`, `pageSize`, `statusCode`, `startTime`, `endTime`, `keyword` | 获取历史记录列表 |
-| get | GET | `id` | 获取单个历史记录详情 |
-| delete | POST | `id` | 删除历史记录 |
-| deleteBatch | POST | `ids` (JSON 数组) | 批量删除历史记录 |
-| replay | POST | `id`, `timeout` | 重放历史记录 |
-| replayBatch | POST | `ids`, `timeout` | 批量重放历史记录 |
-| search | GET | `requestId`, `conditions` (JSON) | 高级搜索 |
-| compare | GET | `idA`, `idB` | 获取两条历史记录用于比对 |
-
-#### 3.3.3 越权测试模块 (module=privilege)
-
-| action | 方法 | 参数 | 说明 |
-|--------|------|------|------|
-| sessionList | GET | 无 | 获取用户会话列表 |
-| sessionGet | GET | `id` | 获取用户会话详情 |
-| sessionCreate | POST | `name`, `color`, `enabled`, `tokenValues`, `schemeId`, `requestTimeout`, `maxConcurrent`, `retryCount`, `retryDelay`, `replayDelay` | 创建用户会话 |
-| sessionUpdate | POST | `id`, ... | 更新用户会话 |
-| sessionDelete | POST | `id` | 删除用户会话 |
-| tokenLocationList | GET | 无 | 获取 Token 位置列表 |
-| tokenLocationCreate | POST | `type`, `expression`, `description`, `persistToGlobal`, `enabled` | 创建 Token 位置 |
-| tokenLocationUpdate | POST | `id`, ... | 更新 Token 位置 |
-| tokenLocationDelete | POST | `id` | 删除 Token 位置 |
-| judgmentRuleList | GET | 无 | 获取判断规则列表 |
-| judgmentRuleCreate | POST | `name`, `target`, `method`, `expression`, `enabled`, `priority`, `successColor`, `failureColor`, `successNote`, `failureNote`, `remark`, `global` | 创建判断规则 |
-| judgmentRuleUpdate | POST | `id`, ... | 更新判断规则 |
-| judgmentRuleDelete | POST | `id` | 删除判断规则 |
-| scopeList | GET | 无 | 获取 Scope 列表 |
-| scopeCreate | POST | `name`, `urlPattern`, `enabled`, `description` | 创建 Scope |
-| scopeUpdate | POST | `id`, ... | 更新 Scope |
-| scopeDelete | POST | `id` | 删除 Scope |
-| autoTestStart | POST | `requestId` 或 `requestIds` | 启动自动越权测试 |
-| autoTestStop | POST | `taskId` | 停止越权测试任务 |
-| autoTestStatus | GET | `taskId` | 获取测试任务状态 |
-| testBatch | POST | `historyIds`, `sessionIds` | 批量越权测试 |
-| reportGenerate | POST | `taskId`, `format` (pdf/html/md) | 生成测试报告 |
-| reportDownload | GET | `reportId` | 下载报告文件 |
-
-#### 3.3.4 API 规则提取模块 (module=apiRule)
-
-| action | 方法 | 参数 | 说明 |
-|--------|------|------|------|
-| list | GET | `global` (0/1) | 获取规则列表 |
-| get | GET | `id`, `global` | 获取规则详情 |
-| create | POST | `name`, `source`, `method`, `expression`, `enabled`, `priority`, `remark`, `global` | 创建规则 |
-| update | POST | `id`, ... | 更新规则 |
-| delete | POST | `id`, `global` | 删除规则 |
-| reorder | POST | `ids`, `global` | 调整规则优先级顺序 |
-
-#### 3.3.5 系统配置模块 (module=system)
-
-| action | 方法 | 参数 | 说明 |
-|--------|------|------|------|
-| configGet | GET | `key` | 获取配置项 |
-| configUpdate | POST | `key`, `value` | 更新配置项 |
-| configList | GET | 无 | 获取所有配置 |
-| logList | GET | `level`, `startTime`, `endTime`, `page`, `pageSize` | 获取日志列表 |
-| exportDatabase | POST | `password` (可选) | 导出数据库为 ERM 文件 |
-| importDatabase | POST | `file`, `password` (可选) | 导入 ERM 文件 |
-| gcTrigger | POST | 无 | 手动触发垃圾回收 |
-| status | GET | 无 | 获取系统状态 |
-
-### 3.4 WebSocket 通信协议
-
-#### 3.4.1 连接建立
-
-前端和后端通过 WebSocket 建立长连接，用于实时数据推送。
-
-**连接 URL**:
-```
-ws://localhost:PORT/ws?clientType=<frontend|plugin>&clientId=<uuid>
-```
-
-| 参数 | 说明 |
-|------|------|
-| clientType | `frontend` (前端) 或 `plugin` (Burp 插件) |
-| clientId | 客户端唯一标识，用于断线重连后的状态恢复 |
-
-#### 3.4.2 消息格式
-
-```json
-{
-  "type": "<消息类型>",
-  "timestamp": 1719398400000,
-  "payload": { ... }
-}
-```
-
-#### 3.4.3 消息类型
-
-**后端 -> 前端 推送消息**:
-
-| type | payload | 说明 |
-|------|---------|------|
-| `privilege.progress` | `{taskId, total, completed, currentRequest, currentSession, status}` | 越权测试进度更新 |
-| `privilege.result` | `{taskId, requestId, sessionId, judgment, similarity, responseTime}` | 单条越权测试结果 |
-| `privilege.complete` | `{taskId, summary}` | 越权测试任务完成 |
-| `request.sent` | `{requestId, historyId, statusCode, responseLength, responseTime}` | 请求发送完成通知 |
-| `log.entry` | `{level, message, timestamp}` | 实时日志推送 |
-| `system.notification` | `{level, message}` | 系统通知（如 GC 完成、自动保存完成） |
-| `plugin.request` | `{requestData, serviceInfo}` | 插件捕获的新请求（推送到前端） |
-| `config.changed` | `{key, value}` | 配置变更通知 |
-
-**前端 -> 后端 发送消息**:
-
-| type | payload | 说明 |
-|------|---------|------|
-| `ping` | `{}` | 心跳保活 |
-| `pong` | `{}` | 心跳响应 |
-| `subscribe` | `{channels: [...]}` | 订阅指定频道 |
-| `unsubscribe` | `{channels: [...]}` | 取消订阅 |
-
-### 3.5 数据模型定义
-
-#### 3.5.1 请求模型 (Request)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 主键，自增 |
-| protocol | String | 协议 (http/https) |
-| domain | String | 目标域名 |
-| path | String | 请求路径 |
-| query | String | 查询参数 |
-| method | String | HTTP 方法 (GET/POST/...) |
-| requestData | String | 完整请求报文字符串 |
-| comment | String | 用户备注 |
-| color | String | 标记颜色 |
-| api | String | 提取的 API 路径 |
-| createdAt | Timestamp | 创建时间 |
-| updatedAt | Timestamp | 更新时间 |
-
-#### 3.5.2 历史记录模型 (History)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 主键，自增 |
-| requestId | Integer | 关联的请求 ID |
-| statusCode | Integer | HTTP 响应状态码 |
-| responseLength | Integer | 响应体长度 |
-| responseData | String | 完整响应报文字符串 |
-| responseTime | Integer | 响应时间 (ms) |
-| createdAt | Timestamp | 创建时间 |
-
-#### 3.5.3 用户会话模型 (UserSession)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 主键，自增 |
-| name | String | 会话名称 |
-| color | String | 标记颜色 |
-| enabled | Boolean | 是否启用 |
-| tokenValues | JSON | Token 值列表 |
-| schemeId | Integer | 关联的 Token 方案 ID |
-| requestTimeout | Integer | 请求超时时间 (ms) |
-| maxConcurrent | Integer | 最大并发数 |
-| retryCount | Integer | 重试次数 |
-| retryDelay | Integer | 重试延迟 (ms) |
-| replayDelay | Integer | 重放延迟 (ms) |
-| createdAt | Timestamp | 创建时间 |
-| updatedAt | Timestamp | 更新时间 |
-
-#### 3.5.4 API 提取规则模型 (ApiExtractionRule)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 主键，自增 |
-| name | String | 规则名称 |
-| source | String | 提取源 (request_line/header/body/response) |
-| method | String | 提取方法 (regex/json_path/xpath/keyword) |
-| expression | String | 提取表达式 |
-| enabled | Boolean | 是否启用 |
-| priority | Integer | 优先级 (越小越优先) |
-| remark | String | 备注 |
-| global | Boolean | 是否为全局规则 |
-| createdAt | Timestamp | 创建时间 |
-| updatedAt | Timestamp | 更新时间 |
-
-#### 3.5.5 Token 位置模型 (TokenLocation)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 主键，自增 |
-| type | String | 位置类型 (header/body/query/url) |
-| expression | String | 定位表达式 |
-| description | String | 描述 |
-| persistToGlobal | Boolean | 是否持久化到全局 |
-| enabled | Boolean | 是否启用 |
-| createdAt | Timestamp | 创建时间 |
-| updatedAt | Timestamp | 更新时间 |
-
-#### 3.5.6 判断规则模型 (JudgmentRule)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 主键，自增 |
-| name | String | 规则名称 |
-| target | String | 判断目标 (status_code/header/body/response_time) |
-| method | String | 判断方法 (equals/contains/regex/greater_than/less_than) |
-| expression | String | 判断表达式 |
-| enabled | Boolean | 是否启用 |
-| priority | Integer | 优先级 |
-| successColor | String | 成功标记颜色 |
-| failureColor | String | 失败标记颜色 |
-| successNote | String | 成功备注 |
-| failureNote | String | 失败备注 |
-| remark | String | 备注 |
-| global | Boolean | 是否为全局规则 |
-| createdAt | Timestamp | 创建时间 |
-| updatedAt | Timestamp | 更新时间 |
+- **请求 (Request)**: 一条待管理/重放的 HTTP 请求，包含协议、域名、路径、方法、完整报文、备注、颜色标记、提取的 API 路径
+- **历史记录 (History)**: 每次重放的响应快照，包含状态码、响应体、响应耗时、关联的请求
+- **用户会话 (UserSession)**: 一个越权测试身份，包含 Token 值、关联的 Token 方案、超时/重试/并发等重放参数
+- **Token 方案 (TokenScheme)**: 一组 Token 位置的集合，定义某个认证体系的凭据分布在报文的哪些位置
+- **Token 位置 (TokenLocation)**: 身份凭据在 HTTP 报文中的具体定位，支持 Header、JSON Body、XML Body、表单字段、Multipart 字段、URL 参数等位置类型
+- **API 提取规则 (ApiExtractionRule)**: 从报文中提取 API 路径标识的规则，支持多种来源和提取方法
+- **判断规则 (JudgmentRule)**: 越权测试中判定响应是否代表越权成功的规则，支持多目标、多方法、条件组合
+- **Scope 条目 (ScopeEntry)**: 自动越权测试的 URL 匹配范围
 
 ---
 
-## 4. 各组件功能规格说明
+## 4. 功能规格说明
 
-### 4.1 Burp Suite 插件端功能规格
+### 4.1 Burp Suite 插件端
 
 #### 4.1.1 右键菜单集成
 
-- 在 Burp Suite 的 Proxy/History/Repeater 等模块的右键菜单中增加"发送到 Repeater Manager"选项
-- 用户点击后，插件将当前选中的 HTTP 请求完整报文 + 服务信息转发到后端
-- 转发成功后，在 Burp 输出面板打印确认信息
+- 在 Burp Suite 的 Proxy / History / Repeater 等模块的右键菜单中提供"发送到 Repeater Manager"选项
+- 用户点击后，插件将当前选中的 HTTP 请求完整报文和服务信息转发至后端
 
 #### 4.1.2 代理拦截器
 
@@ -490,7 +214,7 @@ ws://localhost:PORT/ws?clientType=<frontend|plugin>&clientId=<uuid>
 - 支持按关键字、HTTP 方法、域名、颜色、API 路径等多维度筛选
 - 支持请求的增删改查操作
 - 支持批量删除请求
-- 请求数据变更后，通过 WebSocket 通知前端刷新
+- 请求数据变更后，通过实时通道通知前端刷新
 
 #### 4.2.2 历史记录服务
 
@@ -510,7 +234,7 @@ ws://localhost:PORT/ws?clientType=<frontend|plugin>&clientId=<uuid>
 - 支持代理配置
 - 发送请求到目标服务器并接收响应
 - 将响应结果保存到历史记录
-- 通过 WebSocket 通知前端重放完成
+- 通过实时通道通知前端重放完成
 
 #### 4.2.4 API 规则提取服务
 
@@ -523,14 +247,47 @@ ws://localhost:PORT/ws?clientType=<frontend|plugin>&clientId=<uuid>
 
 #### 4.2.5 越权测试服务
 
-- **用户会话管理**: 创建、编辑、删除、启用/禁用用户会话，每个会话包含独立的 Token 配置
-- **Token 位置配置**: 配置身份凭证在请求中的位置（Header/Body/Query/URL）
-- **判断规则配置**: 配置用于判断响应是否表示越权成功的规则
-- **Scope 配置**: 配置自动越权测试的 URL 匹配范围
-- **自动检测引擎**: 拦截匹配 Scope 的请求，自动使用所有启用的用户会话进行测试
-- **批量测试**: 支持对选中的请求批量执行越权测试
-- **结果判定**: 执行判断规则，计算响应相似度，标记测试结果
-- **报告生成**: 生成 PDF/HTML/Markdown 格式的测试报告
+**会话管理**:
+- 用户会话（UserSession）的完整 CRUD，每个会话绑定独立的 Token 值和 Token 方案
+- 支持从剪贴板或请求报文中智能解析会话信息（自动提取 Token 值）
+- 支持会话启用/禁用、颜色标记
+
+**Token 方案与位置管理**:
+- Token 方案（TokenScheme）：定义一组 Token 位置集合，对应某个认证体系的凭据分布
+- Token 位置（TokenLocation）：支持 6 种位置类型 — HTTP Header、JSON Body、XML Body、表单字段、Multipart 字段、URL 参数
+- Token 替换引擎：根据 Token 位置配置自动替换报文中的身份凭据；支持 null 值（删除 Token）
+- Token 方案和位置均支持全局持久化（跨项目复用）
+
+**判断规则引擎**:
+- 5 种判断目标：状态码、响应头、响应体、相似度、响应时间
+- 9 种判断方法：正则匹配、包含、不包含、等于、不等于、大于、小于、数值等于、长度差异
+- 支持 AND / OR / NOT 条件组合（多条规则同时满足才判定）
+- 支持成功/失败的自定义颜色标记和备注
+- 规则按优先级执行
+
+**相似度引擎**:
+- 根据响应 Content-Type 自动选择算法：JSON 树结构差异、XML 树结构差异、Jaccard n-gram 相似度、Levenshtein 编辑距离
+- 响应噪声过滤（时间戳、随机数等动态内容）
+
+**Scope 自动拦截**:
+- 配置 URL 匹配模式，代理拦截命中 Scope 的流量自动触发越权测试
+- 拦截过程不影响正常代理流量
+
+**API 去重引擎**:
+- 可配置去重策略（按 API 路径/完整 URL/请求体哈希等维度去重）
+- 可配置保留策略（保留首次/最后一次/全部）
+- 减少重复 API 的越权测试开销
+
+**测试执行**:
+- 支持单请求和批量请求的越权测试
+- 每个用户会话并发测试，并发数可配置
+- 支持重试机制（重试次数和延迟可配置）
+- 原始请求作为 Baseline 基准对比
+
+**结果与报告**:
+- 实时推送每条测试的判定结果和相似度
+- 测试完成后汇总展示
+- 生成 PDF / HTML / Markdown 三种格式报告，含 cURL 命令和 Postman 代码片段
 
 #### 4.2.6 报文比对服务
 
@@ -615,15 +372,18 @@ ws://localhost:PORT/ws?clientType=<frontend|plugin>&clientId=<uuid>
 
 #### 4.3.7 越权测试面板
 
-- 用户会话管理：创建、编辑、删除、启用/禁用
-- Token 位置配置：添加、编辑、删除 Token 位置
-- 判断规则配置：添加、编辑、删除、调整优先级
-- Scope 配置：添加、编辑、删除 Scope 规则
+- 用户会话管理：创建、编辑、删除、启用/禁用，支持从剪贴板/报文解析会话
+- Token 方案配置：创建和管理 Token 方案（关联 Token 方案与位置）
+- Token 位置配置：6 种位置类型的添加、编辑、删除
+- 判断规则配置：创建/编辑规则（目标、方法、表达式）、条件组合、优先级调整、成功/失败颜色标记
+- Scope 配置：URL 匹配模式的添加、编辑、删除
+- API 去重配置：去重策略和保留策略的设置
+- 重放配置：超时、并发数、重试次数/延迟、重放延迟等参数
 - 自动检测控制：启动/停止自动越权测试
-- 实时进度展示：进度条、当前请求/会话信息
-- 实时结果展示：表格形式展示每条测试结果
+- 实时进度展示：进度条、当前请求和会话信息
+- 实时结果展示：表格展示每条测试结果（判定结果、相似度、响应时间）
 - 测试完成后汇总展示
-- 报告导出按钮（PDF/HTML/Markdown）
+- 报告导出按钮（PDF / HTML / Markdown）
 
 #### 4.3.8 日志面板
 
@@ -635,217 +395,124 @@ ws://localhost:PORT/ws?clientType=<frontend|plugin>&clientId=<uuid>
 
 ---
 
-## 5. 数据流向与处理流程
+## 5. 核心业务流程
 
-### 5.1 系统整体数据流
-
-```mermaid
-graph TB
-    subgraph "前端应用"
-        FE["Vue3 前端"]
-    end
-
-    subgraph "后端服务"
-        BE["Go 后端"]
-    end
-
-    subgraph "目标服务器"
-        TS["被测试的 API"]
-    end
-
-    subgraph "Burp 插件端"
-        BP["Burp 插件"]
-    end
-
-    subgraph "数据存储"
-        DB[(SQLite DB)]
-        BLOBS["blobs/ 目录"]
-    end
-
-    FE <-->|"HTTP / WebSocket"| BE
-    BE -->|"HTTP"| TS
-    BP -->|"HTTP"| BE
-    BE --> DB
-    BE --> BLOBS
-```
-
-### 5.2 请求捕获与重放流程
+### 5.1 请求捕获与重放
 
 ```mermaid
 graph TB
-    A["Burp Suite 用户右键请求"] --> B["Burp 插件端捕获请求 + 服务信息"]
-    B --> C["HTTP POST 创建请求"]
-    C --> D["后端: 解析请求 -> 去重存储 -> 持久化"]
-    D --> E["WebSocket 推送: request.created"]
-    E --> F["前端: 请求列表自动刷新"]
+    A["Burp 用户右键发送"] --> B["插件端捕获请求"]
+    B --> C["转发至后端"]
+    C --> D["后端: 存储 + API提取"]
+    D --> E["前端列表自动刷新"]
 
-    G["前端用户点击发送按钮"] --> H["HTTP POST 发送请求"]
-    H --> I["后端: 读取请求数据 -> 替换 Token -> 发送 HTTP 请求"]
-    I --> J["目标服务器返回响应"]
-    J --> K["后端: 解析响应 -> 去重存储 -> 持久化"]
-    K --> L["WebSocket 推送: request.sent"]
-    L --> M["前端: 展示响应数据，历史记录追加"]
+    F["前端用户点击发送"] --> G["后端接收重放指令"]
+    G --> H["发送 HTTP 请求至目标服务器"]
+    H --> I["接收响应, 存储至历史记录"]
+    I --> J["实时推送结果至前端"]
 ```
 
-### 5.3 越权测试流程
+### 5.2 越权测试
 
 ```mermaid
 graph TB
-    A["前端用户配置: 用户会话、Token 位置、判断规则、Scope"] --> B["前端用户点击开始自动检测"]
-    B --> C["HTTP POST 启动自动越权测试"]
-    C --> D["后端: 创建异步任务 -> 返回 taskId"]
-    D --> E["前端: 建立 WebSocket 订阅 privilege 频道"]
+    A["用户配置: 会话/Token方案/判断规则/Scope"] --> B["启动测试"]
+    B --> C["后端创建异步任务"]
 
-    F["Burp 代理拦截到匹配 Scope 的请求"] --> G["Burp 插件: 转发请求到后端"]
-    G --> H["后端越权测试引擎"]
-
-    H --> I["保存原始请求为 Baseline"]
-    I --> J["遍历每个用户会话"]
-    J --> K["替换 Token -> 发送请求 -> 接收响应"]
-    K --> L["执行判断规则 -> 计算相似度 -> 保存结果"]
-    L --> M["WebSocket 推送: privilege.progress + privilege.result"]
-    M --> N["前端: 更新进度条、展示实时结果"]
-
-    J -->|"所有会话处理完成"| O["WebSocket 推送: privilege.complete"]
-    O --> P["前端: 展示汇总结果，启用导出报告按钮"]
+    D["插件代理拦截命中Scope的请求"] --> E["转发至后端"]
+    E --> F["保存原始请求为Baseline"]
+    F --> G["遍历每个用户会话"]
+    G --> H["替换Token -> 发送请求"]
+    H --> I["执行判断规则 + 计算相似度"]
+    I --> J["实时推送进度和结果至前端"]
+    G -->|"全部会话完成"| K["推送汇总, 启用报告导出"]
 ```
 
-### 5.4 数据持久化流程
+### 5.3 数据持久化
 
 ```mermaid
 graph TB
-    A["请求/响应数据进入系统"] --> B["内容分割: domain, path, query, header, body"]
-    B --> C["Pool 去重处理"]
-
-    C --> D["domain/path/query: 计算哈希 -> 检查 string_pool -> 引用计数管理"]
-    C --> E["header: 计算哈希 -> 检查 header_pool -> 引用计数管理"]
-    C --> F["body (小): 计算哈希 -> 检查 body_pool -> 引用计数管理"]
-    C --> G["body (大): 计算哈希 -> 存入文件系统 -> 检查 file_pool -> 引用计数管理"]
-
-    D --> H["关联存储: requests/history 表记录各部分的 hash 值"]
-    E --> H
-    F --> H
-    G --> H
-
-    H --> I["垃圾回收 (定时触发)"]
-    I --> J["扫描被删除的记录"]
-    J --> K["对相关 Pool 数据的引用计数递减"]
-    K --> L["引用计数为零的数据移入回收队列"]
-    L --> M["清理回收队列中的数据"]
+    A["请求/响应数据进入系统"] --> B["内容分割: 域名/路径/查询/Header/Body"]
+    B --> C["各分片计算SHA-256哈希"]
+    C --> D["Pool去重: 检查是否已存在"]
+    D -->|"已存在"| E["引用计数+1"]
+    D -->|"不存在"| F["存入对应Pool (string/header/body/file)"]
+    E --> G["请求/历史记录关联哈希值"]
+    F --> G
+    G --> H["垃圾回收: 定时扫描零引用数据并清理"]
 ```
 
-### 5.5 导入导出流程
+### 5.4 导入导出
 
 ```mermaid
 graph TB
     subgraph "ERM 导出"
-        A1["前端: 选择导出路径、输入密码"] --> B1["HTTP POST 导出数据库"]
-        B1 --> C1["后端: 读取数据库文件 + blobs 文件"]
-        C1 --> D1["打包为 tar.gz 格式"]
-        D1 --> E1["如需要密码: 加密 + 完整性校验"]
-        E1 --> F1["生成 .erm 文件"]
-        F1 --> G1["返回文件下载链接"]
+        A1["用户选择路径, 输入密码"] --> B1["后端读取数据库 + blobs"]
+        B1 --> C1["打包压缩"]
+        C1 --> D1["可选: 加密 + 完整性校验"]
+        D1 --> E1["生成 .erm 文件"]
     end
 
     subgraph "ERM 导入"
-        A2["前端: 选择 .erm 文件、输入密码"] --> B2["HTTP POST 导入数据库"]
-        B2 --> C2["后端: 读取 .erm 文件"]
-        C2 --> D2["如加密: 验证完整性 -> 解密"]
-        D2 --> E2["解压 tar.gz"]
-        E2 --> F2["替换/合并数据库文件"]
-        F2 --> G2["重建 blobs 目录"]
-        G2 --> H2["执行 Schema 迁移"]
-        H2 --> I2["返回导入结果"]
+        A2["用户选择 .erm 文件, 输入密码"] --> B2["后端读取文件"]
+        B2 --> C2["可选: 验证完整性和解密"]
+        C2 --> D2["解压, 合并/替换数据库"]
+        D2 --> E2["执行Schema迁移, 返回结果"]
     end
 ```
 
 ---
 
-## 6. 性能要求与异步操作设计
+## 6. 非功能需求
 
-### 6.1 性能指标
+### 6.1 性能要求
 
-| 场景 | 指标 | 目标值 | 说明 |
-|------|------|--------|------|
-| 请求重放延迟 | 从点击发送到收到响应 | < 100ms（不含网络） | 后端处理 + 数据库存储时间 |
-| 历史记录加载 | 1000 条记录分页加载 | < 500ms | 含 Pool 数据重建 |
-| 请求列表加载 | 首次加载 | < 300ms | 默认分页 50 条 |
-| 越权测试并发 | 同时处理的会话数 | >= 10 | 每个会话独立 goroutine |
-| 批量重放 | 10 条请求批量发送 | < 5s（总时间） | 并发执行 |
-| 前端首屏加载 | 从打开页面到可交互 | < 2s | 含 JS/CSS 加载和初始 API 调用 |
-| 内存占用 | 后端常规使用 | < 200MB | 含 SQLite 缓存和连接池 |
-| 数据库查询 | 单表条件查询 | < 50ms | 含索引优化 |
-| WebSocket 推送延迟 | 后端事件 -> 前端接收 | < 50ms | 本地网络 |
+| 场景 | 目标 |
+|------|------|
+| 请求重放延迟（不含网络） | 后端处理 < 100ms |
+| 历史记录加载（1000条） | < 500ms |
+| 请求列表首次加载（50条/页） | < 300ms |
+| 越权测试并发会话数 | 用户可配置，支持 >= 10 |
+| 前端首屏加载 | < 2s |
+| 后端内存占用（常规使用） | < 200MB |
+| 实时推送延迟 | < 50ms |
 
-### 6.2 异步操作设计
+### 6.2 异步操作
 
-#### 6.2.1 异步任务类型
+以下操作必须异步执行，避免阻塞用户交互：
 
-| 任务类型 | 触发方式 | 执行方式 | 结果通知 |
-|----------|----------|----------|----------|
-| 请求重放 | 用户点击发送 | 异步 goroutine | WebSocket + HTTP 回调 |
-| 批量重放 | 用户多选后点击 | 并发 goroutine 池 | WebSocket 逐条推送 |
-| 越权测试 | 用户点击开始/代理拦截 | 异步任务队列 | WebSocket 实时进度 |
-| 批量越权测试 | 用户多选后点击 | 并发任务调度 | WebSocket 实时进度 |
-| 垃圾回收 | 定时/手动 | 后台 goroutine | WebSocket 完成通知 |
-| 自动保存 | 定时 | 后台 goroutine | 无（静默执行） |
-| API 重提取 | 规则变更后自动 | 后台 goroutine | 无（静默执行） |
-| 报告生成 | 用户点击导出 | 异步 goroutine | HTTP 返回下载链接 |
-| 导入导出 | 用户操作 | 异步 goroutine | HTTP 轮询进度或 WebSocket |
+| 操作 | 触发方式 | 结果通知方式 |
+|------|----------|-------------|
+| 请求重放 | 用户点击发送 | 实时推送 |
+| 批量重放 | 用户多选后触发 | 实时逐条推送 |
+| 越权测试 | 用户启动 / 代理拦截触发 | 实时进度 + 结果推送 |
+| 批量越权测试 | 用户多选后触发 | 实时进度 + 结果推送 |
+| 垃圾回收 | 定时 / 手动触发 | 完成通知 |
+| 自动保存 | 定时触发 | 静默执行 |
+| API 静默重提取 | 规则变更后自动触发 | 静默执行 |
+| 报告生成 | 用户点击导出 | 返回下载链接 |
+| 导入导出 | 用户操作 | 进度通知 |
 
-#### 6.2.2 并发模型
+### 6.3 资源保护
 
-后端并发架构:
+| 约束项 | 说明 |
+|--------|------|
+| 请求体大小限制 | 超大请求体应拒绝存储并提示用户 |
+| 并发请求数限制 | 防止后端过载 |
+| 越权测试并发控制 | 受用户配置的 maxConcurrent 参数限制 |
+| 任务队列容量 | 超过容量时拒绝新任务并提示 |
+| 日志文件滚动 | 按大小滚动，最大备份数可配置 |
+| 自动保存间隔 | 最小间隔限制，防止频繁 IO |
+| 实时连接数 | 限制同时连接数，防止资源耗尽 |
 
-- 主 goroutine 负责协调以下组件：
-  - HTTP Server goroutine（处理所有 HTTP 请求）
-  - WebSocket Hub goroutine（管理所有 WS 连接和消息分发）
-  - AutoSave goroutine（定时器触发，每 5 分钟）
-  - GC goroutine（定时器触发，每 10 分钟）
-  - Task Scheduler goroutine（管理异步任务队列）
-- 每个 HTTP 请求由独立 goroutine 处理（Gin 默认）
-- 每个 WebSocket 连接由独立 read/write goroutine 处理
-- 每个越权测试任务由独立 goroutine 执行，内部每个会话由子 goroutine 并发处理
-- 每个批量重放由 goroutine 池处理（限制并发数）
+### 6.4 兼容性与可靠性
 
-#### 6.2.3 任务队列设计
-
-异步任务应包含以下属性：
-- 任务唯一 ID（UUID）
-- 任务类型（越权测试、批量重放、报告生成、导入、导出）
-- 任务状态（待处理、运行中、已完成、失败、已取消）
-- 进度百分比（0-100）
-- 总工作量和已完成工作量
-- 任务结果和错误信息
-- 创建时间、开始时间、完成时间
-- 取消函数（支持任务取消）
-
-任务管理器负责：
-- 维护任务列表和任务队列
-- 分配工作线程处理任务
-- 支持任务取消和状态查询
-
-#### 6.2.4 越权测试并发控制
-
-每个越权测试任务内部应实现并发控制：
-- 使用信号量控制同时执行的会话数（受 maxConcurrent 限制）
-- 每个会话在独立 goroutine 中执行
-- 通过通道收集结果
-- 通过 WebSocket 广播进度
-- 支持任务取消（通过 Context）
-
-### 6.3 资源限制与保护
-
-| 资源 | 限制策略 | 说明 |
-|------|----------|------|
-| 请求体大小 | 最大 10MB | 超过则拒绝存储，提示用户 |
-| 并发请求数 | 最大 50 | 防止后端过载 |
-| 越权测试并发 | 每个会话 maxConcurrent | 用户可配置，默认 1 |
-| 数据库连接 | 连接池最大 10 | SQLite 本身单文件，但连接池提高并发 |
-| WebSocket 连接 | 最大 10 | 防止过多连接占用资源 |
-| 任务队列长度 | 最大 100 | 超过则拒绝新任务，提示用户 |
-| 日志文件大小 | 滚动配置，最大 50MB | 可配置 |
-| 自动保存间隔 | 最小 1 分钟 | 防止频繁 IO |
+| 类别 | 要求 |
+|------|------|
+| 兼容性 | Burp Suite Professional 2024+；主流现代浏览器 |
+| 安全 | 所有通信仅监听 localhost；数据加密存档 |
+| 可靠性 | 自动保存间隔可配置；异常崩溃后数据不丢失 |
+| 跨平台 | 支持 Windows / Linux / macOS |
 
 ---
 
@@ -853,75 +520,63 @@ graph TB
 
 ### 7.1 现有功能映射表
 
-| 现有功能 (Java Swing) | 新架构实现 | 负责组件 |
-|----------------------|-----------|----------|
+| 现有功能 | 新架构实现 | 负责组件 |
+|----------|-----------|----------|
 | 请求列表面板 | 请求列表组件 + 数据表格 | 前端 |
 | 请求编辑面板 | 请求编辑器组件 | 前端 |
 | 响应面板 | 响应查看器组件 | 前端 |
-| 历史记录面板 | 历史记录列表组件 | 前端 |
+| 历史记录面板 | 历史记录列表组件 + 统计栏 | 前端 |
 | 报文比对 | 报文比对对话框 + 差异查看器 | 前端 + 后端 |
 | 配置面板 | 配置视图 + 各配置子组件 | 前端 |
 | API 规则配置 | API 规则配置组件 | 前端 |
-| 越权测试面板 | 越权测试主面板 | 前端 |
+| 越权测试面板 | 越权测试主面板（含会话/Token方案/判断规则/Scope/去重配置） | 前端 |
 | 日志面板 | 日志面板组件 | 前端 |
+| 使用教程面板 | 使用教程面板 | 前端 |
 | 请求发送 | HTTP 请求发送器 | 后端 |
 | 历史记录录制 | 历史记录服务 | 后端 |
 | API 提取引擎 | API 提取引擎 | 后端 |
 | 越权测试引擎 | 越权测试服务 | 后端 |
-| 判断引擎 | 越权测试服务 | 后端 |
-| Token 替换 | 越权测试服务 | 后端 |
-| 相似度计算 | 相似度计算工具 | 后端 |
-| 报告生成 | 报告生成服务 | 后端 |
-| 数据导入导出 | 导入导出服务 | 后端 |
-| Pool 去重 | Pool 数据访问层 | 后端 |
+| 判断引擎 | 判断规则引擎（AND/OR/NOT 组合） | 后端 |
+| Token 替换 | Token 替换引擎（6 种位置类型） | 后端 |
+| 相似度计算 | 相似度引擎（4 种算法） | 后端 |
+| 会话解析 | 会话解析引擎（剪贴板/报文） | 后端 |
+| API 去重 | API 去重引擎 | 后端 |
+| 报告生成 | 报告生成服务（PDF/HTML/MD + cURL/Postman 代码片段） | 后端 |
+| 数据导入导出 | 导入导出服务（ERM/Postman） | 后端 |
+| Pool 去重 | Pool 内容寻址存储 | 后端 |
 | 垃圾回收 | 垃圾回收服务 | 后端 |
 | 自动保存 | 自动保存服务 | 后端 |
 | 日志系统 | 日志工具 | 后端 |
 | 右键菜单 | 右键菜单提供者 | 插件 |
-| 代理拦截 | 代理拦截器 | 插件 |
+| 代理拦截 | 代理拦截器（Scope 匹配） | 插件 |
+| 心跳检测 | 心跳检测 | 插件 |
 
-### 7.2 数据迁移策略
+### 7.2 风险与应对
 
-**从现有 Repeater Manager 迁移到新架构**:
+| 风险 | 应对措施 |
+|------|----------|
+| HTTP/2 等特殊请求发送兼容性 | 充分测试各场景，保留回退机制 |
+| 前端代码编辑器体积影响首屏加载 | 按需加载，代码分割 |
+| 实时推送连接不稳定 | 自动重连机制，关键操作 HTTP 轮询兜底 |
+| 数据并发写入性能 | 批量操作使用事务，优化存储策略 |
+| 跨平台行为差异 | 充分的多平台测试 |
+| 数据迁移失败导致用户数据丢失 | 迁移前自动备份，提供回滚方案 |
 
-1. **数据库文件兼容**: 新架构的 SQLite Schema 与现有 v11 Schema 保持一致，可直接复用现有 `.sqlite3` 文件
-2. **全局规则兼容**: 现有 `api_extraction_rules.yaml` 格式不变，新后端读取相同路径
-3. **配置迁移**: 现有 `repeater_manager_config.properties` 中的配置项映射到新配置系统
-4. **blobs 目录兼容**: 外置 Body 文件存储路径和命名规则保持不变
-
-**迁移步骤**:
-1. 关闭现有 Repeater Manager 插件
-2. 启动新架构的后端服务（指定相同的会话目录）
-3. 后端自动检测现有数据库，执行必要的 Schema 迁移
-4. 在 Burp 中加载新的轻量插件
-5. 通过前端访问 `http://localhost:PORT/`，数据自动加载
-
-### 7.3 风险与应对
-
-| 风险 | 影响 | 应对措施 |
-|------|------|----------|
-| 后端的 HTTP 发送能力不如 Montoya SDK 完善 | 某些特殊请求（如 HTTP/2、特殊编码）可能发送失败 | 保留代理模式回退；充分测试各种场景 |
-| 前端 Monaco Editor 体积大 | 首屏加载慢 | 使用 CDN 或按需加载；Vite 代码分割 |
-| WebSocket 连接不稳定 | 实时推送中断 | 实现自动重连机制；关键操作使用 HTTP 轮询兜底 |
-| SQLite 并发性能瓶颈 | 高并发写入时性能下降 | 使用 WAL 模式；批量操作使用事务；必要时引入连接池 |
-| 跨平台兼容性 | Windows/Linux/macOS 行为差异 | 使用 Go 的跨平台特性；路径处理使用 filepath 包 |
-| 数据迁移失败 | 用户数据丢失 | 迁移前自动备份；提供回滚方案 |
-
-### 7.4 术语表
+### 7.3 术语表
 
 | 术语 | 说明 |
 |------|------|
-| Pool 去重 | 通过 SHA-256 哈希 + 引用计数实现的内容去重存储机制 |
-| Baseline | 越权测试中的原始请求（未替换 Token）作为对比基准 |
-| Token 位置 | 身份凭证在 HTTP 请求中的具体位置（Header/Body/URL 等） |
-| 判断规则 | 用于判断响应是否表示越权成功的规则配置 |
-| Scope | 越权测试自动检测的 URL 匹配范围 |
+| Pool 去重 | 通过内容哈希 + 引用计数实现的去重存储机制，相同内容只存一份 |
+| Baseline | 越权测试中的原始请求（未替换 Token），作为对比基准 |
+| Token 位置 | 身份凭据在 HTTP 报文中的具体定位，支持 Header / JSON Body / XML Body / 表单字段 / Multipart 字段 / URL 参数 |
+| Token 方案 | 一组 Token 位置的集合，对应某个认证体系的凭据分布方式 |
+| 判断规则 | 用于判定响应是否代表越权成功的规则，支持 5 种目标 x 9 种方法 + AND/OR/NOT 组合 |
+| Scope | 越权测试自动拦截的 URL 匹配范围 |
 | ERM | Repeater Manager 专用的加密存档格式 |
-| first-match-wins | API 规则提取的优先级策略，第一个匹配的规则生效 |
-| WAL | SQLite 的 Write-Ahead Logging 模式，提高并发性能 |
-| GC | 垃圾回收，指清理 Pool 中零引用数据的机制 |
-| Diff | 差异比对，用于对比两条报文的差异 |
+| first-match-wins | API 规则提取的优先级策略，第一个匹配的规则即生效 |
+| GC | 垃圾回收，指清理 Pool 中引用计数为零的数据 |
+| Diff | 差异比对，用于对比两条 HTTP 报文的内容差异 |
 
 ---
 
-> 本文档为 Repeater Manager 分离式架构的产品需求文档，后续开发应以此文档为基准。如有需求变更，需同步更新本文档。
+> 本文档为 Repeater Manager 分离式架构的产品需求文档，描述产品应实现的功能和行为，不涉及具体技术实现方案。后续开发应以此文档为功能基准，技术实现细节在专项设计文档中定义。如有需求变更，需同步更新本文档。

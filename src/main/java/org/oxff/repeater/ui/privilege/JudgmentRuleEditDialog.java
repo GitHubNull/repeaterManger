@@ -1,15 +1,17 @@
 package org.oxff.repeater.ui.privilege;
 
 import org.oxff.repeater.privilege.model.JudgmentRule;
+import org.oxff.repeater.privilege.model.RuleCondition;
 import org.oxff.repeater.privilege.model.RuleMethod;
 import org.oxff.repeater.privilege.model.RuleTarget;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 判决规则编辑对话框
- * 用于添加/编辑判决规则
+ * 判决规则编辑对话框（支持多条件 AND/OR/NOT 组合编辑）
  */
 public class JudgmentRuleEditDialog extends JDialog {
 
@@ -17,9 +19,6 @@ public class JudgmentRuleEditDialog extends JDialog {
     private JudgmentRule editingRule;
 
     private JTextField nameField;
-    private JComboBox<RuleTarget> targetCombo;
-    private JComboBox<RuleMethod> methodCombo;
-    private JTextField expressionField;
     private JCheckBox enabledCheckbox;
     private JSpinner prioritySpinner;
     private JButton successColorButton;
@@ -30,6 +29,11 @@ public class JudgmentRuleEditDialog extends JDialog {
 
     private Color successColor;
     private Color failureColor;
+
+    /** 条件列表面板（动态行） */
+    private JPanel conditionsPanel;
+    /** 条件行组件列表 */
+    private final List<ConditionRow> conditionRows = new ArrayList<>();
 
     public JudgmentRuleEditDialog(Frame owner, String title, JudgmentRule rule) {
         super(owner, title, true);
@@ -42,6 +46,52 @@ public class JudgmentRuleEditDialog extends JDialog {
         setLocationRelativeTo(owner);
         setResizable(true);
     }
+
+    // ==================== 每行条件的组件持有者 ====================
+
+    private static class ConditionRow {
+        final int index;
+        final JPanel rowPanel;
+        final JComboBox<RuleCondition.LogicalOperator> operatorCombo;
+        final JCheckBox negateCheckbox;
+        final JComboBox<RuleTarget> targetCombo;
+        final JComboBox<RuleMethod> methodCombo;
+        final JTextField expressionField;
+        final JButton deleteButton;
+
+        ConditionRow(int index, JPanel rowPanel,
+                     JComboBox<RuleCondition.LogicalOperator> operatorCombo,
+                     JCheckBox negateCheckbox,
+                     JComboBox<RuleTarget> targetCombo,
+                     JComboBox<RuleMethod> methodCombo,
+                     JTextField expressionField,
+                     JButton deleteButton) {
+            this.index = index;
+            this.rowPanel = rowPanel;
+            this.operatorCombo = operatorCombo;
+            this.negateCheckbox = negateCheckbox;
+            this.targetCombo = targetCombo;
+            this.methodCombo = methodCombo;
+            this.expressionField = expressionField;
+            this.deleteButton = deleteButton;
+        }
+
+        RuleCondition toCondition() {
+            RuleCondition cond = new RuleCondition();
+            cond.setTarget((RuleTarget) targetCombo.getSelectedItem());
+            cond.setMethod((RuleMethod) methodCombo.getSelectedItem());
+            cond.setExpression(expressionField.getText().trim());
+            if (operatorCombo.isEnabled()) {
+                cond.setOperator((RuleCondition.LogicalOperator) operatorCombo.getSelectedItem());
+            } else {
+                cond.setOperator(RuleCondition.LogicalOperator.AND);
+            }
+            cond.setNegate(negateCheckbox.isSelected());
+            return cond;
+        }
+    }
+
+    // ==================== UI初始化 ====================
 
     private void initComponents() {
         JPanel mainPanel = new JPanel(new GridBagLayout());
@@ -60,58 +110,32 @@ public class JudgmentRuleEditDialog extends JDialog {
         gbc.gridwidth = 1;
 
         row++;
-        // 目标
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("目标:"), gbc);
-        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
-        targetCombo = new JComboBox<>(RuleTarget.values());
-        targetCombo.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                           boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof RuleTarget t) {
-                    setText(t.getDisplayName());
-                }
-                return this;
-            }
-        });
-        mainPanel.add(targetCombo, gbc);
-
-        // 方法
-        gbc.gridx = 2; gbc.gridy = row; gbc.weightx = 1;
-        methodCombo = new JComboBox<>(RuleMethod.values());
-        methodCombo.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                           boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof RuleMethod m) {
-                    setText(m.getDisplayName());
-                }
-                return this;
-            }
-        });
-        methodCombo.addActionListener(e -> {
-            // LENGTH_DIFF 仅适用于 RESPONSE_BODY，自动联动目标
-            if (methodCombo.getSelectedItem() == RuleMethod.LENGTH_DIFF) {
-                if (targetCombo.getSelectedItem() != RuleTarget.RESPONSE_BODY) {
-                    targetCombo.setSelectedItem(RuleTarget.RESPONSE_BODY);
-                    JOptionPane.showMessageDialog(this,
-                            "LENGTH_DIFF 仅适用于响应体目标，已自动调整",
-                            "提示", JOptionPane.INFORMATION_MESSAGE);
-                }
-            }
-        });
-        mainPanel.add(methodCombo, gbc);
+        // 条件列表标签
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 4;
+        mainPanel.add(new JLabel("判决条件（从左到右求值，支持 AND / OR / NOT 组合）:"), gbc);
+        gbc.gridwidth = 1;
 
         row++;
-        // 表达式
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("表达式:"), gbc);
-        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
-        expressionField = new JTextField(30);
-        mainPanel.add(expressionField, gbc);
+        // 条件列表面板（可滚动）
+        conditionsPanel = new JPanel();
+        conditionsPanel.setLayout(new BoxLayout(conditionsPanel, BoxLayout.Y_AXIS));
+        JScrollPane conditionsScroll = new JScrollPane(conditionsPanel);
+        conditionsScroll.setPreferredSize(new Dimension(780, 180));
+        conditionsScroll.setBorder(BorderFactory.createEtchedBorder());
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 4;
+        gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 0.3;
+        mainPanel.add(conditionsScroll, gbc);
+        gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weighty = 0;
+        gbc.gridwidth = 1;
+
+        row++;
+        // 添加条件按钮
+        JPanel addButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton addConditionButton = new JButton("+ 添加条件");
+        addConditionButton.addActionListener(e -> addConditionRow(null));
+        addButtonPanel.add(addConditionButton);
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 4;
+        mainPanel.add(addButtonPanel, gbc);
         gbc.gridwidth = 1;
 
         row++;
@@ -126,11 +150,11 @@ public class JudgmentRuleEditDialog extends JDialog {
         gbc.gridx = 2; gbc.gridy = row; gbc.weightx = 0;
         mainPanel.add(new JLabel("优先级:"), gbc);
         gbc.gridx = 3; gbc.gridy = row; gbc.weightx = 1;
-        prioritySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 100, 1));
+        prioritySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1000, 1));
         mainPanel.add(prioritySpinner, gbc);
 
         row++;
-        // 成功颜色 + 按钮
+        // 越权颜色 + 安全颜色
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
         mainPanel.add(new JLabel("越权颜色:"), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
@@ -176,7 +200,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.anchor = GridBagConstraints.NORTHWEST;
         mainPanel.add(new JLabel("备注:"), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
-        gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 1;
+        gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 0.2;
         remarkArea = new JTextArea(3, 30);
         remarkArea.setLineWrap(true);
         mainPanel.add(new JScrollPane(remarkArea), gbc);
@@ -199,14 +223,228 @@ public class JudgmentRuleEditDialog extends JDialog {
         mainPanel.add(buttonPanel, gbc);
 
         setContentPane(new JScrollPane(mainPanel));
-        setMinimumSize(new Dimension(500, 400));
+        setMinimumSize(new Dimension(850, 550));
     }
+
+    // ==================== 条件行构建 ====================
+
+    /**
+     * 构建一条条件行
+     */
+    private JPanel buildConditionRow(int index, RuleCondition condition) {
+        JPanel rowPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets = new Insets(2, 3, 2, 3);
+        gc.anchor = GridBagConstraints.WEST;
+        gc.fill = GridBagConstraints.NONE;
+        gc.weighty = 0;
+
+        // 运算符
+        JComboBox<RuleCondition.LogicalOperator> operatorCombo = new JComboBox<>(
+                RuleCondition.LogicalOperator.values());
+        operatorCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int idx,
+                                                           boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, idx, isSelected, cellHasFocus);
+                if (value instanceof RuleCondition.LogicalOperator op) {
+                    setText(op.getDisplayName());
+                }
+                return this;
+            }
+        });
+        operatorCombo.setPrototypeDisplayValue(RuleCondition.LogicalOperator.AND);
+
+        // NOT 复选框
+        JCheckBox negateCheckbox = new JCheckBox("非");
+        negateCheckbox.setToolTipText("勾选后取反当前条件的匹配结果");
+
+        // 目标
+        JComboBox<RuleTarget> targetCombo = new JComboBox<>(RuleTarget.values());
+        targetCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int idx,
+                                                           boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, idx, isSelected, cellHasFocus);
+                if (value instanceof RuleTarget t) {
+                    setText(t.getDisplayName());
+                }
+                return this;
+            }
+        });
+        targetCombo.setPrototypeDisplayValue(RuleTarget.RESPONSE_TIME);
+
+        // 方法
+        JComboBox<RuleMethod> methodCombo = new JComboBox<>(RuleMethod.values());
+        methodCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int idx,
+                                                           boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, idx, isSelected, cellHasFocus);
+                if (value instanceof RuleMethod m) {
+                    setText(m.getDisplayName());
+                }
+                return this;
+            }
+        });
+        methodCombo.setPrototypeDisplayValue(RuleMethod.REGEX);
+
+        // LENGTH_DIFF 联动
+        methodCombo.addActionListener(e -> {
+            if (methodCombo.getSelectedItem() == RuleMethod.LENGTH_DIFF) {
+                if (targetCombo.getSelectedItem() != RuleTarget.RESPONSE_BODY) {
+                    targetCombo.setSelectedItem(RuleTarget.RESPONSE_BODY);
+                }
+            }
+        });
+
+        // 目标联动方法过滤
+        targetCombo.addActionListener(e -> filterMethodsForTarget(targetCombo, methodCombo));
+
+        // 表达式（自动填充剩余空间）
+        JTextField expressionField = new JTextField(20);
+
+        // 删除按钮
+        JButton deleteButton = new JButton("✕");
+        deleteButton.setToolTipText("删除此条件");
+        deleteButton.setMargin(new Insets(0, 0, 0, 0));
+
+        // === GridBagLayout 布局：固定列宽度自适应，表达式列自动填充 ===
+        gc.gridx = 0; gc.weightx = 0;
+        rowPanel.add(operatorCombo, gc);
+        gc.gridx = 1; gc.weightx = 0;
+        rowPanel.add(negateCheckbox, gc);
+        gc.gridx = 2; gc.weightx = 0;
+        rowPanel.add(targetCombo, gc);
+        gc.gridx = 3; gc.weightx = 0;
+        rowPanel.add(methodCombo, gc);
+        gc.gridx = 4; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        rowPanel.add(expressionField, gc);
+        gc.fill = GridBagConstraints.NONE;
+        gc.gridx = 5; gc.weightx = 0;
+        rowPanel.add(deleteButton, gc);
+
+        // 设置初始值
+        if (condition != null) {
+            operatorCombo.setSelectedItem(condition.getOperator() != null
+                    ? condition.getOperator() : RuleCondition.LogicalOperator.AND);
+            negateCheckbox.setSelected(condition.isNegate());
+            if (condition.getTarget() != null) targetCombo.setSelectedItem(condition.getTarget());
+            if (condition.getMethod() != null) methodCombo.setSelectedItem(condition.getMethod());
+            if (condition.getExpression() != null) expressionField.setText(condition.getExpression());
+            filterMethodsForTarget(targetCombo, methodCombo);
+        }
+
+        ConditionRow row = new ConditionRow(index, rowPanel, operatorCombo, negateCheckbox,
+                targetCombo, methodCombo, expressionField, deleteButton);
+        conditionRows.add(row);
+
+        deleteButton.addActionListener(e -> {
+            if (conditionRows.size() <= 1) {
+                JOptionPane.showMessageDialog(this, "至少需要保留一条条件", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            removeConditionRow(row);
+        });
+
+        return rowPanel;
+    }
+
+    /**
+     * 添加一条条件行
+     */
+    private void addConditionRow(RuleCondition condition) {
+        int index = conditionRows.size();
+        JPanel row = buildConditionRow(index, condition);
+        conditionsPanel.add(row);
+        refreshOperatorStates();
+        conditionsPanel.revalidate();
+        conditionsPanel.repaint();
+    }
+
+    /**
+     * 删除一条条件行
+     */
+    private void removeConditionRow(ConditionRow row) {
+        conditionsPanel.remove(row.rowPanel);
+        conditionRows.remove(row);
+        // 重建索引并刷新运算符状态
+        for (int i = 0; i < conditionRows.size(); i++) {
+            conditionRows.get(i).rowPanel.revalidate();
+        }
+        refreshOperatorStates();
+        conditionsPanel.revalidate();
+        conditionsPanel.repaint();
+    }
+
+    /**
+     * 刷新运算符状态：第一条条件的运算符禁用，其余启用
+     */
+    private void refreshOperatorStates() {
+        for (int i = 0; i < conditionRows.size(); i++) {
+            ConditionRow row = conditionRows.get(i);
+            if (i == 0) {
+                row.operatorCombo.setEnabled(false);
+                row.operatorCombo.setSelectedItem(RuleCondition.LogicalOperator.AND);
+            } else {
+                row.operatorCombo.setEnabled(true);
+            }
+        }
+    }
+
+    /**
+     * 根据目标过滤方法列表
+     */
+    private void filterMethodsForTarget(JComboBox<RuleTarget> targetCombo, JComboBox<RuleMethod> methodCombo) {
+        RuleTarget target = (RuleTarget) targetCombo.getSelectedItem();
+        if (target == null) return;
+
+        RuleMethod currentMethod = (RuleMethod) methodCombo.getSelectedItem();
+        methodCombo.removeAllItems();
+
+        switch (target) {
+            case SIMILARITY:
+            case RESPONSE_TIME:
+                // 仅数值方法
+                methodCombo.addItem(RuleMethod.GREATER_THAN);
+                methodCombo.addItem(RuleMethod.LESS_THAN);
+                methodCombo.addItem(RuleMethod.NUMERIC_EQUALS);
+                break;
+            case STATUS_CODE:
+                // 排除 LENGTH_DIFF
+                for (RuleMethod m : RuleMethod.values()) {
+                    if (m != RuleMethod.LENGTH_DIFF) {
+                        methodCombo.addItem(m);
+                    }
+                }
+                break;
+            case RESPONSE_BODY:
+            case RESPONSE_HEADER:
+                // 所有方法
+                for (RuleMethod m : RuleMethod.values()) {
+                    methodCombo.addItem(m);
+                }
+                break;
+        }
+
+        // 恢复选中
+        if (currentMethod != null) {
+            for (int i = 0; i < methodCombo.getItemCount(); i++) {
+                if (methodCombo.getItemAt(i) == currentMethod) {
+                    methodCombo.setSelectedIndex(i);
+                    break;
+                }
+            }
+        }
+
+        // 重建模型后重新设置原型值，确保宽度不缩水
+        methodCombo.setPrototypeDisplayValue(RuleMethod.REGEX);
+    }
+
+    // ==================== 数据加载与保存 ====================
 
     private void populateFields(JudgmentRule rule) {
         if (rule.getName() != null) nameField.setText(rule.getName());
-        if (rule.getTarget() != null) targetCombo.setSelectedItem(rule.getTarget());
-        if (rule.getMethod() != null) methodCombo.setSelectedItem(rule.getMethod());
-        if (rule.getExpression() != null) expressionField.setText(rule.getExpression());
         enabledCheckbox.setSelected(rule.isEnabled());
         prioritySpinner.setValue(rule.getPriority());
         if (rule.getSuccessColor() != null) {
@@ -220,6 +458,19 @@ public class JudgmentRuleEditDialog extends JDialog {
         if (rule.getSuccessNote() != null) successNoteField.setText(rule.getSuccessNote());
         if (rule.getFailureNote() != null) failureNoteField.setText(rule.getFailureNote());
         if (rule.getRemark() != null) remarkArea.setText(rule.getRemark());
+
+        // 加载条件列表
+        List<RuleCondition> conditions = rule.getEffectiveConditions();
+        if (conditions != null && !conditions.isEmpty()) {
+            for (RuleCondition cond : conditions) {
+                addConditionRow(cond);
+            }
+        }
+
+        // 确保至少有一行
+        if (conditionRows.isEmpty()) {
+            addConditionRow(null);
+        }
     }
 
     private void chooseColor(JButton button, String title, boolean isSuccessColor) {
@@ -236,16 +487,48 @@ public class JudgmentRuleEditDialog extends JDialog {
     }
 
     private void onOk() {
-        String expr = expressionField.getText().trim();
-        if (expr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "表达式不能为空", "验证错误", JOptionPane.ERROR_MESSAGE);
+        // 校验：至少一条条件
+        if (conditionRows.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "至少需要一条判决条件", "验证错误", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        // LENGTH_DIFF 仅适用于 RESPONSE_BODY，防御性校验
-        if (methodCombo.getSelectedItem() == RuleMethod.LENGTH_DIFF
-                && targetCombo.getSelectedItem() != RuleTarget.RESPONSE_BODY) {
-            targetCombo.setSelectedItem(RuleTarget.RESPONSE_BODY);
+
+        // 校验：每条条件的表达式非空
+        for (int i = 0; i < conditionRows.size(); i++) {
+            ConditionRow row = conditionRows.get(i);
+            String expr = row.expressionField.getText().trim();
+            if (expr.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "第 " + (i + 1) + " 条条件的表达式不能为空",
+                        "验证错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // SIMILARITY 校验
+            RuleTarget target = (RuleTarget) row.targetCombo.getSelectedItem();
+            if (target == RuleTarget.SIMILARITY) {
+                try {
+                    double val = Double.parseDouble(expr);
+                    if (val < 0.0 || val > 1.0) {
+                        JOptionPane.showMessageDialog(this, "相似度条件表达式必须在 0.0~1.0 范围内",
+                                "验证错误", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                } catch (NumberFormatException e) {
+                    JOptionPane.showMessageDialog(this, "相似度条件表达式必须为数值（如 0.90）",
+                            "验证错误", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+            }
         }
+
+        // LENGTH_DIFF 防御性校验
+        for (ConditionRow row : conditionRows) {
+            if (row.methodCombo.getSelectedItem() == RuleMethod.LENGTH_DIFF
+                    && row.targetCombo.getSelectedItem() != RuleTarget.RESPONSE_BODY) {
+                row.targetCombo.setSelectedItem(RuleTarget.RESPONSE_BODY);
+            }
+        }
+
         confirmed = true;
         dispose();
     }
@@ -254,22 +537,37 @@ public class JudgmentRuleEditDialog extends JDialog {
         return confirmed;
     }
 
-    // ==================== 获取编辑结果 ====================
+    // ==================== 公开获取方法（向后兼容旧调用方） ====================
 
     public String getRuleName() {
         return nameField.getText().trim();
     }
 
+    /** @deprecated 使用 getConditions() 代替 */
+    @Deprecated
     public RuleTarget getRuleTarget() {
-        return (RuleTarget) targetCombo.getSelectedItem();
+        if (!conditionRows.isEmpty()) {
+            return (RuleTarget) conditionRows.get(0).targetCombo.getSelectedItem();
+        }
+        return RuleTarget.STATUS_CODE;
     }
 
+    /** @deprecated 使用 getConditions() 代替 */
+    @Deprecated
     public RuleMethod getRuleMethod() {
-        return (RuleMethod) methodCombo.getSelectedItem();
+        if (!conditionRows.isEmpty()) {
+            return (RuleMethod) conditionRows.get(0).methodCombo.getSelectedItem();
+        }
+        return RuleMethod.REGEX;
     }
 
+    /** @deprecated 使用 getConditions() 代替 */
+    @Deprecated
     public String getExpression() {
-        return expressionField.getText().trim();
+        if (!conditionRows.isEmpty()) {
+            return conditionRows.get(0).expressionField.getText().trim();
+        }
+        return "";
     }
 
     public boolean isEnabled() {
@@ -301,14 +599,35 @@ public class JudgmentRuleEditDialog extends JDialog {
     }
 
     /**
-     * 从对话框创建规则对象
+     * 获取所有条件列表
+     */
+    public List<RuleCondition> getConditions() {
+        List<RuleCondition> conditions = new ArrayList<>();
+        for (ConditionRow row : conditionRows) {
+            conditions.add(row.toCondition());
+        }
+        return conditions;
+    }
+
+    /**
+     * 从对话框创建规则对象（多条件模式）
      */
     public JudgmentRule toRule() {
         JudgmentRule rule = new JudgmentRule();
         rule.setName(getRuleName());
-        rule.setTarget(getRuleTarget());
-        rule.setMethod(getRuleMethod());
-        rule.setExpression(getExpression());
+
+        // 设置多条件列表
+        List<RuleCondition> conditions = getConditions();
+        rule.setConditions(conditions);
+
+        // 向后兼容：同时设置单条件字段（取第一条条件）
+        if (!conditions.isEmpty()) {
+            RuleCondition first = conditions.get(0);
+            rule.setTarget(first.getTarget());
+            rule.setMethod(first.getMethod());
+            rule.setExpression(first.getExpression());
+        }
+
         rule.setEnabled(isEnabled());
         rule.setPriority(getPriority());
         rule.setSuccessColor(getSuccessColor());

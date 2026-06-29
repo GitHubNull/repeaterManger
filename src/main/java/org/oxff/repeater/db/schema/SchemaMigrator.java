@@ -64,6 +64,11 @@ public class SchemaMigrator {
         if (currentVersion < 11) {
             migrateV10ToV11(conn);
         }
+
+        // v11→v12 迁移：judgment_rules 新增 conditions_json 列，现有规则自动迁移
+        if (currentVersion < 12) {
+            migrateV11ToV12(conn);
+        }
     }
 
     /**
@@ -546,6 +551,47 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '11')");
 
             LogManager.getInstance().printOutput("[+] v10→v11 迁移完成");
+        }
+    }
+
+    /**
+     * v11→v12 迁移：judgment_rules 新增 conditions_json 列
+     * 将现有单条件规则的 target+method+expression 自动包装为 conditions JSON
+     */
+    private static void migrateV11ToV12(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            LogManager.getInstance().printOutput("[*] 开始v11→v12迁移...");
+
+            // 添加 conditions_json 列
+            try {
+                stmt.execute("ALTER TABLE judgment_rules ADD COLUMN conditions_json TEXT DEFAULT NULL");
+                LogManager.getInstance().printOutput("[+] judgment_rules表添加conditions_json列成功");
+            } catch (SQLException e) {
+                if (!e.getMessage().contains("duplicate column name")) {
+                    LogManager.getInstance().printError("[!] judgment_rules表添加conditions_json列失败: " + e.getMessage());
+                }
+            }
+
+            // 将现有单条件规则迁移为 conditions JSON
+            try {
+                int migrated = stmt.executeUpdate(
+                    "UPDATE judgment_rules SET conditions_json = " +
+                    "'[' || '{\"target\":\"' || target || '\",\"method\":\"' || method || " +
+                    "'\",\"expression\":\"' || REPLACE(expression, '\"', '\\\"') || '\",' || " +
+                    "'\"operator\":\"AND\",\"negate\":false}' || ']' " +
+                    "WHERE conditions_json IS NULL AND expression IS NOT NULL AND expression != ''"
+                );
+                LogManager.getInstance().printOutput("[+] 迁移 " + migrated + " 条现有规则到 conditions_json 完成");
+            } catch (SQLException e) {
+                LogManager.getInstance().printError("[!] 迁移现有规则到 conditions_json 失败: " + e.getMessage());
+                // 失败的规则将在 DAO 层通过 getEffectiveConditions() 自动包装，不影响使用
+            }
+
+            // 更新schema版本
+            stmt.execute("UPDATE schema_meta SET value = '12' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '12')");
+
+            LogManager.getInstance().printOutput("[+] v11→v12 迁移完成");
         }
     }
 }

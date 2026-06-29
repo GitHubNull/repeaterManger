@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.0] - 2026-06-30
+
+### Added
+- 判决规则支持多条件组合：新增 `RuleCondition` 模型，支持 AND/OR/NOT 逻辑组合多个条件进行综合判决
+- 相似度作为可配置判决规则目标：`RuleTarget` 新增 `SIMILARITY` 枚举值，相似度阈值从默认兜底逻辑提升为一等判决规则
+- Schema v11→v12 迁移：`judgment_rules` 表新增 `conditions_json` 列，自动将现有单条件规则包装为 conditions JSON
+
+### Changed
+- 重构 `JudgmentRule` 模型：从单条件（target/method/expression）升级为多条件列表，通过 `getEffectiveConditions()` 自动兼容旧数据
+- 重构 `JudgmentRuleEditDialog`：支持多条件编辑 UI（添加/删除/组合条件）
+- `JudgmentEngine`/`JudgmentRuleManager`/`JudgmentRuleYamlIO`/`JudgmentRuleDAO` 适配多条件模式
+- 更新中文使用文档 (`usage_detailed_zh.md`)
+- 更新分离式架构 PRD 文档
+
 ## [2.26.3] - 2026-06-29
 
 ### Fixed

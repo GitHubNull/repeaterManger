@@ -3,6 +3,7 @@ package org.oxff.repeater.privilege;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.JudgmentResult;
 import org.oxff.repeater.privilege.model.JudgmentRule;
+import org.oxff.repeater.privilege.model.RuleCondition;
 import org.oxff.repeater.privilege.model.RuleMethod;
 import org.oxff.repeater.privilege.model.RuleTarget;
 
@@ -54,13 +55,15 @@ public class JudgmentEngine {
      * @param responseBody      响应体字节数组（纯响应体，不含响应头）
      * @param baselineResponse  基准用户响应体字节数组（纯响应体，用于相似度计算和LENGTH_DIFF）
      * @param baselineStatusCode 基准用户状态码
-     * @param similarityThreshold 相似度阈值
+     * @param similarityThreshold 相似度阈值（已废弃，使用默认相似度规则代替）
      * @param responseTimeMs    响应时间（毫秒）
      * @return 判决结果
      */
+    @SuppressWarnings("deprecation")
     public static JudgmentOutcome judge(int statusCode, String responseHeaders,
                                          byte[] responseBody, byte[] baselineResponse,
-                                         int baselineStatusCode, double similarityThreshold,
+                                         int baselineStatusCode,
+                                         @Deprecated double similarityThreshold,
                                          long responseTimeMs) {
         // 防护守卫：拒绝对无效基准进行判决，防止因基准响应丢失导致误判
         if (baselineResponse == null && baselineStatusCode <= 0) {
@@ -106,12 +109,13 @@ public class JudgmentEngine {
         for (JudgmentRule rule : rules) {
             if (!rule.isEnabled() || !rule.isValid()) continue;
 
-            String targetValue = extractTargetValue(rule.getTarget(), statusCode,
-                    responseHeaders, bodyStr, responseTimeMs);
-            boolean matched = matchValue(rule.getMethod(), rule.getExpression(),
-                    targetValue, statusCode, responseBody, baselineResponse);
+            // 使用 getEffectiveConditions() 获取条件列表（自动处理向后兼容）
+            List<RuleCondition> conditions = rule.getEffectiveConditions();
+            boolean allMatched = evaluateConditions(conditions, statusCode,
+                    responseHeaders, bodyStr, similarity, responseTimeMs,
+                    responseBody, baselineResponse);
 
-            if (matched) {
+            if (allMatched) {
                 // 规则匹配成功 → 表示越权，使用成功颜色和备注
                 String note = rule.getSuccessNote();
                 if (note == null || note.isEmpty()) {
@@ -128,7 +132,8 @@ public class JudgmentEngine {
     }
 
     /**
-     * 默认判决逻辑：状态码 + 相似度
+     * 默认判决逻辑：仅状态码差异兜底
+     * 相似度判断已由默认相似度规则（SIMILARITY >= 0.90）处理，不再硬编码
      */
     private static JudgmentOutcome judgeDefault(int statusCode, int baselineStatusCode,
                                                  double similarity, double similarityThreshold) {
@@ -145,18 +150,55 @@ public class JudgmentEngine {
                     "无法计算相似度", similarity, null);
         }
 
-        if (similarity >= similarityThreshold) {
-            // 相似度超过阈值 → 越权
-            return new JudgmentOutcome(JudgmentResult.ESCALATED, Color.RED,
-                    String.format("相似度超过阈值: %.2f >= %.2f", similarity, similarityThreshold),
-                    similarity, null);
-        }
+        // 所有规则均不匹配，且状态码相同 → 需人工确认
+        return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                "所有规则均不匹配，需人工确认", similarity, null);
+    }
 
-        // 相似度低于阈值 → 安全
-        Color safeColor = new Color(144, 238, 144);
-        return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, safeColor,
-                String.format("相似度: %.2f", similarity),
-                similarity, null);
+    /**
+     * 条件组合求值（AND/OR/NOT 逻辑）
+     * 按条件列表顺序从左到右求值，无括号优先级
+     *
+     * @param conditions       条件列表
+     * @param statusCode       响应状态码
+     * @param responseHeaders  响应头
+     * @param bodyStr          响应体字符串
+     * @param similarity       与基准的相似度
+     * @param responseTimeMs   响应时间
+     * @param responseBody     当前响应体
+     * @param baselineResponse 基准响应体
+     * @return 条件组合是否满足
+     */
+    private static boolean evaluateConditions(List<RuleCondition> conditions,
+                                               int statusCode, String responseHeaders,
+                                               String bodyStr, double similarity,
+                                               long responseTimeMs,
+                                               byte[] responseBody, byte[] baselineResponse) {
+        if (conditions == null || conditions.isEmpty()) return false;
+
+        boolean result = true;  // 初始值为 true（单位元）
+        for (RuleCondition cond : conditions) {
+            if (!cond.isValid()) continue;
+
+            // 1. 计算当前条件的原始匹配结果
+            String targetValue = extractTargetValue(cond.getTarget(), statusCode,
+                    responseHeaders, bodyStr, similarity, responseTimeMs);
+            boolean condResult = matchValue(cond.getMethod(), cond.getExpression(),
+                    targetValue, statusCode, responseBody, baselineResponse);
+
+            // 2. 应用 NOT（取反）
+            if (cond.isNegate()) {
+                condResult = !condResult;
+            }
+
+            // 3. 按运算符与累积结果组合
+            if (cond.getOperator() == RuleCondition.LogicalOperator.AND) {
+                result = result && condResult;
+            } else {  // OR
+                result = result || condResult;
+            }
+        }
+        return result;
     }
 
     /**
@@ -177,12 +219,13 @@ public class JudgmentEngine {
      */
     private static String extractTargetValue(RuleTarget target, int statusCode,
                                               String responseHeaders, String responseBody,
-                                              long responseTimeMs) {
+                                              double similarity, long responseTimeMs) {
         return switch (target) {
             case STATUS_CODE -> String.valueOf(statusCode);
             case RESPONSE_HEADER -> responseHeaders != null ? responseHeaders : "";
             case RESPONSE_BODY -> responseBody != null ? responseBody : "";
             case RESPONSE_TIME -> String.valueOf(responseTimeMs);
+            case SIMILARITY -> String.valueOf(similarity);
         };
     }
 

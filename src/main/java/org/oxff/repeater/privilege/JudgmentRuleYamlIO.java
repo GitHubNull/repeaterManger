@@ -1,11 +1,12 @@
 package org.oxff.repeater.privilege;
 
 import org.oxff.repeater.logging.LogManager;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
 import org.oxff.repeater.privilege.model.JudgmentRule;
+import org.oxff.repeater.privilege.model.RuleCondition;
 import org.oxff.repeater.privilege.model.RuleMethod;
 import org.oxff.repeater.privilege.model.RuleTarget;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +50,23 @@ public class JudgmentRuleYamlIO {
             ruleMap.put("success_note", rule.getSuccessNote());
             ruleMap.put("failure_note", rule.getFailureNote());
             ruleMap.put("remark", rule.getRemark());
+
+            // 序列化 conditions
+            List<RuleCondition> conditions = rule.getEffectiveConditions();
+            if (conditions != null && !conditions.isEmpty()) {
+                List<Map<String, Object>> condList = new ArrayList<>();
+                for (RuleCondition cond : conditions) {
+                    Map<String, Object> condMap = new LinkedHashMap<>();
+                    condMap.put("target", cond.getTarget() != null ? cond.getTarget().name() : "");
+                    condMap.put("method", cond.getMethod() != null ? cond.getMethod().name() : "");
+                    condMap.put("expression", cond.getExpression() != null ? cond.getExpression() : "");
+                    condMap.put("operator", cond.getOperator() != null ? cond.getOperator().name() : "AND");
+                    condMap.put("negate", cond.isNegate());
+                    condList.add(condMap);
+                }
+                ruleMap.put("conditions", condList);
+            }
+
             ruleList.add(ruleMap);
         }
         root.put("judgment_rules", ruleList);
@@ -130,6 +148,34 @@ public class JudgmentRuleYamlIO {
         rule.setSuccessNote(successNote);
         rule.setFailureNote(failureNote);
         rule.setRemark(remark);
+
+        // 解析 conditions
+        Object conditionsObj = map.get("conditions");
+        if (conditionsObj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Object> condList = (List<Object>) conditionsObj;
+            List<RuleCondition> conditions = new ArrayList<>();
+            for (Object item : condList) {
+                if (item instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> condMap = (Map<String, Object>) item;
+                    RuleCondition cond = new RuleCondition();
+                    cond.setTarget(RuleTarget.fromString(getStringValue(condMap, "target", "STATUS_CODE")));
+                    cond.setMethod(RuleMethod.fromString(getStringValue(condMap, "method", "REGEX")));
+                    cond.setExpression(getStringValue(condMap, "expression", ""));
+                    cond.setOperator(RuleCondition.LogicalOperator.fromString(
+                            getStringValue(condMap, "operator", "AND")));
+                    cond.setNegate(getBooleanValue(condMap, "negate", false));
+                    if (cond.isValid()) {
+                        conditions.add(cond);
+                    }
+                }
+            }
+            if (!conditions.isEmpty()) {
+                rule.setConditions(conditions);
+            }
+        }
+
         return rule;
     }
 

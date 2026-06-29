@@ -1,11 +1,15 @@
 package org.oxff.repeater.privilege.dao;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.privilege.model.JudgmentRule;
+import org.oxff.repeater.privilege.model.RuleCondition;
 import org.oxff.repeater.privilege.model.RuleMethod;
 import org.oxff.repeater.privilege.model.RuleTarget;
 
+import java.lang.reflect.Type;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,12 +24,15 @@ import java.util.List;
  */
 public class JudgmentRuleDAO {
 
+    private static final Gson gson = new Gson();
+    private static final Type CONDITION_LIST_TYPE = new TypeToken<List<RuleCondition>>(){}.getType();
+
     /**
      * 获取所有判决规则
      */
     public List<JudgmentRule> getAllRules() {
         List<JudgmentRule> rules = new ArrayList<>();
-        String sql = "SELECT id, name, target, method, expression, enabled, priority, " +
+        String sql = "SELECT id, name, target, method, expression, conditions_json, enabled, priority, " +
                 "success_color, failure_color, success_note, failure_note, remark, global " +
                 "FROM judgment_rules ORDER BY priority ASC, id ASC";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
@@ -45,7 +52,7 @@ public class JudgmentRuleDAO {
      */
     public List<JudgmentRule> getEnabledRules() {
         List<JudgmentRule> rules = new ArrayList<>();
-        String sql = "SELECT id, name, target, method, expression, enabled, priority, " +
+        String sql = "SELECT id, name, target, method, expression, conditions_json, enabled, priority, " +
                 "success_color, failure_color, success_note, failure_note, remark, global " +
                 "FROM judgment_rules WHERE enabled = 1 ORDER BY priority ASC, id ASC";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
@@ -64,7 +71,7 @@ public class JudgmentRuleDAO {
      * 根据ID获取规则
      */
     public JudgmentRule getRuleById(int id) {
-        String sql = "SELECT id, name, target, method, expression, enabled, priority, " +
+        String sql = "SELECT id, name, target, method, expression, conditions_json, enabled, priority, " +
                 "success_color, failure_color, success_note, failure_note, remark, global " +
                 "FROM judgment_rules WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
@@ -86,9 +93,9 @@ public class JudgmentRuleDAO {
      * @return 新记录ID，失败返回-1
      */
     public int addRule(JudgmentRule rule) {
-        String sql = "INSERT INTO judgment_rules (name, target, method, expression, enabled, priority, " +
+        String sql = "INSERT INTO judgment_rules (name, target, method, expression, conditions_json, enabled, priority, " +
                 "success_color, failure_color, success_note, failure_note, remark, global) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             setRuleParameters(pstmt, rule);
@@ -109,12 +116,12 @@ public class JudgmentRuleDAO {
      */
     public boolean updateRule(JudgmentRule rule) {
         String sql = "UPDATE judgment_rules SET name = ?, target = ?, method = ?, expression = ?, " +
-                "enabled = ?, priority = ?, success_color = ?, failure_color = ?, " +
+                "conditions_json = ?, enabled = ?, priority = ?, success_color = ?, failure_color = ?, " +
                 "success_note = ?, failure_note = ?, remark = ?, global = ? WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             setRuleParameters(pstmt, rule);
-            pstmt.setInt(13, rule.getId());
+            pstmt.setInt(14, rule.getId());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             LogManager.getInstance().printError("[!] 更新判决规则失败: " + e.getMessage());
@@ -161,6 +168,19 @@ public class JudgmentRuleDAO {
         rule.setTarget(RuleTarget.fromString(rs.getString("target")));
         rule.setMethod(RuleMethod.fromString(rs.getString("method")));
         rule.setExpression(rs.getString("expression"));
+
+        // 反序列化 conditions_json
+        String conditionsJson = rs.getString("conditions_json");
+        if (conditionsJson != null && !conditionsJson.isEmpty()) {
+            try {
+                List<RuleCondition> conditions = gson.fromJson(conditionsJson, CONDITION_LIST_TYPE);
+                rule.setConditions(conditions);
+            } catch (Exception e) {
+                LogManager.getInstance().printError("[!] 反序列化 conditions_json 失败 (rule_id=" + rule.getId() + "): " + e.getMessage());
+                // 回退：getEffectiveConditions() 会自动从 target/method/expression 包装
+            }
+        }
+
         rule.setEnabled(rs.getInt("enabled") == 1);
         rule.setPriority(rs.getInt("priority"));
         rule.setSuccessColor(JudgmentRule.hexToColor(rs.getString("success_color")));
@@ -177,13 +197,25 @@ public class JudgmentRuleDAO {
         pstmt.setString(2, rule.getTarget() != null ? rule.getTarget().name() : RuleTarget.STATUS_CODE.name());
         pstmt.setString(3, rule.getMethod() != null ? rule.getMethod().name() : RuleMethod.REGEX.name());
         pstmt.setString(4, rule.getExpression() != null ? rule.getExpression() : "");
-        pstmt.setInt(5, rule.isEnabled() ? 1 : 0);
-        pstmt.setInt(6, rule.getPriority());
-        pstmt.setString(7, rule.getSuccessColorHex());
-        pstmt.setString(8, rule.getFailureColorHex());
-        pstmt.setString(9, rule.getSuccessNote());
-        pstmt.setString(10, rule.getFailureNote());
-        pstmt.setString(11, rule.getRemark());
-        pstmt.setInt(12, rule.isGlobal() ? 1 : 0);
+
+        // 序列化 conditions_json
+        String conditionsJson = null;
+        if (rule.getConditions() != null && !rule.getConditions().isEmpty()) {
+            try {
+                conditionsJson = gson.toJson(rule.getConditions());
+            } catch (Exception e) {
+                LogManager.getInstance().printError("[!] 序列化 conditions_json 失败: " + e.getMessage());
+            }
+        }
+        pstmt.setString(5, conditionsJson);
+
+        pstmt.setInt(6, rule.isEnabled() ? 1 : 0);
+        pstmt.setInt(7, rule.getPriority());
+        pstmt.setString(8, rule.getSuccessColorHex());
+        pstmt.setString(9, rule.getFailureColorHex());
+        pstmt.setString(10, rule.getSuccessNote());
+        pstmt.setString(11, rule.getFailureNote());
+        pstmt.setString(12, rule.getRemark());
+        pstmt.setInt(13, rule.isGlobal() ? 1 : 0);
     }
 }

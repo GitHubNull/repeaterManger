@@ -1,23 +1,26 @@
 package org.oxff.repeater.privilege.model;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 判决规则模型
- * 规则用于判断响应是否表示越权成功
+ * 一条规则 = 针对某个测试目标的条件合集
  *
- * 匹配逻辑：规则按priority升序排列，匹配到第一条规则即决定判决结果
- * - 规则匹配成功 → 使用 success_color + success_note
- * - 规则匹配失败 → 使用 failure_color + failure_note
- * - 无规则时 → 回退到默认的相似度+状态码判决
+ * 匹配逻辑：
+ * - 规则内条件：按列表顺序从左到右求值，支持 AND/OR/NOT 逻辑组合
+ * - 规则间：按 priority 升序排列，首个所有条件满足的规则命中 → ESCALATED
+ * - 无规则命中 → PENDING（需人工确认）
  */
 public class JudgmentRule {
 
     private int id;
     private String name;
-    private RuleTarget target;       // 规则应用于响应的哪个部分
-    private RuleMethod method;       // 匹配方法
-    private String expression;       // 匹配表达式
+    private RuleTarget target;       // 规则应用于响应的哪个部分（向后兼容单条件场景）
+    private RuleMethod method;       // 匹配方法（向后兼容单条件场景）
+    private String expression;       // 匹配表达式（向后兼容单条件场景）
+    private List<RuleCondition> conditions; // 多条件列表（优先于单条件 target/method/expression）
     private boolean enabled = true;
     private int priority = 1;
     private Color successColor;      // 匹配成功时的标记颜色（默认红色=越权）
@@ -33,6 +36,7 @@ public class JudgmentRule {
         this.successNote = "";
         this.failureNote = "";
         this.remark = "";
+        this.conditions = new ArrayList<>();
     }
 
     // ==================== Getters & Setters ====================
@@ -75,6 +79,29 @@ public class JudgmentRule {
 
     public void setExpression(String expression) {
         this.expression = expression;
+    }
+
+    public List<RuleCondition> getConditions() {
+        return conditions;
+    }
+
+    public void setConditions(List<RuleCondition> conditions) {
+        this.conditions = conditions != null ? conditions : new ArrayList<>();
+    }
+
+    /**
+     * 获取有效条件列表
+     * 优先返回 conditions（多条件模式），若为空则回退到单条件 target/method/expression 自动包装
+     */
+    public List<RuleCondition> getEffectiveConditions() {
+        if (conditions != null && !conditions.isEmpty()) {
+            return conditions;
+        }
+        // 向后兼容：从单条件字段自动包装
+        if (target != null && method != null && expression != null && !expression.trim().isEmpty()) {
+            return List.of(new RuleCondition(target, method, expression));
+        }
+        return new ArrayList<>();
     }
 
     public boolean isEnabled() {
@@ -150,9 +177,19 @@ public class JudgmentRule {
     }
 
     /**
-     * 检查规则是否有效（有表达式且有目标和方法）
+     * 检查规则是否有效
+     * 优先检查多条件模式，回退到单条件模式
      */
     public boolean isValid() {
+        List<RuleCondition> effective = getEffectiveConditions();
+        if (!effective.isEmpty()) {
+            // 多条件模式：至少有一条有效条件
+            for (RuleCondition cond : effective) {
+                if (cond.isValid()) return true;
+            }
+            return false;
+        }
+        // 单条件模式（向后兼容）
         return target != null && method != null && expression != null && !expression.trim().isEmpty();
     }
 

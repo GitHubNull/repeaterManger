@@ -296,6 +296,7 @@ public class SchemaInitializer {
             "target TEXT NOT NULL, " +
             "method TEXT NOT NULL, " +
             "expression TEXT NOT NULL, " +
+            "conditions_json TEXT DEFAULT NULL, " +
             "enabled INTEGER NOT NULL DEFAULT 1, " +
             "priority INTEGER NOT NULL DEFAULT 1, " +
             "success_color TEXT DEFAULT '#FF0000', " +

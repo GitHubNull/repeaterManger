@@ -11,7 +11,9 @@ public enum RuleTarget {
     /** 响应体 */
     RESPONSE_BODY("响应体"),
     /** 响应时间（毫秒） */
-    RESPONSE_TIME("响应时间");
+    RESPONSE_TIME("响应时间"),
+    /** 响应相似度（与基准响应的相似度，0.0~1.0） */
+    SIMILARITY("相似度");
 
     private final String displayName;
 
