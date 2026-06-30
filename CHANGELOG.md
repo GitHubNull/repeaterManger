@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.30.0] - 2026-07-01
+
+### Added
+- 新增规则组（Rule Group）机制，支持多条件 AND 语义组合判决，替代原有单条件优先级迭代模式
+- 新增 `JudgmentRuleConditionDAO` 和 `JudgmentRuleGroupDAO`，支持规则条件与规则组的独立持久化
+
+### Changed
+- 重构 `JudgmentRule` 模型：从单条件升级为规则组+条件层级结构
+- 重构 `JudgmentEngine` / `JudgmentRuleManager` / `JudgmentRuleYamlIO` / `JudgmentRuleDAO` 适配规则组模式
+- 重构 `JudgmentRuleEditDialog` / `JudgmentRuleConfigTab` / `JudgmentRuleTableModel` UI 适配规则组编辑
+- 重构 `SchemaMigrator` / `SchemaInitializer` 数据库 schema 适配规则组结构
+- 优化 `AutoTestEngine` / `ReplayEngine` / `TokenReplacementEngine` 判决与重放流程
+- 优化 `JsonSimilarityCalculator` 相似度计算逻辑
+- 清理 `SessionManager` / `ReplayConfig` 未使用字段
+
+### Fixed
+- 修复 `NoiseFilter` 噪声过滤边缘情况
+
 ## [2.29.1] - 2026-06-30
 
 ### Fixed

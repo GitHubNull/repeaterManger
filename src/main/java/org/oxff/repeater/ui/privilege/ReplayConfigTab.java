@@ -8,13 +8,12 @@ import java.awt.*;
 
 /**
  * 重放配置子标签页
- * 管理全局重放参数：模式、相似度阈值、超时、并发、重试、延迟等
+ * 管理全局重放参数：模式、超时、并发、重试、延迟等
  */
 public class ReplayConfigTab extends JPanel {
 
     private JRadioButton realtimeRadio;
     private JRadioButton batchRadio;
-    private JSpinner thresholdSpinner;
     private JSpinner timeoutSpinner;
     private JSpinner concurrentSpinner;
     private JSpinner retryCountSpinner;
@@ -46,18 +45,6 @@ public class ReplayConfigTab extends JPanel {
         modePanel.add(realtimeRadio);
         modePanel.add(batchRadio);
         configPanel.add(modePanel, gbc);
-
-        // 相似度阈值
-        row++;
-        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        configPanel.add(new JLabel("相似度阈值:"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1.0;
-        JPanel thresholdPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        thresholdSpinner = new JSpinner(new SpinnerNumberModel(0.7, 0.0, 1.0, 0.05));
-        thresholdSpinner.setPreferredSize(new Dimension(70, 25));
-        thresholdPanel.add(thresholdSpinner);
-        thresholdPanel.add(new JLabel("(0.0~1.0, 超过此值判定为越权)"));
-        configPanel.add(thresholdPanel, gbc);
 
         // 请求超时
         row++;
@@ -149,7 +136,6 @@ public class ReplayConfigTab extends JPanel {
         ReplayConfig config = sm.getReplayConfig();
         realtimeRadio.setSelected(config.isRealtimeMode());
         batchRadio.setSelected(!config.isRealtimeMode());
-        thresholdSpinner.setValue(config.getSimilarityThreshold());
         timeoutSpinner.setValue(config.getRequestTimeout());
         concurrentSpinner.setValue(config.getMaxConcurrent());
         retryCountSpinner.setValue(config.getRetryCount());
@@ -160,7 +146,6 @@ public class ReplayConfigTab extends JPanel {
     private void saveConfig() {
         SessionManager sm = SessionManager.getInstance();
         sm.setRealtimeMode(realtimeRadio.isSelected());
-        sm.setSimilarityThreshold((Double) thresholdSpinner.getValue());
         sm.setRequestTimeout((Integer) timeoutSpinner.getValue());
         sm.setMaxConcurrent((Integer) concurrentSpinner.getValue());
         sm.setRetryCount((Integer) retryCountSpinner.getValue());
@@ -173,7 +158,6 @@ public class ReplayConfigTab extends JPanel {
         ReplayConfig defaults = new ReplayConfig();
         realtimeRadio.setSelected(defaults.isRealtimeMode());
         batchRadio.setSelected(!defaults.isRealtimeMode());
-        thresholdSpinner.setValue(defaults.getSimilarityThreshold());
         timeoutSpinner.setValue(defaults.getRequestTimeout());
         concurrentSpinner.setValue(defaults.getMaxConcurrent());
         retryCountSpinner.setValue(defaults.getRetryCount());

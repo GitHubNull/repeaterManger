@@ -9,9 +9,6 @@ public class ReplayConfig {
     /** 重放模式：true=实时重放，false=批量重放 */
     private boolean realtimeMode;
 
-    /** 相似度阈值 (0.0~1.0) */
-    private double similarityThreshold;
-
     /** 请求超时时间（秒） */
     private int requestTimeout;
 
@@ -29,7 +26,6 @@ public class ReplayConfig {
 
     public ReplayConfig() {
         this.realtimeMode = true;
-        this.similarityThreshold = 0.7;
         this.requestTimeout = 30;
         this.maxConcurrent = 1;
         this.retryCount = 0;
@@ -43,14 +39,6 @@ public class ReplayConfig {
 
     public void setRealtimeMode(boolean realtimeMode) {
         this.realtimeMode = realtimeMode;
-    }
-
-    public double getSimilarityThreshold() {
-        return similarityThreshold;
-    }
-
-    public void setSimilarityThreshold(double similarityThreshold) {
-        this.similarityThreshold = similarityThreshold;
     }
 
     public int getRequestTimeout() {

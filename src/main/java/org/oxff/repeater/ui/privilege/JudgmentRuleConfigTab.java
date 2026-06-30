@@ -44,12 +44,11 @@ public class JudgmentRuleConfigTab extends JPanel {
         ruleModel = new JudgmentRuleTableModel();
         ruleTable = new JTable(ruleModel);
         ruleTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        ruleTable.getColumnModel().getColumn(0).setPreferredWidth(100);  // 名称
-        ruleTable.getColumnModel().getColumn(1).setPreferredWidth(70);   // 目标
-        ruleTable.getColumnModel().getColumn(2).setPreferredWidth(70);   // 方法
-        ruleTable.getColumnModel().getColumn(3).setPreferredWidth(250);  // 表达式
+        ruleTable.getColumnModel().getColumn(0).setPreferredWidth(40);   // 活跃
+        ruleTable.getColumnModel().getColumn(1).setPreferredWidth(120);  // 名称
+        ruleTable.getColumnModel().getColumn(2).setPreferredWidth(50);   // 条件数
+        ruleTable.getColumnModel().getColumn(3).setPreferredWidth(280);  // 条件摘要
         ruleTable.getColumnModel().getColumn(4).setPreferredWidth(40);   // 启用
-        ruleTable.getColumnModel().getColumn(5).setPreferredWidth(50);   // 优先级
 
         JScrollPane scrollPane = new JScrollPane(ruleTable);
         scrollPane.setPreferredSize(new Dimension(0, 200));
@@ -91,9 +90,9 @@ public class JudgmentRuleConfigTab extends JPanel {
         infoArea.setEditable(false);
         infoArea.setLineWrap(true);
         infoArea.setText(
-            "• 规则按优先级升序匹配，匹配到第一条规则即决定判决结果\n" +
-            "• 规则匹配成功 → 标记为越权（红色），匹配失败 → 标记为安全（绿色）\n" +
-            "• 无规则时使用默认判决：状态码不同或响应相似度超过阈值则判定为越权"
+            "• 每次使用一个活跃规则组（勾选\"活跃\"列切换），组内所有条件 AND 求值\n" +
+            "• 活跃规则组全部条件满足 → 标记为越权（红色），任一条件不满足 → 标记为安全（绿色）\n" +
+            "• 无活跃规则组或不匹配时，回退默认相似度判决（相似度>=阈值则判定为越权）"
         );
         infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
 

@@ -53,7 +53,12 @@ public class TokenReplacementEngine {
         if (originalRequest == null || originalRequest.length == 0) {
             return originalRequest;
         }
-        if (locations == null || locations.isEmpty() || session == null) {
+        if (locations == null || locations.isEmpty()) {
+            LogManager.getInstance().printOutput("[!] 令牌位置列表为空，跳过令牌替换（请检查令牌位置配置）");
+            return originalRequest;
+        }
+        if (session == null) {
+            LogManager.getInstance().printOutput("[!] 用户会话为空，跳过令牌替换（请检查用户会话配置）");
             return originalRequest;
         }
 
@@ -93,12 +98,16 @@ public class TokenReplacementEngine {
             }
         }
 
+        // 收集令牌值为 null 的位置，用于诊断日志
+        List<String> nullValueLocations = new ArrayList<>();
+
         // 替换URL参数中的令牌（在header替换之前，因为URL参数在请求行中）
         for (TokenLocation loc : urlLocations) {
             String value = session.getTokenValue(loc.getId());
             // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应token
             if (value == null) {
                 value = "";
+                nullValueLocations.add(loc.getType().getDisplayName() + "[" + loc.getExpression() + "]");
             }
             value = sanitizeNewlines(value, loc.getExpression());
             try {
@@ -114,6 +123,7 @@ public class TokenReplacementEngine {
             // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应header
             if (value == null) {
                 value = "";
+                nullValueLocations.add(loc.getType().getDisplayName() + "[" + loc.getExpression() + "]");
             }
             // 安全过滤：将换行符替换为空格，防止HTTP header注入
             value = sanitizeNewlines(value, loc.getExpression());
@@ -131,6 +141,7 @@ public class TokenReplacementEngine {
                 // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应字段
                 if (value == null) {
                     value = "";
+                    nullValueLocations.add(loc.getType().getDisplayName() + "[" + loc.getExpression() + "]");
                 }
                 // 安全过滤：将换行符替换为空格，防止JSON/XML/body结构破坏
                 value = sanitizeNewlines(value, loc.getExpression());
@@ -163,6 +174,14 @@ public class TokenReplacementEngine {
                     LogManager.getInstance().printError("[!] Body令牌替换失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
                 }
             }
+        }
+
+        // 诊断：令牌值缺失汇总 — 警告用户哪些令牌未配置值
+        if (!nullValueLocations.isEmpty()) {
+            LogManager.getInstance().printError(String.format(
+                    "[!] 令牌替换: 用户 '%s' 在 %d/%d 个令牌位置未配置值 → 将从请求中删除: %s",
+                    session.getName(), nullValueLocations.size(), locations.size(),
+                    String.join(", ", nullValueLocations)));
         }
 
         // 重新组装请求

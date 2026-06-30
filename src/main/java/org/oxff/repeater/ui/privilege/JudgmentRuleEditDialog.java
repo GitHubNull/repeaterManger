@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 判决规则编辑对话框（支持多条件 AND/OR/NOT 组合编辑）
+ * 判决规则编辑对话框（支持多条件 AND 组合编辑）
  */
 public class JudgmentRuleEditDialog extends JDialog {
 
@@ -20,7 +20,6 @@ public class JudgmentRuleEditDialog extends JDialog {
 
     private JTextField nameField;
     private JCheckBox enabledCheckbox;
-    private JSpinner prioritySpinner;
     private JButton successColorButton;
     private JButton failureColorButton;
     private JTextField successNoteField;
@@ -51,20 +50,17 @@ public class JudgmentRuleEditDialog extends JDialog {
 
     private static class ConditionRow {
         final JPanel rowPanel;
-        final JComboBox<RuleCondition.LogicalOperator> operatorCombo;
         final JCheckBox negateCheckbox;
         final JComboBox<RuleTarget> targetCombo;
         final JComboBox<RuleMethod> methodCombo;
         final JTextField expressionField;
         ConditionRow(int index, JPanel rowPanel,
-                     JComboBox<RuleCondition.LogicalOperator> operatorCombo,
                      JCheckBox negateCheckbox,
                      JComboBox<RuleTarget> targetCombo,
                      JComboBox<RuleMethod> methodCombo,
                      JTextField expressionField,
                      JButton deleteButton) {
             this.rowPanel = rowPanel;
-            this.operatorCombo = operatorCombo;
             this.negateCheckbox = negateCheckbox;
             this.targetCombo = targetCombo;
             this.methodCombo = methodCombo;
@@ -76,11 +72,6 @@ public class JudgmentRuleEditDialog extends JDialog {
             cond.setTarget((RuleTarget) targetCombo.getSelectedItem());
             cond.setMethod((RuleMethod) methodCombo.getSelectedItem());
             cond.setExpression(expressionField.getText().trim());
-            if (operatorCombo.isEnabled()) {
-                cond.setOperator((RuleCondition.LogicalOperator) operatorCombo.getSelectedItem());
-            } else {
-                cond.setOperator(RuleCondition.LogicalOperator.AND);
-            }
             cond.setNegate(negateCheckbox.isSelected());
             return cond;
         }
@@ -107,7 +98,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 条件列表标签
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 4;
-        mainPanel.add(new JLabel("判决条件（从左到右求值，支持 AND / OR / NOT 组合）:"), gbc);
+        mainPanel.add(new JLabel("判决条件（组内纯 AND，支持 NOT 取反）:"), gbc);
         gbc.gridwidth = 1;
 
         row++;
@@ -134,19 +125,14 @@ public class JudgmentRuleEditDialog extends JDialog {
         gbc.gridwidth = 1;
 
         row++;
-        // 启用 + 优先级
+        // 启用
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
         mainPanel.add(new JLabel("启用:"), gbc);
-        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 0;
+        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         enabledCheckbox = new JCheckBox();
         enabledCheckbox.setSelected(true);
         mainPanel.add(enabledCheckbox, gbc);
-
-        gbc.gridx = 2; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("优先级:"), gbc);
-        gbc.gridx = 3; gbc.gridy = row; gbc.weightx = 1;
-        prioritySpinner = new JSpinner(new SpinnerNumberModel(1, 1, 1000, 1));
-        mainPanel.add(prioritySpinner, gbc);
+        gbc.gridwidth = 1;
 
         row++;
         // 越权颜色 + 安全颜色
@@ -224,7 +210,7 @@ public class JudgmentRuleEditDialog extends JDialog {
     // ==================== 条件行构建 ====================
 
     /**
-     * 构建一条条件行
+     * 构建一条条件行（v13：移除 operator，纯 AND）
      */
     private JPanel buildConditionRow(int index, RuleCondition condition) {
         JPanel rowPanel = new JPanel(new GridBagLayout());
@@ -233,22 +219,6 @@ public class JudgmentRuleEditDialog extends JDialog {
         gc.anchor = GridBagConstraints.WEST;
         gc.fill = GridBagConstraints.NONE;
         gc.weighty = 0;
-
-        // 运算符
-        JComboBox<RuleCondition.LogicalOperator> operatorCombo = new JComboBox<>(
-                RuleCondition.LogicalOperator.values());
-        operatorCombo.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int idx,
-                                                           boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, idx, isSelected, cellHasFocus);
-                if (value instanceof RuleCondition.LogicalOperator op) {
-                    setText(op.getDisplayName());
-                }
-                return this;
-            }
-        });
-        operatorCombo.setPrototypeDisplayValue(RuleCondition.LogicalOperator.AND);
 
         // NOT 复选框
         JCheckBox negateCheckbox = new JCheckBox("非");
@@ -306,23 +276,19 @@ public class JudgmentRuleEditDialog extends JDialog {
 
         // === GridBagLayout 布局：固定列宽度自适应，表达式列自动填充 ===
         gc.gridx = 0; gc.weightx = 0;
-        rowPanel.add(operatorCombo, gc);
-        gc.gridx = 1; gc.weightx = 0;
         rowPanel.add(negateCheckbox, gc);
-        gc.gridx = 2; gc.weightx = 0;
+        gc.gridx = 1; gc.weightx = 0;
         rowPanel.add(targetCombo, gc);
-        gc.gridx = 3; gc.weightx = 0;
+        gc.gridx = 2; gc.weightx = 0;
         rowPanel.add(methodCombo, gc);
-        gc.gridx = 4; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.gridx = 3; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
         rowPanel.add(expressionField, gc);
         gc.fill = GridBagConstraints.NONE;
-        gc.gridx = 5; gc.weightx = 0;
+        gc.gridx = 4; gc.weightx = 0;
         rowPanel.add(deleteButton, gc);
 
         // 设置初始值
         if (condition != null) {
-            operatorCombo.setSelectedItem(condition.getOperator() != null
-                    ? condition.getOperator() : RuleCondition.LogicalOperator.AND);
             negateCheckbox.setSelected(condition.isNegate());
             if (condition.getTarget() != null) targetCombo.setSelectedItem(condition.getTarget());
             if (condition.getMethod() != null) methodCombo.setSelectedItem(condition.getMethod());
@@ -330,7 +296,7 @@ public class JudgmentRuleEditDialog extends JDialog {
             filterMethodsForTarget(targetCombo, methodCombo);
         }
 
-        ConditionRow row = new ConditionRow(index, rowPanel, operatorCombo, negateCheckbox,
+        ConditionRow row = new ConditionRow(index, rowPanel, negateCheckbox,
                 targetCombo, methodCombo, expressionField, deleteButton);
         conditionRows.add(row);
 
@@ -352,7 +318,6 @@ public class JudgmentRuleEditDialog extends JDialog {
         int index = conditionRows.size();
         JPanel row = buildConditionRow(index, condition);
         conditionsPanel.add(row);
-        refreshOperatorStates();
         conditionsPanel.revalidate();
         conditionsPanel.repaint();
     }
@@ -363,28 +328,11 @@ public class JudgmentRuleEditDialog extends JDialog {
     private void removeConditionRow(ConditionRow row) {
         conditionsPanel.remove(row.rowPanel);
         conditionRows.remove(row);
-        // 重建索引并刷新运算符状态
         for (int i = 0; i < conditionRows.size(); i++) {
             conditionRows.get(i).rowPanel.revalidate();
         }
-        refreshOperatorStates();
         conditionsPanel.revalidate();
         conditionsPanel.repaint();
-    }
-
-    /**
-     * 刷新运算符状态：第一条条件的运算符禁用，其余启用
-     */
-    private void refreshOperatorStates() {
-        for (int i = 0; i < conditionRows.size(); i++) {
-            ConditionRow row = conditionRows.get(i);
-            if (i == 0) {
-                row.operatorCombo.setEnabled(false);
-                row.operatorCombo.setSelectedItem(RuleCondition.LogicalOperator.AND);
-            } else {
-                row.operatorCombo.setEnabled(true);
-            }
-        }
     }
 
     /**
@@ -441,7 +389,6 @@ public class JudgmentRuleEditDialog extends JDialog {
     private void populateFields(JudgmentRule rule) {
         if (rule.getName() != null) nameField.setText(rule.getName());
         enabledCheckbox.setSelected(rule.isEnabled());
-        prioritySpinner.setValue(rule.getPriority());
         if (rule.getSuccessColor() != null) {
             successColor = rule.getSuccessColor();
             successColorButton.setBackground(successColor);
@@ -532,45 +479,14 @@ public class JudgmentRuleEditDialog extends JDialog {
         return confirmed;
     }
 
-    // ==================== 公开获取方法（向后兼容旧调用方） ====================
+    // ==================== 公开获取方法 ====================
 
     public String getRuleName() {
         return nameField.getText().trim();
     }
 
-    /** @deprecated 使用 getConditions() 代替 */
-    @Deprecated
-    public RuleTarget getRuleTarget() {
-        if (!conditionRows.isEmpty()) {
-            return (RuleTarget) conditionRows.get(0).targetCombo.getSelectedItem();
-        }
-        return RuleTarget.STATUS_CODE;
-    }
-
-    /** @deprecated 使用 getConditions() 代替 */
-    @Deprecated
-    public RuleMethod getRuleMethod() {
-        if (!conditionRows.isEmpty()) {
-            return (RuleMethod) conditionRows.get(0).methodCombo.getSelectedItem();
-        }
-        return RuleMethod.REGEX;
-    }
-
-    /** @deprecated 使用 getConditions() 代替 */
-    @Deprecated
-    public String getExpression() {
-        if (!conditionRows.isEmpty()) {
-            return conditionRows.get(0).expressionField.getText().trim();
-        }
-        return "";
-    }
-
     public boolean isEnabled() {
         return enabledCheckbox.isSelected();
-    }
-
-    public int getPriority() {
-        return (Integer) prioritySpinner.getValue();
     }
 
     public Color getSuccessColor() {
@@ -605,26 +521,13 @@ public class JudgmentRuleEditDialog extends JDialog {
     }
 
     /**
-     * 从对话框创建规则对象（多条件模式）
+     * 从对话框创建规则对象
      */
     public JudgmentRule toRule() {
         JudgmentRule rule = new JudgmentRule();
         rule.setName(getRuleName());
-
-        // 设置多条件列表
-        List<RuleCondition> conditions = getConditions();
-        rule.setConditions(conditions);
-
-        // 向后兼容：同时设置单条件字段（取第一条条件）
-        if (!conditions.isEmpty()) {
-            RuleCondition first = conditions.get(0);
-            rule.setTarget(first.getTarget());
-            rule.setMethod(first.getMethod());
-            rule.setExpression(first.getExpression());
-        }
-
+        rule.setConditions(getConditions());
         rule.setEnabled(isEnabled());
-        rule.setPriority(getPriority());
         rule.setSuccessColor(getSuccessColor());
         rule.setFailureColor(getFailureColor());
         rule.setSuccessNote(getSuccessNote());

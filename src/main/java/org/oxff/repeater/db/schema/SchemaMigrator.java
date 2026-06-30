@@ -3,6 +3,7 @@ package org.oxff.repeater.db.schema;
 import org.oxff.repeater.logging.LogManager;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -14,7 +15,7 @@ import java.sql.Statement;
 public class SchemaMigrator {
 
     /** 当前支持的最高 Schema 版本 */
-    public static final int LATEST_VERSION = 12;
+    public static final int LATEST_VERSION = 13;
 
     /**
      * 执行所有必要的数据库迁移
@@ -71,6 +72,11 @@ public class SchemaMigrator {
         // v11→v12 迁移：judgment_rules 新增 conditions_json 列，现有规则自动迁移
         if (currentVersion < 12) {
             migrateV11ToV12(conn);
+        }
+
+        // v12→v13 迁移：judgment_rules → judgment_rule_groups + judgment_rule_conditions 双表
+        if (currentVersion < 13) {
+            migrateV12ToV13(conn);
         }
     }
 
@@ -598,5 +604,205 @@ public class SchemaMigrator {
 
             LogManager.getInstance().printOutput("[+] v11→v12 迁移完成");
         }
+    }
+
+    /**
+     * v12→v13 迁移：从旧 judgment_rules 单表迁移到 judgment_rule_groups + judgment_rule_conditions 双表
+     * <p>
+     * 迁移策略：
+     * 1. 创建新表 judgment_rule_groups 和 judgment_rule_conditions
+     * 2. 将旧 judgment_rules 每条记录转为：1个 group + N个 conditions
+     * 3. 条件来源优先 conditions_json，回退到 target/method/expression 单条件包装
+     * 4. 第一条迁移的规则组设为 is_active=1
+     * 5. 保留旧表不删除，确保可回滚
+     */
+    private static void migrateV12ToV13(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            LogManager.getInstance().printOutput("[*] 开始v12→v13迁移（judgment_rules → 双表）...");
+
+            // 1. 创建新表
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS judgment_rule_groups (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "name TEXT NOT NULL DEFAULT '', " +
+                "is_active INTEGER NOT NULL DEFAULT 0, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "success_color TEXT DEFAULT '#FF0000', " +
+                "failure_color TEXT DEFAULT '#90EE90', " +
+                "success_note TEXT DEFAULT '', " +
+                "failure_note TEXT DEFAULT '', " +
+                "remark TEXT DEFAULT '', " +
+                "global INTEGER NOT NULL DEFAULT 1, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS judgment_rule_conditions (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "group_id INTEGER NOT NULL, " +
+                "target TEXT NOT NULL, " +
+                "method TEXT NOT NULL, " +
+                "expression TEXT NOT NULL, " +
+                "negate INTEGER NOT NULL DEFAULT 0, " +
+                "sort_order INTEGER NOT NULL DEFAULT 0, " +
+                "enabled INTEGER NOT NULL DEFAULT 1, " +
+                "remark TEXT DEFAULT '', " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "FOREIGN KEY (group_id) REFERENCES judgment_rule_groups(id) ON DELETE CASCADE" +
+                ")"
+            );
+
+            // 创建新索引
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_rule_groups_active ON judgment_rule_groups(is_active)");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_conditions_group ON judgment_rule_conditions(group_id, sort_order)");
+
+            LogManager.getInstance().printOutput("[+] v13 新表创建成功");
+
+            // 2. 迁移数据：读取旧 judgment_rules 表
+            boolean oldTableExists = false;
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='judgment_rules'")) {
+                oldTableExists = rs.next();
+            }
+
+            if (!oldTableExists) {
+                LogManager.getInstance().printOutput("[*] 旧 judgment_rules 表不存在，跳过数据迁移");
+                stmt.execute("UPDATE schema_meta SET value = '13' WHERE key = 'schema_version'");
+                stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '13')");
+                LogManager.getInstance().printOutput("[+] v12→v13 迁移完成（无旧数据）");
+                return;
+            }
+
+            // 3. 遍历旧规则，逐条迁移（使用 PreparedStatement 避免字符串拼接风险）
+            int groupCount = 0;
+            int condCount = 0;
+            boolean firstGroup = true;
+
+            // 预编译规则组插入语句
+            String insertGroupSql = "INSERT INTO judgment_rule_groups " +
+                    "(name, is_active, enabled, success_color, failure_color, " +
+                    "success_note, failure_note, remark, global) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+            // 预编译条件插入语句（json_each 展开）
+            String insertCondFromJsonSql = "INSERT INTO judgment_rule_conditions " +
+                    "(group_id, target, method, expression, negate, sort_order, enabled) " +
+                    "SELECT ?, " +
+                    "COALESCE(json_extract(value, '$.target'), 'STATUS_CODE'), " +
+                    "COALESCE(json_extract(value, '$.method'), 'REGEX'), " +
+                    "COALESCE(json_extract(value, '$.expression'), ''), " +
+                    "COALESCE(json_extract(value, '$.negate'), 0), " +
+                    "(rowid - 1), " +
+                    "1 " +
+                    "FROM json_each(?)";
+
+            // 预编译单条件插入语句
+            String insertSingleCondSql = "INSERT INTO judgment_rule_conditions " +
+                    "(group_id, target, method, expression, negate, sort_order, enabled) " +
+                    "VALUES (?, ?, ?, ?, 0, 0, 1)";
+
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT id, name, target, method, expression, conditions_json, enabled, priority, " +
+                    "success_color, failure_color, success_note, failure_note, remark, global " +
+                    "FROM judgment_rules ORDER BY priority ASC, id ASC")) {
+
+                while (rs.next()) {
+                    // 插入规则组（PreparedStatement）
+                    int newGroupId;
+                    try (PreparedStatement ps = conn.prepareStatement(insertGroupSql, Statement.RETURN_GENERATED_KEYS)) {
+                        ps.setString(1, nvl(rs.getString("name"), ""));
+                        ps.setInt(2, firstGroup ? 1 : 0);
+                        ps.setInt(3, rs.getInt("enabled"));
+                        ps.setString(4, nvl(rs.getString("success_color"), "#FF0000"));
+                        ps.setString(5, nvl(rs.getString("failure_color"), "#90EE90"));
+                        ps.setString(6, nvl(rs.getString("success_note"), ""));
+                        ps.setString(7, nvl(rs.getString("failure_note"), ""));
+                        ps.setString(8, nvl(rs.getString("remark"), ""));
+                        ps.setInt(9, rs.getInt("global"));
+                        ps.executeUpdate();
+
+                        try (ResultSet keys = ps.getGeneratedKeys()) {
+                            newGroupId = keys.next() ? keys.getInt(1) : -1;
+                        }
+                    }
+
+                    if (newGroupId <= 0) {
+                        // 回退：用 last_insert_rowid
+                        try (ResultSet lastId = stmt.executeQuery("SELECT last_insert_rowid()")) {
+                            newGroupId = lastId.next() ? lastId.getInt(1) : -1;
+                        }
+                    }
+
+                    if (newGroupId <= 0) {
+                        LogManager.getInstance().printError("[!] 无法获取新插入规则组的ID，跳过条件迁移");
+                        continue;
+                    }
+
+                    groupCount++;
+
+                    // 迁移条件：优先 conditions_json
+                    String conditionsJson = rs.getString("conditions_json");
+                    if (conditionsJson != null && !conditionsJson.isEmpty()) {
+                        try {
+                            try (PreparedStatement ps = conn.prepareStatement(insertCondFromJsonSql)) {
+                                ps.setInt(1, newGroupId);
+                                ps.setString(2, conditionsJson);
+                                int inserted = ps.executeUpdate();
+                                condCount += inserted;
+                            }
+                        } catch (SQLException e) {
+                            // JSON 解析失败，回退到单条件模式
+                            LogManager.getInstance().printError(
+                                "[!] JSON条件迁移失败(group_id=" + newGroupId + "): " + e.getMessage() +
+                                ", 回退到单条件模式");
+                            condCount += migrateLegacyCondition(conn, insertSingleCondSql, newGroupId, rs);
+                        }
+                    } else {
+                        // 无 conditions_json，从 target/method/expression 创建单条件
+                        condCount += migrateLegacyCondition(conn, insertSingleCondSql, newGroupId, rs);
+                    }
+
+                    firstGroup = false;
+                }
+            }
+
+            LogManager.getInstance().printOutput(
+                "[+] v12→v13 数据迁移完成: " + groupCount + " 个规则组, " + condCount + " 条条件");
+
+            // 4. 更新 schema 版本
+            stmt.execute("UPDATE schema_meta SET value = '13' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '13')");
+
+            LogManager.getInstance().printOutput("[+] v12→v13 迁移完成");
+        }
+    }
+
+    /**
+     * 从旧的 target/method/expression 字段迁移单条条件（使用预编译SQL）
+     */
+    private static int migrateLegacyCondition(Connection conn, String insertSql, int groupId, ResultSet rs) throws SQLException {
+        String target = nvl(rs.getString("target"), "STATUS_CODE");
+        String method = nvl(rs.getString("method"), "REGEX");
+        String expression = nvl(rs.getString("expression"), "");
+
+        if (expression.isEmpty()) {
+            return 0;
+        }
+
+        try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+            ps.setInt(1, groupId);
+            ps.setString(2, target);
+            ps.setString(3, method);
+            ps.setString(4, expression);
+            ps.executeUpdate();
+        }
+        return 1;
+    }
+
+    /** null 安全替代 */
+    private static String nvl(String value, String defaultValue) {
+        return value != null ? value : defaultValue;
     }
 }

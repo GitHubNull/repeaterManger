@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v11）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '11')");
+        // 初始化元数据（v13）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '13')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -137,7 +137,7 @@ public class SchemaInitializer {
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        LogManager.getInstance().printOutput("[+] v11 Schema 初始化完成");
+        LogManager.getInstance().printOutput("[+] v13 Schema 初始化完成");
     }
 
     /**
@@ -288,24 +288,38 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 判决规则表
+        // 判决规则组表（v13：替代旧 judgment_rules，单活跃规则集模式）
         stmt.execute(
-            "CREATE TABLE IF NOT EXISTS judgment_rules (" +
+            "CREATE TABLE IF NOT EXISTS judgment_rule_groups (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "name TEXT NOT NULL DEFAULT '', " +
-            "target TEXT NOT NULL, " +
-            "method TEXT NOT NULL, " +
-            "expression TEXT NOT NULL, " +
-            "conditions_json TEXT DEFAULT NULL, " +
+            "is_active INTEGER NOT NULL DEFAULT 0, " +
             "enabled INTEGER NOT NULL DEFAULT 1, " +
-            "priority INTEGER NOT NULL DEFAULT 1, " +
             "success_color TEXT DEFAULT '#FF0000', " +
-            "failure_color TEXT DEFAULT '#00FF00', " +
+            "failure_color TEXT DEFAULT '#90EE90', " +
             "success_note TEXT DEFAULT '', " +
             "failure_note TEXT DEFAULT '', " +
             "remark TEXT DEFAULT '', " +
             "global INTEGER NOT NULL DEFAULT 1, " +
-            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // 判决规则条件表（v13：规范化条件存储，FK 关联规则组）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS judgment_rule_conditions (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "group_id INTEGER NOT NULL, " +
+            "target TEXT NOT NULL, " +
+            "method TEXT NOT NULL, " +
+            "expression TEXT NOT NULL, " +
+            "negate INTEGER NOT NULL DEFAULT 0, " +
+            "sort_order INTEGER NOT NULL DEFAULT 0, " +
+            "enabled INTEGER NOT NULL DEFAULT 1, " +
+            "remark TEXT DEFAULT '', " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "FOREIGN KEY (group_id) REFERENCES judgment_rule_groups(id) ON DELETE CASCADE" +
             ")"
         );
 
@@ -314,7 +328,9 @@ public class SchemaInitializer {
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_session ON token_values(user_session_id)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_judgment ON history(judgment)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_session ON history(user_session_name)");
-        stmt.execute("CREATE INDEX IF NOT EXISTS idx_judgment_rules_enabled ON judgment_rules(enabled, priority)");
+        // v13 新索引
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_rule_groups_active ON judgment_rule_groups(is_active)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_conditions_group ON judgment_rule_conditions(group_id, sort_order)");
         // v11 新增索引
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_scheme ON scheme_token_locations(scheme_id)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_location ON scheme_token_locations(token_location_id)");

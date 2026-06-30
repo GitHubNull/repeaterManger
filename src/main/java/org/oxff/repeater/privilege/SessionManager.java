@@ -511,14 +511,6 @@ public class SessionManager {
         replayConfig.setRealtimeMode(realtimeMode);
     }
 
-    public double getSimilarityThreshold() {
-        return replayConfig.getSimilarityThreshold();
-    }
-
-    public void setSimilarityThreshold(double similarityThreshold) {
-        replayConfig.setSimilarityThreshold(similarityThreshold);
-    }
-
     public int getRequestTimeout() {
         return replayConfig.getRequestTimeout();
     }

@@ -121,6 +121,7 @@ public class AutoTestEngine {
                 byte[] baselineResponse = null;
                 int baselineStatusCode = -1;
                 boolean baselineValid = false;
+                String baselineContentType = null;
 
                 for (int i = 0; i < enabledSessions.size(); i++) {
                     UserSession session = enabledSessions.get(i);
@@ -128,6 +129,39 @@ public class AutoTestEngine {
 
                     // 根据会话关联的方案过滤令牌位置
                     List<TokenLocation> locations = sessionManager.getTokenLocationsByScheme(session.getSchemeId());
+
+                    // 令牌位置为空时的警告：配置错误，将使用原始请求令牌发送
+                    if (locations.isEmpty()) {
+                        LogManager.getInstance().printError(String.format(
+                                "[!] 自动化测试: 用户 '%s' (schemeId=%s) 没有关联的令牌位置，"
+                                + "将使用原始请求令牌发送，可能导致误判！",
+                                session.getName(), session.getSchemeId()));
+                    } else {
+                        int configuredCount = session.getTokenValues().size();
+                        if (configuredCount == 0) {
+                            LogManager.getInstance().printError(String.format(
+                                    "[!] 令牌替换: 用户 '%s' → %d 个令牌位置 / 0 个已配置值！"
+                                    + "所有令牌将被从请求中删除，可能导致 401 认证失败！",
+                                    session.getName(), locations.size()));
+                        } else {
+                            java.util.Set<Integer> valueIds = session.getTokenValues().keySet();
+                            java.util.Set<Integer> locationIds = new java.util.HashSet<>();
+                            for (TokenLocation loc : locations) {
+                                locationIds.add(loc.getId());
+                            }
+                            long matchCount = valueIds.stream().filter(locationIds::contains).count();
+                            if (matchCount == 0) {
+                                LogManager.getInstance().printError(String.format(
+                                        "[!] 令牌替换: 用户 '%s' → 令牌值ID(%s)与位置ID(%s)完全不匹配！"
+                                        + "请检查令牌方案与用户配置是否对应",
+                                        session.getName(), valueIds, locationIds));
+                            } else {
+                                LogManager.getInstance().printOutput(String.format(
+                                        "[*] 令牌替换: 用户 '%s' → %d 个令牌位置 / %d 个已配置值 (匹配%d个)",
+                                        session.getName(), locations.size(), configuredCount, matchCount));
+                            }
+                        }
+                    }
 
                     // 重放延迟：使用全局配置
                     int replayDelay = sessionManager.getReplayDelay();
@@ -202,11 +236,14 @@ public class AutoTestEngine {
                                 baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
                                 baselineStatusCode = holder.statusCode;
                                 baselineValid = true;
+                                // 保存基线 Content-Type（用于相似度算法选择）
+                                String baselineHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                                baselineContentType = JudgmentEngine.extractContentType(baselineHeaders);
                                 judgment = JudgmentResult.NOT_ESCALATED.name();
                             } else {
                                 String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
                                 byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
-                                double threshold = sessionManager.getSimilarityThreshold();
+                                double threshold = 0.70; // 判决兜底默认阈值（规则引擎未命中时的最后安全网）
 
                                 // === 判决前诊断日志 ===
                                 if (baselineResponse == null || baselineResponse.length == 0) {
@@ -231,7 +268,9 @@ public class AutoTestEngine {
 
                                 JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
                                         holder.statusCode, responseHeaders, responseBodyOnly,
-                                        baselineResponse, baselineStatusCode, threshold, holder.durationMs);
+                                        baselineResponse, baselineStatusCode, baselineContentType, threshold,
+                                        holder.durationMs,
+                                        session.getTokenValues().values().stream().allMatch(v -> v == null || v.isEmpty()));
                                 judgment = outcome.result.name();
                                 similarity = outcome.similarity;
                                 judgmentColor = outcome.color;
@@ -292,7 +331,7 @@ public class AutoTestEngine {
                     } catch (Exception e) {
                         LogManager.getInstance().printError("[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
 
-                        // 基准用户异常时不设置baselineValid
+                        // 基准用户异常时 baselineValid 保持初始值 false，后续会话将因此跳过判决
                         if (isFirst) {
                             LogManager.getInstance().printError("[!] 自动化测试：基准用户请求异常，后续会话将跳过判决");
                         }

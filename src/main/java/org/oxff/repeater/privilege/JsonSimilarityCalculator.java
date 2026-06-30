@@ -112,10 +112,10 @@ public class JsonSimilarityCalculator {
      * 使用结构分 + 值分加权混合算法：
      * - 结构分：衡量 key 级别的覆盖度（两边共有 key 数 / 总 key 数）
      * - 值分：在共有 key 上衡量值的匹配度
-     * - 最终相似度 = 0.3 × 结构分 + 0.7 × 值分
+     * - 最终相似度 = 0.5 × 结构分 + 0.5 × 值分
      *
-     * 此修复解决了结构完全相同但值完全不同的 JSON（如 {"code":0,"message":"ok"}
-     * vs {"code":401,"message":"unauthorized"}）被判为相似度 0.0 的问题。
+     * 50/50 平衡权重确保对 RESPONSE WRAPPER 中少量用户元数据字段差异
+     * 具有足够的鲁棒性，避免将真实水平越权漏报为“安全”。
      */
     private static double computeMapSimilarity(Map<String, String> map1, Map<String, String> map2) {
         if (map1.isEmpty() && map2.isEmpty()) return 1.0;
@@ -151,21 +151,22 @@ public class JsonSimilarityCalculator {
         double structureSimilarity = totalKeys > 0 ? structuralScore / totalKeys : 0.0;
         double valueSimilarity = structuralScore > 0 ? valueScore / structuralScore : 0.0;
 
-        // 加权混合：结构分权重 0.3，值分权重 0.7
-        // 这样 {code, message} vs {code, message} 即使值全不同，也有 0.3 的基础分
-        return 0.3 * structureSimilarity + 0.7 * valueSimilarity;
+        // 加权混合：结构分权重 0.5，值分权重 0.5
+        // 50/50 平衡避免值分权重过高导致包装层少量元数据差异引发漏报
+        return 0.5 * structureSimilarity + 0.5 * valueSimilarity;
     }
 
     /**
      * 计算两个叶子值的相似度（已归一化后）
-     * 对短字符串做精确匹配，对长字符串做 Jaccard 子串匹配
+     * 短字符串（<=50字符）使用 Levenshtein 比率给部分分，
+     * 长字符串使用 Jaccard n-gram 给部分分
      */
     private static double computeValueSimilarity(String v1, String v2) {
         if (v1.equals(v2)) return 1.0;
 
-        // 短值（<=50字符）：完全不同则给 0 分
+        // 短值（<=50字符）：使用 Levenshtein 比率给部分分
         if (v1.length() <= 50 && v2.length() <= 50) {
-            return 0.0;
+            return LevenshteinCalculator.similarity(v1, v2);
         }
 
         // 长值：用 Jaccard n-gram 给部分分

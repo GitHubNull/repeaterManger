@@ -36,7 +36,7 @@ public class NoiseFilter {
             Pattern.compile("\\b[0-9a-fA-F]{32}\\b"),
             Pattern.compile("\\b[0-9a-fA-F]{40}\\b"),
             Pattern.compile("\\b[0-9a-fA-F]{64}\\b"),
-            // 数字型ID (纯数字，6-19位)
+            // 数字型ID (纯数字，6-19位；低于6位易误杀年份/状态码等语义字段)
             Pattern.compile("\\b\\d{6,19}\\b")
     );
 

@@ -20,7 +20,7 @@ import java.util.*;
  */
 public class JudgmentRuleYamlIO {
 
-    private static final String YAML_VERSION = "1";
+    private static final String YAML_VERSION = "2";
 
     /**
      * 将规则列表导出为YAML字符串
@@ -40,18 +40,15 @@ public class JudgmentRuleYamlIO {
         for (JudgmentRule rule : rules) {
             Map<String, Object> ruleMap = new LinkedHashMap<>();
             ruleMap.put("name", rule.getName() != null ? rule.getName() : "");
-            ruleMap.put("target", rule.getTarget() != null ? rule.getTarget().name() : RuleTarget.STATUS_CODE.name());
-            ruleMap.put("method", rule.getMethod() != null ? rule.getMethod().name() : RuleMethod.REGEX.name());
-            ruleMap.put("expression", rule.getExpression());
+            ruleMap.put("is_active", rule.isActive());
             ruleMap.put("enabled", rule.isEnabled());
-            ruleMap.put("priority", rule.getPriority());
             ruleMap.put("success_color", rule.getSuccessColorHex());
             ruleMap.put("failure_color", rule.getFailureColorHex());
             ruleMap.put("success_note", rule.getSuccessNote());
             ruleMap.put("failure_note", rule.getFailureNote());
             ruleMap.put("remark", rule.getRemark());
 
-            // 序列化 conditions
+            // 序列化 conditions（v13：不输出 operator）
             List<RuleCondition> conditions = rule.getEffectiveConditions();
             if (conditions != null && !conditions.isEmpty()) {
                 List<Map<String, Object>> condList = new ArrayList<>();
@@ -60,7 +57,6 @@ public class JudgmentRuleYamlIO {
                     condMap.put("target", cond.getTarget() != null ? cond.getTarget().name() : "");
                     condMap.put("method", cond.getMethod() != null ? cond.getMethod().name() : "");
                     condMap.put("expression", cond.getExpression() != null ? cond.getExpression() : "");
-                    condMap.put("operator", cond.getOperator() != null ? cond.getOperator().name() : "AND");
                     condMap.put("negate", cond.isNegate());
                     condList.add(condMap);
                 }
@@ -69,13 +65,13 @@ public class JudgmentRuleYamlIO {
 
             ruleList.add(ruleMap);
         }
-        root.put("judgment_rules", ruleList);
+        root.put("judgment_rule_groups", ruleList);
 
         return yaml.dump(root);
     }
 
     /**
-     * 从YAML字符串解析规则列表
+     * 从YAML字符串解析规则列表（v13：仅支持新格式）
      */
     @SuppressWarnings("unchecked")
     public static List<JudgmentRule> fromYaml(String yamlContent) {
@@ -89,13 +85,9 @@ public class JudgmentRuleYamlIO {
             Map<String, Object> root = yaml.load(yamlContent);
             if (root == null) return rules;
 
-            // 支持 "judgment_rules" 或 "rules" 作为键
-            Object rulesObj = root.get("judgment_rules");
-            if (rulesObj == null) {
-                rulesObj = root.get("rules");
-            }
+            Object rulesObj = root.get("judgment_rule_groups");
             if (!(rulesObj instanceof List)) {
-                LogManager.getInstance().printError("[!] YAML格式错误：缺少judgment_rules列表");
+                LogManager.getInstance().printError("[!] YAML格式错误：缺少judgment_rule_groups列表");
                 return rules;
             }
 
@@ -119,42 +111,24 @@ public class JudgmentRuleYamlIO {
     }
 
     /**
-     * 从Map解析单条规则
+     * 从Map解析单条规则（v13 新格式）
      */
     private static JudgmentRule parseRuleFromMap(Map<String, Object> map) {
         String name = getStringValue(map, "name", "");
-        String targetStr = getStringValue(map, "target", "STATUS_CODE");
-        String methodStr = getStringValue(map, "method", "REGEX");
-        String expression = getStringValue(map, "expression", "");
         boolean enabled = getBooleanValue(map, "enabled", true);
-        int priority = getIntValue(map, "priority", 1);
+        boolean isActive = getBooleanValue(map, "is_active", false);
         String successColor = getStringValue(map, "success_color", "#FF0000");
         String failureColor = getStringValue(map, "failure_color", "#90EE90");
         String successNote = getStringValue(map, "success_note", "");
         String failureNote = getStringValue(map, "failure_note", "");
         String remark = getStringValue(map, "remark", "");
 
-        if (expression.isEmpty()) return null;
-
-        JudgmentRule rule = new JudgmentRule();
-        rule.setName(name);
-        rule.setTarget(RuleTarget.fromString(targetStr));
-        rule.setMethod(RuleMethod.fromString(methodStr));
-        rule.setExpression(expression);
-        rule.setEnabled(enabled);
-        rule.setPriority(priority);
-        rule.setSuccessColor(JudgmentRule.hexToColor(successColor));
-        rule.setFailureColor(JudgmentRule.hexToColor(failureColor));
-        rule.setSuccessNote(successNote);
-        rule.setFailureNote(failureNote);
-        rule.setRemark(remark);
-
         // 解析 conditions
+        List<RuleCondition> conditions = new ArrayList<>();
         Object conditionsObj = map.get("conditions");
         if (conditionsObj instanceof List) {
             @SuppressWarnings("unchecked")
             List<Object> condList = (List<Object>) conditionsObj;
-            List<RuleCondition> conditions = new ArrayList<>();
             for (Object item : condList) {
                 if (item instanceof Map) {
                     @SuppressWarnings("unchecked")
@@ -163,18 +137,26 @@ public class JudgmentRuleYamlIO {
                     cond.setTarget(RuleTarget.fromString(getStringValue(condMap, "target", "STATUS_CODE")));
                     cond.setMethod(RuleMethod.fromString(getStringValue(condMap, "method", "REGEX")));
                     cond.setExpression(getStringValue(condMap, "expression", ""));
-                    cond.setOperator(RuleCondition.LogicalOperator.fromString(
-                            getStringValue(condMap, "operator", "AND")));
                     cond.setNegate(getBooleanValue(condMap, "negate", false));
                     if (cond.isValid()) {
                         conditions.add(cond);
                     }
                 }
             }
-            if (!conditions.isEmpty()) {
-                rule.setConditions(conditions);
-            }
         }
+
+        if (conditions.isEmpty()) return null;
+
+        JudgmentRule rule = new JudgmentRule();
+        rule.setName(name);
+        rule.setEnabled(enabled);
+        rule.setActive(isActive);
+        rule.setSuccessColor(JudgmentRule.hexToColor(successColor));
+        rule.setFailureColor(JudgmentRule.hexToColor(failureColor));
+        rule.setSuccessNote(successNote);
+        rule.setFailureNote(failureNote);
+        rule.setRemark(remark);
+        rule.setConditions(conditions);
 
         return rule;
     }
@@ -253,16 +235,5 @@ public class JudgmentRuleYamlIO {
         if (value instanceof Boolean) return (Boolean) value;
         if (value instanceof Number) return ((Number) value).intValue() != 0;
         return defaultValue;
-    }
-
-    private static int getIntValue(Map<String, Object> map, String key, int defaultValue) {
-        Object value = map.get(key);
-        if (value == null) return defaultValue;
-        if (value instanceof Number) return ((Number) value).intValue();
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
     }
 }
