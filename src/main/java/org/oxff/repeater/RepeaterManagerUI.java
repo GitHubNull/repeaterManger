@@ -422,10 +422,23 @@ public class RepeaterManagerUI {
         dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
     }
 
+    // 请求选中防抖：避免 ListSelectionListener + MouseAdapter 双重触发
+    private volatile int lastSelectedRequestId = -1;
+    private volatile long lastSelectTime = 0;
+    private static final long DEBOUNCE_MS = 300;
+
     /**
      * 请求列表选中回调
      */
     private void onRequestSelected(int requestId, byte[] requestData) {
+        // 防抖：同一 requestId 在 300ms 内不重复处理
+        long now = System.currentTimeMillis();
+        if (requestId == lastSelectedRequestId && (now - lastSelectTime) < DEBOUNCE_MS) {
+            return;
+        }
+        lastSelectedRequestId = requestId;
+        lastSelectTime = now;
+
         LogManager.getInstance().printOutput("[*] 请求选中回调触发，请求ID: " + requestId);
 
         dispatchHandler.setCurrentRequestId(requestId);

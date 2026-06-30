@@ -356,35 +356,43 @@ public class HistoryReadDAO {
             // 尝试从 URL 解析补充 protocol/domain/path/query
             String urlStr = httpRequest.url();
             if (urlStr != null && !urlStr.isEmpty()) {
-                try {
-                    java.net.URL url = new java.net.URL(urlStr);
-
-                    if (record.getProtocol() == null || record.getProtocol().isEmpty()) {
-                        record.setProtocol(url.getProtocol());
-                    }
-
-                    if (record.getDomain() == null || record.getDomain().isEmpty()) {
-                        String host = url.getHost();
-                        int port = url.getPort();
-                        if (port != -1 && port != url.getDefaultPort()) {
-                            host = host + ":" + port;
-                        }
-                        record.setDomain(host);
-                    }
-
+                // 相对路径（如 /api/v1/vps/6/start）无法被 new URL() 解析，
+                // 提前检测避免 MalformedURLException: no protocol 的异常开销
+                if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
                     if (record.getPath() == null || record.getPath().isEmpty() || "/".equals(record.getPath())) {
-                        String urlPath = url.getPath();
-                        if (urlPath != null && !urlPath.isEmpty()) {
-                            record.setPath(urlPath);
-                        }
+                        record.setPath(urlStr.startsWith("/") ? urlStr : "/" + urlStr);
                     }
+                } else {
+                    try {
+                        java.net.URL url = new java.net.URL(urlStr);
 
-                    if (record.getQueryParameters() == null || record.getQueryParameters().isEmpty()) {
-                        String query = url.getQuery();
-                        record.setQueryParameters(query != null ? query : "");
+                        if (record.getProtocol() == null || record.getProtocol().isEmpty()) {
+                            record.setProtocol(url.getProtocol());
+                        }
+
+                        if (record.getDomain() == null || record.getDomain().isEmpty()) {
+                            String host = url.getHost();
+                            int port = url.getPort();
+                            if (port != -1 && port != url.getDefaultPort()) {
+                                host = host + ":" + port;
+                            }
+                            record.setDomain(host);
+                        }
+
+                        if (record.getPath() == null || record.getPath().isEmpty() || "/".equals(record.getPath())) {
+                            String urlPath = url.getPath();
+                            if (urlPath != null && !urlPath.isEmpty()) {
+                                record.setPath(urlPath);
+                            }
+                        }
+
+                        if (record.getQueryParameters() == null || record.getQueryParameters().isEmpty()) {
+                            String query = url.getQuery();
+                            record.setQueryParameters(query != null ? query : "");
+                        }
+                    } catch (Exception e) {
+                        LogManager.getInstance().printOutput("[*] 从请求数据解析URL失败，跳过补充: " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    LogManager.getInstance().printOutput("[*] 从请求数据解析URL失败，跳过补充: " + e.getMessage());
                 }
             }
         } catch (Exception e) {

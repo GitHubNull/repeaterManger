@@ -183,9 +183,13 @@ public class AutoTestEngine {
                         byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
                                 requestBytes, locations, session);
 
+                        // 检测 HTTP/2 协议版本，确保重放时保持与原始请求相同的协议
+                        boolean useHttp2 = "HTTP/2".equals(interceptedRequest.httpVersion());
+
                         // 带重试的同步发送（使用会话级别的超时和重试配置）
                         SyncHttpSender.Result holder = sendSyncRequestWithRetry(
-                                modifiedRequest, httpService, requestManager, timeoutSeconds, retryCount, retryDelayMs);
+                                modifiedRequest, httpService, requestManager,
+                                useHttp2, timeoutSeconds, retryCount, retryDelayMs);
 
                         // 判决
                         String judgment = JudgmentResult.PENDING.name();
@@ -203,6 +207,28 @@ public class AutoTestEngine {
                                 String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
                                 byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
                                 double threshold = sessionManager.getSimilarityThreshold();
+
+                                // === 判决前诊断日志 ===
+                                if (baselineResponse == null || baselineResponse.length == 0) {
+                                    LogManager.getInstance().printError(String.format(
+                                            "[!] 基准响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+                                }
+                                if (responseBodyOnly == null || responseBodyOnly.length == 0) {
+                                    LogManager.getInstance().printError(String.format(
+                                            "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+                                }
+                                LogManager.getInstance().judgmentDebug(String.format(
+                                        "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
+                                        baselineResponse != null ? baselineResponse.length : -1,
+                                        responseBodyOnly != null ? responseBodyOnly.length : -1,
+                                        baselineStatusCode, holder.statusCode, threshold));
+                                LogManager.getInstance().judgmentDebug(String.format(
+                                        "[判决] 基准响应体前200字: %s",
+                                        truncateForLog(baselineResponse, 200)));
+                                LogManager.getInstance().judgmentDebug(String.format(
+                                        "[判决] 当前响应体前200字: %s",
+                                        truncateForLog(responseBodyOnly, 200)));
+
                                 JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
                                         holder.statusCode, responseHeaders, responseBodyOnly,
                                         baselineResponse, baselineStatusCode, threshold, holder.durationMs);
@@ -259,7 +285,9 @@ public class AutoTestEngine {
 
                         LogManager.getInstance().printOutput(String.format(
                                 "[*] 自动化测试: 用户=%s, 判决=%s, 相似度=%.2f",
-                                session.getName(), judgment, similarity));
+                                session.getName(),
+                                JudgmentResult.toDisplayName(judgment),
+                                similarity));
 
                     } catch (Exception e) {
                         LogManager.getInstance().printError("[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
@@ -297,11 +325,27 @@ public class AutoTestEngine {
 
     /**
      * 带重试的同步发送HTTP请求（委托给 SyncHttpSender）
+     *
+     * @param useHttp2 是否使用 HTTP/2 协议重放，从 interceptedRequest.httpVersion() 检测
      */
     private SyncHttpSender.Result sendSyncRequestWithRetry(byte[] requestBytes, HttpService httpService,
                                                              RequestManager requestManager,
+                                                             boolean useHttp2,
                                                              int timeoutSeconds, int retryCount, int retryDelayMs) {
         return SyncHttpSender.sendWithRetry(requestBytes, httpService, requestManager,
-                false, timeoutSeconds, retryCount, retryDelayMs, "自动化测试");
+                useHttp2, timeoutSeconds, retryCount, retryDelayMs, "自动化测试");
+    }
+
+    /**
+     * 截断字节数组为字符串用于日志（UTF-8解码，截断到 maxLen 字符）
+     */
+    private static String truncateForLog(byte[] data, int maxLen) {
+        if (data == null || data.length == 0) return "(空)";
+        try {
+            String s = new String(data, java.nio.charset.StandardCharsets.UTF_8);
+            return s.length() > maxLen ? s.substring(0, maxLen) + "...(截断)" : s;
+        } catch (Exception e) {
+            return "(解码失败)";
+        }
     }
 }

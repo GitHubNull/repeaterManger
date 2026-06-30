@@ -803,11 +803,18 @@ public class RequestDispatchHandler {
                                         });
                                     }
 
-                                    LogManager.getInstance().printOutput(String.format(
-                                            "[*] 批量权限测试 [%d/%d]: 用户=%s, 判决=%s",
-                                            completedCount.get() + 1, totalCount,
-                                            rec.getUserSessionName(),
-                                            rec.getJudgment()));
+                                    if (isFirst) {
+                                        LogManager.getInstance().printOutput(String.format(
+                                                "[*] 批量权限测试 [%d/%d]: 用户=%s (基准用户，不参与比较)",
+                                                completedCount.get() + 1, totalCount,
+                                                rec.getUserSessionName()));
+                                    } else {
+                                        LogManager.getInstance().printOutput(String.format(
+                                                "[*] 批量权限测试 [%d/%d]: 用户=%s, 判决=%s",
+                                                completedCount.get() + 1, totalCount,
+                                                rec.getUserSessionName(),
+                                                JudgmentResult.toDisplayName(rec.getJudgment())));
+                                    }
                                 }
 
                                 @Override

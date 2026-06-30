@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.29.1] - 2026-06-30
+
+### Fixed
+- 修复 `JsonSimilarityCalculator` 相似度算法：从 Jaccard 改为结构分 + 值分加权混合（0.3/0.7），解决结构相同值不同的 JSON（如 `{"code":0}` vs `{"code":401}`）被判为 0.0 的问题
+- 修复 `AutoTestEngine` 重放未检测 HTTP/2 协议版本的问题
+- 修复 `AutoTestEngine` 判决结果显示原始枚举名而非中文化显示名的问题
+- 修复 `RepeaterManagerUI` 请求列表因 `ListSelectionListener` + `MouseAdapter` 双重触发导致重复加载的问题（新增 300ms 防抖）
+- 修复 `RequestDispatchHandler` 批量测试日志中基准用户误显示判决结果的问题（改为"基准用户，不参与比较"）
+
+### Changed
+- 增强 `AutoTestEngine` 判决前诊断日志（空 body 告警 + 截断预览 + 全链路调试输出）
+- 优化 `HistoryReadDAO` 数据库查询
+
 ## [2.29.0] - 2026-06-30
 
 ### Added

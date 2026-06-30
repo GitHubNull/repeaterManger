@@ -109,8 +109,13 @@ public class JsonSimilarityCalculator {
 
     /**
      * 计算两个 key-path 映射的相似度
-     * 使用 Jaccard-like 度量：匹配叶子数 / 总叶子数
-     * 仅当两个映射中存在相同 key 时，才比较 value
+     * 使用结构分 + 值分加权混合算法：
+     * - 结构分：衡量 key 级别的覆盖度（两边共有 key 数 / 总 key 数）
+     * - 值分：在共有 key 上衡量值的匹配度
+     * - 最终相似度 = 0.3 × 结构分 + 0.7 × 值分
+     *
+     * 此修复解决了结构完全相同但值完全不同的 JSON（如 {"code":0,"message":"ok"}
+     * vs {"code":401,"message":"unauthorized"}）被判为相似度 0.0 的问题。
      */
     private static double computeMapSimilarity(Map<String, String> map1, Map<String, String> map2) {
         if (map1.isEmpty() && map2.isEmpty()) return 1.0;
@@ -121,26 +126,34 @@ public class JsonSimilarityCalculator {
         allKeys.addAll(map2.keySet());
 
         int totalKeys = allKeys.size();
-        int matchedKeys = 0;
+        double structuralScore = 0.0;  // key 存在即得分
+        double valueScore = 0.0;       // 值相同才得分
 
         for (String key : allKeys) {
             String v1 = map1.get(key);
             String v2 = map2.get(key);
 
             if (v1 != null && v2 != null) {
-                // 两边都有这个 key，比较值
+                // 两边都有这个 key → 结构分+1
+                structuralScore += 1.0;
                 if (v1.equals(v2)) {
-                    matchedKeys++;
+                    // 值也相同 → 值分+1
+                    valueScore += 1.0;
                 } else {
                     // 值不同，但可能只有噪声差异，计算值的字符串相似度给部分分
                     double valueSim = computeValueSimilarity(v1, v2);
-                    matchedKeys += valueSim;
+                    valueScore += valueSim;
                 }
             }
-            // 单边缺失的 key 不计分
+            // 单边独有的 key → 两个分数都不加
         }
 
-        return (double) matchedKeys / totalKeys;
+        double structureSimilarity = totalKeys > 0 ? structuralScore / totalKeys : 0.0;
+        double valueSimilarity = structuralScore > 0 ? valueScore / structuralScore : 0.0;
+
+        // 加权混合：结构分权重 0.3，值分权重 0.7
+        // 这样 {code, message} vs {code, message} 即使值全不同，也有 0.3 的基础分
+        return 0.3 * structureSimilarity + 0.7 * valueSimilarity;
     }
 
     /**
