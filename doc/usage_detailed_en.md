@@ -89,7 +89,7 @@ Contains multiple sub-tabs:
 - **Proxy Debugging**: HTTP proxy configuration
 - **Data Import/Export**: ERM archive / Postman Collection import/export
 - **API Rule Config**: CRUD operations for global and project rules
-- **Privilege Testing**: User sessions, judgment rules, request scope configuration
+- **Privilege Testing**: Token Schemes / Token Locations / User Sessions / Judgment Rule Groups / Request Scope / Replay Config / Dedup Config
 
 ### 2.3 Log Tab
 
@@ -411,52 +411,244 @@ Global and project rules are sorted by the `priority` field, using a **first-mat
 
 ### 11.1 Feature Overview
 
-The privilege testing module provides automated horizontal/vertical privilege escalation vulnerability detection. By configuring multiple user sessions and judgment rules, the plugin can automatically intercept proxy traffic, replace identity credentials, replay requests, and determine whether there is a privilege escalation risk based on the response.
+The privilege testing module provides automated horizontal/vertical privilege escalation vulnerability detection. It supports a **3-tier architecture** (Token Location → Token Scheme → User Session), uses a **single active rule group** mechanism with AND/OR/NOT multi-condition judgment, and features a three-layer fallback judgment engine (active rule group → default similarity → status code).
 
-### 11.2 User Session Configuration
+Key capabilities:
+- **Token Scheme Management**: Group token locations into reusable schemes, bridging locations and sessions
+- **User Session Management**: Configure sessions for users with different privilege levels
+- **Rule Group Judgment**: Single active rule group + AND/OR/NOT condition combinations
+- **Anonymous User Creation**: One-click guest user with all empty token values
+- **Dedup Configuration**: Priority-chain API deduplication with 6 strategies × 3 keep policies
+- **Session Parsing**: Auto-parse user sessions from clipboard (raw HTTP / Chrome fetch format)
 
-Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab:
+### 11.2 Token Scheme Management
 
-- Add user sessions with different privilege levels (e.g., admin, regular user, guest)
-- Configure credentials or tokens for each session
+**Concept**: A token scheme is a named group of token locations, serving as an intermediate layer between token locations and user sessions. Different schemes correspond to different security testing targets (e.g., testing only Bearer authentication, testing only Cookie authentication, etc.).
+
+**Scheme Operations**:
+- **Create**: Define a scheme name, description, and select associated token locations
+- **Edit**: Modify scheme name, description, or location membership
+- **Delete**: Remove a scheme (associated sessions are unaffected; their location bindings persist)
+- **Enable/Disable**: Toggle scheme availability
+- **Persist to Global**: Save scheme to `~/.burp/repeater_manager/token_schemes.yaml` for cross-project reuse
+
+**Session-to-Scheme Association**:
+- Each user session is associated with one token scheme
+- Token values in the session are filled according to the locations defined in the scheme
+- Changing a scheme's locations automatically affects all sessions associated with that scheme
+
+**Global Scheme Synchronization**:
+- On startup, the plugin automatically loads global schemes from YAML into the project database
+- Schemes marked as `persistToGlobal=true` are synced to YAML on save
+
+**Configuration Examples**:
+| Scheme Name | Token Locations | Use Case |
+|-------------|----------------|----------|
+| Bearer Auth | Authorization Header only | Testing JWT/Bearer token replacement |
+| Cookie Session | Cookie: JSESSIONID | Testing session cookie hijacking |
+| Hybrid Auth | Authorization Header + CSRF Token | Testing APIs requiring multiple auth factors |
+| API Key | URL Param: api_key | Testing API key leakage scenarios |
 
 ### 11.3 Token Location Configuration
 
-Configure where the token is located in the request:
+Configure where tokens are located in the request. The plugin supports **6 token location types**:
 
-| Location Type | Description |
-|---------------|-------------|
-| HEADER | Request header (e.g., Authorization: Bearer xxx) |
-| COOKIE | Cookie field |
-| BODY | In the request body |
-| URL_PARAM | In the URL query parameters |
+| Location Type | Description | Expression Example |
+|---------------|-------------|-------------------|
+| HEADER | Request header value | `Authorization` (extracts value after header name) |
+| JSON_BODY | JSON body field | `$.access_token` (JSONPath expression) |
+| XML_BODY | XML body node | `//auth/token` (XPath expression) |
+| FORM_FIELD | URL-encoded form field | `csrf_token` (field name) |
+| MULTIPART_FIELD | Multipart form field | `session_id` (field name) |
+| URL_PARAM | URL query parameter | `token` (parameter name) |
 
-Token locations support **persist to global** (cross-session sharing) and **enable/disable** control.
+**Additional Features**:
+- **Persist to Global**: Save location to `~/.burp/repeater_manager/token_locations.yaml` for cross-project sharing
+- **Enable/Disable**: Temporarily disable a location without deleting it
+- **Expression Support**: JSON_BODY and XML_BODY types support JSONPath/XPath expressions for extracting tokens from complex nested structures
 
-### 11.4 Judgment Rule Configuration
+### 11.4 Judgment Rule Group Configuration
 
-Set conditions for detecting privilege escalation:
+#### Core Concept Change (v2.30.0+)
 
-| Judgment Target | Judgment Method | Description |
-|-----------------|-----------------|-------------|
-| STATUS_CODE | EQUALS / NOT_EQUALS / CONTAINS | Status code matching |
-| RESPONSE_BODY | CONTAINS / NOT_CONTAINS / REGEX | Response body content matching |
-| RESPONSE_HEADER | CONTAINS / NOT_CONTAINS | Response header matching |
-| RESPONSE_TIME | GREATER_THAN / LESS_THAN | Response time judgment |
+The judgment system has been refactored from "multi-condition AND/OR combination" to **"Rule Group + Single Active Rule Set"**:
 
-### 11.5 Request Scope Configuration
+- **Rule Group**: A named collection of conditions combined with **AND** logic — all conditions within a group must be satisfied simultaneously for the group to match
+- **Single Active Rule Set**: Only **one** rule group is "active" at any given time; the judgment engine evaluates only the active group
+- **Fallback**: When no active rule group exists or the active group doesn't match → fallback to default similarity judgment (`SIMILARITY >= 0.90`)
+
+**Condition Operators**:
+
+| Operator | Description | Behavior |
+|----------|-------------|----------|
+| AND | All conditions must match | Default operator within a rule group |
+| OR | Any condition matches | Used for alternative detection paths |
+| NOT | Negate condition result | Invert match (e.g., status NOT 200) |
+
+**Judgment Targets & Methods**:
+
+| Target | Available Methods | Description |
+|--------|-------------------|-------------|
+| STATUS_CODE | EQUALS, NOT_EQUALS, GREATER_THAN, LESS_THAN | HTTP status code matching |
+| RESPONSE_BODY | CONTAINS, NOT_CONTAINS, REGEX, LENGTH_DIFF | Response body content analysis |
+| RESPONSE_HEADER | CONTAINS, NOT_CONTAINS, REGEX | Response header field matching |
+| RESPONSE_TIME | GREATER_THAN, LESS_THAN, NUMERIC_EQUALS | Response time threshold detection |
+| SIMILARITY | GREATER_THAN, LESS_THAN, NUMERIC_EQUALS | Response similarity score comparison |
+
+#### 11.4.1 Rule Configuration Cases
+
+Each case below corresponds to one rule group. Groups marked with `[NOT]` demonstrate the negation operator.
+
+**Case 1: Status Code Anomaly Detection**
+- **Scenario**: Normal user gets 200 but low-privilege user gets 200 with sensitive data
+- **Conditions**: `STATUS_CODE EQUALS 200`
+- **Note**: Simplest check; combine with body content detection for better accuracy
+
+**Case 2: Unauthorized Access Detection (Body Keywords)**
+- **Scenario**: Verify that sensitive pages return proper rejection messages
+- **Conditions**: `RESPONSE_BODY NOT_CONTAINS "unauthorized"` AND `RESPONSE_BODY NOT_CONTAINS "forbidden"`
+- **Note**: If 200 is returned without any rejection keywords, unauthorized access may exist
+
+**Case 3: Sensitive Data Leakage Detection**
+- **Scenario**: Test if low-privilege users can access admin-only data fields
+- **Conditions**: `RESPONSE_BODY CONTAINS "admin"` OR `RESPONSE_BODY CONTAINS "superuser"`
+- **Note**: If response contains admin-related data, privilege escalation is confirmed
+
+**Case 4: Response Length Anomaly Detection**
+- **Scenario**: Detect large bodies suggesting excessive data exposure
+- **Conditions**: `RESPONSE_BODY LENGTH_DIFF > 500`
+- **Note**: Length difference > 500 characters compared to baseline; tune threshold per application
+
+**Case 5: High-Similarity Response with Status 200**
+- **Scenario**: Detect when different users get identical successful responses
+- **Conditions**: `SIMILARITY > 0.95` AND `STATUS_CODE EQUALS 200`
+- **Note**: High similarity + success status = likely accessing same privileged data
+
+**Case 6: Response Time Anomaly**
+- **Scenario**: Detect processing anomalies that may indicate data retrieval
+- **Conditions**: `RESPONSE_TIME LESS_THAN 500`
+- **Note**: Low-privilege users getting fast responses may indicate no authorization checks
+
+**Case 7: Header-Based Detection**
+- **Scenario**: Detect redirect or authentication headers in response
+- **Conditions**: `RESPONSE_HEADER CONTAINS "Location: /login"` NOT
+- **Note**: If no redirect to login page, the resource may be accessible without auth
+
+**Case 8 (NEW): Anonymous User Unauthorized Access**
+- **Scenario**: Anonymous user (all tokens empty) accessing authenticated endpoints
+- **Conditions**: `STATUS_CODE EQUALS 200` AND `RESPONSE_BODY NOT_CONTAINS "please login"` (via NOT operator)
+- **Note**: Server should return 401/403 or page with "please login" message; if 200 is returned directly, an unauthorized access vulnerability exists
+
+#### 11.4.2 Active Rule Group Management
+
+- **Setting Active**: In the judgment rule table, check the **"Active"** column for the desired rule group
+- **Global Uniqueness**: Setting a new active rule group automatically deactivates all other groups
+- **Visual Feedback**: The active rule group is highlighted with a special style in the table
+- **No Active Group**: When no active rule group exists, judgment falls back to default similarity (`SIMILARITY >= 0.90`)
+- **Quick Switching**: Switch between rule groups (e.g., "strict detection" vs "lenient detection") for different testing scenarios
+
+#### 11.4.3 Rule Reuse
+
+- Rule groups can be set as **global rules** (`global=true`) for cross-project sharing
+- Support **YAML export/import** for cross-session reuse and team sharing (auto-dedup on import)
+- Recommended practice: Build a collection of rule groups for typical privilege escalation scenarios, then import directly for similar targets
+
+### 11.9 Request Scope Configuration
 
 Specify URL patterns to test. Only requests matching the scope will be intercepted and tested.
 
-### 11.6 Running Tests
+### 11.6 Anonymous User
 
-1. After completing the above configurations, enable **"Auto-testing"**
-2. The plugin intercepts scope-matched proxy traffic
-3. Automatically replaces tokens and replays requests
-4. Evaluates privilege escalation risk based on judgment rules
-5. View results in the **"Privilege Test"** panel:
-   - **Green**: Safe, no privilege escalation detected
+**Feature Overview**: One-click creation of a guest user with all token values empty, used for unauthorized access testing.
+
+**Workflow**:
+1. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
+2. Click the **"Add Anonymous User"** button
+3. The system performs intelligent token scheme matching:
+   - **Priority 1**: Reuse an existing user's token scheme (if any user already has a scheme)
+   - **Priority 2**: Auto-match the single enabled scheme
+   - **Priority 3**: Show a selection dialog when multiple schemes exist
+
+**Empty Token Value Semantics**: All token values for the anonymous user are empty strings. During request replay:
+- **HEADER**: Remove the header entirely (rather than setting an empty value)
+- **JSON_BODY**: Remove the JSON property
+- **XML_BODY**: Remove the XML node
+- **FORM_FIELD / MULTIPART_FIELD**: Remove the form field
+- **URL_PARAM**: Remove the URL query parameter
+
+> This "removal" semantics simulates the unauthenticated state where authentication parameters are completely absent, which is closer to a real unauthorized access scenario than setting empty string values.
+
+**Use Cases**:
+- Unauthorized access testing (detecting if authentication is required)
+- Guest permission boundary testing (can anonymous users see data that should be hidden?)
+- Missing authentication detection on API endpoints
+
+### 11.7 Dedup Configuration
+
+**Feature Overview**: Prevent the same API from being tested for privilege escalation multiple times, improving automated testing efficiency.
+
+**Core Concepts**:
+- **Dedup Strategy (DedupStrategy)**: Defines how to extract a dedup key from a request (6 types)
+- **Keep Policy (DedupKeepPolicy)**: Defines which request to keep among duplicates (3 types)
+- **Priority-Chain Matching**: Traverses all enabled configs from highest to lowest priority; the first config that successfully extracts a dedup key is used
+
+**6 Dedup Strategies**:
+
+| Strategy | Description | Expression Example |
+|----------|-------------|-------------------|
+| PATH | Deduplicate by URL path | (no expression needed) |
+| API | Deduplicate by extracted API path | (no expression needed) |
+| JSON_BODY_FIELD | Deduplicate by JSON body field value | `user_id` |
+| XML_BODY_FIELD | Deduplicate by XML body node value | `//user/id` |
+| FORM_FIELD | Deduplicate by form field value | `order_id` |
+| URL_PARAM | Deduplicate by URL parameter value | `page` |
+
+**3 Keep Policies**:
+
+| Policy | Description |
+|--------|-------------|
+| FIRST | Keep the first matching request; skip subsequent duplicates |
+| LAST | Keep the last matching request; overwrite previous ones |
+| MIDDLE | Keep the middle-positioned request (median index) |
+
+**Storage Modes**:
+- **Global Persistence**: Configs stored in `~/.burp/repeater_manager/dedup_configs.yaml`, shared across sessions
+- **Session Temporary**: Only effective for the current session; cleared on restart
+
+### 11.8 Session Parsing
+
+**Feature Overview**: Automatically parse user session token values and locations from clipboard HTTP messages, greatly simplifying session configuration.
+
+**Supported Formats**:
+1. **Raw HTTP Request**: Standard HTTP request message (e.g., copied from Burp Proxy)
+2. **Chrome "Copy as fetch"**: Chrome DevTools Network panel fetch copy format
+3. **Chrome "Copy as fetch (Node.js)"**: Node.js-compatible fetch copy format
+
+**Workflow**:
+1. Copy the target request from Burp Proxy or Chrome DevTools
+2. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
+3. Click the **"Parse from Clipboard"** button
+4. The plugin auto-detects clipboard format and converts it to raw HTTP
+5. Automatically extracts token values and location information
+6. Select the target token scheme (a selection dialog appears if no matching scheme exists)
+7. Confirm to create or update the user session
+
+> Chrome fetch format support includes single/double quotes, escape sequences, nested objects, and other complex JS syntax parsing.
+
+### 11.10 Execute Test
+
+1. After completing the above configuration, set an **active rule group** in the privilege testing panel (check the "Active" column for the target rule group)
+2. Enable the **"Auto-testing"** switch
+3. The plugin intercepts scope-matched proxy traffic
+4. Automatically replaces tokens and replays requests (anonymous user's empty token values trigger "removal" operations)
+5. Evaluates privilege escalation risk based on the active rule group (all conditions AND-matched → ESCALATED; any condition fails → fallback to similarity judgment)
+6. View results in the **"Privilege Test"** panel:
    - **Red**: Potential privilege escalation, requires manual confirmation
+   - **Green**: Safe, no privilege escalation detected
+
+> **Three-Layer Judgment Flow**: ① Baseline response invalid → marked "ERROR"; ② Active rule group exists and all conditions match → marked "ESCALATED"; ③ No active group or mismatch → fallback to default similarity judgment (≥ threshold → ESCALATED, < threshold → NOT_ESCALATED).
+
+> **Default Similarity Rule**: On first startup, the system auto-creates a "Default Similarity Rule Group" (lowest priority) with condition `SIMILARITY >= 0.90`. When no active rule group exists or the active group doesn't match, this fallback rule group takes effect. Users can view, edit, activate, disable, or delete this rule group in the "Judgment Rules" tab.
 
 ---
 
@@ -536,37 +728,70 @@ Batch operations allow processing multiple history records simultaneously, signi
 
 ### 14.1 Feature Overview
 
-The report export module uses the Template Method design pattern to export privilege testing results in multiple formats, facilitating delivery, archiving, and team sharing.
+The report export module uses the Template Method design pattern to export privilege testing results in multiple formats, facilitating delivery, archiving, and team sharing. Report generation is based on a unified data model (`ReportData`), dispatched by `ReportExporter`, supporting both plaintext and encrypted export modes.
 
 ### 14.2 Export Operation
 
 1. After completing tests in the privilege test panel, click the **"Export Report"** button
-2. Select export format: PDF / HTML / Markdown
+2. Select export format: PDF / HTML / Markdown / ERMR (encrypted container)
 3. Choose the file save path
-4. The plugin generates the report
-5. HTML format reports automatically open in the browser after generation
+4. If ERMR encryption mode is selected, enter a password (AES-256-CBC encryption)
+5. The plugin generates the report
+6. HTML format reports automatically open in the browser after generation
 
 ### 14.3 Report Formats
 
-| Format | Description | Implementation |
-|--------|-------------|----------------|
-| PDF | Apache PDFBox 3.0.1 native generation, embedded Chinese fonts, suitable for formal delivery | PdfReportGenerator |
-| HTML | FreeMarker template rendering, visually appealing, view in browser | HtmlReportGenerator |
-| Markdown | FreeMarker template generating plain text reports, suitable for version control management | MarkdownReportGenerator |
+| Format | Extension | Description | Implementation |
+|--------|-----------|-------------|----------------|
+| PDF | `.pdf` | Apache PDFBox 3.0.1 native generation, embedded Chinese fonts, suitable for formal delivery | `PdfReportGenerator` |
+| HTML | `.html` | FreeMarker template rendering, visually appealing, view in browser | `HtmlReportGenerator` |
+| Markdown | `.md` | FreeMarker template generating plain text reports, suitable for version control management | `MarkdownReportGenerator` |
+| ERMR (Encrypted Container) | `.ermr` | Packages any report format into AES-256-CBC + HMAC-SHA256 encrypted archive, suitable for secure transmission | `ReportExporter` (dispatcher) |
+
+> ERMR container mode can be layered on top of PDF/HTML/Markdown to generate `.ermr` encrypted files, ensuring the security of sensitive report data during transmission and storage.
 
 ### 14.4 Report Content
 
-- **Test Summary**: Test time, target scope, total requests, privilege escalation findings
-- **Session Statistics**: Aggregated test result statistics for each user session
-- **Per-endpoint Details**: Original request/response and replaced request/response details for each endpoint
-- **cURL Commands**: Equivalent cURL commands for each test (generated by CurlBuilder)
-- **Postman Snippets**: Postman code snippets for each test (generated by PostmanSnippetBuilder)
+**Test Summary**:
+- Test time, target scope, total requests, privilege escalation findings
+- Baseline user name and the configured active rule group name
+
+**Session Statistics**:
+- Aggregated test result statistics for each user session
+- Judgment results use Chinese display names:
+
+| Enum Value | Report Display | Meaning |
+|------------|---------------|---------|
+| `ESCALATED` | ⚠ Escalated (越权) | Privilege escalation risk detected, requires manual confirmation |
+| `NOT_ESCALATED` | ✔ Safe (安全) | No privilege escalation detected |
+| `ERROR` | ✗ Error (错误) | Judgment process error (e.g., invalid baseline response) |
+| `PENDING` | Pending (待判定) | Judgment not yet complete (e.g., status code difference needs manual review) |
+
+> Report templates use the `JudgmentResult.toDisplayName()` method to uniformly convert enum values to Chinese display names, ensuring raw enum strings like `"ESCALATED"` never appear in reports.
+
+**Per-Endpoint Details** (each tested API endpoint includes):
+- Original request/response and token-replaced request/response details
+- Matched **rule group name** (`matchedRuleName`): When judgment is triggered by a rule group, the report explicitly displays the matched rule group name for traceability
+- Similarity score (`similarity`): Percentage of similarity between original and replaced responses
+- HTTP status code, response length, response time
+
+**Reproduction Commands**:
+- **cURL Commands**: Equivalent cURL commands for each test (generated by `CurlBuilder`)
+- **Postman Snippets**: Postman code snippets for each test (generated by `PostmanSnippetBuilder`), importable directly into Postman for reproduction
 
 ### 14.5 Content Rendering
 
-- Request/response bodies automatically rendered (BodyRenderer)
-- Binary content (images, serialized data, etc.) automatically converted to hex or base64 text display (BinaryContentRenderer)
+- Request/response bodies automatically rendered (`BodyRenderer`)
+- Binary content (images, serialized data, etc.) automatically converted to hex or base64 text display (`BinaryContentRenderer`)
 - Text content maintains original formatting and syntax highlighting
+- In PDF reports, excessively long text (such as Base64 strings) is automatically truncated with a prompt to view the HTML report for full data
+
+### 14.6 Sensitive Data Warning
+
+When exporting reports, the plugin displays a sensitive data warning dialog, indicating that the report will contain complete request/response data (which may include Bearer Tokens, Session Cookies, and other sensitive information). Recommendations:
+- Use ERMR encrypted container mode to protect report data
+- Review reports for unmasked authentication information before delivery
+- Use strong passwords to encrypt ERMR files
 
 ---
 

@@ -97,13 +97,15 @@ Click the **"Layout"** dropdown in the top-right corner to choose your preferred
 ## 10. Report Export
 
 - In the privilege test panel, click **"Export Report"** to export test results as a formal report
-- Supports three formats:
+- Supports four formats:
   | Format | Characteristics |
   |--------|-----------------|
   | PDF | Native format, embedded Chinese fonts, suitable for formal delivery |
   | HTML | Open directly in browser, visually appealing |
   | Markdown | Plain text, suitable for version control and further processing |
+  | ERMR | Encrypted container, AES-256-CBC encryption, suitable for secure transmission |
 - Report content includes: Test summary, session statistics, per-endpoint details, cURL/Postman code snippets
+- Judgment results shown in Chinese: ⚠ Escalated (越权) / ✔ Safe (安全) / ✗ Error (错误), matched rule group name also displayed
 - Request/response bodies are auto-rendered (text highlighting, binary hex conversion)
 
 ---
@@ -147,18 +149,32 @@ The plugin can automatically extract API paths from non-standard requests for ea
 
 ---
 
-## 14. Privilege Testing
+## 14. Dedup Configuration
+
+Configure dedup strategies to avoid duplicate privilege testing of the same API:
+
+- Navigate to **"Configuration"** → **"Privilege Testing"** → **"Dedup Config"** tab to add dedup rules
+- 6 dedup strategies: PATH (URL path) / API (extracted path) / JSON_BODY_FIELD / XML_BODY_FIELD / FORM_FIELD / URL_PARAM
+- 3 keep policies: FIRST / LAST / MIDDLE
+- Priority-chain matching — the first enabled config that successfully extracts a dedup key takes effect
+
+---
+
+## 15. Privilege Testing
 
 Automated privilege escalation vulnerability detection:
 
 1. Navigate to the **"Configuration"** panel and configure:
-   - **User Sessions**: Add credentials/tokens for users with different privilege levels
-   - **Token Location**: Configure where the token is in the request (Header / Cookie / Body / URL Parameter)
-   - **Judgment Rules**: Set conditions for detecting privilege escalation (status code / response body / header / response time)
+   - **Token Locations**: Configure where tokens are in the request (HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM, 6 types total)
+   - **Token Schemes**: Create a named group of token locations (e.g., "Bearer Auth" with Authorization Header only), associate schemes with user sessions
+   - **User Sessions**: Add credentials/tokens for users with different privilege levels; one-click **"Add Anonymous User"** (all token values empty, simulating unauthenticated state)
+   - **Judgment Rule Groups**: Create rule groups (conditions within a group are AND-combined), set one as the **active rule group** (globally unique), supports AND/OR/NOT operators
    - **Request Scope**: Specify URL patterns to test
 2. Enable auto-testing; the plugin intercepts scope-matched proxy traffic
-3. Auto-replaces tokens and replays requests, judges risk based on rules
+3. Auto-replaces tokens and replays requests (empty tokens for anonymous users perform "removal" operations), judges risk based on the active rule group
 4. View results in the **"Privilege Test"** panel (color coded: red = potential escalation, green = safe)
+
+> Three-layer judgment flow: Invalid baseline → Error; Active rule group match → Escalated/Safe; No active rule group → Similarity fallback (≥0.90 → Escalated). Supports session parsing from clipboard (raw HTTP / Chrome fetch format).
 
 ---
 

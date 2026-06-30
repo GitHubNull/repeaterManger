@@ -6,7 +6,7 @@
 
 **Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理、API 规则提取和自动化越权测试功能。项目使用 Java 17 编写，基于 Montoya SDK（`burp.api.montoya.*`），采用 MVC 架构。
 
-- **版本**: 2.16.2
+- **版本**: 2.31.0
 - **Java 版本**: 17（source/target 兼容）
 - **构建工具**: Maven
 - **许可证**: Apache License 2.0
@@ -29,37 +29,47 @@
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
-| 扩展入口 | `burp/BurpExtender.java` | 实现 Montoya `BurpExtension` 接口，初始化所有组件 |
-| API 持有者 | `oxff/top/api/MontoyaApiHolder.java` | MontoyaApi 静态持有者 |
-| 主 UI 控制器 | `oxff/top/RepeaterManagerUI.java` | 协调所有 UI 面板和功能组件 |
-| 数据库管理 | `oxff/top/db/DatabaseManager.java` | SQLite 连接池、Schema 初始化、会话管理 |
-| Schema 迁移 | `oxff/top/db/schema/SchemaMigrator.java` | 数据库 Schema 版本化迁移 |
-| Pool 去重 | `oxff/top/db/pool/PoolManager.java` | 字符串/头部/Body 内容 SHA-256 去重存储 |
-| 请求管理 | `oxff/top/http/RequestManager.java` | 异步 HTTP 请求发送（Montoya API） |
-| 历史录制 | `oxff/top/service/HistoryRecordingService.java` | 异步队列化历史记录保存 |
-| 垃圾回收 | `oxff/top/service/GarbageCollectorService.java` | 自动清理零引用 Pool 数据（10分钟间隔） |
-| 自动保存 | `oxff/top/service/AutoSaveService.java` | 定时数据库检查点 |
-| 日志管理 | `oxff/top/logging/LogManager.java` | 多通道日志分发和级别过滤 |
-| ERM 存档 | `oxff/top/io/ErmArchiveWriter.java` / `ErmArchiveReader.java` | 加密存档导入导出（AES-256-CBC + HMAC-SHA256） |
-| 数据导入导出 | `oxff/top/io/DataExporter.java` / `DataImporter.java` | 统一导入导出调度 |
-| API 提取引擎 | `oxff/top/api/ApiExtractionEngine.java` | 无状态规则引擎（4种源 × 4种方法） |
-| 全局规则管理 | `oxff/top/api/GlobalRuleManager.java` | 全局 API 提取规则管理（YAML 文件） |
-| 项目规则管理 | `oxff/top/api/ApiRuleManager.java` | 项目级 API 提取规则管理（SQLite） |
-| 越权测试引擎 | `oxff/top/privilege/AutoTestEngine.java` | 自动化越权测试（拦截代理 → 重放 → 判断） |
-| Token 替换 | `oxff/top/privilege/TokenReplacementEngine.java` | 请求中 Token 自动替换 |
-| 判断引擎 | `oxff/top/privilege/JudgmentEngine.java` | 响应判断引擎 |
-| 配置管理 | `oxff/top/config/DatabaseConfig.java` | 存储模式/日志/代理配置 |
-| 报文比对引擎 | `oxff/top/ui/history/DiffEngine.java` / `DiffPane.java` | LCS 行级/字符级差异算法与 RSyntaxTextArea 渲染面板 |
-| 比对对话框 | `oxff/top/ui/history/ComparisonDialog.java` | 全功能报文比对（标签页/四分格布局） |
-| 差异导航器 | `oxff/top/ui/history/DiffNavigator.java` | 差异区域上一处/下一处跳转导航 |
-| 报告生成引擎 | `oxff/top/privilege/report/ReportGenerator.java` (abstract) | PDF/HTML/Markdown 报告生成基类 |
-| PDF 报告 | `oxff/top/privilege/report/PdfReportGenerator.java` | 原生 PDF 报告 (Apache PDFBox，内嵌中文字体) |
-| HTML/MD 报告 | `oxff/top/privilege/report/HtmlReportGenerator.java` / `MarkdownReportGenerator.java` | FreeMarker 模板渲染报告 |
-| 身体渲染器 | `oxff/top/privilege/report/BodyRenderer.java` / `BinaryContentRenderer.java` | 请求/响应体渲染与二进制内容转换 |
-| 全局Token管理 | `oxff/top/privilege/GlobalTokenLocationManager.java` | 跨会话全局 Token 位置管理 |
-| 用户会话导入导出 | `oxff/top/privilege/UserSessionYamlIO.java` | 用户会话 YAML 导入导出 |
-| 请求调度处理器 | `oxff/top/RequestDispatchHandler.java` | 统一请求调度（普通/越权测试模式路由） |
-| 文件选择器 | `oxff/top/utils/FileChooserHelper.java` | 统一文件选择器工具 |
+| 扩展入口 | `org/oxff/repeater/RepeaterManagerExtension.java` | 实现 Montoya `BurpExtension` 接口，管理插件生命周期 |
+| API 持有者 | `org/oxff/repeater/api/MontoyaApiHolder.java` | MontoyaApi 静态持有者 |
+| 主 UI 控制器 | `org/oxff/repeater/RepeaterManagerUI.java` | 协调所有 UI 面板和功能组件 |
+| UI 桥接 | `org/oxff/repeater/UIRequestDispatcher.java` | 解耦入口类与 UI 操作 |
+| 数据库管理 | `org/oxff/repeater/db/DatabaseManager.java` | SQLite 连接池、Schema 初始化、会话管理 |
+| Schema 迁移 | `org/oxff/repeater/db/schema/SchemaMigrator.java` | 数据库 Schema 版本化迁移 |
+| Pool 去重 | `org/oxff/repeater/db/pool/PoolManager.java` | 字符串/头部/Body 内容 SHA-256 去重存储 |
+| 请求管理 | `org/oxff/repeater/http/RequestManager.java` | 异步 HTTP 请求发送（Montoya API） |
+| 请求调度 | `org/oxff/repeater/RequestDispatchHandler.java` | 统一请求调度（普通/越权测试模式路由） |
+| 历史录制 | `org/oxff/repeater/service/HistoryRecordingService.java` | 异步队列化历史记录保存 |
+| 垃圾回收 | `org/oxff/repeater/service/GarbageCollectorService.java` | 自动清理零引用 Pool 数据（10分钟间隔），支持自动/手动模式切换 |
+| 自动保存 | `org/oxff/repeater/service/AutoSaveService.java` | 定时数据库检查点 |
+| 日志管理 | `org/oxff/repeater/logging/LogManager.java` | 多通道日志分发和级别过滤，内置 GC 定时调度器 |
+| ERM 存档 | `org/oxff/repeater/io/ErmArchiveWriter.java` / `ErmArchiveReader.java` | 加密存档导入导出（AES-256-CBC + HMAC-SHA256） |
+| 数据导入导出 | `org/oxff/repeater/io/DataExporter.java` / `DataImporter.java` | 统一导入导出调度 |
+| API 提取引擎 | `org/oxff/repeater/api/ApiExtractionEngine.java` | 无状态规则引擎（4种源 × 4种方法） |
+| 全局规则管理 | `org/oxff/repeater/api/GlobalRuleManager.java` | 全局 API 提取规则管理（YAML 文件） |
+| 项目规则管理 | `org/oxff/repeater/api/ApiRuleManager.java` | 项目级 API 提取规则管理（SQLite） |
+| 越权测试引擎 | `org/oxff/repeater/privilege/AutoTestEngine.java` | 自动化越权测试（拦截代理 → 重放 → 判断） |
+| Token 替换 | `org/oxff/repeater/privilege/TokenReplacementEngine.java` | 请求中 Token 自动替换 |
+| 判断引擎 | `org/oxff/repeater/privilege/JudgmentEngine.java` | 响应判断引擎（三层：基准无效→活跃规则组→兜底相似度） |
+| 规则条件模型 | `org/oxff/repeater/privilege/model/RuleCondition.java` | 规则条件（target + method + expression + AND/OR/NOT） |
+| 令牌方案模型 | `org/oxff/repeater/privilege/model/TokenScheme.java` | 令牌方案（一组令牌位置的组合，会话-方案关联） |
+| 全局令牌方案管理 | `org/oxff/repeater/privilege/GlobalTokenSchemeManager.java` | 跨会话全局令牌方案 CRUD 与 YAML 持久化 |
+| 去重配置管理 | `org/oxff/repeater/privilege/DedupConfigManager.java` | 多配置优先级链式去重（6策略 × 3保留策略） |
+| API 去重引擎 | `org/oxff/repeater/privilege/ApiDedupEngine.java` | 从 HTTP 请求中提取去重键 |
+| 会话解析 | `org/oxff/repeater/privilege/FetchRequestParser.java` | Chrome DevTools fetch 格式报文解析 |
+| 相似度引擎 | `org/oxff/repeater/privilege/SimilarityEngine.java` | 内容感知相似度计算（JSON/XML/通用文本） |
+| 同步 HTTP 发送 | `org/oxff/repeater/privilege/SyncHttpSender.java` | 带重试的同步 HTTP 请求发送 |
+| HTTP 消息解析 | `org/oxff/repeater/http/HttpMessageParser.java` | 统一提取响应体/响应头 |
+| 配置管理 | `org/oxff/repeater/config/DatabaseConfig.java` | 存储模式/日志/代理配置 |
+| 报文比对引擎 | `org/oxff/repeater/ui/history/DiffEngine.java` / `DiffPane.java` | LCS 行级/字符级差异算法与 RSyntaxTextArea 渲染面板 |
+| 比对对话框 | `org/oxff/repeater/ui/history/ComparisonDialog.java` | 全功能报文比对（标签页/四分格布局） |
+| 差异导航器 | `org/oxff/repeater/ui/history/DiffNavigator.java` | 差异区域上一处/下一处跳转导航 |
+| 报告生成引擎 | `org/oxff/repeater/privilege/report/ReportGenerator.java` (abstract) | PDF/HTML/Markdown 报告生成基类 |
+| PDF 报告 | `org/oxff/repeater/privilege/report/PdfReportGenerator.java` | 原生 PDF 报告 (Apache PDFBox，内嵌中文字体) |
+| HTML/MD 报告 | `org/oxff/repeater/privilege/report/HtmlReportGenerator.java` / `MarkdownReportGenerator.java` | FreeMarker 模板渲染报告 |
+| 身体渲染器 | `org/oxff/repeater/privilege/report/BodyRenderer.java` / `BinaryContentRenderer.java` | 请求/响应体渲染与二进制内容转换 |
+| 全局Token管理 | `org/oxff/repeater/privilege/GlobalTokenLocationManager.java` | 跨会话全局 Token 位置管理 |
+| 用户会话导入导出 | `org/oxff/repeater/privilege/UserSessionYamlIO.java` | 用户会话 YAML 导入导出 |
+| 文件选择器 | `org/oxff/repeater/utils/FileChooserHelper.java` | 统一文件选择器工具 |
 
 ## 关键设计决策
 
@@ -97,14 +107,39 @@
 
 ### 越权测试模块
 
-自动化越权测试工作流：
-1. 定义用户会话（凭证/Token + Token 位置）
-2. 配置判断规则（如何检测越权成功）
-3. 设置请求范围（URL 匹配模式）
-4. `AutoTestEngine` 拦截匹配范围的代理流量
-5. `TokenReplacementEngine` 注入不同用户 Token
-6. `JudgmentEngine` 根据规则评估响应
-7. 结果在越权测试面板展示（颜色标记）
+自动化越权测试工作流（v2.30.0 规则组重构）：
+1. 定义令牌方案（Token Scheme）— 一组令牌位置的组合
+2. 定义令牌位置（Token Location）— Token 在请求中的位置（6 种类型）
+3. 创建用户会话（User Session）— 关联令牌方案，填充各位置的 Token 值
+4. 配置判断规则组（Judgment Rule Group）— 设置活跃规则组（全局唯一活跃），组内条件纯 AND 组合
+5. 设置请求范围（Scope）— URL 匹配模式
+6. 配置去重规则（Dedup Config）— 避免同一 API 重复测试
+7. `AutoTestEngine` 拦截匹配范围的代理流量
+8. `TokenReplacementEngine` 注入不同用户 Token
+9. `JudgmentEngine` 按三层逻辑判决：基准无效→ERROR → 活跃规则组匹配 → 兜底相似度
+10. 结果在越权测试面板展示（颜色标记：红=越权/绿=安全）
+
+### 令牌方案系统（v2.21.0）
+
+- `TokenScheme` 作为令牌位置与用户会话之间的中间层
+- 支持多方案管理，不同方案对应不同安全测试目标
+- `GlobalTokenSchemeManager` 单例管理跨会话全局方案持久化（YAML）
+- 用户会话通过 `schemeId` 一对一关联方案
+- 匿名用户创建时智能匹配方案（v2.31.0）
+
+### 去重配置系统（v2.20.0）
+
+- `DedupConfigManager` 管理多配置优先级链式匹配
+- `ApiDedupEngine` 支持 6 种去重策略（PATH/API/JSON_BODY_FIELD/XML_BODY_FIELD/FORM_FIELD/URL_PARAM）
+- 支持 3 种保留策略（FIRST/LAST/MIDDLE）
+- 双重存储：全局 YAML 持久化 + 会话级内存
+
+### 会话解析系统（v2.25.x~v2.26.0）
+
+- `FetchRequestParser` 支持 Chrome DevTools "Copy as fetch" 格式解析
+- 自动检测剪贴板内容格式（原始 HTTP / fetch browser / fetch Node.js）
+- `SessionParserEngine` 从报文自动提取 Token 值和位置
+- 方案匹配：无匹配方案时弹出 `SelectSchemeDialog`
 
 ### 会话目录
 
@@ -165,8 +200,8 @@ mvn clean package
 ```
 
 构建产物：
-- `target/repeater-manager-2.16.2.jar` — 开发版本
-- `target/releases/repeater-manager-2.16.2-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-2.31.0.jar` — 开发版本
+- `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 
@@ -187,9 +222,14 @@ file_pool   (hash, relative_path, size, ref_count, is_binary)
 api_extraction_rules (id, name, source, method, expression, enabled, priority, persistent, is_global)
 
 -- 越权测试表
-user_sessions (id, name, ...)
-judgment_rules (id, name, target, method, threshold, ...)
+user_sessions (id, name, scheme_id, request_timeout, max_concurrent, retry_count, retry_delay, replay_delay, ...)
+token_schemes (id, name, description, enabled, persist_to_global, ...)
+scheme_token_locations (scheme_id, token_location_id)
+token_locations (id, type, expression, enabled, persist_to_global, ...)
+judgment_rules (id, name, enabled, is_active, success_color, failure_color, ...)
+judgment_rule_conditions (id, group_id, target, method, expression, negate, operator, sort_order, enabled, ...)
 scopes (id, pattern, ...)
+dedup_configs (全局 YAML: ~/.burp/repeater_manager/dedup_configs.yaml)
 
 -- GC 队列
 gc_queue (id, pool_type, hash, enqueued_at)
@@ -244,8 +284,7 @@ schema_meta (key, value)
 
 项目使用 GitHub Actions（`.github/workflows/release.yml`）：
 
-- **触发条件**: 推送 `v*` 格式标签（如 `v2.16.2`）或手动触发
+- **触发条件**: 推送 `v*` 格式标签（如 `v2.31.0`）或手动触发
 - **构建**: JDK 17 + Maven
 - **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
-- **预发布**: 标签包含 `-` 后缀（如 `v2.16.2-beta`）时标记为预发布
-- **预发布**: 标签包含 `-` 后缀（如 `v2.2.0-beta`）时标记为预发布
+- **预发布**: 标签包含 `-` 后缀（如 `v2.31.0-beta`）时标记为预发布

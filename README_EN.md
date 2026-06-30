@@ -14,7 +14,7 @@
 
 Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. Compared to the native Repeater, it provides more powerful features, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, API rule extraction, automated privilege escalation testing, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
-> **Current Version**: v2.16.2 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
+> **Current Version**: v2.31.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
 
 ## Core Features
 
@@ -28,9 +28,14 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Column Display Control | Customizable table columns for better information density and readability |
 | API Rule Extraction | Configurable API extraction rule engine, supporting 4 extraction sources × 4 extraction methods, auto-extracting API paths from irregular requests |
 | Privilege Testing | Automated privilege escalation vulnerability testing framework with user session token replacement and response comparison |
+| Token Scheme Management | Multi-scheme token location management with scheme-session association and global persistence |
+| Rule Group Judgment | Single active rule group + AND/OR/NOT multi-condition judgment, replacing legacy priority iteration mode |
+| Anonymous User Creation | One-click guest user creation with all empty token values, intelligent token scheme matching |
+| Dedup Configuration | Priority-chain API deduplication with 6 strategies and 3 keep policies |
+| Session Parsing | Auto-parse user sessions from clipboard, supporting Chrome DevTools fetch format |
 | Data Import/Export | Support ERM encrypted archives (AES-256-CBC + HMAC-SHA256), Postman Collection v2.1, and more formats |
 | Auto-save | Periodic synchronization of in-memory data to disk, preventing data loss |
-| Garbage Collection | Background automatic cleanup of zero-reference pool data, reclaiming storage space (10min interval) |
+| Garbage Collection | Background automatic cleanup of zero-reference pool data, reclaiming storage space (10min interval), toolbar toggle for auto/manual mode |
 | Logging System | Multi-channel log output (Burp console/rolling file/UI panel) with level filtering (DEBUG/INFO/SUCCESS/WARN/ERROR) |
 | Proxy Debugging | Support HTTP proxy configuration for request debugging |
 | Layout Switching | Request/Response panel supports horizontal/vertical/request-only/response-only layouts |
@@ -65,9 +70,13 @@ Repeater Manager
 │   └── Project Rules (SQLite independent storage)
 ├── Privilege Testing Module
 │   ├── Multi-user Session Management
+│   ├── Token Scheme Management (scheme-location-session 3-tier architecture)
 │   ├── Token Location Configuration (Header/Cookie/Body/URL Param)
 │   ├── Automated Token Replacement Engine
-│   ├── Judgment Rule Configuration (Status Code/Body/Header/Response Time)
+│   ├── Judgment Rule Group Configuration (single active rule set + AND/OR/NOT multi-condition)
+│   ├── One-click Anonymous User Creation
+│   ├── Dedup Configuration (6 strategies × 3 keep policies priority-chain matching)
+│   ├── Session Parsing (raw HTTP / Chrome fetch format)
 │   ├── Automated Testing Engine (intercept proxy traffic → replay → judge)
 │   ├── Result Display with Color Coding
 │   └── Report Generation (New)
@@ -171,10 +180,8 @@ For detailed usage instructions, please refer to:
 
 ```
 src/main/java/
-├── burp/
-│   └── BurpExtender.java              # Burp extension entry point (Montoya BurpExtension)
-└── oxff/top/
-    ├── RepeaterManagerUI.java          # Main UI controller
+├── org/oxff/repeater/
+│   ├── RepeaterManagerExtension.java    # Plugin lifecycle entry point (Montoya BurpExtension)
     ├── api/                            # API extraction subsystem
     │   ├── MontoyaApiHolder.java       # MontoyaApi static holder
     │   ├── ApiExtractionEngine.java    # Stateless rule-based extraction engine
@@ -214,6 +221,7 @@ src/main/java/
     │   ├── RequestManager.java         # HTTP request management (Montoya API async)
     │   ├── HttpRequestHelper.java      # HTTP request parsing utilities (Montoya types)
     │   ├── RequestDataHelper.java      # Request data validation/repair utilities
+    │   ├── HttpMessageParser.java      # HTTP message parser
     │   └── RequestResponseRecord.java  # Request-response record model
     ├── io/
     │   ├── DataExporter.java           # Export dispatcher
@@ -247,14 +255,22 @@ src/main/java/
     │   ├── JudgmentRuleManager.java    # Judgment rule manager
     │   ├── ScopeManager.java           # Request scope manager
     │   ├── JudgmentRuleYamlIO.java     # Judgment rule YAML serialization
+    │   ├── GlobalTokenSchemeManager.java # Global token scheme manager
+    │   ├── DedupConfigManager.java     # Dedup config manager
+    │   ├── ApiDedupEngine.java         # API dedup engine
+    │   ├── FetchRequestParser.java     # Chrome fetch format parser
+    │   ├── SimilarityEngine.java       # Similarity engine
+    │   ├── SyncHttpSender.java         # Sync HTTP sender (with retry)
     │   ├── model/                      # Privilege test models
     │   │   ├── UserSession.java        # User session (credentials/tokens)
     │   │   ├── JudgmentRule.java       # Judgment rule
     │   │   ├── JudgmentResult.java     # Test result
     │   │   ├── TokenLocation.java      # Token location
-    │   │   ├── TokenLocationType.java  # Enum: HEADER/COOKIE/BODY/URL_PARAM
-    │   │   ├── RuleTarget.java         # Enum: STATUS_CODE/RESPONSE_BODY/etc.
-    │   │   ├── RuleMethod.java         # Enum: CONTAINS/NOT_CONTAINS/REGEX/LENGTH_DIFF
+    │   │   ├── TokenLocationType.java  # Enum: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
+    │   │   ├── RuleTarget.java         # Enum: STATUS_CODE/RESPONSE_HEADER/RESPONSE_BODY/RESPONSE_TIME/SIMILARITY
+    │   │   ├── RuleMethod.java         # Enum: REGEX/CONTAINS/NOT_CONTAINS/EQUALS/NOT_EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/LENGTH_DIFF
+    │   │   ├── RuleCondition.java      # Rule condition model (AND/OR/NOT operators)
+    │   │   ├── TokenScheme.java        # Token scheme model
     │   │   └── ScopeEntry.java         # Scope configuration
     │   └── dao/
     │       ├── SessionDAO.java         # User session CRUD
@@ -369,8 +385,8 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/repeater-manager-2.16.2.jar`
-- Timestamped release version: `target/releases/repeater-manager-2.16.2-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.31.0.jar`
+- Timestamped release version: `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 

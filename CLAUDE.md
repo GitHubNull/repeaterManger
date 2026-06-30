@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, API extraction, privilege escalation testing, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
 
-- **Version**: 2.16.2
+- **Version**: 2.31.0
 - **Java**: 17 (source/target compatibility)
 - **Build**: Maven
 - **License**: Apache License 2.0
@@ -27,16 +27,18 @@ The project follows a layered architecture:
 ```
 
 Key components:
-- **BurpExtender.java**: Entry point implementing Montoya SDK's `BurpExtension` interface, initialized via `initialize(MontoyaApi)`
+- **RepeaterManagerExtension.java**: Plugin lifecycle entry point implementing Montoya SDK's `BurpExtension` interface, initialized via `initialize(MontoyaApi)` (replaced deleted `burp/BurpExtender.java`)
 - **MontoyaApiHolder.java**: Static holder for `MontoyaApi` instance, bridges legacy static access pattern to constructor injection
 - **RepeaterManagerUI.java**: Main UI controller that orchestrates all components
-- **DatabaseManager.java**: Singleton managing SQLite connections (connection pool via `BlockingQueue` + JDK dynamic proxy), Schema initialization, session management
+- **UIRequestDispatcher.java**: UI bridge decoupling entry class from UI operations
+- **DatabaseManager.java**: Singleton managing SQLite connections (connection pool via `BlockingQueue` + JDK dynamic proxy), Schema initialization, session management, connection pool monitoring stats
 - **PoolManager.java**: Content deduplication manager using SHA-256 hash-based pools
 - **RequestManager.java**: Async HTTP request sender using `MontoyaApi.http().sendRequest()`
+- **RequestDispatchHandler.java**: Central request dispatch handler coordinating privilege test and normal request flows
 - **HistoryRecordingService.java**: Singleton async queue-based history recording service
-- **GarbageCollectorService.java**: Background GC for zero-reference pool data cleanup
+- **GarbageCollectorService.java**: Background GC for zero-reference pool data cleanup, supports auto/manual mode toggle
 - **AutoSaveService.java**: Scheduled database checkpoint service
-- **LogManager.java**: Multi-channel log dispatcher with level filtering (Burp console / rolling file / UI panel)
+- **LogManager.java**: Multi-channel log dispatcher with level filtering (Burp console / rolling file / UI panel), built-in GC scheduler (30s interval daemon thread)
 - **ErmArchiveWriter/Reader.java**: Custom binary archive format with optional AES-256-CBC + HMAC-SHA256 encryption
 - **DatabaseConfig.java**: Configuration management (storage mode / logging / proxy)
 - **PopMenu.java**: Context menu provider implementing Montoya SDK's `ContextMenuItemsProvider`
@@ -45,15 +47,23 @@ Key components:
 - **ApiRuleManager.java**: Project-level API extraction rule management with SQLite persistence
 - **AutoTestEngine.java**: Automated privilege escalation testing from proxy-intercepted scope-matched traffic
 - **ReplayEngine.java**: Handles request replay logic for privilege testing
-- **JudgmentEngine.java**: Evaluates responses against configurable rules to detect privilege escalation
-- **TokenReplacementEngine.java**: Manages token substitution in requests across user sessions
+- **JudgmentEngine.java**: Evaluates responses using three-tier logic: invalid baseline→ERROR → active rule group match → fallback similarity judgment (v2.30.0 rule group refactor)
+- **TokenReplacementEngine.java**: Manages token substitution in requests across user sessions, supports empty-value removal semantics
+- **RuleCondition.java**: Rule condition model (target + method + expression + AND/OR/NOT operator + negate flag)
+- **TokenScheme.java**: Token scheme model bridging token locations and user sessions
+- **GlobalTokenSchemeManager.java**: Singleton managing global token scheme CRUD with YAML persistence (v2.21.0)
+- **DedupConfigManager.java**: Multi-config priority-chain deduplication manager (6 strategies × 3 keep policies, v2.20.0)
+- **ApiDedupEngine.java**: Stateless API dedup key extraction engine
+- **FetchRequestParser.java**: Chrome DevTools "Copy as fetch" format parser (v2.26.0)
+- **SimilarityEngine.java**: Content-aware similarity calculation engine (JSON/XML/generic text)
+- **SyncHttpSender.java**: Synchronous HTTP sender with retry support
+- **HttpMessageParser.java**: Unified HTTP message parsing utilities
 - **DiffEngine.java / DiffPane.java / SearchBar.java / DiffNavigator.java**: Message comparison components with string/byte-level diff, syntax highlighting, synchronized scrolling, and change navigation (ComparisonDialog for full-featured comparison)
 - **ReportGenerator.java**: Abstract base class for report generation with PdfReportGenerator (Apache PDFBox), HtmlReportGenerator, and MarkdownReportGenerator (FreeMarker templates) implementations
 - **ReportExporter.java**: Unified report export dispatcher (PDF/HTML/Markdown)
 - **BodyRenderer.java / BinaryContentRenderer.java**: Request/response body rendering including binary content support
-- **GlobalTokenLocationManager.java**: Singleton managing global token locations shared across sessions (TokenLocationYamlIO for YAML serialization)
+- **GlobalTokenLocationManager.java**: Singleton managing global token locations shared across sessions
 - **UserSessionYamlIO.java**: YAML serialization for user session import/export
-- **RequestDispatchHandler.java**: Central request dispatch handler coordinating privilege test and normal request flows
 - **FileChooserHelper.java**: Unified file chooser utility for consistent file selection dialogs
 
 ## Key Features
@@ -71,7 +81,7 @@ Key components:
 11. **Proxy Debugging**: Configurable HTTP proxy for request debugging
 12. **Layout Switching**: Horizontal/vertical/request-only/response-only layout modes
 13. **API Extraction**: Configurable rule engine supporting 4 extraction sources (URL_PATH, URL_QUERY, HEADER, BODY) × 4 methods (REGEX, SUBSTR, JSON_PATH, XPATH), with global rules (YAML) and project-level rules (SQLite)
-14. **Privilege Escalation Testing**: Automated testing framework that intercepts scope-matched proxy traffic, replays requests with different user tokens, and judges responses against configurable rules (status code, response body/header/time comparison)
+14. **Privilege Escalation Testing**: Automated testing framework with token scheme management, single-active rule group judgment (AND/OR/NOT conditions), configurable dedup, one-click anonymous user creation, and session parsing from clipboard (including Chrome DevTools fetch format)
 15. **Message Comparison**: String and byte-level diff comparison between request/response pairs with syntax highlighting (RSyntaxTextArea), synchronized scrolling (SynchronizedScrollPanel), diff navigation (DiffNavigator), and in-line character-level diff highlighting via DiffEngine/DiffPane
 16. **Report Generation**: Export privilege test results as PDF (Apache PDFBox with embedded Chinese fonts), HTML or Markdown (FreeMarker templates) reports with embedded request/response bodies, cURL commands, and Postman code snippets; includes binary content rendering for non-text responses
 17. **Batch Operations**: Multi-select support in history and request panels; batch replay, batch privilege testing, and batch deletion of selected entries
@@ -89,17 +99,17 @@ mvn clean package
 ```
 
 The build process creates two JAR files:
-- Development version: `target/repeater-manager-2.16.2.jar`
-- Timestamped release: `target/releases/repeater-manager-2.16.2-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.31.0.jar`
+- Timestamped release: `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar`
 
 ## Source Code Organization
 
 ```
 src/main/java/
-├── burp/
-│   └── BurpExtender.java              # Extension entry point (must be in burp package)
-└── oxff/top/
-    ├── RepeaterManagerUI.java          # Main UI controller
+├── org/oxff/repeater/
+│   ├── RepeaterManagerExtension.java    # Plugin lifecycle entry point (replaced burp/BurpExtender.java)
+│   ├── RepeaterManagerUI.java          # Main UI controller
+│   ├── UIRequestDispatcher.java         # UI bridge
     ├── api/                            # API extraction subsystem
     │   ├── MontoyaApiHolder.java       # Static bridge for MontoyaApi access
     │   ├── ApiExtractionEngine.java    # Stateless rule-based extraction engine
@@ -173,14 +183,18 @@ src/main/java/
     │   ├── ScopeManager.java           # Request scope manager
     │   ├── JudgmentRuleYamlIO.java     # YAML serialization for judgment rules
     │   ├── model/                      # Privilege test models
-    │   │   ├── UserSession.java        # User session (credentials/tokens)
-    │   │   ├── JudgmentRule.java       # Escalation detection rule
-    │   │   ├── JudgmentResult.java     # Test result
+    │   │   ├── UserSession.java        # User session (credentials/tokens, schemeId)
+    │   │   ├── TokenScheme.java         # Token scheme model (v2.21.0)
+    │   │   ├── JudgmentRule.java       # Escalation detection rule group (v2.30.0 refactor)
+    │   │   ├── RuleCondition.java       # Rule condition (target + method + expression + AND/OR/NOT)
+    │   │   ├── JudgmentResult.java     # Test result (PENDING/ESCALATED/NOT_ESCALATED/ERROR)
     │   │   ├── TokenLocation.java      # Token location in request
     │   │   ├── TokenLocationType.java  # Enum: HEADER, JSON_BODY, XML_BODY, FORM_FIELD, MULTIPART_FIELD, URL_PARAM
-    │   │   ├── RuleTarget.java         # Enum: STATUS_CODE, RESPONSE_BODY, etc.
-    │   │   ├── RuleMethod.java         # Enum: CONTAINS, NOT_CONTAINS, REGEX, LENGTH_DIFF
-    │   │   └── ScopeEntry.java         # Scope configuration
+    │   │   ├── RuleTarget.java         # Enum: STATUS_CODE, RESPONSE_HEADER, RESPONSE_BODY, RESPONSE_TIME, SIMILARITY
+    │   │   ├── RuleMethod.java         # Enum: REGEX, CONTAINS, EQUALS, GREATER_THAN, LESS_THAN, NUMERIC_EQUALS, NOT_CONTAINS, NOT_EQUALS, LENGTH_DIFF
+    │   │   ├── ScopeEntry.java         # Scope configuration
+    │   │   ├── DedupStrategy.java       # Enum: PATH, API, JSON_BODY_FIELD, XML_BODY_FIELD, FORM_FIELD, URL_PARAM
+    │   │   └── DedupKeepPolicy.java     # Enum: FIRST, LAST, MIDDLE
     │   └── dao/                        # Privilege test DAOs
     │       ├── SessionDAO.java         # User session CRUD
     │       ├── JudgmentRuleDAO.java    # Judgment rule CRUD
@@ -322,9 +336,14 @@ Two main tables + four pool tables + GC queue + API extraction rules:
 
 **Feature tables**:
 - `api_extraction_rules`: Project-level API extraction rules (source, method, expression, priority, enabled)
-- `user_sessions`: Privilege testing user sessions (credentials, token locations)
-- `judgment_rules`: Privilege escalation judgment rules (target, method, threshold)
+- `user_sessions`: Privilege testing user sessions (credentials, scheme_id, replay config fields)
+- `token_schemes`: Token scheme definitions (name, description, enabled, persist_to_global)
+- `scheme_token_locations`: Scheme-to-token-location associations
+- `token_locations`: Token location definitions (type, expression, enabled, persist_to_global)
+- `judgment_rules`: Privilege escalation judgment rule groups (name, enabled, is_active, colors)
+- `judgment_rule_conditions`: Rule conditions within groups (target, method, expression, negate, operator, sort_order)
 - `scopes`: Request scope patterns for automated privilege testing
+- `dedup_configs`: (Global YAML: `~/.burp/repeater_manager/dedup_configs.yaml`)
 
 **System tables**:
 - `gc_queue`: Garbage collection queue (pool_type, hash)
@@ -390,7 +409,7 @@ Data is persisted in session directories under `~/.burp/` (timestamp-named), eac
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/release.yml`):
-- **Trigger**: Push `v*` tags (e.g., `v2.16.2`) or manual dispatch
+- **Trigger**: Push `v*` tags (e.g., `v2.31.0`) or manual dispatch
 - **Build**: JDK 17 + Maven on Ubuntu
 - **Release**: Auto-creates GitHub Release with JAR attachment
-- **Prerelease**: Tags with `-` suffix (e.g., `v2.16.2-beta`) are marked as prerelease
+- **Prerelease**: Tags with `-` suffix (e.g., `v2.31.0-beta`) are marked as prerelease
