@@ -4,6 +4,9 @@ import burp.api.montoya.MontoyaApi;
 import org.oxff.repeater.ui.LogPanel;
 
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 日志管理器单例 - 所有日志输出的统一入口
@@ -225,6 +228,15 @@ public class LogManager {
     /** 判决调试模式开关 — 控制判决引擎详细日志输出 */
     private volatile boolean judgmentDebugEnabled = false;
 
+    /** 自动GC开关 — 控制定时垃圾回收 */
+    private volatile boolean autoGcEnabled = false;
+
+    /** GC调度器 — volatile确保shutdown()线程可见 */
+    private volatile ScheduledExecutorService gcScheduler;
+
+    /** GC触发间隔（秒） */
+    private static final long GC_INTERVAL_SECONDS = 30;
+
     public boolean isJudgmentDebugEnabled() {
         return judgmentDebugEnabled;
     }
@@ -240,6 +252,58 @@ public class LogManager {
     public void judgmentDebug(String message) {
         if (judgmentDebugEnabled) {
             log(LogLevel.INFO, "[D-判决] " + message);
+        }
+    }
+
+    // ========== 自动GC控制 ==========
+
+    public boolean isAutoGcEnabled() {
+        return autoGcEnabled;
+    }
+
+    public void setAutoGcEnabled(boolean enabled) {
+        if (this.autoGcEnabled == enabled) {
+            return;
+        }
+        this.autoGcEnabled = enabled;
+        if (enabled) {
+            startGcScheduler();
+        } else {
+            stopGcScheduler();
+        }
+    }
+
+    private void startGcScheduler() {
+        if (gcScheduler != null && !gcScheduler.isShutdown()) {
+            return;
+        }
+        gcScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "repeater-gc-scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+        gcScheduler.scheduleWithFixedDelay(() -> {
+            try {
+                System.gc();
+                System.runFinalization();
+            } catch (Exception e) {
+                // GC异常静默处理，不影响调度器运行
+            }
+        }, GC_INTERVAL_SECONDS, GC_INTERVAL_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private void stopGcScheduler() {
+        if (gcScheduler != null && !gcScheduler.isShutdown()) {
+            gcScheduler.shutdown();
+            try {
+                if (!gcScheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                    gcScheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                gcScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            gcScheduler = null;
         }
     }
 
@@ -303,6 +367,7 @@ public class LogManager {
         burpConsoleHandler = null;
         rollingFileHandler = null;
         uiHandler = null;
+        stopGcScheduler();
     }
 
     /**

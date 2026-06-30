@@ -1,6 +1,6 @@
 # 越权判决引擎问题根因分析报告
 
-> 基于三份测试日志 `repeater_manager_log-2026-06-30_1632/1642/1651.txt` 的交叉分析
+> 基于四份测试日志 `repeater_manager_log-2026-06-30_1632/1642/1651/1722.txt` 的交叉分析
 
 ---
 
@@ -12,8 +12,11 @@
 | 2 | 代理模式下并发重放导致日志严重交错 | 中 | 代理模式调试体验 | `ReplayEngine.replay()` 异步提交 |
 | 3 | 批量进度日志显示枚举名 `NOT_ESCALATED` 而非中文 `安全` | 中 | 批量权限测试 UI | `RequestDispatchHandler.batchPrivilegeTest()` L807-L810 |
 | 4 | 批量进度日志中基准用户错误显示判决结果 | 中 | 批量权限测试 UI | 同上，未检查 `isFirst` |
-| 5 | 从请求数据解析相对路径 URL 反复失败 | 低 | 历史记录加载 | `HistoryReadDAO.supplementFromRequestData()` L360 |
+| 5 | 从请求数据解析相对路径 URL 反复失败 | 中 | 历史记录加载 | `HistoryReadDAO.supplementFromRequestData()` L360 |
 | 6 | 请求选中回调每次单击触发两次 | 低 | UI 事件处理 | `RequestListPanel` 的 `ListSelectionListener` + `MouseAdapter` 双重触发 |
+| 7 | AutoTestEngine 判决日志使用枚举原名 `NOT_ESCALATED` 而非中文 `安全` | 中 | 代理自动化测试日志 | `AutoTestEngine.java` L260-L262 |
+| 8 | AutoTestEngine 缺少判决调试日志 | 中 | 代理自动化测试调试体验 | `AutoTestEngine.java` L196-L213 |
+| 9 | AutoTestEngine 硬编码 `useHttp2=false` | 低 | 代理自动化测试 HTTP/2 兼容性 | `AutoTestEngine.java` L304 |
 
 ---
 
@@ -516,20 +519,210 @@ private void onRequestSelected(int requestId, byte[] requestData) {
 
 ---
 
+## 问题 7：AutoTestEngine 判决日志使用枚举原名而非中文
+
+### 现象
+
+代理自动化测试路径的日志输出：
+
+```
+[*] 自动化测试: 用户=zero, 判决=NOT_ESCALATED, 相似度=0.00
+```
+
+对比 `ReplayEngine` 路径（通过 `RequestDispatchHandler` 回调，已修复）：
+
+```
+[*] 权限测试重放完成: requestId=1, 用户=zero, 判决=安全, 相似度=0.00
+```
+
+### 根因推导
+
+> **文件**: `src/main/java/org/oxff/repeater/privilege/AutoTestEngine.java` L260-L262
+
+```java
+LogManager.getInstance().printOutput(String.format(
+        "[*] 自动化测试: 用户=%s, 判决=%s, 相似度=%.2f",
+        session.getName(), judgment, similarity));
+//                         ^^^^^^^^ 直接输出枚举名 "NOT_ESCALATED"
+```
+
+`judgment` 变量的值来自：
+- `JudgmentResult.NOT_ESCALATED.name()` → `"NOT_ESCALATED"`（L201）
+- `outcome.result.name()` → `"NOT_ESCALATED"`（L209）
+
+两者都是 Java 枚举的原始名称，未经过 `JudgmentResult.toDisplayName()` 转换。
+
+而 `ReplayEngine` 路径通过回调进入 `RequestDispatchHandler`，该处已正确使用 `judgment.getDisplayName()`（L684），故输出"安全"。
+
+### 修复建议
+
+使用 `JudgmentResult.toDisplayName()` 转换：
+
+```java
+LogManager.getInstance().printOutput(String.format(
+        "[*] 自动化测试: 用户=%s, 判决=%s, 相似度=%.2f",
+        session.getName(),
+        JudgmentResult.toDisplayName(judgment),  // "NOT_ESCALATED" → "安全"
+        similarity));
+```
+
+---
+
+## 问题 8：AutoTestEngine 缺少判决调试日志
+
+### 现象
+
+用户开启调试模式后，`ReplayEngine` 路径可输出完整的 `[D-判决]` 日志（如1722日志第30-45行），但代理自动化测试路径 (`AutoTestEngine`) 即使在调试模式下也无任何判决细节输出，导致代理模式下的判决问题无法诊断。
+
+### 根因推导
+
+对比两个引擎的判决路径：
+
+**ReplayEngine（有调试日志）** — `ReplayEngine.java` L204-L214：
+
+```java
+LogManager.getInstance().judgmentDebug(String.format(
+        "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, ...", ...));
+LogManager.getInstance().judgmentDebug(String.format(
+        "[判决] 基准响应体前200字: %s", truncateForLog(baselineResponse, 200)));
+LogManager.getInstance().judgmentDebug(String.format(
+        "[判决] 当前响应体前200字: %s", truncateForLog(responseBodyOnly, 200)));
+```
+
+**AutoTestEngine（无调试日志）** — `AutoTestEngine.java` L196-L213：
+
+```java
+if (holder.response != null && holder.response.length > 0) {
+    if (isFirst) {
+        baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
+        baselineStatusCode = holder.statusCode;
+        baselineValid = true;
+        judgment = JudgmentResult.NOT_ESCALATED.name();
+    } else {
+        // ... 直接调用 JudgmentEngine.judge() ...
+        // ❌ 缺少 judgmentDebug() 调用
+    }
+}
+```
+
+### 修复建议
+
+在 `AutoTestEngine.java` 的非基准用户判决分支（L202-L213）中，于 `JudgmentEngine.judge()` 调用前添加与 `ReplayEngine` 一致的调试日志：
+
+```java
+// === 判决前诊断日志 ===
+if (baselineResponse == null || baselineResponse.length == 0) {
+    LogManager.getInstance().printError(String.format(
+            "[!] 基准响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+}
+if (responseBodyOnly == null || responseBodyOnly.length == 0) {
+    LogManager.getInstance().printError(String.format(
+            "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+}
+LogManager.getInstance().judgmentDebug(String.format(
+        "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
+        baselineResponse != null ? baselineResponse.length : -1,
+        responseBodyOnly != null ? responseBodyOnly.length : -1,
+        baselineStatusCode, holder.statusCode, threshold));
+LogManager.getInstance().judgmentDebug(String.format(
+        "[判决] 基准响应体前200字: %s", truncateForLog(baselineResponse, 200)));
+LogManager.getInstance().judgmentDebug(String.format(
+        "[判决] 当前响应体前200字: %s", truncateForLog(responseBodyOnly, 200)));
+```
+
+> **注意**：`truncateForLog()` 目前是 `ReplayEngine` 的私有方法，需要抽取为公共工具方法或复制到 `AutoTestEngine`。
+
+---
+
+## 问题 9：AutoTestEngine 硬编码 useHttp2=false
+
+### 现象
+
+代理拦截到 HTTP/2 请求后，AutoTestEngine 重放时始终使用 HTTP/1.1，可能导致不支持 HTTP/1.1 的服务端拒绝请求或行为差异。
+
+### 根因推导
+
+> **文件**: `src/main/java/org/oxff/repeater/privilege/AutoTestEngine.java` L301-L305
+
+```java
+private SyncHttpSender.Result sendSyncRequestWithRetry(byte[] requestBytes, HttpService httpService,
+                                                         RequestManager requestManager,
+                                                         int timeoutSeconds, int retryCount, int retryDelayMs) {
+    return SyncHttpSender.sendWithRetry(requestBytes, httpService, requestManager,
+            false, timeoutSeconds, retryCount, retryDelayMs, "自动化测试");
+    //      ^^^^^ 硬编码为 false
+}
+```
+
+对比 `ReplayEngine`（正确传递）：
+
+> **文件**: `src/main/java/org/oxff/repeater/privilege/ReplayEngine.java` L315-L319
+
+```java
+private SyncHttpSender.Result sendSyncWithRetry(byte[] requestBytes, HttpService httpService,
+                                              RequestManager requestManager, boolean useHttp2,
+                                              int timeoutSeconds, int retryCount, int retryDelayMs) {
+    return SyncHttpSender.sendWithRetry(requestBytes, httpService, requestManager,
+            useHttp2, timeoutSeconds, retryCount, retryDelayMs, "重放");
+    //      ^^^^^^^ 从调用方传入
+}
+```
+
+`ReplayEngine` 的 `sendSyncWithRetry` 接受 `useHttp2` 参数并透传给 `SyncHttpSender`，而 `AutoTestEngine` 的对应方法不接受此参数，直接硬编码 `false`。
+
+**注意**：这是重构前就存在的问题（旧版 `AutoTestEngine.sendSyncRequestOnce()` 调用 `makeHttpRequestAsync` 时同样未传 HTTP/2 标志），`SyncHttpSender` 重构使其显式化，但未修复。
+
+### 修复建议
+
+从 `InterceptedRequest` 或 `HttpService` 提取 HTTP/2 信息并传递：
+
+```java
+// 方案：通过 HttpService 或 Burp API 判断
+// Montoya API 中 HttpService 目前无直接 isHttp2() 方法，
+// 但可从 interceptedRequest 的注释/标记中获取，或使用 Burp 扩展 API
+
+// 短期方案：通过请求字节中的协议指示符判断
+boolean useHttp2 = detectHttp2FromRequest(requestBytes, httpService);
+
+private SyncHttpSender.Result sendSyncRequestWithRetry(byte[] requestBytes, HttpService httpService,
+                                                         RequestManager requestManager,
+                                                         int timeoutSeconds, int retryCount, int retryDelayMs,
+                                                         boolean useHttp2) {
+    return SyncHttpSender.sendWithRetry(requestBytes, httpService, requestManager,
+            useHttp2, timeoutSeconds, retryCount, retryDelayMs, "自动化测试");
+}
+```
+
+---
+
 ## 附录：各日志的测试环境差异
 
-| 维度 | 1632 日志 | 1642 日志 | 1651 日志 |
-|------|----------|----------|----------|
-| 模式 | 代理实时拦截 | 代理实时拦截 | 批量权限测试 |
-| 并发度 | 2 批 | 4 批 | 串行 |
-| 测试 API | start/stop | start/stop/list/detail | start/stop/list/detail |
-| 基准用户 | globex_viewer | globex_viewer | globex_viewer |
-| 测试用户 | zero | zero | zero |
-| 判决规则 | ces + 默认相似度规则 | ces + 默认相似度规则 | ces + 默认相似度规则 |
-| 相似度阈值 | 0.70 | 0.70 | 0.70 |
-| 调试模式 | 开启 | 开启 | 开启 |
-| 全部判决结果 | 安全 (相似度=0.00) | 安全 (相似度=0.00) | 安全 (NOT_ESCALATED) |
-| 判决是否正确 | ✅ 正确 (401 确实安全) | ✅ 正确 | ✅ 正确 |
-| 相似度是否正确 | 🔴 0.0 不合理 | 🔴 0.0 不合理 | 🔴 0.0 不合理 |
+| 维度 | 1632 日志 | 1642 日志 | 1651 日志 | 1722 日志 |
+|------|----------|----------|----------|----------|
+| 模式 | 代理实时拦截 | 代理实时拦截 | 批量权限测试 | 代理实时拦截 |
+| 并发度 | 2 批 | 4 批 | 串行 | 1 批（串行） |
+| 测试 API | start/stop | start/stop/list/detail | start/stop/list/detail | start |
+| 基准用户 | globex_viewer | globex_viewer | globex_viewer | globex_viewer |
+| 测试用户 | zero | zero | zero | zero |
+| 判决规则 | 测试 + 默认相似度规则 | 测试 + 默认相似度规则 | 测试 + 默认相似度规则 | 测试 + 默认相似度规则 |
+| 相似度阈值 | 0.70 | 0.70 | 0.70 | 0.85 |
+| 调试模式 | 开启 | 开启 | 开启 | 开启 |
+| 全部判决结果 | 安全 (相似度=0.00) | 安全 (相似度=0.00) | 安全 (NOT_ESCALATED) | 安全 (相似度=0.00) |
+| 判决是否正确 | ✅ 正确 (401 确实安全) | ✅ 正确 | ✅ 正确 | ✅ 正确 |
+| 相似度是否正确 | 🔴 0.0 不合理 | 🔴 0.0 不合理 | 🔴 0.0 不合理 | 🔴 0.0 不合理 |
+| 问题3/4（枚举名/基准） | 触发 | 触发 | 触发 | 未触发（非批量路径已正确） |
+| 问题6（双重回调） | 未明确 | 未明确 | 触发（每次2次） | 触发（每次2次） |
+| 问题5（URL解析） | 触发（每次2次） | 触发（每次2次） | 触发（每次2次） | 触发（每次2次） |
+| 问题7/8/9（AutoTestEngine） | 未检测 | 未检测 | 未检测 | 本次代码分析发现 |
 
-**核心结论**：所有三次测试的判决结果（安全/未越权）都是**正确的**——测试用户 `zero` 缺少有效的 Authorization header，服务器正确返回 401。但**相似度计算值 0.0 是误导性的**，它无法反映两个 JSON 响应之间真实的结构相似度，使得基于相似度阈值的判决机制形同虚设。
+**核心结论**：
+
+1. **判决结果正确性**：所有四次测试的判决结果（安全/未越权）都是**正确的**——测试用户 `zero` 缺少有效的 Authorization header，服务器正确返回 401。
+
+2. **相似度计算的根本缺陷**（问题1）：`computeValueSimilarity()` 对短不同值返回 0.0，导致**结构完全相同的 JSON 被判为完全不相似**，使得基于相似度阈值的判决机制形同虚设。四次测试中复现此问题共 **11 次**（1632:3次, 1642:4次, 1651:3次, 1722:1次）。
+
+3. **路径不一致**（问题3、7）：非批量路径（`RequestDispatchHandler`）已正确使用 `getDisplayName()`，但批量路径和 `AutoTestEngine` 路径仍输出枚举原名。
+
+4. **调试覆盖不全**（问题8）：`ReplayEngine` 有完整的 `judgmentDebug()` 调用链，但 `AutoTestEngine` 完全缺失，导致代理自动化测试路径的判决问题无法诊断。
+
+5. **历史遗留问题累积**：问题5、6、9 均为长期存在的低优先级问题，低频操作下影响有限但持续复现。

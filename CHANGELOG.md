@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.29.0] - 2026-06-30
+
+### Added
+- 新增 `LogManager` 自动 GC 定时调度器（30s 间隔守护线程），支持运行时开关控制
+- 新增工具栏自动 GC 切换按钮（`SwitchButton`），支持一键切换手动/自动 GC 模式
+
+### Changed
+- 增强 `LogManager.shutdown()` 安全关闭 GC 调度器
+- 更新越权测试问题分析文档 (`privilege_test_issues_analysis.md`)
+
 ## [2.28.0] - 2026-06-30
 
 ### Added

@@ -84,6 +84,11 @@ public class RepeaterManagerUI {
     private JLabel debugNormalLabel;
     private JLabel debugModeLabel;
 
+    // 自动GC切换按钮
+    private SwitchButton gcToggleButton;
+    private JLabel gcOffLabel;
+    private JLabel gcOnLabel;
+
     /**
      * 创建 Repeater Manager 界面
      *
@@ -331,6 +336,29 @@ public class RepeaterManagerUI {
         debugModeLabel = new JLabel("调试");
         debugModeLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
         leftToolPanel.add(debugModeLabel);
+
+        // 分隔符
+        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
+        // 自动GC标签(关闭)
+        gcOffLabel = new JLabel("手动GC");
+        gcOffLabel.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
+        leftToolPanel.add(gcOffLabel);
+
+        // 自动GC切换开关
+        gcToggleButton = new SwitchButton();
+        gcToggleButton.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
+        gcToggleButton.addActionListener(e -> {
+            boolean selected = gcToggleButton.isSelected();
+            LogManager.getInstance().setAutoGcEnabled(selected);
+            LogManager.getInstance().printOutput("[*] 自动GC: " + (selected ? "已开启" : "已关闭"));
+        });
+        leftToolPanel.add(gcToggleButton);
+
+        // 自动GC标签(开启)
+        gcOnLabel = new JLabel("自动GC");
+        gcOnLabel.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
+        leftToolPanel.add(gcOnLabel);
 
         // 右侧布局控制区
         JPanel rightToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
