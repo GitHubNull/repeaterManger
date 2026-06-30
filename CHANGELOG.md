@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.31.0] - 2026-07-01
+
+### Added
+- 用户会话面板新增"添加匿名用户"按钮，一键创建所有令牌值为空的匿名用户，支持智能令牌方案匹配（优先复用已有用户方案 → 自动匹配唯一方案 → 多方案时弹窗选择）
+
 ## [2.30.0] - 2026-07-01
 
 ### Added

@@ -14,8 +14,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * 用户会话管理子标签页
@@ -107,6 +109,7 @@ public class UserSessionTab extends JPanel {
         JButton importSessionBtn = new JButton("导入");
         JButton exportSessionBtn = new JButton("导出");
         JButton parseFromClipboardBtn = new JButton("从报文解析");
+        JButton addAnonymousBtn = new JButton("添加匿名用户");
 
         addSessionBtn.addActionListener(e -> addUserSession());
         editSessionBtn.addActionListener(e -> editUserSession());
@@ -115,8 +118,10 @@ public class UserSessionTab extends JPanel {
         importSessionBtn.addActionListener(e -> importUserSessions());
         exportSessionBtn.addActionListener(e -> exportUserSessions());
         parseFromClipboardBtn.addActionListener(e -> parseSessionFromClipboard());
+        addAnonymousBtn.addActionListener(e -> addAnonymousUser());
 
         sessionButtonPanel.add(addSessionBtn);
+        sessionButtonPanel.add(addAnonymousBtn);
         sessionButtonPanel.add(parseFromClipboardBtn);
         sessionButtonPanel.add(editSessionBtn);
         sessionButtonPanel.add(deleteSessionBtn);
@@ -181,6 +186,101 @@ public class UserSessionTab extends JPanel {
             }
             refreshData();
         }
+    }
+
+    /**
+     * 一键添加匿名用户（所有令牌值留空，用于未授权测试）
+     * 令牌方案智能选择：优先复用已有用户方案，其次自动匹配唯一方案，多方案时弹窗选择
+     */
+    private void addAnonymousUser() {
+        SessionManager sm = SessionManager.getInstance();
+
+        // 生成唯一名称
+        String baseName = "匿名用户";
+        String candidateName = baseName;
+        int suffix = 2;
+        Set<String> existingNames = sm.getUserSessions().stream()
+                .map(UserSession::getName).collect(Collectors.toSet());
+        while (existingNames.contains(candidateName)) {
+            candidateName = baseName + "_" + suffix++;
+        }
+
+        // 智能确定令牌方案
+        Integer schemeId = determineAnonymousScheme(candidateName);
+        if (schemeId == null) {
+            return; // 用户取消
+        }
+
+        String colorHex = "#999999";
+        int id = sm.addUserSession(candidateName, colorHex, true, schemeId);
+        if (id > 0) {
+            refreshData();
+            JOptionPane.showMessageDialog(this,
+                    "匿名用户 \"" + candidateName + "\" 已创建", "成功", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this,
+                    "创建匿名用户失败", "错误", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * 为匿名用户智能确定令牌方案：
+     * 1. 优先使用已有测试用户所使用的方案
+     * 2. 若无用户，且只有一个启用的方案或只有一个方案，自动使用
+     * 3. 否则弹出 UserSessionEditDialog 让用户手动选择方案
+     *
+     * @param candidateName 匿名用户的候选名称（用于预填充对话框）
+     * @return 确定的 schemeId，若用户取消则返回 null
+     */
+    private Integer determineAnonymousScheme(String candidateName) {
+        SessionManager sm = SessionManager.getInstance();
+        List<UserSession> existingSessions = sm.getUserSessions();
+
+        // Priority 1: 复用已有用户的方案
+        if (!existingSessions.isEmpty()) {
+            for (UserSession session : existingSessions) {
+                if (session.getSchemeId() != null) {
+                    return session.getSchemeId();
+                }
+            }
+        }
+
+        // Priority 2: 无已有用户时，检查可用方案数量
+        List<TokenScheme> allSchemes = sm.getTokenSchemes();
+        List<TokenScheme> enabledSchemes = sm.getEnabledTokenSchemes();
+
+        if (enabledSchemes.size() == 1) {
+            return enabledSchemes.get(0).getId();
+        }
+        if (enabledSchemes.isEmpty() && allSchemes.size() == 1) {
+            return allSchemes.get(0).getId();
+        }
+
+        // Priority 3: 多方案时弹窗选择
+        return showSchemeSelectionDialog(candidateName);
+    }
+
+    /**
+     * 多方案时弹出 UserSessionEditDialog 让用户选择方案
+     * 对话框预填充名称和灰色，令牌值区域默认为空
+     *
+     * @param candidateName 预填充的名称
+     * @return 用户选择的 schemeId，若取消则返回 null
+     */
+    private Integer showSchemeSelectionDialog(String candidateName) {
+        // 创建临时 UserSession 用于预填充名称和颜色
+        UserSession tempSession = new UserSession();
+        tempSession.setName(candidateName);
+        tempSession.setColor(new Color(0x99, 0x99, 0x99));
+
+        Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
+        UserSessionEditDialog dialog = new UserSessionEditDialog(owner, "添加匿名用户", tempSession);
+        dialog.setVisible(true);
+
+        if (dialog.isConfirmed()) {
+            return dialog.getSchemeId();
+        }
+        return null;
     }
 
     private void editUserSession() {
