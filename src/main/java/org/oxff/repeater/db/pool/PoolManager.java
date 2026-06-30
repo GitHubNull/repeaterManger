@@ -411,8 +411,14 @@ public class PoolManager {
     }
 
     /**
-     * 通用缓存淘汰：保留 targetSize 条目，移除多余条目
-     * ConcurrentHashMap 无序，所以这里是随机淘汰（近似 FIFO）
+     * 通用缓存淘汰：保留最近 targetSize 条目，移除多余条目。
+     *
+     * 使用 ConcurrentHashMap.keySet() 迭代顺序淘汰，该顺序在 JVM 运行期间相对稳定，
+     * 近似于 FIFO（先插入的先淘汰）。在 Burp 插件的高频重复访问模式下，
+     * 高频条目通常会被持续重新插入（命中后不改变迭代顺序），因此实际命中率可接受。
+     *
+     * 限制：不是严格 LRU，极端情况下高频条目可能被淘汰。但由于缓存容量较大
+     * （MAX_CACHE_SIZE=2000/STRING=1000/HEADER=500），日常使用极少触发淘汰。
      */
     private <K, V> void evictCache(ConcurrentHashMap<K, V> cache, int targetSize) {
         int toRemove = cache.size() - targetSize;

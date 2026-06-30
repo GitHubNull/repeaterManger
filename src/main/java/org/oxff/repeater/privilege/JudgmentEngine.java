@@ -73,6 +73,36 @@ public class JudgmentEngine {
         JudgmentRuleManager ruleManager = JudgmentRuleManager.getInstance();
         List<JudgmentRule> rules = ruleManager.getEnabledRules();
 
+        // === 空 Body 感知预处理 ===
+        boolean baselineBodyEmpty = isBodyEmpty(baselineResponse);
+        boolean currentBodyEmpty = isBodyEmpty(responseBody);
+
+        if (baselineBodyEmpty || currentBodyEmpty) {
+            // 当用户配置了判决规则且其中有 RESPONSE_BODY 条件时，仍走规则匹配流程
+            boolean hasBodyRule = false;
+            if (!rules.isEmpty()) {
+                for (JudgmentRule rule : rules) {
+                    if (!rule.isEnabled() || !rule.isValid()) continue;
+                    for (RuleCondition cond : rule.getEffectiveConditions()) {
+                        if (cond.getTarget() == RuleTarget.RESPONSE_BODY) {
+                            hasBodyRule = true;
+                            break;
+                        }
+                    }
+                    if (hasBodyRule) break;
+                }
+            }
+            if (!hasBodyRule) {
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 进入空Body判决: 基线body空=%b(%d字节)/测试body空=%b(%d字节), 基线状态码=%d, 测试状态码=%d",
+                        baselineBodyEmpty, baselineResponse != null ? baselineResponse.length : -1,
+                        currentBodyEmpty, responseBody != null ? responseBody.length : -1,
+                        baselineStatusCode, statusCode));
+                return judgeWithEmptyBody(statusCode, responseBody, baselineResponse,
+                        baselineStatusCode, baselineBodyEmpty, currentBodyEmpty, similarityThreshold);
+            }
+        }
+
         // 计算相似度（使用内容感知的混合算法）
         double similarity = -1;
         if (baselineResponse != null && responseBody != null) {
@@ -81,6 +111,13 @@ public class JudgmentEngine {
             String contentType = extractContentType(responseHeaders);
             similarity = SimilarityEngine.similarity(respStr, baseStr, contentType);
         }
+
+        LogManager.getInstance().judgmentDebug(String.format(
+                "[判决] judge() 入参: statusCode=%d, bodyLen=%d, baselineBodyLen=%d, threshold=%.2f, respTimeMs=%d, contentType=%s, similarity=%.4f",
+                statusCode, responseBody != null ? responseBody.length : -1,
+                baselineResponse != null ? baselineResponse.length : -1,
+                similarityThreshold, responseTimeMs,
+                extractContentType(responseHeaders), similarity));
 
         // 有规则时：按优先级匹配
         if (!rules.isEmpty()) {
@@ -105,8 +142,14 @@ public class JudgmentEngine {
                                                    long responseTimeMs) {
         String bodyStr = responseBody != null ? new String(responseBody, StandardCharsets.UTF_8) : "";
 
+        LogManager.getInstance().judgmentDebug(String.format(
+                "[判决] 规则匹配开始: 共%d条规则", rules.size()));
+
         for (JudgmentRule rule : rules) {
             if (!rule.isEnabled() || !rule.isValid()) continue;
+
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[判决] 评估规则: name='%s', priority=%d", rule.getName(), rule.getPriority()));
 
             // 使用 getEffectiveConditions() 获取条件列表（自动处理向后兼容）
             List<RuleCondition> conditions = rule.getEffectiveConditions();
@@ -115,6 +158,8 @@ public class JudgmentEngine {
                     responseBody, baselineResponse);
 
             if (allMatched) {
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 规则命中: '%s' → ESCALATED", rule.getName()));
                 // 规则匹配成功 → 表示越权，使用成功颜色和备注
                 String note = rule.getSuccessNote();
                 if (note == null || note.isEmpty()) {
@@ -124,8 +169,11 @@ public class JudgmentEngine {
                         note, similarity, rule.getName());
             }
             // 规则不匹配 → 继续检查下一条规则，不提前返回
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[判决] 规则未命中: '%s', 继续下一条", rule.getName()));
         }
 
+        LogManager.getInstance().judgmentDebug("[判决] 所有规则均未命中 → 回退到默认判决");
         // 所有规则都不匹配，回退到默认判决
         return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold);
     }
@@ -143,11 +191,15 @@ public class JudgmentEngine {
         // 能够计算相似度时，以相似度为主要判决依据
         if (similarity >= 0) {
             if (similarity >= similarityThreshold) {
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 默认判决: similarity=%.4f >= threshold=%.2f → ESCALATED", similarity, similarityThreshold));
                 // 相似度高于阈值：低权限用户响应与基准高度相似 → 越权
                 return new JudgmentOutcome(JudgmentResult.ESCALATED, Color.RED,
                         String.format("相似度%.1f%% >= 阈值%.1f%%，疑似越权", similarity * 100, similarityThreshold * 100),
                         similarity, null);
             } else {
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 默认判决: similarity=%.4f < threshold=%.2f → NOT_ESCALATED", similarity, similarityThreshold));
                 // 相似度低于阈值：响应差异显著 → 安全（正确被限制访问）
                 return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, null,
                         String.format("相似度%.1f%% < 阈值%.1f%%，响应差异显著", similarity * 100, similarityThreshold * 100),
@@ -157,12 +209,14 @@ public class JudgmentEngine {
 
         // 无法计算相似度时，回退到状态码检查
         if (statusCode != baselineStatusCode) {
-            // 状态码不同但无法确定是否越权（可能是正常拒绝如401/403，也可能是异常）
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[判决] 默认判决: similarity<0, statusCode=%d != baselineStatusCode=%d → PENDING", statusCode, baselineStatusCode));
             return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
                     "状态码不同但无法计算相似度: 基准=" + baselineStatusCode + ", 当前=" + statusCode,
                     similarity, null);
         }
 
+        LogManager.getInstance().judgmentDebug("[判决] 默认判决: similarity<0, 状态码相同, 无法计算 → PENDING");
         // 无法计算相似度且状态码相同 → 挂起，需人工确认
         return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
                 "无法计算相似度", similarity, null);
@@ -187,11 +241,17 @@ public class JudgmentEngine {
                                                String bodyStr, double similarity,
                                                long responseTimeMs,
                                                byte[] responseBody, byte[] baselineResponse) {
-        if (conditions == null || conditions.isEmpty()) return false;
+        if (conditions == null || conditions.isEmpty()) {
+            LogManager.getInstance().judgmentDebug("[判决] evaluateConditions: 条件列表为空 → false");
+            return false;
+        }
 
         boolean result = true;  // 初始值为 true（单位元）
         for (RuleCondition cond : conditions) {
-            if (!cond.isValid()) continue;
+            if (!cond.isValid()) {
+                LogManager.getInstance().judgmentDebug("[判决]   条件无效,跳过");
+                continue;
+            }
 
             // 1. 计算当前条件的原始匹配结果
             String targetValue = extractTargetValue(cond.getTarget(), statusCode,
@@ -199,17 +259,30 @@ public class JudgmentEngine {
             boolean condResult = matchValue(cond.getMethod(), cond.getExpression(),
                     targetValue, statusCode, responseBody, baselineResponse);
 
+            // 截断用于日志展示的 value（避免大响应体撑爆日志）
+            String displayValue = targetValue != null && targetValue.length() > 200
+                    ? targetValue.substring(0, 200) + "...(截断)" : targetValue;
+
             // 2. 应用 NOT（取反）
+            boolean beforeNegate = condResult;
             if (cond.isNegate()) {
                 condResult = !condResult;
             }
 
             // 3. 按运算符与累积结果组合
+            boolean beforeCombine = result;
+            String operatorSymbol = cond.getOperator() == RuleCondition.LogicalOperator.AND ? "AND" : "OR";
             if (cond.getOperator() == RuleCondition.LogicalOperator.AND) {
                 result = result && condResult;
             } else {  // OR
                 result = result || condResult;
             }
+
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[判决]   target=%s, method=%s, expr='%s', value='%s' → rawMatch=%b, negate=%b(→%b), %s → %b(累积=%b)",
+                    cond.getTarget().name(), cond.getMethod().name(), cond.getExpression(),
+                    displayValue, beforeNegate, cond.isNegate(), condResult,
+                    operatorSymbol, beforeCombine, result));
         }
         return result;
     }
@@ -308,5 +381,98 @@ public class JudgmentEngine {
             LogManager.getInstance().printError("[!] 判决规则匹配异常: " + e.getMessage());
             return false;
         }
+    }
+
+    // ==================== 空 Body 判决 ====================
+
+    /**
+     * 判断 body 是否为空（null 或长度=0）
+     */
+    private static boolean isBodyEmpty(byte[] body) {
+        return body == null || body.length == 0;
+    }
+
+    /**
+     * 空 Body 场景的专门判决逻辑
+     * <p>
+     * 当基线或测试响应体为空时,body 相似度无意义,
+     * 转而通过状态码 + body 有无的组合来推断越权风险。
+     *
+     * @param statusCode         测试用户响应状态码
+     * @param responseBody       测试用户响应体
+     * @param baselineResponse   基准用户响应体
+     * @param baselineStatusCode 基准用户状态码
+     * @param baselineBodyEmpty  基准 body 是否为空
+     * @param currentBodyEmpty   测试 body 是否为空
+     * @param threshold          相似度阈值(此处仅用于日志)
+     */
+    private static JudgmentOutcome judgeWithEmptyBody(int statusCode, byte[] responseBody,
+                                                       byte[] baselineResponse,
+                                                       int baselineStatusCode,
+                                                       boolean baselineBodyEmpty,
+                                                       boolean currentBodyEmpty,
+                                                       double threshold) {
+        if (baselineBodyEmpty && currentBodyEmpty) {
+            // 双方 body 均为空
+            if (statusCode == baselineStatusCode) {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 双方body均为空, 状态码相同(%d) → 安全(被同等限制)", statusCode));
+                return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, null,
+                        String.format("双方body均为空,状态码相同(%d),被同等限制", statusCode), -1, null);
+            } else {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 双方body均为空, 状态码不同(基准=%d,测试=%d) → 待确认",
+                        baselineStatusCode, statusCode));
+                return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                        String.format("双方body均为空,状态码不同(基准=%d,测试=%d),需人工确认",
+                                baselineStatusCode, statusCode), -1, null);
+            }
+        }
+
+        if (baselineBodyEmpty && !currentBodyEmpty) {
+            // 基线空, 测试有内容 → 测试用户拿到了数据!
+            if (statusCode >= 200 && statusCode < 400) {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 基线body空,测试body非空(%d字节),状态码=%d → 越权! 拿到了不该拿的数据",
+                        responseBody != null ? responseBody.length : 0, statusCode));
+                return new JudgmentOutcome(JudgmentResult.ESCALATED, Color.RED,
+                        String.format("基线body为空但测试返回%d字节,状态码%d,疑似越权",
+                                responseBody != null ? responseBody.length : 0, statusCode),
+                        -1, null);
+            } else {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 基线body空,测试body非空(%d字节),状态码=%d → 安全(被拒绝)",
+                        responseBody != null ? responseBody.length : 0, statusCode));
+                return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, null,
+                        String.format("基线body为空,测试状态码%d,无越权迹象", statusCode), -1, null);
+            }
+        }
+
+        if (!baselineBodyEmpty && currentBodyEmpty) {
+            // 基线有内容, 测试空
+            if (statusCode >= 400 && statusCode < 500) {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 基线body非空(%d字节),测试body空,状态码=%d → 安全(正确被拒绝)",
+                        baselineResponse != null ? baselineResponse.length : 0, statusCode));
+                return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, null,
+                        String.format("测试被拒绝(状态码%d),无越权迹象", statusCode), -1, null);
+            } else if (statusCode >= 200 && statusCode < 300) {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 基线body非空(%d字节),测试body空,状态码=%d → 安全(如204等)",
+                        baselineResponse != null ? baselineResponse.length : 0, statusCode));
+                return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, null,
+                        String.format("测试状态码%d但body为空(如204),无越权迹象", statusCode), -1, null);
+            } else {
+                LogManager.getInstance().printOutput(String.format(
+                        "[*] 空Body判决: 基线body非空(%d字节),测试body空,状态码=%d → 待确认",
+                        baselineResponse != null ? baselineResponse.length : 0, statusCode));
+                return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                        String.format("测试body为空,状态码%d,需人工确认", statusCode), -1, null);
+            }
+        }
+
+        // 兜底: 不应到达这里
+        return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                "空Body判决逻辑异常", -1, null);
     }
 }

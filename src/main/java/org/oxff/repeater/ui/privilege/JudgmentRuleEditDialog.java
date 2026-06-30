@@ -50,15 +50,12 @@ public class JudgmentRuleEditDialog extends JDialog {
     // ==================== 每行条件的组件持有者 ====================
 
     private static class ConditionRow {
-        final int index;
         final JPanel rowPanel;
         final JComboBox<RuleCondition.LogicalOperator> operatorCombo;
         final JCheckBox negateCheckbox;
         final JComboBox<RuleTarget> targetCombo;
         final JComboBox<RuleMethod> methodCombo;
         final JTextField expressionField;
-        final JButton deleteButton;
-
         ConditionRow(int index, JPanel rowPanel,
                      JComboBox<RuleCondition.LogicalOperator> operatorCombo,
                      JCheckBox negateCheckbox,
@@ -66,14 +63,12 @@ public class JudgmentRuleEditDialog extends JDialog {
                      JComboBox<RuleMethod> methodCombo,
                      JTextField expressionField,
                      JButton deleteButton) {
-            this.index = index;
             this.rowPanel = rowPanel;
             this.operatorCombo = operatorCombo;
             this.negateCheckbox = negateCheckbox;
             this.targetCombo = targetCombo;
             this.methodCombo = methodCombo;
             this.expressionField = expressionField;
-            this.deleteButton = deleteButton;
         }
 
         RuleCondition toCondition() {

@@ -33,6 +33,13 @@ public class DatabaseManager {
     private static final int POOL_SIZE = 15;
     private final BlockingQueue<Connection> connectionPool = new ArrayBlockingQueue<>(POOL_SIZE);
 
+    // 连接池监控统计（线程安全由 volatile 保证基础可见性）
+    private volatile long totalConnectionsCreated = 0;
+    private volatile long totalConnectionsReturned = 0;
+    private volatile long peakPoolSize = 0;
+    private volatile long lastStatsLogTime = 0;
+    private static final long STATS_LOG_INTERVAL_MS = 300_000; // 每5分钟最多输出一次统计
+
     // 当前会话的数据库文件路径
     private String currentDbPath;
 
@@ -107,6 +114,13 @@ public class DatabaseManager {
     public void resetForNewSession() {
         synchronized (connectionLock) {
             LogManager.getInstance().printOutput("[*] 重置数据库管理器以开始新会话...");
+
+            // 停止旧 GC 服务，避免残留调度线程操作新数据库
+            if (gcService != null) {
+                gcService.stop();
+                gcService = null;
+            }
+
             // 先关闭现有连接池中的连接
             Connection conn;
             while ((conn = connectionPool.poll()) != null) {
@@ -258,7 +272,18 @@ public class DatabaseManager {
             if (conn == null || conn.isClosed()) {
                 // 如果池中连接不可用，创建新连接
                 conn = createNewConnection();
+                totalConnectionsCreated++;
             }
+
+            // 更新峰值池大小
+            int currentPoolSize = connectionPool.size();
+            if (currentPoolSize > peakPoolSize) {
+                peakPoolSize = currentPoolSize;
+            }
+
+            // 定期输出连接池统计日志
+            logPoolStatsIfNeeded();
+
             // 返回代理连接，close()时自动归还到池中
             return createPooledConnectionProxy(conn);
         } catch (InterruptedException e) {
@@ -311,7 +336,9 @@ public class DatabaseManager {
                     }
                     // 归还到连接池
                     if (!realConnection.isClosed()) {
-                        if (!connectionPool.offer(realConnection)) {
+                        if (connectionPool.offer(realConnection)) {
+                            totalConnectionsReturned++;
+                        } else {
                             // 池已满，真正关闭连接
                             realConnection.close();
                         }
@@ -357,6 +384,29 @@ public class DatabaseManager {
         } catch (SQLException e) {
             LogManager.getInstance().printError("[!] 归还数据库连接失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 定期输出连接池统计日志（每 STATS_LOG_INTERVAL_MS 毫秒最多一次）
+     */
+    private void logPoolStatsIfNeeded() {
+        long now = System.currentTimeMillis();
+        if (now - lastStatsLogTime > STATS_LOG_INTERVAL_MS) {
+            lastStatsLogTime = now;
+            int currentSize = connectionPool.size();
+            LogManager.getInstance().printOutput(String.format(
+                "[*] 连接池统计 — 当前: %d/%d | 峰值: %d | 累计创建: %d | 累计归还: %d",
+                currentSize, POOL_SIZE, peakPoolSize, totalConnectionsCreated, totalConnectionsReturned));
+        }
+    }
+
+    /**
+     * 获取连接池统计信息（供 JMX 或调试使用）
+     */
+    public String getPoolStats() {
+        return String.format("Pool[%d/%d], Peak=%d, Created=%d, Returned=%d",
+                connectionPool.size(), POOL_SIZE, peakPoolSize,
+                totalConnectionsCreated, totalConnectionsReturned);
     }
 
     /**

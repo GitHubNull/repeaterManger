@@ -81,6 +81,12 @@ public class HistoryWriteDAO {
                 fallbackRecord.setResponseData(record.getResponseData());
                 fallbackRecord.setComment(record.getComment());
                 fallbackRecord.setColor(record.getColor());
+                // 补全越权测试相关字段，避免外键回退时丢失判决数据
+                fallbackRecord.setUserSessionName(record.getUserSessionName());
+                fallbackRecord.setJudgment(record.getJudgment());
+                fallbackRecord.setSimilarity(record.getSimilarity());
+                fallbackRecord.setApi(record.getApi());
+                fallbackRecord.setBaselineResponseData(record.getBaselineResponseData());
 
                 return saveHistory(fallbackRecord);
             }
@@ -254,5 +260,13 @@ public class HistoryWriteDAO {
 
             return -1;
         }
+    }
+
+    /**
+     * 清除 PoolManager 内存缓存
+     * 在数据库被替换后（如 ERM 导入）调用，防止残留旧缓存数据
+     */
+    public void clearPoolCache() {
+        poolManager.clearCache();
     }
 }

@@ -655,6 +655,10 @@ public class ErmArchiveReader {
 
     private void refreshUIAfterImport() {
         try {
+            // 清除 HistoryRecordingService 中持久化 DAO 的 PoolManager 缓存，
+            // 防止旧数据库的 hash→value 映射残留影响新数据库的读写
+            org.oxff.repeater.service.HistoryRecordingService.getInstance().clearPoolCache();
+
             UIRequestDispatcher.getInstance().refreshUIData();
             LogManager.getInstance().printOutput("[+] 界面数据刷新成功");
         } catch (Exception e) {

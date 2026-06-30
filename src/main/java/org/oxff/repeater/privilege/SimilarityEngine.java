@@ -1,5 +1,6 @@
 package org.oxff.repeater.privilege;
 
+import org.oxff.repeater.logging.LogManager;
 /**
  * 相似度引擎 - 无状态工具类
  * 根据响应内容类型自动选择最优相似度算法的混合引擎
@@ -51,10 +52,23 @@ public class SimilarityEngine {
      */
     public static double similarity(String s1, String s2, ContentTypeDetector.ContentType type) {
         if (s1 == null && s2 == null) return 1.0;
-        if (s1 == null || s2 == null) return 0.0;
-        if (s1.isEmpty() && s2.isEmpty()) return 1.0;
-        if (s1.isEmpty() || s2.isEmpty()) return 0.0;
-        if (s1.equals(s2)) return 1.0;
+        if (s1 == null || s2 == null) {
+            LogManager.getInstance().judgmentDebug("[相似度] 一方为null → 0.0");
+            return 0.0;
+        }
+        if (s1.isEmpty() && s2.isEmpty()) {
+            LogManager.getInstance().judgmentDebug("[相似度] 双方均为空字符串 → 1.0");
+            return 1.0;
+        }
+        if (s1.isEmpty() || s2.isEmpty()) {
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[相似度] 一方为空(len1=%d,len2=%d) → 0.0", s1.length(), s2.length()));
+            return 0.0;
+        }
+        if (s1.equals(s2)) {
+            LogManager.getInstance().judgmentDebug("[相似度] 内容完全相同 → 1.0");
+            return 1.0;
+        }
 
         return computeByType(s1, s2, type);
     }
@@ -70,12 +84,27 @@ public class SimilarityEngine {
      */
     public static double similarity(String s1, String s2, String contentTypeHeader) {
         if (s1 == null && s2 == null) return 1.0;
-        if (s1 == null || s2 == null) return 0.0;
-        if (s1.isEmpty() && s2.isEmpty()) return 1.0;
-        if (s1.isEmpty() || s2.isEmpty()) return 0.0;
-        if (s1.equals(s2)) return 1.0;
+        if (s1 == null || s2 == null) {
+            LogManager.getInstance().judgmentDebug("[相似度] 一方为null → 0.0");
+            return 0.0;
+        }
+        if (s1.isEmpty() && s2.isEmpty()) {
+            LogManager.getInstance().judgmentDebug("[相似度] 双方均为空字符串 → 1.0");
+            return 1.0;
+        }
+        if (s1.isEmpty() || s2.isEmpty()) {
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[相似度] 一方为空(len1=%d,len2=%d) → 0.0", s1.length(), s2.length()));
+            return 0.0;
+        }
+        if (s1.equals(s2)) {
+            LogManager.getInstance().judgmentDebug("[相似度] 内容完全相同 → 1.0");
+            return 1.0;
+        }
 
         ContentTypeDetector.ContentType type = ContentTypeDetector.detect(contentTypeHeader, s1);
+        LogManager.getInstance().judgmentDebug(String.format(
+                "[相似度] ContentType=%s, len1=%d, len2=%d", type.name(), s1.length(), s2.length()));
         return computeByType(s1, s2, type);
     }
 
@@ -83,12 +112,15 @@ public class SimilarityEngine {
      * 按内容类型路由到具体算法
      */
     private static double computeByType(String s1, String s2, ContentTypeDetector.ContentType type) {
-        return switch (type) {
+        double result = switch (type) {
             case JSON -> JsonSimilarityCalculator.similarity(s1, s2);
             case XML -> XmlSimilarityCalculator.similarity(s1, s2);
             case HTML, TEXT -> JaccardSimilarityCalculator.similarity(s1, s2);
             case BINARY -> computeBinarySimilarity(s1, s2);
         };
+        LogManager.getInstance().judgmentDebug(String.format(
+                "[相似度] 算法=%s, 结果=%.4f", type.name(), result));
+        return result;
     }
 
     /**

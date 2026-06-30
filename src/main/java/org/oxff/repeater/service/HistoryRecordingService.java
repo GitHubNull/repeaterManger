@@ -188,9 +188,9 @@ public class HistoryRecordingService {
             record.setResponseLength(0);
             record.setResponseTime((int) responseTime);
             record.setRequestData(requestBytes);
-            record.setResponseData(null);
+            record.setResponseData(new byte[0]);  // 失败时使用空数组而非null，避免NPE风险
             record.setTimestamp(new Date());
-            record.setComment("请求失败: " + errorMessage);
+            record.setComment(String.format("请求失败 [%dms]: %s", responseTime, errorMessage));
             
             // 异步提交录制任务
             RecordingTask task = new RecordingTask(record, new RecordingCallback() {
@@ -417,6 +417,16 @@ public class HistoryRecordingService {
     /**
      * 关闭服务
      */
+    /**
+     * 清除内部 HistoryWriteDAO 的 PoolManager 内存缓存
+     * 在数据库被替换后（如 ERM 导入）调用，防止残留旧缓存数据
+     */
+    public void clearPoolCache() {
+        if (historyWriteDAO != null) {
+            historyWriteDAO.clearPoolCache();
+        }
+    }
+
     public void shutdown() {
         isRunning.set(false);
         executor.shutdown();

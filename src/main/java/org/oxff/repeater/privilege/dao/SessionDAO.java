@@ -511,26 +511,40 @@ public class SessionDAO {
     }
 
     /**
-     * 保存指定用户会话的所有令牌值（先删后插）
+     * 保存指定用户会话的所有令牌值。
+     *
+     * 使用 INSERT OR REPLACE 逐条 upsert + 清理旧值，替代先删后插模式。
+     * 利用 token_values(token_location_id, user_session_id) UNIQUE 约束实现幂等写入，
+     * 避免 DELETE 回滚时丢失全部旧值的风险。
      */
     public boolean saveTokenValues(int userSessionId, Map<Integer, String> tokenValues) {
         try (Connection conn = DatabaseManager.getInstance().getConnection()) {
             conn.setAutoCommit(false);
             try {
-                // 删除旧的令牌值
-                String deleteSql = "DELETE FROM token_values WHERE user_session_id = ?";
-                try (PreparedStatement pstmt = conn.prepareStatement(deleteSql)) {
-                    pstmt.setInt(1, userSessionId);
-                    pstmt.executeUpdate();
-                }
-
-                // 插入新的令牌值
-                String insertSql = "INSERT INTO token_values (token_location_id, user_session_id, value) VALUES (?, ?, ?)";
-                try (PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+                String upsertSql = "INSERT OR REPLACE INTO token_values (token_location_id, user_session_id, value) VALUES (?, ?, ?)";
+                try (PreparedStatement pstmt = conn.prepareStatement(upsertSql)) {
                     for (Map.Entry<Integer, String> entry : tokenValues.entrySet()) {
                         pstmt.setInt(1, entry.getKey());
                         pstmt.setInt(2, userSessionId);
                         pstmt.setString(3, entry.getValue() != null ? entry.getValue() : "");
+                        pstmt.executeUpdate();
+                    }
+                }
+
+                // 清理不再存在于新集合中的旧令牌值（如被移除的 token_location）
+                if (!tokenValues.isEmpty()) {
+                    StringBuilder deleteSql = new StringBuilder("DELETE FROM token_values WHERE user_session_id = ? AND token_location_id NOT IN (");
+                    for (int i = 0; i < tokenValues.size(); i++) {
+                        if (i > 0) deleteSql.append(",");
+                        deleteSql.append("?");
+                    }
+                    deleteSql.append(")");
+                    try (PreparedStatement pstmt = conn.prepareStatement(deleteSql.toString())) {
+                        pstmt.setInt(1, userSessionId);
+                        int idx = 2;
+                        for (Integer locId : tokenValues.keySet()) {
+                            pstmt.setInt(idx++, locId);
+                        }
                         pstmt.executeUpdate();
                     }
                 }

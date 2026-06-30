@@ -222,6 +222,27 @@ public class LogManager {
 
     // ========== 级别和开关控制 ==========
 
+    /** 判决调试模式开关 — 控制判决引擎详细日志输出 */
+    private volatile boolean judgmentDebugEnabled = false;
+
+    public boolean isJudgmentDebugEnabled() {
+        return judgmentDebugEnabled;
+    }
+
+    public void setJudgmentDebugEnabled(boolean judgmentDebugEnabled) {
+        this.judgmentDebugEnabled = judgmentDebugEnabled;
+    }
+
+    /**
+     * 判决调试日志 — 仅在 judgmentDebugEnabled=true 时输出
+     * 日志前缀统一为 [D-判决]，方便搜索过滤
+     */
+    public void judgmentDebug(String message) {
+        if (judgmentDebugEnabled) {
+            log(LogLevel.INFO, "[D-判决] " + message);
+        }
+    }
+
     public void setLevel(LogLevel level) {
         this.currentLevel = level;
     }

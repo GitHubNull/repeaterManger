@@ -213,8 +213,8 @@ public class RequestDAO {
 
                     int affectedRows = pstmt.executeUpdate();
                     if (affectedRows > 0) {
-                        // 释放旧引用
-                        releaseOldRefs(conn, oldRefs);
+                        // 只释放请求侧旧引用，响应基线字段未被 UPDATE 修改故不释放
+                        releaseRequestSideRefs(conn, oldRefs);
                         conn.commit();
                         return true;
                     }
@@ -333,7 +333,6 @@ public class RequestDAO {
                     } else {
                         String basicRequest = createBasicRequest(
                                 (String) request.get("method"),
-                                (String) request.get("protocol"),
                                 (String) request.get("domain"),
                                 (String) request.get("path"),
                                 (String) request.get("query")
@@ -413,7 +412,6 @@ public class RequestDAO {
                         } else {
                             String basicRequest = createBasicRequest(
                                     (String) request.get("method"),
-                                    (String) request.get("protocol"),
                                     (String) request.get("domain"),
                                     (String) request.get("path"),
                                     (String) request.get("query")
@@ -667,7 +665,7 @@ public class RequestDAO {
         return (value != null) ? value : defaultValue;
     }
 
-    private String createBasicRequest(String method, String protocol, String domain, String path, String query) {
+    private String createBasicRequest(String method, String domain, String path, String query) {
         StringBuilder sb = new StringBuilder();
         sb.append(method).append(" ");
         sb.append(path);
@@ -681,6 +679,14 @@ public class RequestDAO {
         sb.append("Connection: close\r\n");
         sb.append("\r\n");
         return sb.toString();
+    }
+
+    /**
+     * 清除 PoolManager 内存缓存
+     * 在数据库被替换后（如 ERM 导入）调用，防止残留旧缓存数据
+     */
+    public void clearPoolCache() {
+        poolManager.clearCache();
     }
 
     private void cleanupCacheIfNeeded() {
@@ -754,24 +760,29 @@ public class RequestDAO {
     }
 
     /**
-     * 释放旧引用
+     * 释放请求侧旧引用（仅索引0-6，不包含响应基线字段）
+     * 用于 updateRequest，因为 UPDATE 不修改 resp_* 列
+     */
+    private void releaseRequestSideRefs(Connection conn, String[] refs) throws SQLException {
+        if (refs == null) return;
+
+        poolManager.releaseString(conn, refs[0]); // domain_hash
+        poolManager.releaseString(conn, refs[1]); // path_hash
+        poolManager.releaseString(conn, refs[2]); // query_hash
+        poolManager.releaseHeader(conn, refs[3]); // req_header_hash
+        poolManager.releaseBody(conn, refs[4], refs[5]); // req_body_hash + storage
+        poolManager.releaseString(conn, refs[6]); // api_hash
+    }
+
+    /**
+     * 释放全部旧引用（含响应基线字段）
+     * 用于 deleteRequest，需要释放所有关联的 pool 引用
      */
     private void releaseOldRefs(Connection conn, String[] refs) throws SQLException {
         if (refs == null) return;
 
-        // 释放字符串引用
-        poolManager.releaseString(conn, refs[0]); // domain_hash
-        poolManager.releaseString(conn, refs[1]); // path_hash
-        poolManager.releaseString(conn, refs[2]); // query_hash
-
-        // 释放头部引用
-        poolManager.releaseHeader(conn, refs[3]);
-
-        // 释放 Body 引用
-        poolManager.releaseBody(conn, refs[4], refs[5]);
-
-        // 释放 API 引用
-        poolManager.releaseString(conn, refs[6]); // api_hash
+        // 释放请求侧引用
+        releaseRequestSideRefs(conn, refs);
 
         // 释放响应基线引用
         poolManager.releaseHeader(conn, refs[7]);                    // resp_header_hash

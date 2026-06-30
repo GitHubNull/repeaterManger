@@ -13,6 +13,9 @@ import java.sql.Statement;
  */
 public class SchemaMigrator {
 
+    /** 当前支持的最高 Schema 版本 */
+    public static final int LATEST_VERSION = 12;
+
     /**
      * 执行所有必要的数据库迁移
      */
@@ -81,13 +84,15 @@ public class SchemaMigrator {
                 try {
                     return Integer.parseInt(rs.getString("value"));
                 } catch (NumberFormatException e) {
-                    return 2;
+                    // schema_meta 值损坏，假设已是当前最新版，跳过所有迁移
+                    return LATEST_VERSION;
                 }
             }
         } catch (SQLException e) {
             // schema_meta 表可能不存在（极旧版本），忽略
         }
-        return 2;
+        // schema_meta 缺失，假设已是当前最新版，避免重复执行 ALTER TABLE
+        return LATEST_VERSION;
     }
 
     /**

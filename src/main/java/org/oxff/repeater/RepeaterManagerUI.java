@@ -17,6 +17,7 @@ import org.oxff.repeater.ui.config.ConfigPanel;
 import org.oxff.repeater.ui.DataPanel;
 import org.oxff.repeater.ui.LogPanel;
 import org.oxff.repeater.ui.StatusPanel;
+import org.oxff.repeater.ui.SimilarityCalculatorDialog;
 import org.oxff.repeater.ui.SwitchButton;
 import org.oxff.repeater.ui.layout.LayoutManager;
 import org.oxff.repeater.ui.layout.LayoutManager.LayoutType;
@@ -77,6 +78,11 @@ public class RepeaterManagerUI {
     private SwitchButton modeToggleButton;
     private JLabel normalModeLabel;
     private JLabel privilegeModeLabel;
+
+    // 判决调试切换按钮
+    private SwitchButton debugToggleButton;
+    private JLabel debugNormalLabel;
+    private JLabel debugModeLabel;
 
     /**
      * 创建 Repeater Manager 界面
@@ -289,6 +295,42 @@ public class RepeaterManagerUI {
         privilegeModeLabel = new JLabel("权限测试");
         privilegeModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
         leftToolPanel.add(privilegeModeLabel);
+
+        // 分隔符
+        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
+        // 相似度计算按钮
+        JButton similarityCalcBtn = new JButton("相似度计算");
+        similarityCalcBtn.setToolTipText("打开相似度计算工具，比较两个HTTP报文的相似度");
+        similarityCalcBtn.addActionListener(e -> {
+            SimilarityCalculatorDialog dialog = new SimilarityCalculatorDialog(
+                (Frame) SwingUtilities.getWindowAncestor(mainPanel));
+            dialog.setVisible(true);
+        });
+        leftToolPanel.add(similarityCalcBtn);
+
+        // 分隔符
+        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
+
+        // 判决调试标签(正常)
+        debugNormalLabel = new JLabel("正常");
+        debugNormalLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
+        leftToolPanel.add(debugNormalLabel);
+
+        // 判决调试切换开关
+        debugToggleButton = new SwitchButton();
+        debugToggleButton.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
+        debugToggleButton.addActionListener(e -> {
+            boolean selected = debugToggleButton.isSelected();
+            LogManager.getInstance().setJudgmentDebugEnabled(selected);
+            LogManager.getInstance().printOutput("[*] 判决调试模式: " + (selected ? "已开启" : "已关闭"));
+        });
+        leftToolPanel.add(debugToggleButton);
+
+        // 判决调试标签(调试)
+        debugModeLabel = new JLabel("调试");
+        debugModeLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
+        leftToolPanel.add(debugModeLabel);
 
         // 右侧布局控制区
         JPanel rightToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));

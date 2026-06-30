@@ -190,4 +190,12 @@ public class HistoryUpdateDAO {
         // 释放 API 字符串引用
         poolManager.releaseString(conn, refs[9]); // api_hash
     }
+
+    /**
+     * 清除 PoolManager 内存缓存
+     * 在数据库被替换后（如 ERM 导入）调用，防止残留旧缓存数据
+     */
+    public void clearPoolCache() {
+        poolManager.clearCache();
+    }
 }

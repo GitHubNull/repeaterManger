@@ -155,7 +155,14 @@ public class GarbageCollectorService {
     }
 
     /**
-     * 全量 ref_count 重算并清理零引用条目
+     * 全量 ref_count 重算并清理零引用条目。
+     *
+     * 调用方应确保在低并发或无并发写入时调用此方法。当前调用路径：
+     * clearAllRequests()/clearAllHistory() → 在 EDT 线程中顺序执行，
+     * 清空操作后几乎无并发写入，竞态窗口极小。
+     *
+     * 注意：如果未来在并发写入场景下调用，重算过程中的 ref_count
+     * 可能与并发写入产生短暂不一致。不建议引入全局锁来处理此边缘情况。
      */
     public void fullReclamation() {
         if (!DatabaseManager.getInstance().isConnectionValid()) {

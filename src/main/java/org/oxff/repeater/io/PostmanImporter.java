@@ -194,12 +194,26 @@ public class PostmanImporter {
                 String itemName = getString(item, "name", "");
                 String comment = desc.comment != null && !desc.comment.isEmpty() ? desc.comment : itemName;
 
-                if (responses.size() > 0) {
-                    // 有response → 导入为history
+                // 先创建 requests 记录，获取有效 requestId（无论是否有响应）
+                int newId = requestDAO.saveRequest(url.protocol, url.domain, url.path, url.query, method, rawRequest);
+                if (newId > 0) {
+                    if (comment != null && !comment.isEmpty()) {
+                        requestDAO.updateRequestComment(newId, comment);
+                    }
+                    if (desc.color != null && !desc.color.isEmpty()) {
+                        try {
+                            requestDAO.updateRequestColor(newId, Color.decode(desc.color));
+                        } catch (Exception e) {
+                            // 忽略
+                        }
+                    }
+                    requestCount++;
+
+                    // 如果有 response，额外创建关联的 history 记录
                     for (JsonElement respElem : responses) {
                         JsonObject respObj = respElem.getAsJsonObject();
                         RequestResponseRecord record = new RequestResponseRecord();
-                        record.setRequestId(-1);
+                        record.setRequestId(newId);
                         record.setMethod(method);
                         record.setProtocol(url.protocol);
                         record.setDomain(url.domain);
@@ -223,22 +237,6 @@ public class PostmanImporter {
 
                         historyWriteDAO.saveHistory(record);
                         historyCount++;
-                    }
-                } else {
-                    // 无response → 导入为request
-                    int newId = requestDAO.saveRequest(url.protocol, url.domain, url.path, url.query, method, rawRequest);
-                    if (newId > 0) {
-                        if (comment != null && !comment.isEmpty()) {
-                            requestDAO.updateRequestComment(newId, comment);
-                        }
-                        if (desc.color != null && !desc.color.isEmpty()) {
-                            try {
-                                requestDAO.updateRequestColor(newId, Color.decode(desc.color));
-                            } catch (Exception e) {
-                                // 忽略
-                            }
-                        }
-                        requestCount++;
                     }
                 }
             }
@@ -608,9 +606,37 @@ public class PostmanImporter {
         rawResponse.append("\r\n");
 
         String body = getString(responseObj, "body", "");
-        rawResponse.append(body);
+        // 尝试 Base64 解码：Postman 导出二进制响应时可能以 Base64 存储
+        // 通过检测字符串是否仅包含 Base64 字符集来判断
+        if (!body.isEmpty() && looksLikeBase64(body)) {
+            try {
+                byte[] decoded = java.util.Base64.getDecoder().decode(body);
+                rawResponse.append(new String(decoded, StandardCharsets.UTF_8));
+            } catch (IllegalArgumentException e) {
+                // 不是有效的 Base64，使用原始字符串
+                rawResponse.append(body);
+            }
+        } else {
+            rawResponse.append(body);
+        }
 
         return rawResponse.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 检测字符串是否看起来像 Base64 编码（仅包含 Base64 字符集和填充符）
+     */
+    private boolean looksLikeBase64(String s) {
+        // Base64 合法字符: A-Z, a-z, 0-9, +, /, = (填充)
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                    || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=')) {
+                return false;
+            }
+        }
+        // 必须是 4 的倍数，且非空
+        return s.length() >= 4 && s.length() % 4 == 0;
     }
 
     private DescriptionParse parseDescription(String description) {

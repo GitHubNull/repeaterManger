@@ -57,16 +57,26 @@ public class FileStorageManager {
             try {
                 Files.write(tempFile.toPath(), data);
 
-                // 原子重命名
-                Files.move(tempFile.toPath(), targetFile.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE);
+                // 原子重命名：优先使用 ATOMIC_MOVE，Windows 上不可靠时回退普通移动
+                try {
+                    Files.move(tempFile.toPath(), targetFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    // Windows 上 ATOMIC_MOVE 可能不受支持，回退非原子移动
+                    Files.move(tempFile.toPath(), targetFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING);
+                }
 
                 return relativePath;
             } finally {
                 // 清理可能残留的临时文件
                 if (tempFile.exists()) {
-                    tempFile.delete();
+                    try {
+                        Files.deleteIfExists(tempFile.toPath());
+                    } catch (IOException ignored) {
+                        // 忽略清理失败，临时文件在下次写入时会被覆盖
+                    }
                 }
             }
         } catch (IOException e) {

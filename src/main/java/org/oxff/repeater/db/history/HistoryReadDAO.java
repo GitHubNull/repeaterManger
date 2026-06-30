@@ -140,8 +140,14 @@ public class HistoryReadDAO {
 
     /**
      * 获取指定requestId的基线记录（原始请求）
-     * 基线记录定义：user_session_name为NULL或空字符串的最早一条历史记录
-     * 如果没有基线记录，则返回该requestId下的第一条记录
+     *
+     * 基线记录定义：user_session_name为NULL或空字符串的最早一条历史记录。
+     * 如果没有基线记录，则返回该requestId下的第一条记录。
+     *
+     * 注意：此方法主要用于 UI 显示和报告生成场景。越权测试的实际比对基线
+     * 使用 requests 表的 resp_* 字段（通过 RequestDAO.getOriginalResponseData() 获取），
+     * 而非此方法返回的 history 记录。如果用户先手动重放再越权测试，此方法可能
+     * 将手动重放的记录误判为基线——但这不影响越权判决的准确性（判决使用 requests 表数据）。
      */
     public RequestResponseRecord getBaselineRecord(int requestId) {
         // 先尝试查找user_session_name为NULL或空的记录

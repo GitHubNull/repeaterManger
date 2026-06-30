@@ -4,6 +4,7 @@ import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.http.message.requests.HttpRequest;
+import org.oxff.repeater.http.HttpMessageParser;
 import org.oxff.repeater.http.HttpRequestHelper;
 import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.http.RequestResponseRecord;
@@ -165,7 +166,7 @@ public class ReplayEngine {
 
                     // 带重试的同步发送请求（在后台线程中）
                     // finalUseHttp2 通过参数传递，避免单例实例字段在并发 replay() 调用时被覆盖
-                    ReplayResultHolder holder = sendSyncWithRetry(
+                    SyncHttpSender.Result holder = sendSyncWithRetry(
                             modifiedRequest, httpService, requestManager, finalUseHttp2,
                             timeoutSeconds, retryCount, retryDelay);
 
@@ -178,16 +179,39 @@ public class ReplayEngine {
                     if (holder.response != null && holder.response.length > 0) {
                         if (isFirst) {
                             // 基准用户：保存纯响应体作为比较基准（仅响应体，不含响应头）
-                            baselineResponse = extractResponseBody(holder.response);
+                            baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
                             baselineStatusCode = holder.statusCode;
                             baselineValid = true;
                             judgment = JudgmentResult.NOT_ESCALATED.name(); // 基准用户默认标记为安全
                             judgmentColor = null; // 基准用户不特殊着色
                         } else {
                             // 非基准用户：使用 JudgmentEngine 判决
-                            String responseHeaders = extractResponseHeaders(holder.response);
-                            byte[] responseBodyOnly = extractResponseBody(holder.response);
+                            String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                            byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
                             double threshold = sessionManager.getSimilarityThreshold();
+
+                            // === 判决前诊断日志 ===
+                            // 空 body WARNING — 始终输出(不受调试开关影响)
+                            if (baselineResponse == null || baselineResponse.length == 0) {
+                                LogManager.getInstance().printError(String.format(
+                                        "[!] 基准响应体为空(requestId未知,用户=%s),相似度计算不可靠", session.getName()));
+                            }
+                            if (responseBodyOnly == null || responseBodyOnly.length == 0) {
+                                LogManager.getInstance().printError(String.format(
+                                        "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+                            }
+                            // 调试日志
+                            LogManager.getInstance().judgmentDebug(String.format(
+                                    "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
+                                    baselineResponse != null ? baselineResponse.length : -1,
+                                    responseBodyOnly != null ? responseBodyOnly.length : -1,
+                                    baselineStatusCode, holder.statusCode, threshold));
+                            LogManager.getInstance().judgmentDebug(String.format(
+                                    "[判决] 基准响应体前200字: %s",
+                                    truncateForLog(baselineResponse, 200)));
+                            LogManager.getInstance().judgmentDebug(String.format(
+                                    "[判决] 当前响应体前200字: %s",
+                                    truncateForLog(responseBodyOnly, 200)));
 
                             JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
                                     holder.statusCode, responseHeaders, responseBodyOnly,
@@ -286,110 +310,13 @@ public class ReplayEngine {
     }
 
     /**
-     * 带重试的同步发送HTTP请求（在后台线程中调用）
-     *
-     * @param requestBytes   请求字节数组
-     * @param httpService    HTTP服务信息
-     * @param requestManager 请求管理器
-     * @param useHttp2       是否使用HTTP/2协议（参数传递，避免实例字段竞态）
-     * @param timeoutSeconds 请求超时时间（秒）
-     * @param retryCount     失败重试次数
-     * @param retryDelayMs   重试间隔（毫秒）
+     * 带重试的同步发送HTTP请求（委托给 SyncHttpSender）
      */
-    private ReplayResultHolder sendSyncWithRetry(byte[] requestBytes, HttpService httpService,
+    private SyncHttpSender.Result sendSyncWithRetry(byte[] requestBytes, HttpService httpService,
                                                   RequestManager requestManager, boolean useHttp2,
                                                   int timeoutSeconds, int retryCount, int retryDelayMs) {
-        ReplayResultHolder holder = sendSyncOnce(requestBytes, httpService, requestManager, useHttp2, timeoutSeconds);
-
-        // 重试逻辑：仅在请求失败且有重试次数时执行
-        int attempts = 0;
-        while (holder.errorMessage != null && attempts < retryCount) {
-            attempts++;
-            LogManager.getInstance().printOutput(String.format("[*] 重放重试 (%d/%d), 等待 %dms...",
-                    attempts, retryCount, retryDelayMs));
-            try {
-                Thread.sleep(retryDelayMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-            holder = sendSyncOnce(requestBytes, httpService, requestManager, useHttp2, timeoutSeconds);
-        }
-
-        return holder;
-    }
-
-    /**
-     * 单次同步发送HTTP请求（在后台线程中调用）
-     *
-     * @param requestBytes   请求字节数组
-     * @param httpService    HTTP服务信息
-     * @param requestManager 请求管理器
-     * @param useHttp2       是否使用HTTP/2协议
-     * @param timeoutSeconds 请求超时时间（秒）
-     */
-    private ReplayResultHolder sendSyncOnce(byte[] requestBytes, HttpService httpService,
-                                             RequestManager requestManager, boolean useHttp2,
-                                             int timeoutSeconds) {
-        ReplayResultHolder holder = new ReplayResultHolder();
-        Object lock = new Object();
-        boolean[] done = {false};
-
-        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService, useHttp2,
-                new RequestManager.RequestCallback() {
-                    @Override
-                    public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
-                        holder.response = response;
-                        holder.durationMs = durationMs;
-                        if (response != null && response.length > 0) {
-                            try {
-                                burp.api.montoya.http.message.responses.HttpResponse resp =
-                                        burp.api.montoya.http.message.responses.HttpResponse.httpResponse(
-                                                burp.api.montoya.core.ByteArray.byteArray(response));
-                                holder.statusCode = resp.statusCode();
-                            } catch (Exception e) {
-                                holder.statusCode = -1;
-                            }
-                        }
-                        synchronized (lock) {
-                            done[0] = true;
-                            lock.notifyAll();
-                        }
-                    }
-
-                    @Override
-                    public void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
-                        holder.errorMessage = errorMessage;
-                        holder.durationMs = durationMs;
-                        synchronized (lock) {
-                            done[0] = true;
-                            lock.notifyAll();
-                        }
-                    }
-                });
-
-        // 等待响应（超时时间基于请求超时的2倍，最少60秒）
-        long waitTimeoutMs = Math.max(60000, timeoutSeconds * 2000L);
-        synchronized (lock) {
-            long startTime = System.currentTimeMillis();
-            while (!done[0] && (System.currentTimeMillis() - startTime) < waitTimeoutMs) {
-                try {
-                    lock.wait(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-            // BUG修复：超时后设置 errorMessage，使 sendSyncWithRetry 的重试逻辑能被触发
-            // 原代码超时后 holder.errorMessage 为 null，导致重试条件 holder.errorMessage != null 永远为 false
-            if (!done[0] && holder.errorMessage == null) {
-                holder.errorMessage = String.format("请求超时（等待 %dms 未收到响应）", waitTimeoutMs);
-                holder.durationMs = waitTimeoutMs;
-                LogManager.getInstance().printError(String.format("[!] 重放请求超时：等待 %dms 未收到响应", waitTimeoutMs));
-            }
-        }
-
-        return holder;
+        return SyncHttpSender.sendWithRetry(requestBytes, httpService, requestManager,
+                useHttp2, timeoutSeconds, retryCount, retryDelayMs, "重放");
     }
 
     /**
@@ -429,75 +356,15 @@ public class ReplayEngine {
     }
 
     /**
-     * 从响应字节数组中提取响应头字符串
-     * 使用字节级查找分隔符，避免 UTF-8 多字节字符导致字符索引与字节偏移错位（BUG-007）
+     * 截断字节数组为字符串用于日志（UTF-8解码，截断到 maxLen 字符）
      */
-    private String extractResponseHeaders(byte[] responseBytes) {
-        if (responseBytes == null || responseBytes.length == 0) return "";
+    private static String truncateForLog(byte[] data, int maxLen) {
+        if (data == null || data.length == 0) return "(空)";
         try {
-            int separatorPos = findHeaderBodySeparator(responseBytes);
-            if (separatorPos < 0) {
-                // 未找到分隔符，返回全部内容
-                return new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
-            }
-            return new String(responseBytes, 0, separatorPos, java.nio.charset.StandardCharsets.UTF_8);
+            String s = new String(data, java.nio.charset.StandardCharsets.UTF_8);
+            return s.length() > maxLen ? s.substring(0, maxLen) + "...(截断)" : s;
         } catch (Exception e) {
-            return "";
+            return "(解码失败)";
         }
-    }
-
-    /**
-     * 字节级查找 header/body 分隔符
-     * @return 分隔符起始位置的字节偏移，未找到返回 -1
-     */
-    private static int findHeaderBodySeparator(byte[] data) {
-        // 优先查找 \r\n\r\n
-        for (int i = 0; i < data.length - 3; i++) {
-            if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
-                return i;
-            }
-        }
-        // 回退查找 \n\n
-        for (int i = 0; i < data.length - 1; i++) {
-            if (data[i] == '\n' && data[i + 1] == '\n') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * 从响应字节数组中提取纯响应体（不含响应头）
-     * 相似度计算应仅基于响应体内容，排除响应头的影响
-     * 使用字节级查找分隔符，避免 UTF-8 多字节字符导致字符索引与字节偏移错位（BUG-007）
-     */
-    private byte[] extractResponseBody(byte[] responseBytes) {
-        if (responseBytes == null || responseBytes.length == 0) return new byte[0];
-        try {
-            int separatorPos = findHeaderBodySeparator(responseBytes);
-            if (separatorPos < 0) {
-                // 无法分离头和体时，返回完整内容作为fallback
-                return responseBytes;
-            }
-            // 计算分隔符长度（\r\n\r\n=4 或 \n\n=2）
-            int separatorLen = (responseBytes[separatorPos] == '\r') ? 4 : 2;
-            int bodyStart = separatorPos + separatorLen;
-            if (bodyStart < responseBytes.length) {
-                return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
-            }
-            return new byte[0];
-        } catch (Exception e) {
-            return responseBytes;
-        }
-    }
-
-    /**
-     * 重放结果持有者
-     */
-    private static class ReplayResultHolder {
-        byte[] response;
-        int statusCode = -1;
-        long durationMs;
-        String errorMessage;
     }
 }

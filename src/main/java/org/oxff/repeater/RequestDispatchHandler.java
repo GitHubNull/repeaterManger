@@ -670,13 +670,20 @@ public class RequestDispatchHandler {
                         }
 
                         // 打印判决结果日志
-                        JudgmentResult judgment = JudgmentResult.fromString(record.getJudgment());
-                        LogManager.getInstance().printOutput(String.format(
-                                "[*] 权限测试重放完成: requestId=%d, 用户=%s, 判决=%s, 相似度=%.2f",
-                                record.getRequestId(),
-                                record.getUserSessionName(),
-                                judgment.getDisplayName(),
-                                record.getSimilarity()));
+                        if (isFirst) {
+                            LogManager.getInstance().printOutput(String.format(
+                                    "[*] 权限测试重放完成: requestId=%d, 用户=%s, 判决=基准用户(不参与比较)",
+                                    record.getRequestId(),
+                                    record.getUserSessionName()));
+                        } else {
+                            JudgmentResult judgment = JudgmentResult.fromString(record.getJudgment());
+                            LogManager.getInstance().printOutput(String.format(
+                                    "[*] 权限测试重放完成: requestId=%d, 用户=%s, 判决=%s, 相似度=%.2f",
+                                    record.getRequestId(),
+                                    record.getUserSessionName(),
+                                    judgment.getDisplayName(),
+                                    record.getSimilarity()));
+                        }
                     }
 
                     @Override

@@ -3,6 +3,7 @@ package org.oxff.repeater.privilege;
 import burp.api.montoya.http.HttpService;
 import burp.api.montoya.proxy.http.InterceptedRequest;
 import org.oxff.repeater.db.RequestDAO;
+import org.oxff.repeater.http.HttpMessageParser;
 import org.oxff.repeater.http.HttpRequestHelper;
 import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.http.RequestResponseRecord;
@@ -183,7 +184,7 @@ public class AutoTestEngine {
                                 requestBytes, locations, session);
 
                         // 带重试的同步发送（使用会话级别的超时和重试配置）
-                        ReplayResultHolder holder = sendSyncRequestWithRetry(
+                        SyncHttpSender.Result holder = sendSyncRequestWithRetry(
                                 modifiedRequest, httpService, requestManager, timeoutSeconds, retryCount, retryDelayMs);
 
                         // 判决
@@ -194,13 +195,13 @@ public class AutoTestEngine {
 
                         if (holder.response != null && holder.response.length > 0) {
                             if (isFirst) {
-                                baselineResponse = extractResponseBody(holder.response);
+                                baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
                                 baselineStatusCode = holder.statusCode;
                                 baselineValid = true;
                                 judgment = JudgmentResult.NOT_ESCALATED.name();
                             } else {
-                                String responseHeaders = extractResponseHeaders(holder.response);
-                                byte[] responseBodyOnly = extractResponseBody(holder.response);
+                                String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                                byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
                                 double threshold = sessionManager.getSimilarityThreshold();
                                 JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
                                         holder.statusCode, responseHeaders, responseBodyOnly,
@@ -294,139 +295,13 @@ public class AutoTestEngine {
 
     // ==================== 内部方法 ====================
 
-    private String extractResponseHeaders(byte[] responseBytes) {
-        if (responseBytes == null || responseBytes.length == 0) return "";
-        try {
-            String responseStr = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
-            int bodySeparator = responseStr.indexOf("\r\n\r\n");
-            if (bodySeparator > 0) return responseStr.substring(0, bodySeparator);
-            bodySeparator = responseStr.indexOf("\n\n");
-            if (bodySeparator > 0) return responseStr.substring(0, bodySeparator);
-            return responseStr;
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
     /**
-     * 从响应字节数组中提取纯响应体（不含响应头）
-     * 相似度计算应仅基于响应体内容，排除响应头的影响
+     * 带重试的同步发送HTTP请求（委托给 SyncHttpSender）
      */
-    private byte[] extractResponseBody(byte[] responseBytes) {
-        if (responseBytes == null || responseBytes.length == 0) return new byte[0];
-        try {
-            String responseStr = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
-            int bodySeparator = responseStr.indexOf("\r\n\r\n");
-            if (bodySeparator > 0) {
-                int bodyStart = bodySeparator + 4;
-                if (bodyStart < responseBytes.length) {
-                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
-                }
-                return new byte[0];
-            }
-            bodySeparator = responseStr.indexOf("\n\n");
-            if (bodySeparator > 0) {
-                int bodyStart = bodySeparator + 2;
-                if (bodyStart < responseBytes.length) {
-                    return java.util.Arrays.copyOfRange(responseBytes, bodyStart, responseBytes.length);
-                }
-                return new byte[0];
-            }
-            // 无法分离头和体时，返回完整内容作为fallback
-            return responseBytes;
-        } catch (Exception e) {
-            return responseBytes;
-        }
-    }
-
-    /**
-     * 带重试的同步发送HTTP请求
-     */
-    private ReplayResultHolder sendSyncRequestWithRetry(byte[] requestBytes, HttpService httpService,
-                                                         RequestManager requestManager,
-                                                         int timeoutSeconds, int retryCount, int retryDelayMs) {
-        ReplayResultHolder holder = sendSyncRequestOnce(requestBytes, httpService, requestManager, timeoutSeconds);
-
-        int attempts = 0;
-        while (holder.errorMessage != null && attempts < retryCount) {
-            attempts++;
-            LogManager.getInstance().printOutput(String.format("[*] 自动化测试重试 (%d/%d), 等待 %dms...",
-                    attempts, retryCount, retryDelayMs));
-            try {
-                Thread.sleep(retryDelayMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-            holder = sendSyncRequestOnce(requestBytes, httpService, requestManager, timeoutSeconds);
-        }
-
-        return holder;
-    }
-
-    /**
-     * 单次同步发送HTTP请求
-     */
-    private ReplayResultHolder sendSyncRequestOnce(byte[] requestBytes, HttpService httpService,
-                                                    RequestManager requestManager, int timeoutSeconds) {
-        ReplayResultHolder holder = new ReplayResultHolder();
-        Object lock = new Object();
-        boolean[] done = {false};
-
-        requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService,
-                new RequestManager.RequestCallback() {
-                    @Override
-                    public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
-                        holder.response = response;
-                        holder.durationMs = durationMs;
-                        if (response != null && response.length > 0) {
-                            try {
-                                burp.api.montoya.http.message.responses.HttpResponse resp =
-                                        burp.api.montoya.http.message.responses.HttpResponse.httpResponse(
-                                                burp.api.montoya.core.ByteArray.byteArray(response));
-                                holder.statusCode = resp.statusCode();
-                            } catch (Exception e) {
-                                holder.statusCode = -1;
-                            }
-                        }
-                        synchronized (lock) {
-                            done[0] = true;
-                            lock.notifyAll();
-                        }
-                    }
-
-                    @Override
-                    public void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
-                        holder.errorMessage = errorMessage;
-                        holder.durationMs = durationMs;
-                        synchronized (lock) {
-                            done[0] = true;
-                            lock.notifyAll();
-                        }
-                    }
-                });
-
-        synchronized (lock) {
-            long startTime = System.currentTimeMillis();
-            while (!done[0] && (System.currentTimeMillis() - startTime) < Math.max(60000, timeoutSeconds * 2000L)) {
-                try {
-                    lock.wait(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }
-        return holder;
-    }
-
-    /**
-     * 内部结果持有者
-     */
-    private static class ReplayResultHolder {
-        byte[] response;
-        int statusCode = -1;
-        long durationMs;
-        String errorMessage;
+    private SyncHttpSender.Result sendSyncRequestWithRetry(byte[] requestBytes, HttpService httpService,
+                                                             RequestManager requestManager,
+                                                             int timeoutSeconds, int retryCount, int retryDelayMs) {
+        return SyncHttpSender.sendWithRetry(requestBytes, httpService, requestManager,
+                false, timeoutSeconds, retryCount, retryDelayMs, "自动化测试");
     }
 }

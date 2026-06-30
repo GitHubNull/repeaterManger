@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.28.0] - 2026-06-30
+
+### Added
+- 新增 `HttpMessageParser` HTTP 消息解析工具类，统一提取响应体/响应头方法
+- 新增 `SyncHttpSender` 同步 HTTP 请求发送器，从 `ReplayEngine` 抽取带重试的同步发送逻辑
+- 新增 `SimilarityCalculatorDialog` 相似度计算器 UI 对话框
+- 新增 `DatabaseManager` 连接池监控统计（峰值大小、创建/归还计数，每 5 分钟输出统计日志）
+
+### Changed
+- 重构 `ReplayEngine`：HTTP 解析委托给 `HttpMessageParser`，同步发送委托给 `SyncHttpSender`，增强判决前诊断日志（空 body 告警 + 截断预览）
+- 重构 `JudgmentEngine`：增强空 Body 场景判决逻辑——当用户未配置 RESPONSE_BODY 规则时走专用空 Body 判决路径，新增全链路判决调试日志
+- 优化 `AutoTestEngine` 精简重复逻辑与流程控制
+- 优化 `DatabaseManager.resetForNewSession()` 先停止残留 GC 服务线程，避免操作新数据库
+- 优化数据访问层 (`RequestDAO`/`SessionDAO`/`HistoryReadDAO`/`HistoryUpdateDAO`/`HistoryWriteDAO`)
+- 优化文件存储管理 (`FileStorageManager`/`PoolManager`)
+- 优化导入导出 (`ErmArchiveReader`/`ErmFormatConstants`/`PostmanImporter`)
+- 增强 `LogManager` 日志管理与 `SimilarityEngine` 相似度计算
+- 优化 `GarbageCollectorService`/`HistoryRecordingService`/`RepeaterManagerUI`/`RequestDispatchHandler`/`SchemaMigrator`
+
+### Removed
+- 移除废弃的 `RequestResponseRecord` 模型类
+
 ## [2.27.1] - 2026-06-29
 
 ### Fixed
