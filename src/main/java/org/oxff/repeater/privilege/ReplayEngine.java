@@ -221,6 +221,11 @@ public class ReplayEngine {
                     record.setSimilarity(similarity);
                     record.setColor(judgmentColor);
 
+                    // 基准用户：保存纯响应体到独立字段，用于报告生成时的数据分离
+                    if (isFirst) {
+                        record.setBaselineResponseData(baselineResponse);
+                    }
+
                     if (holder.errorMessage != null) {
                         record.setComment("请求失败: " + holder.errorMessage);
                     } else if (judgmentNote != null && !judgmentNote.isEmpty()) {

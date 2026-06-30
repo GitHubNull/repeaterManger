@@ -48,7 +48,7 @@ ${ep.baselineData.responseMd}
 
 <#-- User sessions -->
 <#list ep.userSessions as us>
-#### ${us.sessionName} http data <#if us.judgment == 'ESCALATED'>&#9888; ESCALATED<#elseif us.judgment == 'NOT_ESCALATED'>&#10004; SAFE<#else>&#10007; ERROR</#if>
+#### ${us.sessionName} http data <#if us.judgment == 'ESCALATED'>&#9888; 越权<#elseif us.judgment == 'NOT_ESCALATED'>&#10004; 安全<#else>&#10007; 错误</#if>
 
 <#if us.matchedRuleName??>
 - **Rule**: ${us.matchedRuleName}

@@ -282,11 +282,11 @@ public class PdfReportGenerator extends ReportGenerator {
             // 非基准用户会话
             String judgmentLabel;
             if ("ESCALATED".equalsIgnoreCase(session.getJudgment())) {
-                judgmentLabel = "ESCALATED";
+                judgmentLabel = "越权";
             } else if ("NOT_ESCALATED".equalsIgnoreCase(session.getJudgment())) {
-                judgmentLabel = "SAFE";
+                judgmentLabel = "安全";
             } else {
-                judgmentLabel = "ERROR";
+                judgmentLabel = "错误";
             }
 
             writer.drawTitle(session.getSessionName() + " http data  |  " + judgmentLabel, 10);

@@ -55,15 +55,14 @@ public class JudgmentEngine {
      * @param responseBody      响应体字节数组（纯响应体，不含响应头）
      * @param baselineResponse  基准用户响应体字节数组（纯响应体，用于相似度计算和LENGTH_DIFF）
      * @param baselineStatusCode 基准用户状态码
-     * @param similarityThreshold 相似度阈值（已废弃，使用默认相似度规则代替）
+     * @param similarityThreshold 相似度阈值（0.0~1.0），默认0.7，用于区分越权与安全
      * @param responseTimeMs    响应时间（毫秒）
      * @return 判决结果
      */
-    @SuppressWarnings("deprecation")
     public static JudgmentOutcome judge(int statusCode, String responseHeaders,
                                          byte[] responseBody, byte[] baselineResponse,
                                          int baselineStatusCode,
-                                         @Deprecated double similarityThreshold,
+                                         double similarityThreshold,
                                          long responseTimeMs) {
         // 防护守卫：拒绝对无效基准进行判决，防止因基准响应丢失导致误判
         if (baselineResponse == null && baselineStatusCode <= 0) {
@@ -132,27 +131,41 @@ public class JudgmentEngine {
     }
 
     /**
-     * 默认判决逻辑：仅状态码差异兜底
-     * 相似度判断已由默认相似度规则（SIMILARITY >= 0.90）处理，不再硬编码
+     * 默认判决逻辑：基于相似度阈值进行三段式判决
+     * 
+     * 判决语义：
+     * - 相似度 >= 阈值 → ESCALATED（响应高度相似，低权限用户拿到了高权限数据）
+     * - 0 <= 相似度 < 阈值 → NOT_ESCALATED（响应差异显著，正确被限制访问）
+     * - 相似度 < 0（无法计算）→ 回退到状态码检查，状态码不同说明可能是拒绝响应，标记为 PENDING
      */
     private static JudgmentOutcome judgeDefault(int statusCode, int baselineStatusCode,
                                                  double similarity, double similarityThreshold) {
+        // 能够计算相似度时，以相似度为主要判决依据
+        if (similarity >= 0) {
+            if (similarity >= similarityThreshold) {
+                // 相似度高于阈值：低权限用户响应与基准高度相似 → 越权
+                return new JudgmentOutcome(JudgmentResult.ESCALATED, Color.RED,
+                        String.format("相似度%.1f%% >= 阈值%.1f%%，疑似越权", similarity * 100, similarityThreshold * 100),
+                        similarity, null);
+            } else {
+                // 相似度低于阈值：响应差异显著 → 安全（正确被限制访问）
+                return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, null,
+                        String.format("相似度%.1f%% < 阈值%.1f%%，响应差异显著", similarity * 100, similarityThreshold * 100),
+                        similarity, null);
+            }
+        }
+
+        // 无法计算相似度时，回退到状态码检查
         if (statusCode != baselineStatusCode) {
-            // 状态码不同 → 越权
-            return new JudgmentOutcome(JudgmentResult.ESCALATED, Color.RED,
-                    "状态码不同: 基准=" + baselineStatusCode + ", 当前=" + statusCode,
+            // 状态码不同但无法确定是否越权（可能是正常拒绝如401/403，也可能是异常）
+            return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                    "状态码不同但无法计算相似度: 基准=" + baselineStatusCode + ", 当前=" + statusCode,
                     similarity, null);
         }
 
-        if (similarity < 0) {
-            // 无法计算相似度 → 挂起，需人工确认
-            return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
-                    "无法计算相似度", similarity, null);
-        }
-
-        // 所有规则均不匹配，且状态码相同 → 需人工确认
+        // 无法计算相似度且状态码相同 → 挂起，需人工确认
         return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
-                "所有规则均不匹配，需人工确认", similarity, null);
+                "无法计算相似度", similarity, null);
     }
 
     /**

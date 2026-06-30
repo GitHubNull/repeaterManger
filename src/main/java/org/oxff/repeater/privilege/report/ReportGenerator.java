@@ -53,12 +53,22 @@ public abstract class ReportGenerator {
             section.setUrl(first.getProtocol() + "://" + first.getDomain() + first.getPath());
 
             // 分离 baseline 和 user session 记录
+            // 优先通过 baselineResponseData 字段识别基准记录（v2.18+），回退到旧逻辑兼容
             RequestResponseRecord baselineRecord = null;
             String baselineSessionName = null;
             List<RequestResponseRecord> userRecords = new ArrayList<>();
 
             for (RequestResponseRecord record : epRecords) {
-                if (record.getSimilarity() == -1 && "NOT_ESCALATED".equalsIgnoreCase(record.getJudgment())) {
+                boolean isBaseline = false;
+                // 新逻辑：基准记录带有独立的基准响应体字段
+                if (record.getBaselineResponseData() != null) {
+                    isBaseline = true;
+                } else if (record.getSimilarity() == -1 && "NOT_ESCALATED".equalsIgnoreCase(record.getJudgment())) {
+                    // 旧逻辑回退：兼容 v2.17 及以下版本的历史数据
+                    isBaseline = true;
+                }
+
+                if (isBaseline) {
                     baselineRecord = record;
                     baselineSessionName = record.getUserSessionName();
                 } else {
@@ -79,7 +89,13 @@ public abstract class ReportGenerator {
                         byte[] originalRequestData = (byte[]) originalRequest.get("request_data");
                         RequestResponseRecord orinRecord = new RequestResponseRecord();
                         orinRecord.setRequestData(originalRequestData);
-                        orinRecord.setResponseData(baselineRecord.getResponseData());
+                        // 使用独立的基准响应数据（v2.18+），回退到完整响应兼容旧数据
+                        byte[] baselineRespData = baselineRecord.getBaselineResponseData();
+                        if (baselineRespData != null) {
+                            orinRecord.setResponseData(baselineRespData);
+                        } else {
+                            orinRecord.setResponseData(baselineRecord.getResponseData());
+                        }
                         orinRecord.setStatusCode(baselineRecord.getStatusCode());
                         orinRecord.setResponseLength(baselineRecord.getResponseLength());
                         orinRecord.setResponseTime(baselineRecord.getResponseTime());

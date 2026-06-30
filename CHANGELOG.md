@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.1] - 2026-06-29
+
+### Fixed
+- 修复基准报文点击响应显示错误：新增 `baselineResponseData` 独立字段存储原始响应，`loadBaselineOrLatestResponse()` 优先从 `requests` 表加载基线响应，避免越权重放后点击基准报文显示历史重放响应而非原始响应
+- 修复点击已选中行不刷新问题：`RequestListPanel` 新增 `MouseListener`，重复点击同一行时重新加载请求和响应数据
+
+### Changed
+- 判决结果标签中文化：`JudgmentResult` 新增 `toDisplayName()` 静态方法，将 ESCALATED/SAFE/ERROR 替换为 越权/安全/错误，同步更新报告模板（`html_report.ftl`/`md_report.ftl`）、比对对话框、历史面板
+- 报告生成器基线识别逻辑优化：优先通过 `baselineResponseData` 字段识别基准记录，回退兼容旧数据（v2.17 及以下）
+- 判决引擎与 PDF 报告生成器微调
+
 ## [2.27.0] - 2026-06-30
 
 ### Added

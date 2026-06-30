@@ -29,7 +29,8 @@ public class RequestResponseRecord {
     // 权限测试相关字段（null表示普通模式）
     private String userSessionName;    // 权限测试时对应的用户会话名称
     private String judgment;           // 判决结果：PENDING/ESCALATED/NOT_ESCALATED/ERROR
-    private double similarity = -1;    // Levenshtein相似度（-1表示不适用）
+    private double similarity = -1;    // 内容感知的混合相似度（-1表示不适用）
+    private byte[] baselineResponseData; // 基准用户响应体（纯响应体，不含响应头），仅基准记录非null
     
     /**
      * 默认构造函数
@@ -352,7 +353,23 @@ public class RequestResponseRecord {
     public void setSimilarity(double similarity) {
         this.similarity = similarity;
     }
-    
+
+    /**
+     * 获取基准用户响应体（纯响应体，不含响应头）
+     * 仅在基准用户记录中非null，用于报告生成时与重放响应分离
+     */
+    public byte[] getBaselineResponseData() {
+        return baselineResponseData;
+    }
+
+    /**
+     * 设置基准用户响应体
+     * @param baselineResponseData 纯响应体字节数组（不含响应头）
+     */
+    public void setBaselineResponseData(byte[] baselineResponseData) {
+        this.baselineResponseData = baselineResponseData;
+    }
+
     /**
      * 获取完整URL
      */

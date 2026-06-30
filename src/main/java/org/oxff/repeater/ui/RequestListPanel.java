@@ -131,6 +131,26 @@ public class RequestListPanel extends JPanel {
             }
         });
 
+        // 处理单击已选中行的场景：Swing 的 ListSelectionListener 在选中行未变化时不触发，
+        // 但用户从历史记录面板切换回基准报文表点击同一行时，需要重新加载基准报文的请求和响应
+        requestTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (batchAddMode) return;
+                int row = requestTable.rowAtPoint(e.getPoint());
+                if (row < 0) return;
+                // 仅当点击的是当前已选中的行时才手动触发回调
+                // （点击未选中行时 ListSelectionListener 会自动处理）
+                if (row == requestTable.getSelectedRow()) {
+                    int requestId = (int) tableModel.getValueAt(row, 0);
+                    byte[] requestData = requestDataMap.get(requestId);
+                    if (requestData != null && requestSelectedCallback != null) {
+                        requestSelectedCallback.onRequestSelected(requestId, requestData);
+                    }
+                }
+            }
+        });
+
         // 添加表格到滚动面板
         JScrollPane scrollPane = new JScrollPane(requestTable);
         add(scrollPane, BorderLayout.CENTER);

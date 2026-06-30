@@ -79,7 +79,7 @@
     <div class="session-header">
       <span>${us.sessionName} http data</span>
       <span class="badge <#if us.judgment == 'ESCALATED'>escalated<#elseif us.judgment == 'NOT_ESCALATED'>safe<#else>error</#if>">
-        <#if us.judgment == 'ESCALATED'>&#9888; ESCALATED<#elseif us.judgment == 'NOT_ESCALATED'>&#10004; SAFE<#else>&#10007; ERROR</#if>
+        <#if us.judgment == 'ESCALATED'>&#9888; 越权<#elseif us.judgment == 'NOT_ESCALATED'>&#10004; 安全<#else>&#10007; 错误</#if>
       </span>
     </div>
     <div class="session-content">

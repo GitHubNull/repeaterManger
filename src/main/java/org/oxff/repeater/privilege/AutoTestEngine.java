@@ -240,6 +240,12 @@ public class AutoTestEngine {
                         record.setJudgment(judgment);
                         record.setSimilarity(similarity);
                         record.setColor(judgmentColor);
+
+                        // 基准用户：保存纯响应体到独立字段，用于报告生成时的数据分离
+                        if (isFirst) {
+                            record.setBaselineResponseData(baselineResponse);
+                        }
+
                         if (judgmentNote != null && !judgmentNote.isEmpty()) {
                             record.setComment(judgmentNote);
                         }

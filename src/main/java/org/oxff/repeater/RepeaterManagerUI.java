@@ -389,8 +389,10 @@ public class RepeaterManagerUI {
             String url = HttpRequestHelper.extractUrlFromRequest(requestData, httpRequest, service);
             historyPanel.setBorderTitle("请求历史记录 - " + url);
 
-            // 尝试加载该请求的最新响应数据
-            loadLatestResponseForRequest(requestId);
+            // 优先加载基线响应（来自 requests 表），没有基线时才回退到最新历史响应
+            // 修复：之前直接调用 loadLatestResponseForRequest 会拿到越权重放的历史响应，
+            // 而不是基准报文自身的原始响应，导致点击基准报文时响应面板显示错误数据
+            loadBaselineOrLatestResponse(requestId);
 
             // 加载相关的历史记录（批量添加模式下使用静默模式，避免"没有历史记录"噪音日志）
             loadHistoryForRequest(requestId, requestListPanel.isBatchAddMode());
@@ -403,7 +405,38 @@ public class RepeaterManagerUI {
     }
 
     /**
-     * 加载指定请求ID的最新响应数据
+     * 加载请求的响应数据：优先尝试基线响应（来自 requests 表），
+     * 没有基线时才回退到加载最新历史响应
+     *
+     * 问题背景：批量越权测试后，history 表中有多条重放记录，
+     * 直接取最新历史响应会拿到重放报文的响应，而非基准报文自身的原始响应。
+     * 基准响应在 send to repeater 时已通过 saveOriginalResponseAsBaseline 存入 requests 表。
+     */
+    private void loadBaselineOrLatestResponse(int requestId) {
+        // 优先：从 requests 表加载基线响应（原始报文的响应）
+        try {
+            RequestDAO requestDAO = new RequestDAO();
+            byte[] baselineResponse = requestDAO.getOriginalResponseData(requestId);
+            int statusCode = requestDAO.getOriginalResponseStatusCode(requestId);
+
+            if (baselineResponse != null && baselineResponse.length > 0) {
+                responsePanel.setResponse(baselineResponse);
+                boolean success = statusCode >= 100 && statusCode < 400;
+                statusPanel.updateStatus(success, baselineResponse.length, 0, 0, 0);
+                LogManager.getInstance().printOutput(
+                    String.format("[+] 已加载请求ID %d 的基线响应 (%d 字节)", requestId, baselineResponse.length));
+                return;
+            }
+        } catch (Exception e) {
+            LogManager.getInstance().printError("[!] 加载基线响应失败: " + e.getMessage());
+        }
+
+        // 回退：没有基线响应时，尝试加载最新历史响应（兼容旧数据或纯重放场景）
+        loadLatestResponseForRequest(requestId);
+    }
+
+    /**
+     * 加载指定请求ID的最新响应数据（从 history 表）
      */
     private void loadLatestResponseForRequest(int requestId) {
         try {

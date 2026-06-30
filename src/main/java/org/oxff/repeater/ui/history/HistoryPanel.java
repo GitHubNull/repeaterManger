@@ -5,6 +5,7 @@ import org.oxff.repeater.RequestDispatchHandler;
 import org.oxff.repeater.db.history.HistoryUpdateDAO;
 import org.oxff.repeater.db.history.HistoryWriteDAO;
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.privilege.model.JudgmentResult;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -246,7 +247,7 @@ public class HistoryPanel extends JPanel {
             record.getResponseLength(),               // 响应长度
             record.getResponseTime(),                 // 响应时间
             record.getUserSessionName() != null ? record.getUserSessionName() : "",  // 用户
-            record.getJudgment() != null ? record.getJudgment() : "",                // 判决
+            record.getJudgment() != null ? JudgmentResult.toDisplayName(record.getJudgment()) : "",                // 判决
             record.getUserSessionName() != null ? "是" : "否",                         // 越权测试
             record.getComment()                       // 备注
         };

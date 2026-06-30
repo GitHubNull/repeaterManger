@@ -295,7 +295,7 @@ public class ComparisonDialog extends JDialog {
 
         if (sessionRecord.getJudgment() != null) {
             row1.add(new JLabel("  |  "));
-            JLabel judgmentLabel = new JLabel("判决: " + sessionRecord.getJudgment());
+            JLabel judgmentLabel = new JLabel("判决: " + org.oxff.repeater.privilege.model.JudgmentResult.toDisplayName(sessionRecord.getJudgment()));
             judgmentLabel.setForeground(getJudgmentColor(sessionRecord.getJudgment()));
             judgmentLabel.setFont(judgmentLabel.getFont().deriveFont(Font.BOLD, 14f));
             row1.add(judgmentLabel);

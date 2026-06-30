@@ -312,6 +312,14 @@ public class ReportData {
             this.judgment = judgment;
         }
 
+        /**
+         * 获取判决结果的中文显示名
+         * @return 中文显示名（如 "越权"、"安全"、"错误"、"待判定"）
+         */
+        public String getJudgmentDisplayName() {
+            return org.oxff.repeater.privilege.model.JudgmentResult.toDisplayName(judgment);
+        }
+
         public double getSimilarity() {
             return similarity;
         }
