@@ -11,39 +11,23 @@ public class FieldDefinition {
     private String description;
     private boolean persistToGlobal;
     private boolean enabled;
+    private long createdAt;
 
     public FieldDefinition() {
-        this.type = FieldType.HEADER;
-        this.expression = "";
-        this.description = "";
-        this.persistToGlobal = true;
-        this.enabled = true;
+        this(FieldType.HEADER, "", "");
     }
 
     public FieldDefinition(FieldType type, String expression, String description) {
-        this.type = type;
-        this.expression = expression;
-        this.description = description != null ? description : "";
-        this.persistToGlobal = true;
-        this.enabled = true;
+        this(type, expression, description, true, true);
     }
 
     public FieldDefinition(FieldType type, String expression, String description,
                            boolean persistToGlobal, boolean enabled) {
-        this.type = type;
-        this.expression = expression;
-        this.description = description != null ? description : "";
-        this.persistToGlobal = persistToGlobal;
-        this.enabled = enabled;
+        this(0, type, expression, description, persistToGlobal, enabled);
     }
 
     public FieldDefinition(int id, FieldType type, String expression, String description) {
-        this.id = id;
-        this.type = type;
-        this.expression = expression;
-        this.description = description != null ? description : "";
-        this.persistToGlobal = true;
-        this.enabled = true;
+        this(id, type, expression, description, true, true);
     }
 
     public FieldDefinition(int id, FieldType type, String expression, String description,
@@ -54,6 +38,7 @@ public class FieldDefinition {
         this.description = description != null ? description : "";
         this.persistToGlobal = persistToGlobal;
         this.enabled = enabled;
+        this.createdAt = System.currentTimeMillis();
     }
 
     // Getters and Setters
@@ -104,6 +89,14 @@ public class FieldDefinition {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(long createdAt) {
+        this.createdAt = createdAt;
     }
 
     @Override

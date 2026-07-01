@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.1] - 2026-07-01
+
+### Changed
+- FieldDefinition 新增 `createdAt` 时间戳字段，构造函数重构为链式调用模式
+- FieldDefinitionYamlIO 支持 `createdAt` 字段的序列化/反序列化，新增 `getLongValue` 安全读取方法
+- FieldReplacementEngine XML 工厂实例（`DocumentBuilderFactory`/`XPathFactory`/`TransformerFactory`）静态化，避免重复创建
+- FieldReplacementEngine `extractBoundary()` 改用正则匹配替代手动字符串解析，增强边界情况鲁棒性
+- UserSessionEditDialog 变量命名优化（`existingTokens` → `existingVals`）
+
 ## [2.32.0] - 2026-07-01
 
 ### Added

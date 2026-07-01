@@ -5,7 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
 import org.oxff.repeater.http.RequestDataHelper;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.FieldType;
@@ -31,6 +30,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 字段替换引擎 - 无状态工具类
@@ -40,6 +41,33 @@ import java.util.List;
  * 替换后自动修正Content-Length
  */
 public class FieldReplacementEngine {
+
+    private static final DocumentBuilderFactory DOC_BUILDER_FACTORY = createDocumentBuilderFactory();
+    private static final XPathFactory XPATH_FACTORY = XPathFactory.newInstance();
+    private static final TransformerFactory TRANSFORMER_FACTORY = TransformerFactory.newInstance();
+
+    /**
+     * 创建并配置安全的 DocumentBuilderFactory
+     * 禁用外部实体解析以防止 XXE 攻击
+     *
+     * @return 安全配置的 DocumentBuilderFactory，如果配置失败则返回 null
+     */
+    private static DocumentBuilderFactory createDocumentBuilderFactory() {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setFeature(
+                    "http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature(
+                    "http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature(
+                    "http://xml.org/sax/features/external-parameter-entities", false);
+            return factory;
+        } catch (Exception e) {
+            LogManager.getInstance().printError(
+                    "[!] XML安全配置失败，XML Body替换功能将不可用: " + e.getMessage());
+            return null;
+        }
+    }
 
     /**
      * 替换请求中的字段值
@@ -150,21 +178,37 @@ public class FieldReplacementEngine {
                         case JSON_BODY:
                             if (contentType != null && contentType.contains("application/json")) {
                                 bodyStr = replaceJsonBody(bodyStr, field.getExpression(), value);
+                            } else {
+                                LogManager.getInstance().printOutput(String.format(
+                                        "[!] 字段 '%s' 类型为 JSON_BODY，但请求 Content-Type 为 '%s'，替换已跳过",
+                                        field.getExpression(), contentType));
                             }
                             break;
                         case XML_BODY:
                             if (contentType != null && contentType.contains("xml")) {
                                 bodyStr = replaceXmlBody(bodyStr, field.getExpression(), value);
+                            } else {
+                                LogManager.getInstance().printOutput(String.format(
+                                        "[!] 字段 '%s' 类型为 XML_BODY，但请求 Content-Type 为 '%s'，替换已跳过",
+                                        field.getExpression(), contentType));
                             }
                             break;
                         case FORM_FIELD:
                             if (contentType != null && contentType.contains("x-www-form-urlencoded")) {
                                 bodyStr = replaceFormField(bodyStr, field.getExpression(), value);
+                            } else {
+                                LogManager.getInstance().printOutput(String.format(
+                                        "[!] 字段 '%s' 类型为 FORM_FIELD，但请求 Content-Type 为 '%s'，替换已跳过",
+                                        field.getExpression(), contentType));
                             }
                             break;
                         case MULTIPART_FIELD:
                             if (contentType != null && contentType.contains("multipart/form-data")) {
                                 bodyStr = replaceMultipartField(bodyStr, contentType, field.getExpression(), value);
+                            } else {
+                                LogManager.getInstance().printOutput(String.format(
+                                        "[!] 字段 '%s' 类型为 MULTIPART_FIELD，但请求 Content-Type 为 '%s'，替换已跳过",
+                                        field.getExpression(), contentType));
                             }
                             break;
                         default:
@@ -363,15 +407,15 @@ public class FieldReplacementEngine {
      * 如果value为空字符串，则移除该节点的文本内容（未授权测试场景）
      */
     private static String replaceXmlBody(String bodyStr, String xpathExpression, String value) {
+        if (DOC_BUILDER_FACTORY == null) {
+            LogManager.getInstance().printError("[!] XML解析器未就绪（安全配置失败），跳过XML Body替换");
+            return bodyStr;
+        }
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            // 禁用外部实体，防止XXE
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
+            DocumentBuilder builder = DOC_BUILDER_FACTORY.newDocumentBuilder();
             Document doc = builder.parse(new InputSource(new StringReader(bodyStr)));
 
-            XPathFactory xPathFactory = XPathFactory.newInstance();
-            XPath xpath = xPathFactory.newXPath();
+            XPath xpath = XPATH_FACTORY.newXPath();
             Node node = (Node) xpath.evaluate(xpathExpression, doc, XPathConstants.NODE);
 
             if (node != null) {
@@ -391,8 +435,7 @@ public class FieldReplacementEngine {
             }
 
             // 序列化回字符串
-            TransformerFactory tf = TransformerFactory.newInstance();
-            Transformer transformer = tf.newTransformer();
+            Transformer transformer = TRANSFORMER_FACTORY.newTransformer();
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             StringWriter writer = new StringWriter();
             transformer.transform(new DOMSource(doc), new StreamResult(writer));
@@ -507,29 +550,18 @@ public class FieldReplacementEngine {
 
     /**
      * 从Content-Type头中提取boundary参数
-     * 支持格式: boundary=xxx 或 boundary="xxx"
+     * 使用正则匹配，鲁棒地处理空格、引号、多个boundary参数等边界情况
      */
     private static String extractBoundary(String contentType) {
         if (contentType == null) return null;
-
-        // 查找boundary=参数
-        int boundaryIdx = contentType.toLowerCase().indexOf("boundary=");
-        if (boundaryIdx < 0) return null;
-
-        String boundaryValue = contentType.substring(boundaryIdx + 9).trim();
-
-        // 去除尾部可能的其他参数（如 ; charset=xxx）
-        int semiIdx = boundaryValue.indexOf(';');
-        if (semiIdx > 0) {
-            boundaryValue = boundaryValue.substring(0, semiIdx).trim();
+        Pattern pattern = Pattern.compile(
+                "boundary\\s*=\\s*(\"?)([^\";\\s]+)\\1",
+                Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(contentType);
+        if (matcher.find()) {
+            return matcher.group(2);
         }
-
-        // 去除引号包裹
-        if (boundaryValue.startsWith("\"") && boundaryValue.endsWith("\"") && boundaryValue.length() > 1) {
-            boundaryValue = boundaryValue.substring(1, boundaryValue.length() - 1);
-        }
-
-        return boundaryValue.isEmpty() ? null : boundaryValue;
+        return null;
     }
 
     /**

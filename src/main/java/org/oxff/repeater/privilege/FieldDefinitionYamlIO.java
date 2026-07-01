@@ -45,6 +45,7 @@ public class FieldDefinitionYamlIO {
             fieldMap.put("description", field.getDescription());
             fieldMap.put("persistToGlobal", field.isPersistToGlobal());
             fieldMap.put("enabled", field.isEnabled());
+            fieldMap.put("createdAt", field.getCreatedAt());
             fieldList.add(fieldMap);
         }
         root.put("fields", fieldList);
@@ -108,6 +109,7 @@ public class FieldDefinitionYamlIO {
         String description = getStringValue(map, "description", "");
         boolean persistToGlobal = getBooleanValue(map, "persistToGlobal", true);
         boolean enabled = getBooleanValue(map, "enabled", true);
+        long createdAt = getLongValue(map, "createdAt", System.currentTimeMillis());
 
         if (expression.isEmpty()) {
             return null;
@@ -119,6 +121,7 @@ public class FieldDefinitionYamlIO {
         field.setDescription(description);
         field.setPersistToGlobal(persistToGlobal);
         field.setEnabled(enabled);
+        field.setCreatedAt(createdAt);
         return field;
     }
 
@@ -208,5 +211,31 @@ public class FieldDefinitionYamlIO {
         if (value instanceof Boolean) return (Boolean) value;
         if (value instanceof Number) return ((Number) value).intValue() != 0;
         return defaultValue;
+    }
+
+    /**
+     * 从YAML Map中安全读取long值，提供三层回退策略：
+     * <ol>
+     *   <li>key 对应值为 null → 返回 {@code defaultValue}</li>
+     *   <li>值为 {@link Number} 实例 → 调用 {@link Number#longValue()}</li>
+     *   <li>值为字符串 → 尝试 {@link Long#parseLong(String)}，失败则返回 {@code defaultValue}</li>
+     * </ol>
+     * 此方法与同文件中的 {@link #getStringValue} / {@link #getBooleanValue} 风格一致，
+     * 用于兼容旧版本 YAML 文件（不含 {@code createdAt} 等新字段时通过默认值回退）。
+     *
+     * @param map          YAML 解析出的键值对 Map
+     * @param key          要读取的键名
+     * @param defaultValue 默认值（在值缺失、类型不匹配或解析失败时返回）
+     * @return 解析出的 long 值，或 {@code defaultValue}
+     */
+    private static long getLongValue(Map<String, Object> map, String key, long defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+        if (value instanceof Number) return ((Number) value).longValue();
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

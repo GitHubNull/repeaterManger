@@ -172,8 +172,8 @@ public class UserSessionEditDialog extends JDialog {
                 colorPreview.setBackground(selectedColor);
             }
             // 保存现有字段值
-            Map<Integer, String> existingTokens = existing.getFieldValues();
-            existingFieldValues = existingTokens != null ? new LinkedHashMap<>(existingTokens) : new LinkedHashMap<>();
+            Map<Integer, String> existingVals = existing.getFieldValues();
+            existingFieldValues = existingVals != null ? new LinkedHashMap<>(existingVals) : new LinkedHashMap<>();
             // 方案选择（最后执行，因为会触发 refreshFieldValuesPanel() 使用 outerScrollPane）
             if (existing.getSchemeId() != null) {
                 for (Scheme scheme : schemes) {
