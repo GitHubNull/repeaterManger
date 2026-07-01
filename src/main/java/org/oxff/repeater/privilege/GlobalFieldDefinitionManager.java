@@ -13,6 +13,7 @@ import java.util.List;
  * 全局字段定义可被任何新项目自动加载
  */
 public class GlobalFieldDefinitionManager {
+
     private static GlobalFieldDefinitionManager instance;
 
     private static final String GLOBAL_DIR_NAME = ".burp" + File.separator + "repeater_manager";
@@ -20,6 +21,7 @@ public class GlobalFieldDefinitionManager {
 
     private final String globalFieldsPath;
     private List<FieldDefinition> globalFields;
+
     private GlobalFieldDefinitionManager() {
         String userHome = System.getProperty("user.home");
         this.globalFieldsPath = userHome + File.separator + GLOBAL_DIR_NAME + File.separator + GLOBAL_FIELDS_FILE;

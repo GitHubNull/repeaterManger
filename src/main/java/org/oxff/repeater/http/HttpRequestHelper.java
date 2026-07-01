@@ -225,11 +225,6 @@ public class HttpRequestHelper {
     }
 
     /**
-     * 将Montoya API的HttpHeader列表转换为字符串列表
-     * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行
-     * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取
-     */
-    /**
      * 解析域名字符串（含非标准端口）
      * <p>
      * 优先从HttpService获取端口（httpRequest.url()可能不含显式端口，getPort()返回-1），
@@ -313,6 +308,14 @@ public class HttpRequestHelper {
         return host;
     }
 
+    /**
+     * 将Montoya API的HttpHeader列表转换为字符串列表。
+     * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行，
+     * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取。
+     *
+     * @param rawHeaders Montoya HTTP头部列表
+     * @return "Name: Value"格式的字符串列表
+     */
     private static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
         List<String> result = new ArrayList<>();
         for (burp.api.montoya.http.message.HttpHeader header : rawHeaders) {

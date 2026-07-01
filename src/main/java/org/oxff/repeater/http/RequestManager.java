@@ -15,6 +15,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -728,114 +729,22 @@ public class RequestManager {
             ProxyConfig proxyConfig = ProxyConfig.getInstance();
             Proxy proxy = proxyConfig.toJavaProxy();
 
-            // 打开连接
+            // 打开连接并配置
             conn = (HttpURLConnection) url.openConnection(proxy);
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutSeconds * 1000);
             conn.setReadTimeout(timeoutSeconds * 1000);
             conn.setInstanceFollowRedirects(false);
 
-            // 解析请求头（headers() 不含请求行，全部是标准 HTTP 头部）
-            HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-            List<String> headers = convertHeadersToStringList(requestInfo.headers());
-            boolean hasContentType = false;
-            for (int i = 0; i < headers.size(); i++) {
-                String header = headers.get(i);
-                int colonIdx = header.indexOf(':');
-                if (colonIdx > 0) {
-                    String headerName = header.substring(0, colonIdx).trim();
-                    String headerValue = header.substring(colonIdx + 1).trim();
-                    // 跳过Host头（由URLConnection自动设置）和Proxy相关头
-                    if (headerName.equalsIgnoreCase("Host") || headerName.equalsIgnoreCase("Proxy-Connection")) {
-                        continue;
-                    }
-                    if (headerName.equalsIgnoreCase("Content-Type")) {
-                        hasContentType = true;
-                    }
-                    conn.setRequestProperty(headerName, headerValue);
-                }
-            }
+            // 应用请求头
+            boolean hasContentType = applyProxyRequestHeaders(conn, service, requestBytes);
 
-            // 处理HTTPS信任所有证书
-            if (conn instanceof HttpsURLConnection) {
-                setupTrustAllSSL((HttpsURLConnection) conn);
-            }
-
-            // 判断是否有请求体
+            // 准备并写入请求体
             int bodyOffset = findBodyOffset(requestBytes);
-            boolean hasBody = bodyOffset > 0 && bodyOffset < requestBytes.length;
-            boolean isBodyMethod = method.equalsIgnoreCase("POST") || method.equalsIgnoreCase("PUT") || method.equalsIgnoreCase("PATCH");
+            prepareAndWriteProxyBody(conn, requestBytes, bodyOffset, method, hasContentType);
 
-            if (hasBody) {
-                conn.setDoOutput(true);
-                if (!hasContentType) {
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                }
-            } else if (isBodyMethod) {
-                // POST/PUT/PATCH 即使 body 为空，也必须调用 setDoOutput(true) 并显式写入空 body
-                // 否则 HttpURLConnection 不会正确关闭输出流，代理会等待 body 数据直到超时（~10秒）
-                conn.setDoOutput(true);
-                conn.setFixedLengthStreamingMode(0);
-            }
-
-            // 发送请求
-            conn.connect();
-
-            if (hasBody) {
-                byte[] bodyBytes = new byte[requestBytes.length - bodyOffset];
-                System.arraycopy(requestBytes, bodyOffset, bodyBytes, 0, bodyBytes.length);
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(bodyBytes);
-                    os.flush();
-                }
-            } else if (isBodyMethod) {
-                // 显式获取并关闭输出流，通知代理 body 传输完成
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.flush();
-                }
-            }
-
-            // 读取响应
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            int responseCode = conn.getResponseCode();
-            String responseMessage = conn.getResponseMessage();
-
-            // 构建状态行
-            String statusLine = String.format("HTTP/1.1 %d %s\r\n", responseCode, responseMessage != null ? responseMessage : "");
-            baos.write(statusLine.getBytes("UTF-8"));
-
-            // 构建响应头
-            for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
-                String headerName = entry.getKey();
-                if (headerName == null) continue; // 跳过状态行
-                for (String headerValue : entry.getValue()) {
-                    baos.write(String.format("%s: %s\r\n", headerName, headerValue).getBytes("UTF-8"));
-                }
-            }
-            baos.write("\r\n".getBytes("UTF-8"));
-
-            // 读取响应体
-            InputStream is = null;
-            try {
-                is = conn.getInputStream();
-            } catch (Exception e) {
-                is = conn.getErrorStream();
-            }
-
-            if (is != null) {
-                try (InputStream inputStream = is) {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = inputStream.read(buffer)) != -1) {
-                        baos.write(buffer, 0, bytesRead);
-                    }
-                }
-            }
-
-            byte[] response = baos.toByteArray();
-            LogManager.getInstance().printOutput(
-                String.format("[D] 代理响应: HTTP %d, 响应总大小: %d 字节", responseCode, response.length));
-            return response;
+            // 读取并返回响应
+            return readConnectionResponse(conn);
 
         } catch (Exception e) {
             LogManager.getInstance().printError("[!] 代理请求失败: " + e.getMessage());
@@ -845,6 +754,139 @@ public class RequestManager {
                 conn.disconnect();
             }
         }
+    }
+
+    /**
+     * 将请求的HTTP头部应用到代理连接上
+     *
+     * @param conn         代理连接
+     * @param service      HTTP服务信息
+     * @param requestBytes 原始请求字节数组
+     * @return 是否包含Content-Type头
+     */
+    private boolean applyProxyRequestHeaders(HttpURLConnection conn, HttpService service, byte[] requestBytes) {
+        HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+        List<String> headers = convertHeadersToStringList(requestInfo.headers());
+        boolean hasContentType = false;
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i);
+            int colonIdx = header.indexOf(':');
+            if (colonIdx > 0) {
+                String headerName = header.substring(0, colonIdx).trim();
+                String headerValue = header.substring(colonIdx + 1).trim();
+                if (headerName.equalsIgnoreCase("Host") || headerName.equalsIgnoreCase("Proxy-Connection")) {
+                    continue;
+                }
+                if (headerName.equalsIgnoreCase("Content-Type")) {
+                    hasContentType = true;
+                }
+                conn.setRequestProperty(headerName, headerValue);
+            }
+        }
+
+        // 处理HTTPS信任所有证书
+        if (conn instanceof HttpsURLConnection) {
+            setupTrustAllSSL((HttpsURLConnection) conn);
+        }
+
+        return hasContentType;
+    }
+
+    /**
+     * 准备代理连接的请求体输出并写入body数据
+     *
+     * @param conn          代理连接
+     * @param requestBytes  原始请求字节数组
+     * @param bodyOffset    请求体起始偏移量
+     * @param method        HTTP方法
+     * @param hasContentType 是否已有Content-Type头
+     */
+    private void prepareAndWriteProxyBody(HttpURLConnection conn, byte[] requestBytes,
+                                          int bodyOffset, String method, boolean hasContentType) throws IOException {
+        boolean hasBody = bodyOffset > 0 && bodyOffset < requestBytes.length;
+        boolean isBodyMethod = method.equalsIgnoreCase("POST")
+                || method.equalsIgnoreCase("PUT")
+                || method.equalsIgnoreCase("PATCH");
+
+        if (hasBody) {
+            conn.setDoOutput(true);
+            if (!hasContentType) {
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            }
+        } else if (isBodyMethod) {
+            conn.setDoOutput(true);
+            conn.setFixedLengthStreamingMode(0);
+        }
+
+        conn.connect();
+
+        if (hasBody) {
+            byte[] bodyBytes = new byte[requestBytes.length - bodyOffset];
+            System.arraycopy(requestBytes, bodyOffset, bodyBytes, 0, bodyBytes.length);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(bodyBytes);
+                os.flush();
+            }
+        } else if (isBodyMethod) {
+            try (OutputStream os = conn.getOutputStream()) {
+                os.flush();
+            }
+        }
+    }
+
+    /**
+     * 从代理连接读取完整的HTTP响应（状态行 + 响应头 + 响应体）
+     *
+     * @param conn 代理连接（已发送请求）
+     * @return 完整的HTTP响应字节数组
+     * @throws IOException 读取失败时抛出
+     */
+    private byte[] readConnectionResponse(HttpURLConnection conn) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        int responseCode = conn.getResponseCode();
+        String responseMessage = conn.getResponseMessage();
+
+        // 构建状态行
+        String statusLine = String.format("HTTP/1.1 %d %s\r\n", responseCode,
+                responseMessage != null ? responseMessage : "");
+        baos.write(statusLine.getBytes("UTF-8"));
+
+        // 构建响应头
+        for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
+            String headerName = entry.getKey();
+            if (headerName == null) continue;
+            for (String headerValue : entry.getValue()) {
+                baos.write(String.format("%s: %s\r\n", headerName, headerValue).getBytes("UTF-8"));
+            }
+        }
+        baos.write("\r\n".getBytes("UTF-8"));
+
+        // 读取响应体
+        InputStream is = null;
+        try {
+            is = conn.getInputStream();
+        } catch (Exception e) {
+            is = conn.getErrorStream();
+            if (is == null) {
+                LogManager.getInstance().printError(
+                    "[!] 响应流获取失败，错误流也为空: " + e.getMessage());
+            }
+        }
+
+        if (is != null) {
+            try (InputStream inputStream = is) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    baos.write(buffer, 0, bytesRead);
+                }
+            }
+        }
+
+        byte[] response = baos.toByteArray();
+        LogManager.getInstance().printOutput(
+                String.format("[D] 代理响应: HTTP %d, 响应总大小: %d 字节", responseCode, response.length));
+        return response;
     }
 
     /**

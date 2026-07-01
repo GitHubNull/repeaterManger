@@ -20,104 +20,6 @@ public class DiffEngine {
     private static final double PAIR_SIMILARITY_THRESHOLD = 0.3;
 
     /**
-     * 差异类型枚举
-     */
-    public enum DiffType {
-        UNCHANGED,   // 未变化
-        ADDED,       // 新增行
-        REMOVED,     // 删除行
-        CHANGED      // 修改行（内容有变化但行号对齐，配对产生）
-    }
-
-    /**
-     * 行内差异段类型
-     */
-    public enum InlineDiffType {
-        MATCH,  // 匹配的字符/词
-        DIFF    // 不匹配的字符/词
-    }
-
-    /**
-     * 行内差异段 — 表示一行内连续的匹配或不匹配文本
-     */
-    public static class InlineDiffSegment {
-        private final String text;
-        private final InlineDiffType type;
-
-        public InlineDiffSegment(String text, InlineDiffType type) {
-            this.text = text;
-            this.type = type;
-        }
-
-        public String getText() { return text; }
-        public InlineDiffType getType() { return type; }
-    }
-
-    /**
-     * 行级差异结果
-     */
-    public static class DiffLine {
-        private final int lineNumber;
-        private final String lineText;
-        private final DiffType diffType;
-
-        public DiffLine(int lineNumber, String lineText, DiffType diffType) {
-            this.lineNumber = lineNumber;
-            this.lineText = lineText;
-            this.diffType = diffType;
-        }
-
-        public int getLineNumber() { return lineNumber; }
-        public String getLineText() { return lineText; }
-        public DiffType getDiffType() { return diffType; }
-    }
-
-    /**
-     * 已变更行差异结果 — 携带行内字符级差异
-     * 继承 DiffLine，增加原始侧和修改侧的行内差异段
-     */
-    public static class ChangedDiffLine extends DiffLine {
-        private final String pairedText;                        // 配对行文本（另一侧）
-        private final List<InlineDiffSegment> originalInlineDiff;  // 原始侧行内差异
-        private final List<InlineDiffSegment> modifiedInlineDiff;  // 修改侧行内差异
-
-        public ChangedDiffLine(int lineNumber, String originalText, String modifiedText,
-                               List<InlineDiffSegment> originalInlineDiff,
-                               List<InlineDiffSegment> modifiedInlineDiff) {
-            super(lineNumber, originalText, DiffType.CHANGED);
-            this.pairedText = modifiedText;
-            this.originalInlineDiff = originalInlineDiff;
-            this.modifiedInlineDiff = modifiedInlineDiff;
-        }
-
-        public String getPairedText() { return pairedText; }
-        public List<InlineDiffSegment> getOriginalInlineDiff() { return originalInlineDiff; }
-        public List<InlineDiffSegment> getModifiedInlineDiff() { return modifiedInlineDiff; }
-    }
-
-    /**
-     * 字节级差异结果（hex格式）
-     */
-    public static class DiffSegment {
-        private final int offset;
-        private final String hexData;
-        private final String asciiData;
-        private final DiffType diffType;
-
-        public DiffSegment(int offset, String hexData, String asciiData, DiffType diffType) {
-            this.offset = offset;
-            this.hexData = hexData;
-            this.asciiData = asciiData;
-            this.diffType = diffType;
-        }
-
-        public int getOffset() { return offset; }
-        public String getHexData() { return hexData; }
-        public String getAsciiData() { return asciiData; }
-        public DiffType getDiffType() { return diffType; }
-    }
-
-    /**
      * 计算行级差异（使用LCS算法 + REMOVED/ADDED行配对 → CHANGED）
      *
      * @param text1 原始文本
@@ -204,23 +106,6 @@ public class DiffEngine {
         }
 
         return result;
-    }
-
-    /**
-     * 行内差异结果对 — 同时包含原始侧和修改侧的差异段
-     */
-    public static class InlineDiffResult {
-        private final List<InlineDiffSegment> originalSegments;
-        private final List<InlineDiffSegment> modifiedSegments;
-
-        public InlineDiffResult(List<InlineDiffSegment> originalSegments,
-                                List<InlineDiffSegment> modifiedSegments) {
-            this.originalSegments = originalSegments;
-            this.modifiedSegments = modifiedSegments;
-        }
-
-        public List<InlineDiffSegment> getOriginalSegments() { return originalSegments; }
-        public List<InlineDiffSegment> getModifiedSegments() { return modifiedSegments; }
     }
 
     /**

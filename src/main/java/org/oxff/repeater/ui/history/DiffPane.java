@@ -58,10 +58,10 @@ public class DiffPane extends JPanel {
     public static class DiffRegion {
         private final int startOffset;
         private final int endOffset;
-        private final DiffEngine.DiffType diffType;
+        private final DiffType diffType;
         private final int lineNumber;
 
-        public DiffRegion(int startOffset, int endOffset, DiffEngine.DiffType diffType, int lineNumber) {
+        public DiffRegion(int startOffset, int endOffset, DiffType diffType, int lineNumber) {
             this.startOffset = startOffset;
             this.endOffset = endOffset;
             this.diffType = diffType;
@@ -70,7 +70,7 @@ public class DiffPane extends JPanel {
 
         public int getStartOffset() { return startOffset; }
         public int getEndOffset() { return endOffset; }
-        public DiffEngine.DiffType getDiffType() { return diffType; }
+        public DiffType getDiffType() { return diffType; }
         public int getLineNumber() { return lineNumber; }
     }
 
@@ -138,7 +138,7 @@ public class DiffPane extends JPanel {
      * @param diffLines      差异行列表
      * @param isOriginalSide 是否为原始侧(左侧)
      */
-    public void renderDiffLines(List<DiffEngine.DiffLine> diffLines, boolean isOriginalSide) {
+    public void renderDiffLines(List<DiffLine> diffLines, boolean isOriginalSide) {
         this.diffRegions.clear();
         this.lineSnapshots.clear();
 
@@ -166,7 +166,7 @@ public class DiffPane extends JPanel {
         StyleConstants.setBackground(blankStyle, Color.WHITE);
 
         try {
-            for (DiffEngine.DiffLine line : diffLines) {
+            for (DiffLine line : diffLines) {
                 int lineStartOffset = styledDoc.getLength();
 
                 switch (line.getDiffType()) {
@@ -178,12 +178,12 @@ public class DiffPane extends JPanel {
                     case REMOVED:
                         if (isOriginalSide) {
                             styledDoc.insertString(styledDoc.getLength(), line.getLineText() + "\n", removedStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.REMOVED, line.getLineNumber());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.REMOVED, line.getLineNumber());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, COLOR_REMOVED_LINE);
                         } else {
                             styledDoc.insertString(styledDoc.getLength(), "\n", blankStyle);
                             // 对齐空行也记录为差异区域，以便导航同步
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.REMOVED, line.getLineNumber());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.REMOVED, line.getLineNumber());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, Color.WHITE);
                         }
                         break;
@@ -191,24 +191,24 @@ public class DiffPane extends JPanel {
                     case ADDED:
                         if (isOriginalSide) {
                             styledDoc.insertString(styledDoc.getLength(), "\n", blankStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.ADDED, line.getLineNumber());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.ADDED, line.getLineNumber());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, Color.WHITE);
                         } else {
                             styledDoc.insertString(styledDoc.getLength(), line.getLineText() + "\n", addedStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.ADDED, line.getLineNumber());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.ADDED, line.getLineNumber());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, COLOR_ADDED_LINE);
                         }
                         break;
 
                     case CHANGED:
-                        if (line instanceof DiffEngine.ChangedDiffLine changedLine) {
+                        if (line instanceof ChangedDiffLine changedLine) {
                             renderChangedLine(changedLine, isOriginalSide, changedStyle);
                         } else {
                             // 降级为普通行
                             styledDoc.insertString(styledDoc.getLength(), line.getLineText() + "\n", changedStyle);
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, COLOR_CHANGED_LINE);
                         }
-                        recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.CHANGED, line.getLineNumber());
+                        recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.CHANGED, line.getLineNumber());
                         break;
                 }
             }
@@ -223,9 +223,9 @@ public class DiffPane extends JPanel {
     /**
      * 渲染 CHANGED 行 — 行内字符级差异: MATCH=绿底, DIFF=红底(原始侧)/深绿底(修改侧)
      */
-    private void renderChangedLine(DiffEngine.ChangedDiffLine changedLine, boolean isOriginalSide,
+    private void renderChangedLine(ChangedDiffLine changedLine, boolean isOriginalSide,
                                    Style changedBaseStyle) throws BadLocationException {
-        List<DiffEngine.InlineDiffSegment> segments;
+        List<InlineDiffSegment> segments;
         String displayText;
 
         if (isOriginalSide) {
@@ -261,9 +261,9 @@ public class DiffPane extends JPanel {
         StyleConstants.setBackground(inlineDiffStyle, isOriginalSide ? COLOR_INLINE_DIFF_ORIG : COLOR_INLINE_DIFF_MOD);
 
         // 渲染行内段，同时记录每段快照用于搜索恢复
-        for (DiffEngine.InlineDiffSegment segment : segments) {
+        for (InlineDiffSegment segment : segments) {
             int segStartOffset = styledDoc.getLength();
-            boolean isMatch = segment.getType() == DiffEngine.InlineDiffType.MATCH;
+            boolean isMatch = segment.getType() == InlineDiffType.MATCH;
             Style segStyle = isMatch ? inlineMatchStyle : inlineDiffStyle;
             styledDoc.insertString(styledDoc.getLength(), segment.getText(), segStyle);
             Color segBgColor = isMatch ? COLOR_INLINE_MATCH : (isOriginalSide ? COLOR_INLINE_DIFF_ORIG : COLOR_INLINE_DIFF_MOD);
@@ -279,7 +279,7 @@ public class DiffPane extends JPanel {
     /**
      * 渲染 Hex 级差异
      */
-    public void renderHexDiffSegments(List<DiffEngine.DiffSegment> diffSegments, boolean isOriginalSide) {
+    public void renderHexDiffSegments(List<DiffSegment> diffSegments, boolean isOriginalSide) {
         this.diffRegions.clear();
         this.lineSnapshots.clear();
 
@@ -306,7 +306,7 @@ public class DiffPane extends JPanel {
         StyleConstants.setBackground(blankStyle, Color.WHITE);
 
         try {
-            for (DiffEngine.DiffSegment seg : diffSegments) {
+            for (DiffSegment seg : diffSegments) {
                 String lineText = String.format("%08X  %-47s  %s\n",
                     seg.getOffset(), seg.getHexData(), seg.getAsciiData());
                 int lineStartOffset = styledDoc.getLength();
@@ -319,22 +319,22 @@ public class DiffPane extends JPanel {
                     case REMOVED:
                         if (isOriginalSide) {
                             styledDoc.insertString(styledDoc.getLength(), lineText, removedStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.REMOVED, seg.getOffset());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.REMOVED, seg.getOffset());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, COLOR_REMOVED_LINE);
                         } else {
                             styledDoc.insertString(styledDoc.getLength(), "\n", blankStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.REMOVED, seg.getOffset());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.REMOVED, seg.getOffset());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, Color.WHITE);
                         }
                         break;
                     case ADDED:
                         if (isOriginalSide) {
                             styledDoc.insertString(styledDoc.getLength(), "\n", blankStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.ADDED, seg.getOffset());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.ADDED, seg.getOffset());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, Color.WHITE);
                         } else {
                             styledDoc.insertString(styledDoc.getLength(), lineText, addedStyle);
-                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffEngine.DiffType.ADDED, seg.getOffset());
+                            recordDiffRegion(lineStartOffset, styledDoc.getLength(), DiffType.ADDED, seg.getOffset());
                             recordLineSnapshot(lineStartOffset, styledDoc.getLength() - lineStartOffset, COLOR_ADDED_LINE);
                         }
                         break;
@@ -391,7 +391,7 @@ public class DiffPane extends JPanel {
 
     // ==================== 差异区域追踪 ====================
 
-    private void recordDiffRegion(int startOffset, int endOffset, DiffEngine.DiffType type, int lineNumber) {
+    private void recordDiffRegion(int startOffset, int endOffset, DiffType type, int lineNumber) {
         diffRegions.add(new DiffRegion(startOffset, endOffset, type, lineNumber));
     }
 

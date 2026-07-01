@@ -19,18 +19,24 @@ public class FileChooserHelper {
     // 配置键前缀
     private static final String CONFIG_KEY_PREFIX = "file.dialog.last_dir.";
 
-    // 操作类型常量
+    // 操作类型常量 - 导入导出
     public static final String OP_ERM_IMPORT = "erm_import";
     public static final String OP_ERM_EXPORT = "erm_export";
     public static final String OP_POSTMAN_IMPORT = "postman_import";
     public static final String OP_POSTMAN_EXPORT = "postman_export";
+
+    // 操作类型常量 - 报告
     public static final String OP_REPORT_EXPORT = "report_export";
     public static final String OP_REPORT_IMPORT = "report_import";
     public static final String OP_REPORT_SAVE = "report_save";
+
+    // 操作类型常量 - YAML规则/会话
     public static final String OP_YAML_RULE_EXPORT = "yaml_rule_export";
     public static final String OP_YAML_RULE_IMPORT = "yaml_rule_import";
     public static final String OP_SESSION_YAML_EXPORT = "session_yaml_export";
     public static final String OP_SESSION_YAML_IMPORT = "session_yaml_import";
+
+    // 操作类型常量 - 其他
     public static final String OP_RESPONSE_SAVE = "response_save";
     public static final String OP_LOG_EXPORT = "log_export";
     public static final String OP_STORAGE_DIRECTORY = "storage_directory";

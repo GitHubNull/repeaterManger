@@ -23,13 +23,13 @@ public class DiffNavigator {
      */
     public static class MergedDiffRegion {
         private final int lineNumber;
-        private final DiffEngine.DiffType diffType;
+        private final DiffType diffType;
         private final int leftStartOffset;
         private final int leftEndOffset;
         private final int rightStartOffset;
         private final int rightEndOffset;
 
-        public MergedDiffRegion(int lineNumber, DiffEngine.DiffType diffType,
+        public MergedDiffRegion(int lineNumber, DiffType diffType,
                                 int leftStartOffset, int leftEndOffset,
                                 int rightStartOffset, int rightEndOffset) {
             this.lineNumber = lineNumber;
@@ -41,7 +41,7 @@ public class DiffNavigator {
         }
 
         public int getLineNumber() { return lineNumber; }
-        public DiffEngine.DiffType getDiffType() { return diffType; }
+        public DiffType getDiffType() { return diffType; }
         public int getLeftStartOffset() { return leftStartOffset; }
         public int getLeftEndOffset() { return leftEndOffset; }
         public int getRightStartOffset() { return rightStartOffset; }
@@ -131,14 +131,14 @@ public class DiffNavigator {
     /**
      * 选择合并后的差异类型（优先级: CHANGED > REMOVED > ADDED）
      */
-    private DiffEngine.DiffType chooseDiffType(DiffEngine.DiffType left, DiffEngine.DiffType right) {
-        if (left == DiffEngine.DiffType.CHANGED || right == DiffEngine.DiffType.CHANGED) {
-            return DiffEngine.DiffType.CHANGED;
+    private DiffType chooseDiffType(DiffType left, DiffType right) {
+        if (left == DiffType.CHANGED || right == DiffType.CHANGED) {
+            return DiffType.CHANGED;
         }
-        if (left == DiffEngine.DiffType.REMOVED || right == DiffEngine.DiffType.REMOVED) {
-            return DiffEngine.DiffType.REMOVED;
+        if (left == DiffType.REMOVED || right == DiffType.REMOVED) {
+            return DiffType.REMOVED;
         }
-        return DiffEngine.DiffType.ADDED;
+        return DiffType.ADDED;
     }
 
     // ==================== 导航方法 ====================

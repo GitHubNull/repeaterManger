@@ -79,271 +79,300 @@ public class AutoTestEngine {
             return;
         }
 
-        executor.submit(() -> {
-            try {
-                HttpService httpService = interceptedRequest.httpService();
+        executor.submit(() -> executeAutoTestSessions(
+                interceptedRequest, sessionManager, api, requestBytes));
+    }
 
-                LogManager.getInstance().printOutput("[*] 自动化测试：开始处理 " + api);
+    /**
+     * 执行自动化测试会话遍历的核心逻辑（在后台线程中运行）。
+     * <p>
+     * 保存原始请求到DB，遍历所有已启用用户会话，替换认证字段后发送请求，
+     * 与基准响应比对判决，结果通过 UIRequestDispatcher 回传UI。
+     *
+     * @param interceptedRequest 代理拦截到的请求
+     * @param sessionManager     会话管理器
+     * @param api                去重后的API标识
+     * @param requestBytes       原始请求字节数组
+     */
+    private void executeAutoTestSessions(InterceptedRequest interceptedRequest,
+                                          SessionManager sessionManager,
+                                          String api, byte[] requestBytes) {
+        try {
+            HttpService httpService = interceptedRequest.httpService();
 
-                List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
-                RequestManager requestManager = new RequestManager();
+            LogManager.getInstance().printOutput("[*] 自动化测试：开始处理 " + api);
 
-                // 保存原始请求到 requests 表（用于报告生成时获取原始报文）
-                int requestId = -1;
+            List<UserSession> enabledSessions = sessionManager.getEnabledSessions();
+            RequestManager requestManager = new RequestManager();
+
+            // 保存原始请求到 requests 表（用于报告生成时获取原始报文）
+            int requestId = saveAutoTestRequest(interceptedRequest, httpService, api, requestBytes);
+
+            // 存储基准用户响应
+            byte[] baselineResponse = null;
+            int baselineStatusCode = -1;
+            boolean baselineValid = false;
+            String baselineContentType = null;
+
+            for (int i = 0; i < enabledSessions.size(); i++) {
+                UserSession session = enabledSessions.get(i);
+                boolean isFirst = (i == 0);
+
+                // 根据会话关联的方案过滤字段位置
+                List<FieldDefinition> locations = sessionManager.getFieldDefinitionsByScheme(session.getSchemeId());
+                logSessionFieldDiagnostics(session, locations);
+
+                // 重放延迟
+                int replayDelay = sessionManager.getReplayDelay();
+                if (replayDelay > 0 && i > 0) {
+                    try {
+                        Thread.sleep(replayDelay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+
+                int timeoutSeconds = sessionManager.getRequestTimeout();
+                int retryCount = sessionManager.getRetryCount();
+                int retryDelayMs = sessionManager.getRetryDelay();
+
+                // 非基准用户：如果基准请求失败，跳过比对判决
+                if (!isFirst && !baselineValid) {
+                    notifyAutoTestSkip(interceptedRequest, httpService, requestId, session, api, requestBytes);
+                    continue;
+                }
+
                 try {
-                    RequestDAO requestDAO = new RequestDAO();
-                    requestId = requestDAO.saveRequest(
+                    byte[] modifiedRequest = FieldReplacementEngine.replaceFields(
+                            requestBytes, locations, session);
+
+                    boolean useHttp2 = "HTTP/2".equals(interceptedRequest.httpVersion());
+
+                    SyncHttpSender.Result holder = sendSyncRequestWithRetry(
+                            modifiedRequest, httpService, requestManager,
+                            useHttp2, timeoutSeconds, retryCount, retryDelayMs);
+
+                    // 判决
+                    String judgment = JudgmentResult.PENDING.name();
+                    double similarity = -1;
+                    java.awt.Color judgmentColor = null;
+                    String judgmentNote = "";
+
+                    if (holder.response != null && holder.response.length > 0) {
+                        if (isFirst) {
+                            baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
+                            baselineStatusCode = holder.statusCode;
+                            baselineValid = true;
+                            String baselineHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                            baselineContentType = JudgmentEngine.extractContentType(baselineHeaders);
+                            judgment = JudgmentResult.NOT_ESCALATED.name();
+                        } else {
+                            String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                            byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
+                            double threshold = 0.70;
+
+                            // 判决前诊断日志
+                            if (baselineResponse == null || baselineResponse.length == 0) {
+                                LogManager.getInstance().printError(String.format(
+                                        "[!] 基准响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+                            }
+                            if (responseBodyOnly == null || responseBodyOnly.length == 0) {
+                                LogManager.getInstance().printError(String.format(
+                                        "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+                            }
+                            LogManager.getInstance().judgmentDebug(String.format(
+                                    "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
+                                    baselineResponse != null ? baselineResponse.length : -1,
+                                    responseBodyOnly != null ? responseBodyOnly.length : -1,
+                                    baselineStatusCode, holder.statusCode, threshold));
+                            LogManager.getInstance().judgmentDebug(String.format(
+                                    "[判决] 基准响应体前200字: %s", truncateForLog(baselineResponse, 200)));
+                            LogManager.getInstance().judgmentDebug(String.format(
+                                    "[判决] 当前响应体前200字: %s", truncateForLog(responseBodyOnly, 200)));
+
+                            JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
+                                    holder.statusCode, responseHeaders, responseBodyOnly,
+                                    baselineResponse, baselineStatusCode, baselineContentType, threshold,
+                                    holder.durationMs,
+                                    session.getFieldValues().values().stream()
+                                            .allMatch(v -> v == null || v.isEmpty()));
+                            judgment = outcome.result.name();
+                            similarity = outcome.similarity;
+                            judgmentColor = outcome.color;
+                            judgmentNote = outcome.note;
+                        }
+                    } else {
+                        judgment = JudgmentResult.ERROR.name();
+                        if (isFirst) {
+                            LogManager.getInstance().printError(
+                                    "[!] 自动化测试：基准用户请求失败，后续会话将跳过判决");
+                        }
+                        if (holder.errorMessage != null && !holder.errorMessage.isEmpty()) {
+                            judgmentNote = "请求失败: " + holder.errorMessage;
+                            LogManager.getInstance().printError(
+                                    "[!] 自动化测试请求失败 (user=" + session.getName() + "): " + holder.errorMessage);
+                        }
+                    }
+
+                    RequestResponseRecord record = new RequestResponseRecord();
+                    record.setRequestId(requestId);
+                    record.setMethod(interceptedRequest.method());
+                    record.setProtocol(httpService.secure() ? "https" : "http");
+                    record.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
+                    record.setPath(interceptedRequest.path());
+                    record.setQueryParameters(interceptedRequest.query() != null ? interceptedRequest.query() : "");
+                    record.setApi(api);
+                    record.setStatusCode(holder.statusCode);
+                    record.setResponseLength(holder.response != null ? holder.response.length : 0);
+                    record.setResponseTime((int) holder.durationMs);
+                    record.setRequestData(modifiedRequest);
+                    record.setResponseData(holder.response != null ? holder.response : new byte[0]);
+                    record.setTimestamp(new java.util.Date());
+                    record.setUserSessionName(session.getName());
+                    record.setJudgment(judgment);
+                    record.setSimilarity(similarity);
+                    record.setColor(judgmentColor);
+
+                    if (isFirst) {
+                        record.setBaselineResponseData(baselineResponse);
+                    }
+
+                    if (judgmentNote != null && !judgmentNote.isEmpty()) {
+                        record.setComment(judgmentNote);
+                    }
+
+                    final RequestResponseRecord finalRecord = record;
+                    SwingUtilities.invokeLater(() -> {
+                        UIRequestDispatcher.getInstance().addPrivilegeTestRecord(finalRecord);
+                    });
+
+                    LogManager.getInstance().printOutput(String.format(
+                            "[*] 自动化测试: 用户=%s, 判决=%s, 相似度=%.2f",
+                            session.getName(), JudgmentResult.toDisplayName(judgment), similarity));
+
+                } catch (Exception e) {
+                    LogManager.getInstance().printError(
+                            "[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
+
+                    if (isFirst) {
+                        LogManager.getInstance().printError(
+                                "[!] 自动化测试：基准用户请求异常，后续会话将跳过判决");
+                    }
+                }
+            }
+
+            LogManager.getInstance().printOutput("[+] 自动化测试完成: " + api);
+
+        } catch (Exception e) {
+            LogManager.getInstance().printError("[!] 自动化测试处理请求异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 保存自动化测试的原始请求到DB，并通知UI面板。
+     *
+     * @return 保存后的请求ID，失败返回-1
+     */
+    private int saveAutoTestRequest(InterceptedRequest interceptedRequest, HttpService httpService,
+                                     String api, byte[] requestBytes) {
+        int requestId = -1;
+        try {
+            RequestDAO requestDAO = new RequestDAO();
+            requestId = requestDAO.saveRequest(
+                    httpService.secure() ? "https" : "http",
+                    HttpRequestHelper.resolveDomainFromService(httpService),
+                    interceptedRequest.path(),
+                    interceptedRequest.query() != null ? interceptedRequest.query() : "",
+                    interceptedRequest.method(),
+                    requestBytes,
+                    true);
+            if (requestId > 0) {
+                final int finalRequestId = requestId;
+                SwingUtilities.invokeLater(() -> {
+                    UIRequestDispatcher.getInstance().addAutoTestRequestToPanel(finalRequestId, api,
+                            interceptedRequest.method(),
                             httpService.secure() ? "https" : "http",
                             HttpRequestHelper.resolveDomainFromService(httpService),
                             interceptedRequest.path(),
                             interceptedRequest.query() != null ? interceptedRequest.query() : "",
-                            interceptedRequest.method(),
-                            requestBytes,
-                            true  // isPrivilegeTest
-                    );
-                    if (requestId > 0) {
-                        final int finalRequestId = requestId;
-                        SwingUtilities.invokeLater(() -> {
-                            UIRequestDispatcher.getInstance().addAutoTestRequestToPanel(finalRequestId, api,
-                                    interceptedRequest.method(),
-                                    httpService.secure() ? "https" : "http",
-                                    HttpRequestHelper.resolveDomainFromService(httpService),
-                                    interceptedRequest.path(),
-                                    interceptedRequest.query() != null ? interceptedRequest.query() : "",
-                                    requestBytes);
-                        });
-                    }
-                } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] 保存自动化测试原始请求失败: " + e.getMessage());
-                }
-
-                // 存储基准用户响应
-                byte[] baselineResponse = null;
-                int baselineStatusCode = -1;
-                boolean baselineValid = false;
-                String baselineContentType = null;
-
-                for (int i = 0; i < enabledSessions.size(); i++) {
-                    UserSession session = enabledSessions.get(i);
-                    boolean isFirst = (i == 0);
-
-                    // 根据会话关联的方案过滤字段位置
-                    List<FieldDefinition> locations = sessionManager.getFieldDefinitionsByScheme(session.getSchemeId());
-
-                    // 字段位置为空时的警告：配置错误，将使用原始请求字段发送
-                    if (locations.isEmpty()) {
-                        LogManager.getInstance().printError(String.format(
-                                "[!] 自动化测试: 用户 '%s' (schemeId=%s) 没有关联的字段位置，"
-                                + "将使用原始请求字段发送，可能导致误判！",
-                                session.getName(), session.getSchemeId()));
-                    } else {
-                        int configuredCount = session.getFieldValues().size();
-                        if (configuredCount == 0) {
-                            LogManager.getInstance().printError(String.format(
-                                    "[!] 字段替换: 用户 '%s' → %d 个字段位置 / 0 个已配置值！"
-                                    + "所有字段将被从请求中删除，可能导致 401 认证失败！",
-                                    session.getName(), locations.size()));
-                        } else {
-                            java.util.Set<Integer> valueIds = session.getFieldValues().keySet();
-                            java.util.Set<Integer> locationIds = new java.util.HashSet<>();
-                            for (FieldDefinition loc : locations) {
-                                locationIds.add(loc.getId());
-                            }
-                            long matchCount = valueIds.stream().filter(locationIds::contains).count();
-                            if (matchCount == 0) {
-                                LogManager.getInstance().printError(String.format(
-                                        "[!] 字段替换: 用户 '%s' → 字段值ID(%s)与位置ID(%s)完全不匹配！"
-                                        + "请检查字段方案与用户配置是否对应",
-                                        session.getName(), valueIds, locationIds));
-                            } else {
-                                LogManager.getInstance().printOutput(String.format(
-                                        "[*] 字段替换: 用户 '%s' → %d 个字段位置 / %d 个已配置值 (匹配%d个)",
-                                        session.getName(), locations.size(), configuredCount, matchCount));
-                            }
-                        }
-                    }
-
-                    // 重放延迟：使用全局配置
-                    int replayDelay = sessionManager.getReplayDelay();
-                    if (replayDelay > 0 && i > 0) {
-                        try {
-                            Thread.sleep(replayDelay);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-
-                    // 请求超时：使用全局配置
-                    int timeoutSeconds = sessionManager.getRequestTimeout();
-
-                    // 重试参数：使用全局配置
-                    int retryCount = sessionManager.getRetryCount();
-                    int retryDelayMs = sessionManager.getRetryDelay();
-
-                    // 非基准用户：如果基准请求失败，跳过比对判决，标记为ERROR
-                    if (!isFirst && !baselineValid) {
-                        RequestResponseRecord skipRecord = new RequestResponseRecord();
-                        skipRecord.setRequestId(requestId);
-                        skipRecord.setMethod(interceptedRequest.method());
-                        skipRecord.setProtocol(httpService.secure() ? "https" : "http");
-                        skipRecord.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
-                        skipRecord.setPath(interceptedRequest.path());
-                        skipRecord.setQueryParameters(interceptedRequest.query() != null ? interceptedRequest.query() : "");
-                        skipRecord.setApi(api);
-                        skipRecord.setStatusCode(0);
-                        skipRecord.setResponseLength(0);
-                        skipRecord.setResponseTime(0);
-                        skipRecord.setRequestData(requestBytes);
-                        skipRecord.setResponseData(new byte[0]);
-                        skipRecord.setTimestamp(new java.util.Date());
-                        skipRecord.setUserSessionName(session.getName());
-                        skipRecord.setJudgment(JudgmentResult.ERROR.name());
-                        skipRecord.setSimilarity(-1);
-                        skipRecord.setComment("基准请求失败，无法进行对比判决");
-
-                        final RequestResponseRecord finalSkipRecord = skipRecord;
-                        SwingUtilities.invokeLater(() -> {
-                            UIRequestDispatcher.getInstance().addPrivilegeTestRecord(finalSkipRecord);
-                        });
-
-                        LogManager.getInstance().printOutput(String.format(
-                                "[*] 自动化测试: 用户=%s, 判决=ERROR (基准请求失败)",
-                                session.getName()));
-                        continue;
-                    }
-
-                    try {
-                        byte[] modifiedRequest = FieldReplacementEngine.replaceFields(
-                                requestBytes, locations, session);
-
-                        // 检测 HTTP/2 协议版本，确保重放时保持与原始请求相同的协议
-                        boolean useHttp2 = "HTTP/2".equals(interceptedRequest.httpVersion());
-
-                        // 带重试的同步发送（使用会话级别的超时和重试配置）
-                        SyncHttpSender.Result holder = sendSyncRequestWithRetry(
-                                modifiedRequest, httpService, requestManager,
-                                useHttp2, timeoutSeconds, retryCount, retryDelayMs);
-
-                        // 判决
-                        String judgment = JudgmentResult.PENDING.name();
-                        double similarity = -1;
-                        java.awt.Color judgmentColor = null;
-                        String judgmentNote = "";
-
-                        if (holder.response != null && holder.response.length > 0) {
-                            if (isFirst) {
-                                baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
-                                baselineStatusCode = holder.statusCode;
-                                baselineValid = true;
-                                // 保存基线 Content-Type（用于相似度算法选择）
-                                String baselineHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
-                                baselineContentType = JudgmentEngine.extractContentType(baselineHeaders);
-                                judgment = JudgmentResult.NOT_ESCALATED.name();
-                            } else {
-                                String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
-                                byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
-                                double threshold = 0.70; // 判决兜底默认阈值（规则引擎未命中时的最后安全网）
-
-                                // === 判决前诊断日志 ===
-                                if (baselineResponse == null || baselineResponse.length == 0) {
-                                    LogManager.getInstance().printError(String.format(
-                                            "[!] 基准响应体为空(用户=%s),相似度计算不可靠", session.getName()));
-                                }
-                                if (responseBodyOnly == null || responseBodyOnly.length == 0) {
-                                    LogManager.getInstance().printError(String.format(
-                                            "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
-                                }
-                                LogManager.getInstance().judgmentDebug(String.format(
-                                        "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
-                                        baselineResponse != null ? baselineResponse.length : -1,
-                                        responseBodyOnly != null ? responseBodyOnly.length : -1,
-                                        baselineStatusCode, holder.statusCode, threshold));
-                                LogManager.getInstance().judgmentDebug(String.format(
-                                        "[判决] 基准响应体前200字: %s",
-                                        truncateForLog(baselineResponse, 200)));
-                                LogManager.getInstance().judgmentDebug(String.format(
-                                        "[判决] 当前响应体前200字: %s",
-                                        truncateForLog(responseBodyOnly, 200)));
-
-                                JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
-                                        holder.statusCode, responseHeaders, responseBodyOnly,
-                                        baselineResponse, baselineStatusCode, baselineContentType, threshold,
-                                        holder.durationMs,
-                                        session.getFieldValues().values().stream().allMatch(v -> v == null || v.isEmpty()));
-                                judgment = outcome.result.name();
-                                similarity = outcome.similarity;
-                                judgmentColor = outcome.color;
-                                judgmentNote = outcome.note;
-                            }
-                        } else {
-                            judgment = JudgmentResult.ERROR.name();
-                            if (isFirst) {
-                                LogManager.getInstance().printError("[!] 自动化测试：基准用户请求失败，后续会话将跳过判决");
-                            }
-                            if (holder.errorMessage != null && !holder.errorMessage.isEmpty()) {
-                                judgmentNote = "请求失败: " + holder.errorMessage;
-                                LogManager.getInstance().printError("[!] 自动化测试请求失败 (user=" + session.getName()
-                                        + "): " + holder.errorMessage);
-                            }
-                        }
-
-                        RequestResponseRecord record = new RequestResponseRecord();
-                        record.setRequestId(requestId);
-                        record.setMethod(interceptedRequest.method());
-                        record.setProtocol(httpService.secure() ? "https" : "http");
-                        record.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
-                        record.setPath(interceptedRequest.path());
-                        record.setQueryParameters(interceptedRequest.query() != null ? interceptedRequest.query() : "");
-                        record.setApi(api);
-                        record.setStatusCode(holder.statusCode);
-                        record.setResponseLength(holder.response != null ? holder.response.length : 0);
-                        record.setResponseTime((int) holder.durationMs);
-                        record.setRequestData(modifiedRequest);
-                        record.setResponseData(holder.response != null ? holder.response : new byte[0]);
-                        record.setTimestamp(new java.util.Date());
-                        record.setUserSessionName(session.getName());
-                        record.setJudgment(judgment);
-                        record.setSimilarity(similarity);
-                        record.setColor(judgmentColor);
-
-                        // 基准用户：保存纯响应体到独立字段，用于报告生成时的数据分离
-                        if (isFirst) {
-                            record.setBaselineResponseData(baselineResponse);
-                        }
-
-                        if (judgmentNote != null && !judgmentNote.isEmpty()) {
-                            record.setComment(judgmentNote);
-                        }
-
-                        // 通过 RepeaterManagerUI 回传
-                        final RequestResponseRecord finalRecord = record;
-                        SwingUtilities.invokeLater(() -> {
-                            UIRequestDispatcher.getInstance().addPrivilegeTestRecord(finalRecord);
-                        });
-
-                        LogManager.getInstance().printOutput(String.format(
-                                "[*] 自动化测试: 用户=%s, 判决=%s, 相似度=%.2f",
-                                session.getName(),
-                                JudgmentResult.toDisplayName(judgment),
-                                similarity));
-
-                    } catch (Exception e) {
-                        LogManager.getInstance().printError("[!] 自动化测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
-
-                        // 基准用户异常时 baselineValid 保持初始值 false，后续会话将因此跳过判决
-                        if (isFirst) {
-                            LogManager.getInstance().printError("[!] 自动化测试：基准用户请求异常，后续会话将跳过判决");
-                        }
-                    }
-                }
-
-                LogManager.getInstance().printOutput("[+] 自动化测试完成: " + api);
-
-            } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 自动化测试处理请求异常: " + e.getMessage());
+                            requestBytes);
+                });
             }
+        } catch (Exception e) {
+            LogManager.getInstance().printError("[!] 保存自动化测试原始请求失败: " + e.getMessage());
+        }
+        return requestId;
+    }
+
+    /**
+     * 诊断并记录会话的字段配置状态
+     */
+    private void logSessionFieldDiagnostics(UserSession session, List<FieldDefinition> locations) {
+        if (locations.isEmpty()) {
+            LogManager.getInstance().printError(String.format(
+                    "[!] 自动化测试: 用户 '%s' (schemeId=%s) 没有关联的字段位置，"
+                    + "将使用原始请求字段发送，可能导致误判！",
+                    session.getName(), session.getSchemeId()));
+        } else {
+            int configuredCount = session.getFieldValues().size();
+            if (configuredCount == 0) {
+                LogManager.getInstance().printError(String.format(
+                        "[!] 字段替换: 用户 '%s' → %d 个字段位置 / 0 个已配置值！"
+                        + "所有字段将被从请求中删除，可能导致 401 认证失败！",
+                        session.getName(), locations.size()));
+            } else {
+                java.util.Set<Integer> valueIds = session.getFieldValues().keySet();
+                java.util.Set<Integer> locationIds = new java.util.HashSet<>();
+                for (FieldDefinition loc : locations) {
+                    locationIds.add(loc.getId());
+                }
+                long matchCount = valueIds.stream().filter(locationIds::contains).count();
+                if (matchCount == 0) {
+                    LogManager.getInstance().printError(String.format(
+                            "[!] 字段替换: 用户 '%s' → 字段值ID(%s)与位置ID(%s)完全不匹配！"
+                            + "请检查字段方案与用户配置是否对应",
+                            session.getName(), valueIds, locationIds));
+                } else {
+                    LogManager.getInstance().printOutput(String.format(
+                            "[*] 字段替换: 用户 '%s' → %d 个字段位置 / %d 个已配置值 (匹配%d个)",
+                            session.getName(), locations.size(), configuredCount, matchCount));
+                }
+            }
+        }
+    }
+
+    /**
+     * 通知UI：基线不可用时跳过该会话的判决
+     */
+    private void notifyAutoTestSkip(InterceptedRequest interceptedRequest, HttpService httpService,
+                                     int requestId, UserSession session, String api, byte[] requestBytes) {
+        RequestResponseRecord skipRecord = new RequestResponseRecord();
+        skipRecord.setRequestId(requestId);
+        skipRecord.setMethod(interceptedRequest.method());
+        skipRecord.setProtocol(httpService.secure() ? "https" : "http");
+        skipRecord.setDomain(HttpRequestHelper.resolveDomainFromService(httpService));
+        skipRecord.setPath(interceptedRequest.path());
+        skipRecord.setQueryParameters(interceptedRequest.query() != null ? interceptedRequest.query() : "");
+        skipRecord.setApi(api);
+        skipRecord.setStatusCode(0);
+        skipRecord.setResponseLength(0);
+        skipRecord.setResponseTime(0);
+        skipRecord.setRequestData(requestBytes);
+        skipRecord.setResponseData(new byte[0]);
+        skipRecord.setTimestamp(new java.util.Date());
+        skipRecord.setUserSessionName(session.getName());
+        skipRecord.setJudgment(JudgmentResult.ERROR.name());
+        skipRecord.setSimilarity(-1);
+        skipRecord.setComment("基准请求失败，无法进行对比判决");
+
+        final RequestResponseRecord finalSkipRecord = skipRecord;
+        SwingUtilities.invokeLater(() -> {
+            UIRequestDispatcher.getInstance().addPrivilegeTestRecord(finalSkipRecord);
         });
+
+        LogManager.getInstance().printOutput(String.format(
+                "[*] 自动化测试: 用户=%s, 判决=ERROR (基准请求失败)", session.getName()));
     }
 
     /**

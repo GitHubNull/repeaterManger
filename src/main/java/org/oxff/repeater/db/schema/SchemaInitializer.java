@@ -42,7 +42,7 @@ public class SchemaInitializer {
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '15')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
-        // 创建池表
+        // ===== 池表 =====
         createPoolTables(stmt);
 
         // GC 队列表
@@ -56,7 +56,7 @@ public class SchemaInitializer {
         );
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_gc_queue_pool ON gc_queue(pool_type, hash)");
 
-        // 请求表（v10 结构：v8 + 响应字段）
+        // ===== 请求表（v10 结构：v8 + 响应字段）=====
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS requests (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -82,7 +82,7 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 历史记录表（v3 结构：v2 + api_hash）
+        // ===== 历史记录表（v3 结构：v2 + api_hash）=====
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS history (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -132,10 +132,10 @@ public class SchemaInitializer {
         // 创建索引
         createV3Indexes(stmt);
 
-        // 创建v6权限测试相关表（v14 已重命名：token_locations→field_definitions 等）
+        // ===== v6 权限测试相关表（v14 已重命名）=====
         createV6PrivilegeTables(stmt);
 
-        // 创建v7 Scope表
+        // ===== v7 Scope表 =====
         createV7ScopeTables(stmt);
 
         LogManager.getInstance().printOutput("[+] v15 Schema 初始化完成");

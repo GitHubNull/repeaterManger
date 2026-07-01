@@ -103,296 +103,326 @@ public class ReplayEngine {
         }
 
         final boolean finalUseHttp2 = useHttp2;
-        executor.submit(() -> {
-            LogManager.getInstance().printOutput("[*] 开始权限测试重放: " + enabledSessions.size() + "个用户会话");
-
-            // ===== 加载存储的基线响应（来自 benchmark 报文表 requests 表）=====
-            // 基准报文在 Proxy 历史中已由原始用户（如 acme_viewer）产生过响应，
-            // 该响应已存入 requests 表作为基线，所有测试用户的响应都应与此基线比对。
-            byte[] baselineResponse = null;
-            int baselineStatusCode = -1;
-            boolean baselineValid = false;
-            String baselineContentType = null;
-            boolean hasStoredBaseline = false;
-
-            try {
-                org.oxff.repeater.db.RequestDAO requestDAO = new org.oxff.repeater.db.RequestDAO();
-                byte[] storedBaseline = requestDAO.getOriginalResponseData(requestId);
-                if (storedBaseline != null && storedBaseline.length > 0) {
-                    byte[] storedBody = HttpMessageParser.extractResponseBody(storedBaseline);
-                    int storedStatus = requestDAO.getOriginalResponseStatusCode(requestId);
-                    if (storedBody != null && storedBody.length > 0 && storedStatus > 0) {
-                        baselineResponse = storedBody;
-                        baselineStatusCode = storedStatus;
-                        String storedHeaders = HttpMessageParser.extractResponseHeaders(storedBaseline);
-                        baselineContentType = JudgmentEngine.extractContentType(storedHeaders);
-                        baselineValid = true;
-                        hasStoredBaseline = true;
-                        LogManager.getInstance().printOutput(String.format(
-                                "[*] 使用存储基线响应: requestId=%d, status=%d, bodyLen=%d",
-                                requestId, baselineStatusCode, baselineResponse.length));
-                    }
-                }
-            } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 加载存储基线响应失败: " + e.getMessage());
-            }
-
-            if (!hasStoredBaseline) {
-                LogManager.getInstance().printOutput(
-                        "[*] 无存储基线响应，回退兼容模式：首个已启用会话响应作为基准");
-            }
-
-            for (int i = 0; i < enabledSessions.size(); i++) {
-                UserSession session = enabledSessions.get(i);
-                boolean isFirst = (i == 0);
-                // 有存储基线时：所有会话都是测试对象，不做"首个=基准"假设
-                boolean useAsBaselineFallback = (!hasStoredBaseline && isFirst);
-
-                // 根据会话关联的方案过滤字段位置
-                List<FieldDefinition> locations = sessionManager.getFieldDefinitionsByScheme(session.getSchemeId());
-
-                // 字段位置为空时的警告：配置错误，将使用原始请求字段发送
-                if (locations.isEmpty()) {
-                    LogManager.getInstance().printError(String.format(
-                            "[!] 权限测试: 用户 '%s' (schemeId=%s) 没有关联的字段位置，"
-                            + "将使用原始请求字段发送，可能导致误判！",
-                            session.getName(), session.getSchemeId()));
-                } else {
-                    // 诊断：显示该会话的字段配置概况，并检测配置缺失
-                    int configuredCount = session.getFieldValues().size();
-                    if (configuredCount == 0) {
-                        // 字段位置存在但用户未配置任何字段值 → 所有字段将被删除，请求将缺少认证信息
-                        LogManager.getInstance().printError(String.format(
-                                "[!] 字段替换: 用户 '%s' → %d 个字段位置 / 0 个已配置值！"
-                                + "所有字段将被从请求中删除，可能导致 401 认证失败！",
-                                session.getName(), locations.size()));
-                    } else {
-                        // 检查字段值ID是否与字段位置ID匹配
-                        java.util.Set<Integer> valueIds = session.getFieldValues().keySet();
-                        java.util.Set<Integer> locationIds = new java.util.HashSet<>();
-                        for (FieldDefinition loc : locations) {
-                            locationIds.add(loc.getId());
-                        }
-                        long matchCount = valueIds.stream().filter(locationIds::contains).count();
-                        if (matchCount == 0) {
-                            LogManager.getInstance().printError(String.format(
-                                    "[!] 字段替换: 用户 '%s' → 字段值ID(%s)与位置ID(%s)完全不匹配！"
-                                    + "请检查字段方案与用户配置是否对应",
-                                    session.getName(), valueIds, locationIds));
-                        } else {
-                            LogManager.getInstance().printOutput(String.format(
-                                    "[*] 字段替换: 用户 '%s' → %d 个字段位置 / %d 个已配置值 (匹配%d个)",
-                                    session.getName(), locations.size(), configuredCount, matchCount));
-                        }
-                    }
-                }
-
-                // 重放延迟：使用全局配置
-                int replayDelay = sessionManager.getReplayDelay();
-                if (replayDelay > 0 && i > 0) {
-                    try {
-                        Thread.sleep(replayDelay);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-
-                // 请求超时：使用全局配置
-                int timeoutSeconds = sessionManager.getRequestTimeout();
-
-                // 重试参数：使用全局配置
-                int retryCount = sessionManager.getRetryCount();
-                int retryDelay = sessionManager.getRetryDelay();
-
-                // 基线不可用时跳过对比判决（兼容模式下首个会话是基线源，不跳过）
-                if (!useAsBaselineFallback && !baselineValid) {
-                    RequestResponseRecord skipRecord = new RequestResponseRecord();
-                    skipRecord.setRequestId(requestId);
-                    populateRecordFromRequest(skipRecord, originalRequest, httpService);
-                    skipRecord.setStatusCode(0);
-                    skipRecord.setResponseTime(0);
-                    skipRecord.setRequestData(originalRequest);
-                    skipRecord.setResponseData(new byte[0]);
-                    skipRecord.setTimestamp(new java.util.Date());
-                    skipRecord.setUserSessionName(session.getName());
-                    skipRecord.setJudgment(JudgmentResult.ERROR.name());
-                    skipRecord.setSimilarity(-1);
-                    skipRecord.setComment("基准请求失败，无法进行对比判决");
-
-                    SwingUtilities.invokeLater(() -> {
-                        if (callback != null) {
-                            callback.onReplayComplete(skipRecord, false);
-                        }
-                    });
-                    continue;
-                }
-
-                try {
-                    // 替换字段（使用方案过滤后的字段位置）
-                    byte[] modifiedRequest = FieldReplacementEngine.replaceFields(
-                            originalRequest, locations, session);
-
-                    // 带重试的同步发送请求（在后台线程中）
-                    // finalUseHttp2 通过参数传递，避免单例实例字段在并发 replay() 调用时被覆盖
-                    SyncHttpSender.Result holder = sendSyncWithRetry(
-                            modifiedRequest, httpService, requestManager, finalUseHttp2,
-                            timeoutSeconds, retryCount, retryDelay);
-
-                    // 判断判决结果
-                    String judgment = JudgmentResult.PENDING.name();
-                    double similarity = -1;
-                    Color judgmentColor = null;
-                    String judgmentNote = "";
-
-                    if (holder.response != null && holder.response.length > 0) {
-                        if (useAsBaselineFallback) {
-                            // 兼容模式：无存储基线时，用首个会话响应作为基线
-                            baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
-                            baselineStatusCode = holder.statusCode;
-                            baselineValid = true;
-                            // 保存基线 Content-Type（用于相似度算法选择）
-                            String baselineHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
-                            baselineContentType = JudgmentEngine.extractContentType(baselineHeaders);
-                            judgment = JudgmentResult.NOT_ESCALATED.name(); // 兼容模式基准不参与判决
-                            judgmentColor = null;
-                            judgmentNote = "兼容模式：以此响应为基准";
-                        } else {
-                            // 所有测试用户（含有存储基线时的第一个会话）：
-                            // 使用 JudgmentEngine 与存储基线（或兼容模式基线）比对
-                            String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
-                            byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
-                            double threshold = 0.70; // 判决兜底默认阈值（规则引擎未命中时的最后安全网）
-
-                            // === 判决前诊断日志 ===
-                            // 空 body WARNING — 始终输出(不受调试开关影响)
-                            if (baselineResponse == null || baselineResponse.length == 0) {
-                                LogManager.getInstance().printError(String.format(
-                                        "[!] 基准响应体为空(requestId=%d,用户=%s),相似度计算不可靠", requestId, session.getName()));
-                            }
-                            if (responseBodyOnly == null || responseBodyOnly.length == 0) {
-                                LogManager.getInstance().printError(String.format(
-                                        "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
-                            }
-                            // 调试日志
-                            LogManager.getInstance().judgmentDebug(String.format(
-                                    "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
-                                    baselineResponse != null ? baselineResponse.length : -1,
-                                    responseBodyOnly != null ? responseBodyOnly.length : -1,
-                                    baselineStatusCode, holder.statusCode, threshold));
-                            LogManager.getInstance().judgmentDebug(String.format(
-                                    "[判决] 基准响应体前200字: %s",
-                                    truncateForLog(baselineResponse, 200)));
-                            LogManager.getInstance().judgmentDebug(String.format(
-                                    "[判决] 当前响应体前200字: %s",
-                                    truncateForLog(responseBodyOnly, 200)));
-
-                            // 判断字段是否全部为空（游客/未登录场景）
-                            boolean allFieldsEmpty = session.getFieldValues().values().stream()
-                                    .allMatch(v -> v == null || v.isEmpty());
-
-                            JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
-                                    holder.statusCode, responseHeaders, responseBodyOnly,
-                                    baselineResponse, baselineStatusCode, baselineContentType, threshold,
-                                    holder.durationMs, allFieldsEmpty);
-
-                            judgment = outcome.result.name();
-                            similarity = outcome.similarity;
-                            judgmentColor = outcome.color;
-                            judgmentNote = outcome.note;
-                        }
-                    } else {
-                        judgment = JudgmentResult.ERROR.name();
-                        if (useAsBaselineFallback) {
-                            LogManager.getInstance().printError("[!] 兼容模式：基线用户请求失败，后续会话将跳过判决");
-                        } else {
-                            judgmentNote = "请求无响应";
-                        }
-                    }
-
-                    // 创建历史记录
-                    RequestResponseRecord record = new RequestResponseRecord();
-                    record.setRequestId(requestId);
-                    // 解析HTTP元数据（方法、协议、域名、路径、查询参数）
-                    populateRecordFromRequest(record, modifiedRequest, httpService);
-                    record.setStatusCode(holder.statusCode);
-                    record.setResponseLength(holder.response != null ? holder.response.length : 0);
-                    record.setResponseTime((int) holder.durationMs);
-                    record.setRequestData(modifiedRequest);
-                    record.setResponseData(holder.response != null ? holder.response : new byte[0]);
-                    record.setTimestamp(new java.util.Date());
-                    record.setUserSessionName(session.getName());
-                    record.setJudgment(judgment);
-                    record.setSimilarity(similarity);
-                    record.setColor(judgmentColor);
-
-                    // 保存存储基线响应体到独立字段，用于报告生成时的数据分离
-                    // 只有第一个会话记录携带此标记，报告生成器据此识别基线记录
-                    // 所有会话都设置会导致报告生成器将所有记录误判为基线（baselineRecord被反复覆盖）
-                    if (isFirst) {
-                        // 统一规范：空body等同于null，避免下游需要同时检查 null 和 length>0
-                        byte[] respData = (baselineResponse != null && baselineResponse.length > 0)
-                                          ? baselineResponse : null;
-                        record.setBaselineResponseData(respData);
-                    }
-
-                    if (holder.errorMessage != null) {
-                        record.setComment("请求失败: " + holder.errorMessage);
-                    } else if (judgmentNote != null && !judgmentNote.isEmpty()) {
-                        record.setComment(judgmentNote);
-                    }
-
-                    // 通知UI（在EDT上）
-                    final RequestResponseRecord finalRecord = record;
-                    final boolean finalIsFirst = hasStoredBaseline ? false : isFirst;
-                    SwingUtilities.invokeLater(() -> {
-                        if (callback != null) {
-                            callback.onReplayComplete(finalRecord, finalIsFirst);
-                        }
-                    });
-
-                } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] 权限测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
-
-                    // 兼容模式基线用户异常时 baselineValid 保持 false，后续会话将因此跳过判决
-                    if (useAsBaselineFallback) {
-                        LogManager.getInstance().printError("[!] 兼容模式：基线用户请求异常，后续会话将跳过判决");
-                    }
-
-                    // 创建错误记录
-                    RequestResponseRecord errorRecord = new RequestResponseRecord();
-                    errorRecord.setRequestId(requestId);
-                    // 解析HTTP元数据（方法、协议、域名、路径、查询参数）
-                    populateRecordFromRequest(errorRecord, originalRequest, httpService);
-                    errorRecord.setStatusCode(0);
-                    errorRecord.setResponseTime(0);
-                    errorRecord.setRequestData(originalRequest);
-                    errorRecord.setResponseData(new byte[0]);
-                    errorRecord.setTimestamp(new java.util.Date());
-                    errorRecord.setUserSessionName(session.getName());
-                    errorRecord.setJudgment(JudgmentResult.ERROR.name());
-                    errorRecord.setSimilarity(-1);
-                    errorRecord.setComment("重放异常: " + e.getMessage());
-
-                    SwingUtilities.invokeLater(() -> {
-                        if (callback != null) {
-                            callback.onReplayComplete(errorRecord, isFirst);
-                        }
-                    });
-                }
-            }
-
-            // 全部完成
-            SwingUtilities.invokeLater(() -> {
-                if (callback != null) {
-                    callback.onAllComplete();
-                }
-            });
-
-            LogManager.getInstance().printOutput("[+] 权限测试重放完成: " + enabledSessions.size() + "个用户会话");
-        });
+        executor.submit(() -> executeSessionReplay(
+                enabledSessions, sessionManager, originalRequest, httpService,
+                requestId, finalUseHttp2, requestManager, callback));
 
         return false; // 正常执行了重放（异步），未被去重跳过
+    }
+
+    /**
+     * 执行会话重放的核心逻辑（在后台线程中运行）。
+     * <p>
+     * 对每个已启用的用户会话：加载存储基线、替换认证字段、发送请求、
+     * 与基线比对判决、创建历史记录并通知UI。
+     *
+     * @param enabledSessions 已启用的用户会话列表
+     * @param sessionManager  会话管理器
+     * @param originalRequest 原始请求字节数组
+     * @param httpService     HTTP服务信息
+     * @param requestId       请求ID
+     * @param useHttp2        是否使用HTTP/2
+     * @param requestManager  请求管理器
+     * @param callback        重放完成回调
+     */
+    private void executeSessionReplay(List<UserSession> enabledSessions, SessionManager sessionManager,
+                                       byte[] originalRequest, HttpService httpService, int requestId,
+                                       boolean useHttp2, RequestManager requestManager, ReplayCallback callback) {
+        LogManager.getInstance().printOutput("[*] 开始权限测试重放: " + enabledSessions.size() + "个用户会话");
+
+        // ===== 加载存储的基线响应（来自 benchmark 报文表 requests 表）=====
+        byte[] baselineResponse = null;
+        int baselineStatusCode = -1;
+        boolean baselineValid = false;
+        String baselineContentType = null;
+        boolean hasStoredBaseline = false;
+
+        try {
+            org.oxff.repeater.db.RequestDAO requestDAO = new org.oxff.repeater.db.RequestDAO();
+            byte[] storedBaseline = requestDAO.getOriginalResponseData(requestId);
+            if (storedBaseline != null && storedBaseline.length > 0) {
+                byte[] storedBody = HttpMessageParser.extractResponseBody(storedBaseline);
+                int storedStatus = requestDAO.getOriginalResponseStatusCode(requestId);
+                if (storedBody != null && storedBody.length > 0 && storedStatus > 0) {
+                    baselineResponse = storedBody;
+                    baselineStatusCode = storedStatus;
+                    String storedHeaders = HttpMessageParser.extractResponseHeaders(storedBaseline);
+                    baselineContentType = JudgmentEngine.extractContentType(storedHeaders);
+                    baselineValid = true;
+                    hasStoredBaseline = true;
+                    LogManager.getInstance().printOutput(String.format(
+                            "[*] 使用存储基线响应: requestId=%d, status=%d, bodyLen=%d",
+                            requestId, baselineStatusCode, baselineResponse.length));
+                }
+            }
+        } catch (Exception e) {
+            LogManager.getInstance().printError("[!] 加载存储基线响应失败: " + e.getMessage());
+        }
+
+        if (!hasStoredBaseline) {
+            LogManager.getInstance().printOutput(
+                    "[*] 无存储基线响应，回退兼容模式：首个已启用会话响应作为基准");
+        }
+
+        for (int i = 0; i < enabledSessions.size(); i++) {
+            UserSession session = enabledSessions.get(i);
+            boolean isFirst = (i == 0);
+            boolean useAsBaselineFallback = (!hasStoredBaseline && isFirst);
+
+            // 诊断并记录会话字段配置状态
+            List<FieldDefinition> locations = sessionManager.getFieldDefinitionsByScheme(session.getSchemeId());
+            logSessionFieldDiagnostics(session, locations);
+
+            // 重放延迟
+            int replayDelay = sessionManager.getReplayDelay();
+            if (replayDelay > 0 && i > 0) {
+                try {
+                    Thread.sleep(replayDelay);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+
+            int timeoutSeconds = sessionManager.getRequestTimeout();
+            int retryCount = sessionManager.getRetryCount();
+            int retryDelay = sessionManager.getRetryDelay();
+
+            // 基线不可用时跳过对比判决
+            if (!useAsBaselineFallback && !baselineValid) {
+                RequestResponseRecord skipRecord = createSkipRecord(
+                        originalRequest, httpService, requestId, session, "基准请求失败，无法进行对比判决");
+                SwingUtilities.invokeLater(() -> {
+                    if (callback != null) {
+                        callback.onReplayComplete(skipRecord, false);
+                    }
+                });
+                continue;
+            }
+
+            try {
+                byte[] modifiedRequest = FieldReplacementEngine.replaceFields(
+                        originalRequest, locations, session);
+
+                SyncHttpSender.Result holder = sendSyncWithRetry(
+                        modifiedRequest, httpService, requestManager, useHttp2,
+                        timeoutSeconds, retryCount, retryDelay);
+
+                // 判决结果（由辅助方法计算）
+                ReplayJudgment judgment = evaluateJudgment(
+                        holder, useAsBaselineFallback, baselineResponse, baselineStatusCode,
+                        baselineContentType, baselineValid, session, requestId);
+
+                // 更新基线（兼容模式首个会话）
+                if (useAsBaselineFallback && judgment.baselineUpdated) {
+                    baselineResponse = judgment.newBaselineResponse;
+                    baselineStatusCode = judgment.newBaselineStatusCode;
+                    baselineContentType = judgment.newBaselineContentType;
+                    baselineValid = true;
+                }
+
+                // 创建历史记录
+                RequestResponseRecord record = new RequestResponseRecord();
+                record.setRequestId(requestId);
+                populateRecordFromRequest(record, modifiedRequest, httpService);
+                record.setStatusCode(holder.statusCode);
+                record.setResponseLength(holder.response != null ? holder.response.length : 0);
+                record.setResponseTime((int) holder.durationMs);
+                record.setRequestData(modifiedRequest);
+                record.setResponseData(holder.response != null ? holder.response : new byte[0]);
+                record.setTimestamp(new java.util.Date());
+                record.setUserSessionName(session.getName());
+                record.setJudgment(judgment.result);
+                record.setSimilarity(judgment.similarity);
+                record.setColor(judgment.color);
+
+                if (isFirst) {
+                    byte[] respData = (baselineResponse != null && baselineResponse.length > 0)
+                                      ? baselineResponse : null;
+                    record.setBaselineResponseData(respData);
+                }
+
+                if (holder.errorMessage != null) {
+                    record.setComment("请求失败: " + holder.errorMessage);
+                } else if (judgment.note != null && !judgment.note.isEmpty()) {
+                    record.setComment(judgment.note);
+                }
+
+                final RequestResponseRecord finalRecord = record;
+                final boolean finalIsFirst = hasStoredBaseline ? false : isFirst;
+                SwingUtilities.invokeLater(() -> {
+                    if (callback != null) {
+                        callback.onReplayComplete(finalRecord, finalIsFirst);
+                    }
+                });
+
+            } catch (Exception e) {
+                LogManager.getInstance().printError(
+                        "[!] 权限测试重放异常 (user=" + session.getName() + "): " + e.getMessage());
+
+                if (useAsBaselineFallback) {
+                    LogManager.getInstance().printError("[!] 兼容模式：基线用户请求异常，后续会话将跳过判决");
+                }
+
+                RequestResponseRecord errorRecord = createSkipRecord(
+                        originalRequest, httpService, requestId, session, "重放异常: " + e.getMessage());
+                errorRecord.setJudgment(JudgmentResult.ERROR.name());
+                errorRecord.setSimilarity(-1);
+
+                SwingUtilities.invokeLater(() -> {
+                    if (callback != null) {
+                        callback.onReplayComplete(errorRecord, isFirst);
+                    }
+                });
+            }
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            if (callback != null) {
+                callback.onAllComplete();
+            }
+        });
+
+        LogManager.getInstance().printOutput("[+] 权限测试重放完成: " + enabledSessions.size() + "个用户会话");
+    }
+
+    /**
+     * 判决结果封装（内部使用）
+     */
+    private static class ReplayJudgment {
+        private String result = JudgmentResult.PENDING.name();
+        private double similarity = -1;
+        private Color color = null;
+        private String note = "";
+        private boolean baselineUpdated = false;
+        private byte[] newBaselineResponse;
+        private int newBaselineStatusCode;
+        private String newBaselineContentType;
+    }
+
+    /**
+     * 根据响应结果评估判决（基线模式 / 比对模式）
+     */
+    private ReplayJudgment evaluateJudgment(SyncHttpSender.Result holder, boolean useAsBaselineFallback,
+                                             byte[] baselineResponse, int baselineStatusCode,
+                                             String baselineContentType, boolean baselineValid,
+                                             UserSession session, int requestId) {
+        ReplayJudgment judgment = new ReplayJudgment();
+
+        if (holder.response != null && holder.response.length > 0) {
+            if (useAsBaselineFallback) {
+                judgment.newBaselineResponse = HttpMessageParser.extractResponseBody(holder.response);
+                judgment.newBaselineStatusCode = holder.statusCode;
+                String baselineHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                judgment.newBaselineContentType = JudgmentEngine.extractContentType(baselineHeaders);
+                judgment.baselineUpdated = true;
+                judgment.result = JudgmentResult.NOT_ESCALATED.name();
+                judgment.note = "兼容模式：以此响应为基准";
+            } else {
+                String responseHeaders = HttpMessageParser.extractResponseHeaders(holder.response);
+                byte[] responseBodyOnly = HttpMessageParser.extractResponseBody(holder.response);
+                double threshold = 0.70;
+
+                // 判决前诊断日志
+                if (baselineResponse == null || baselineResponse.length == 0) {
+                    LogManager.getInstance().printError(String.format(
+                            "[!] 基准响应体为空(requestId=%d,用户=%s),相似度计算不可靠",
+                            requestId, session.getName()));
+                }
+                if (responseBodyOnly == null || responseBodyOnly.length == 0) {
+                    LogManager.getInstance().printError(String.format(
+                            "[!] 当前响应体为空(用户=%s),相似度计算不可靠", session.getName()));
+                }
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 判决前数据: baselineBodyLen=%d, currentBodyLen=%d, baselineStatusCode=%d, currentStatusCode=%d, threshold=%.2f",
+                        baselineResponse != null ? baselineResponse.length : -1,
+                        responseBodyOnly != null ? responseBodyOnly.length : -1,
+                        baselineStatusCode, holder.statusCode, threshold));
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 基准响应体前200字: %s", truncateForLog(baselineResponse, 200)));
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 当前响应体前200字: %s", truncateForLog(responseBodyOnly, 200)));
+
+                boolean allFieldsEmpty = session.getFieldValues().values().stream()
+                        .allMatch(v -> v == null || v.isEmpty());
+
+                JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
+                        holder.statusCode, responseHeaders, responseBodyOnly,
+                        baselineResponse, baselineStatusCode, baselineContentType, threshold,
+                        holder.durationMs, allFieldsEmpty);
+
+                judgment.result = outcome.result.name();
+                judgment.similarity = outcome.similarity;
+                judgment.color = outcome.color;
+                judgment.note = outcome.note;
+            }
+        } else {
+            judgment.result = JudgmentResult.ERROR.name();
+            if (useAsBaselineFallback) {
+                LogManager.getInstance().printError("[!] 兼容模式：基线用户请求失败，后续会话将跳过判决");
+            } else {
+                judgment.note = "请求无响应";
+            }
+        }
+
+        return judgment;
+    }
+
+    /**
+     * 诊断并记录会话的字段配置状态
+     */
+    private void logSessionFieldDiagnostics(UserSession session, List<FieldDefinition> locations) {
+        if (locations.isEmpty()) {
+            LogManager.getInstance().printError(String.format(
+                    "[!] 权限测试: 用户 '%s' (schemeId=%s) 没有关联的字段位置，"
+                    + "将使用原始请求字段发送，可能导致误判！",
+                    session.getName(), session.getSchemeId()));
+        } else {
+            int configuredCount = session.getFieldValues().size();
+            if (configuredCount == 0) {
+                LogManager.getInstance().printError(String.format(
+                        "[!] 字段替换: 用户 '%s' → %d 个字段位置 / 0 个已配置值！"
+                        + "所有字段将被从请求中删除，可能导致 401 认证失败！",
+                        session.getName(), locations.size()));
+            } else {
+                java.util.Set<Integer> valueIds = session.getFieldValues().keySet();
+                java.util.Set<Integer> locationIds = new java.util.HashSet<>();
+                for (FieldDefinition loc : locations) {
+                    locationIds.add(loc.getId());
+                }
+                long matchCount = valueIds.stream().filter(locationIds::contains).count();
+                if (matchCount == 0) {
+                    LogManager.getInstance().printError(String.format(
+                            "[!] 字段替换: 用户 '%s' → 字段值ID(%s)与位置ID(%s)完全不匹配！"
+                            + "请检查字段方案与用户配置是否对应",
+                            session.getName(), valueIds, locationIds));
+                } else {
+                    LogManager.getInstance().printOutput(String.format(
+                            "[*] 字段替换: 用户 '%s' → %d 个字段位置 / %d 个已配置值 (匹配%d个)",
+                            session.getName(), locations.size(), configuredCount, matchCount));
+                }
+            }
+        }
+    }
+
+    /**
+     * 创建跳过/错误记录的通用方法
+     */
+    private RequestResponseRecord createSkipRecord(byte[] originalRequest, HttpService httpService,
+                                                    int requestId, UserSession session, String comment) {
+        RequestResponseRecord record = new RequestResponseRecord();
+        record.setRequestId(requestId);
+        populateRecordFromRequest(record, originalRequest, httpService);
+        record.setStatusCode(0);
+        record.setResponseTime(0);
+        record.setRequestData(originalRequest);
+        record.setResponseData(new byte[0]);
+        record.setTimestamp(new java.util.Date());
+        record.setUserSessionName(session.getName());
+        record.setJudgment(JudgmentResult.ERROR.name());
+        record.setSimilarity(-1);
+        record.setComment(comment);
+        return record;
     }
 
     /**

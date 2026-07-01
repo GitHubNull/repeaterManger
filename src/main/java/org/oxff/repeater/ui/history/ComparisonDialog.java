@@ -131,13 +131,13 @@ public class ComparisonDialog extends JDialog {
         DiffPane sessDiffPane = new DiffPane();
 
         if (isHexMode) {
-            List<DiffEngine.DiffSegment> diff = DiffEngine.computeByteDiff(originalData, sessionData);
+            List<DiffSegment> diff = DiffEngine.computeByteDiff(originalData, sessionData);
             origDiffPane.renderHexDiffSegments(diff, true);
             sessDiffPane.renderHexDiffSegments(diff, false);
         } else {
             String origStr = bytesToString(originalData);
             String sessStr = bytesToString(sessionData);
-            List<DiffEngine.DiffLine> diff = DiffEngine.computeLineDiff(origStr, sessStr);
+            List<DiffLine> diff = DiffEngine.computeLineDiff(origStr, sessStr);
             origDiffPane.renderDiffLines(diff, true);
             sessDiffPane.renderDiffLines(diff, false);
         }
@@ -171,13 +171,13 @@ public class ComparisonDialog extends JDialog {
         } else {
             String origReqStr = bytesToString(originalRecord.getRequestData());
             String sessReqStr = bytesToString(sessionRecord.getRequestData());
-            List<DiffEngine.DiffLine> reqDiff = DiffEngine.computeLineDiff(origReqStr, sessReqStr);
+            List<DiffLine> reqDiff = DiffEngine.computeLineDiff(origReqStr, sessReqStr);
             origReqPane.renderDiffLines(reqDiff, true);
             sessReqPane.renderDiffLines(reqDiff, false);
 
             String origResStr = bytesToString(originalRecord.getResponseData());
             String sessResStr = bytesToString(sessionRecord.getResponseData());
-            List<DiffEngine.DiffLine> resDiff = DiffEngine.computeLineDiff(origResStr, sessResStr);
+            List<DiffLine> resDiff = DiffEngine.computeLineDiff(origResStr, sessResStr);
             origResPane.renderDiffLines(resDiff, true);
             sessResPane.renderDiffLines(resDiff, false);
         }

@@ -89,7 +89,7 @@ class CodeQualityStats:
         self.file_stats = []
         self.summary = {}
         # 确保tmp目录存在
-        self.output_dir = self.project_root / 'tmp' / 'quality_reports'
+        self.output_dir = self.project_root / 'tmp' / 'code_quality_stats_reports'
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # 时间戳
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
