@@ -327,10 +327,13 @@ public class ReplayEngine {
                     record.setColor(judgmentColor);
 
                     // 保存存储基线响应体到独立字段，用于报告生成时的数据分离
-                    if (hasStoredBaseline) {
-                        record.setBaselineResponseData(baselineResponse);
-                    } else if (isFirst) {
-                        record.setBaselineResponseData(baselineResponse);
+                    // 只有第一个会话记录携带此标记，报告生成器据此识别基线记录
+                    // 所有会话都设置会导致报告生成器将所有记录误判为基线（baselineRecord被反复覆盖）
+                    if (isFirst) {
+                        // 统一规范：空body等同于null，避免下游需要同时检查 null 和 length>0
+                        byte[] respData = (baselineResponse != null && baselineResponse.length > 0)
+                                          ? baselineResponse : null;
+                        record.setBaselineResponseData(respData);
                     }
 
                     if (holder.errorMessage != null) {

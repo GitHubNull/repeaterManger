@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v14）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '14')");
+        // 初始化元数据（v15 — 与下方 DDL 中 history 表包含 baseline_response_data 列保持一致）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '15')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -108,6 +108,7 @@ public class SchemaInitializer {
             "user_session_name TEXT DEFAULT NULL, " +
             "judgment TEXT DEFAULT NULL, " +
             "similarity REAL DEFAULT -1, " +
+            "baseline_response_data BLOB DEFAULT NULL, " +
             "FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL" +
             ")"
         );
@@ -137,7 +138,7 @@ public class SchemaInitializer {
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        LogManager.getInstance().printOutput("[+] v14 Schema 初始化完成");
+        LogManager.getInstance().printOutput("[+] v15 Schema 初始化完成");
     }
 
     /**

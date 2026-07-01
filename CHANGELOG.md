@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.2] - 2026-07-01
+
+### Fixed
+- ReplayEngine 基线响应数据写入逻辑修正：仅首个会话记录设置 `baselineResponseData`，修复报告生成器将所有记录误判为基线的缺陷
+- ReportGenerator 基准记录相似度字段修正：`-1` → 实际值，避免报告展示异常
+- ReportGenerator 基准响应数据空值检查增强：同时检查 `null` 和 `length>0`，防止空 body 被当作有效基线使用
+
+### Changed
+- SessionDirectory 时间戳统一：`SimpleDateFormat` → `java.time.DateTimeFormatter`，格式统一为 `yyyyMMdd_HHmmss`
+- 报告导出文件名新增时间戳后缀（`ReportExporter` / `LogPanel`），确保外部文件与容器内部文件名一致
+- Schema 升级至 v15
+- 报告模板（HTML/MD/PDF）基线区域中文描述增强：标题改为「原始基准 HTTP 数据 — 参考对照标准」，新增说明提示
+
 ## [2.32.1] - 2026-07-01
 
 ### Changed

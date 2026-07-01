@@ -3,8 +3,8 @@ package org.oxff.repeater.config;
 import org.oxff.repeater.logging.LogManager;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * 会话目录封装类 - 管理一次插件会话的所有数据文件
@@ -61,16 +61,28 @@ public class SessionDirectory {
         return new SessionDirectory(sessionDir);
     }
 
+    /** 导出文件/会话目录统一时间戳格式 */
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = 
+        DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+
+    /**
+     * 生成统一时间戳字符串
+     * 格式: YYYYMMDD_HHMMSS（精确到秒，无毫秒）
+     *
+     * @return 时间戳字符串，如 "20260701_153045"
+     */
+    public static String generateTimestamp() {
+        return LocalDateTime.now().format(TIMESTAMP_FORMATTER);
+    }
+
     /**
      * 生成会话目录名称
-     * 格式: repeater_manager_YYYY_MMDD_HHmm_ssSSS
-     * 与原数据库文件名格式一致（去掉 .sqlite3 后缀）
+     * 格式: repeater_manager_YYYYMMDD_HHMMSS
      *
      * @return 会话目录名称
      */
     public static String generateSessionDirectoryName() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy_MMdd_HHmm_ssSSS");
-        return "repeater_manager_" + sdf.format(new Date());
+        return "repeater_manager_" + generateTimestamp();
     }
 
     /**

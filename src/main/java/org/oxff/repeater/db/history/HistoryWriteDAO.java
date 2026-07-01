@@ -81,7 +81,8 @@ public class HistoryWriteDAO {
                 fallbackRecord.setResponseData(record.getResponseData());
                 fallbackRecord.setComment(record.getComment());
                 fallbackRecord.setColor(record.getColor());
-                // 补全越权测试相关字段，避免外键回退时丢失判决数据
+                // 以下逐字段拷贝主要属性，避免外键回退时丢失数据
+                // NOTE: 若 RequestResponseRecord 新增字段，需同步添加到此列表
                 fallbackRecord.setUserSessionName(record.getUserSessionName());
                 fallbackRecord.setJudgment(record.getJudgment());
                 fallbackRecord.setSimilarity(record.getSimilarity());
@@ -182,8 +183,8 @@ public class HistoryWriteDAO {
                 "status_code, response_length, response_time, timestamp, comment, color, " +
                 "req_header_hash, req_body_hash, req_body_storage, " +
                 "resp_header_hash, resp_body_hash, resp_body_storage, api_hash, " +
-                "user_session_name, judgment, similarity) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "user_session_name, judgment, similarity, baseline_response_data) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             if (requestId <= 0) {
@@ -248,6 +249,14 @@ public class HistoryWriteDAO {
             }
 
             pstmt.setDouble(22, record.getSimilarity());
+
+            // 基准响应体数据
+            byte[] baselineResponseData = record.getBaselineResponseData();
+            if (baselineResponseData != null && baselineResponseData.length > 0) {
+                pstmt.setBytes(23, baselineResponseData);
+            } else {
+                pstmt.setNull(23, java.sql.Types.BLOB);
+            }
 
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {

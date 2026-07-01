@@ -15,7 +15,7 @@ import java.sql.Statement;
 public class SchemaMigrator {
 
     /** 当前支持的最高 Schema 版本 */
-    public static final int LATEST_VERSION = 14;
+    public static final int LATEST_VERSION = 15;
 
     /**
      * 执行所有必要的数据库迁移
@@ -82,6 +82,11 @@ public class SchemaMigrator {
         // v13→v14 迁移：token_locations→field_definitions, token_schemes→schemes 等表重命名
         if (currentVersion < 14) {
             migrateV13ToV14(conn);
+        }
+
+        // v14→v15 迁移：history 表新增 baseline_response_data 列
+        if (currentVersion < 15) {
+            migrateV14ToV15(conn);
         }
     }
 
@@ -820,6 +825,34 @@ public class SchemaMigrator {
             stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '14')");
 
             LogManager.getInstance().printOutput("[+] v13→v14 迁移完成");
+        }
+    }
+
+    /**
+     * v14→v15 迁移：history 表新增 baseline_response_data 列
+     * 用于持久化基准用户原始响应体，确保越权测试报告中能正确展示基准报文数据
+     */
+    private static void migrateV14ToV15(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            LogManager.getInstance().printOutput("[*] 开始v14→v15迁移...");
+
+            // history 表新增 baseline_response_data 列
+            try {
+                stmt.execute("ALTER TABLE history ADD COLUMN baseline_response_data BLOB DEFAULT NULL");
+                LogManager.getInstance().printOutput("[+] history表添加baseline_response_data列成功");
+            } catch (SQLException e) {
+                // 列可能已存在（重复迁移），忽略
+                if (!e.getMessage().contains("duplicate column name")) {
+                    throw e;
+                }
+                LogManager.getInstance().printOutput("[*] baseline_response_data列已存在，跳过");
+            }
+
+            // 更新 schema 版本
+            stmt.execute("UPDATE schema_meta SET value = '15' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '15')");
+
+            LogManager.getInstance().printOutput("[+] v14→v15 迁移完成");
         }
     }
 

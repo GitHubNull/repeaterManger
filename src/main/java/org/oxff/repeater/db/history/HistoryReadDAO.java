@@ -231,7 +231,7 @@ public class HistoryReadDAO {
                 "h.comment, h.color, " +
                 "h.req_header_hash, h.req_body_hash, h.req_body_storage, " +
                 "h.resp_header_hash, h.resp_body_hash, h.resp_body_storage, " +
-                "h.user_session_name, h.judgment, h.similarity, " +
+                "h.user_session_name, h.judgment, h.similarity, h.baseline_response_data, " +
                 "sd.value as domain, sp.value as path, sq.value as query, sa.value as api " +
                 "FROM history h " +
                 "LEFT JOIN string_pool sd ON h.domain_hash = sd.hash " +
@@ -329,6 +329,13 @@ public class HistoryReadDAO {
                 }
             } catch (SQLException e) {
                 record.setSimilarity(-1);
+            }
+
+            try {
+                byte[] baselineRespData = rs.getBytes("baseline_response_data");
+                record.setBaselineResponseData(baselineRespData);
+            } catch (SQLException e) {
+                record.setBaselineResponseData(null);
             }
 
             return record;

@@ -3,6 +3,7 @@ package org.oxff.repeater.privilege.report;
 import org.oxff.repeater.db.RequestDAO;
 import org.oxff.repeater.db.history.HistoryReadDAO;
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.logging.LogManager;
 
 import java.util.*;
 
@@ -91,7 +92,7 @@ public abstract class ReportGenerator {
                         orinRecord.setRequestData(originalRequestData);
                         // 使用独立的基准响应数据（v2.18+），回退到完整响应兼容旧数据
                         byte[] baselineRespData = baselineRecord.getBaselineResponseData();
-                        if (baselineRespData != null) {
+                        if (baselineRespData != null && baselineRespData.length > 0) {
                             orinRecord.setResponseData(baselineRespData);
                         } else {
                             orinRecord.setResponseData(baselineRecord.getResponseData());
@@ -106,9 +107,15 @@ public abstract class ReportGenerator {
                         orinRecord.setQueryParameters((String) originalRequest.get("query"));
                         baselineData.setRecord(orinRecord);
                     } else {
+                        LogManager.getInstance().printOutput(
+                            "[*] 端点 " + section.getUrl() + " 的基准请求(requestId=" + requestId
+                            + ")未在requests表中找到，使用历史记录中的请求数据作为基准");
                         baselineData.setRecord(baselineRecord);
                     }
                 } else {
+                    LogManager.getInstance().printOutput(
+                        "[*] 端点 " + section.getUrl() + " 的基准记录无有效requestId(requestId=" + requestId
+                        + ")，使用历史记录中的请求数据作为基准");
                     baselineData.setRecord(baselineRecord);
                 }
                 section.setBaselineData(baselineData);
@@ -122,7 +129,7 @@ public abstract class ReportGenerator {
                 ReportData.SessionFinding baselineFinding = new ReportData.SessionFinding();
                 baselineFinding.setSessionName(baselineSessionName);
                 baselineFinding.setJudgment(baselineRecord.getJudgment());
-                baselineFinding.setSimilarity(-1);
+                baselineFinding.setSimilarity(baselineRecord.getSimilarity());
                 baselineFinding.setRecord(baselineRecord);
                 baselineFinding.setBaseline(false);
                 baselineFinding.setCurlCommand(CurlBuilder.build(baselineRecord));

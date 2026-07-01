@@ -56,6 +56,16 @@
     border-bottom: 1px dashed #90CAF9;
   }
 
+  .baseline-note {
+    font-size: 12px;
+    color: #546E7A;
+    background: #E3F2FD;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border-left: 3px solid #1565C0;
+  }
+
   .meta-info { font-size: 12px; color: #888; margin-bottom: 6px; }
   .meta-info span { margin-right: 16px; }
   pre { background: #263238; color: #eeffff; padding: 12px 16px; border-radius: 4px; overflow-x: auto;

@@ -245,7 +245,8 @@ public class PdfReportGenerator extends ReportGenerator {
      * 渲染基准报文区域（orin http data，每个端点顶部展示一次）
      */
     private void buildBaselineSection(InnerWriter writer, ReportData.BaselineData baseline) throws Exception {
-        writer.drawTitle("原始 HTTP 数据  |  基线", 10);
+        writer.drawTitle("原始基准 HTTP 数据（参考对照标准）  |  基线", 10);
+        writer.drawText("以下为基准用户的原始请求与响应，用于与各会话重放结果对比分析，判断是否存在越权。", 8, MARGIN + 10);
 
         RequestResponseRecord rec = baseline.getRecord();
 

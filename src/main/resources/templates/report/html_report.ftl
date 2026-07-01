@@ -61,10 +61,11 @@
   <#if ep.baselineData??>
   <div class="session-block baseline-block">
     <div class="session-header baseline-header">
-      <span>原始 HTTP 数据</span>
+      <span>原始基准 HTTP 数据 — 参考对照标准</span>
       <span class="badge baseline">基线</span>
     </div>
     <div class="session-content">
+      <p class="baseline-note">基准报文是参考用户的原始请求与响应，用于与各会话重放结果对比分析，判断是否存在越权。</p>
       <div class="section-title">请求</div>
       ${ep.baselineData.requestHtml?no_esc}
       <div class="section-title">响应 — HTTP ${ep.baselineData.record.statusCode} (${ep.baselineData.record.responseLength} bytes, ${ep.baselineData.record.responseTime}ms)</div>

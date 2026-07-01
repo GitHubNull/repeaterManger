@@ -1,5 +1,6 @@
 package org.oxff.repeater.privilege.report;
 
+import org.oxff.repeater.config.SessionDirectory;
 import org.oxff.repeater.logging.LogManager;
 
 import javax.swing.*;
@@ -48,10 +49,13 @@ public class ReportExporter {
                 return;
         }
 
+        // 预生成统一时间戳，确保外部文件名和容器内部文件名一致
+        final String exportTimestamp = SessionDirectory.generateTimestamp();
+
         // 文件保存对话框
         boolean useContainer = encryptionMode != ReportContainerWriter.EncryptionMode.PLAIN;
         String outputExt = useContainer ? "ermr" : ext;
-        String defaultFilename = "privilege_test_report." + outputExt;
+        String defaultFilename = "privilege_test_report_" + exportTimestamp + "." + outputExt;
 
         javax.swing.filechooser.FileNameExtensionFilter saveFilter;
         if (useContainer) {
@@ -129,7 +133,7 @@ public class ReportExporter {
 
                 // 根据加密模式输出
                 if (useContainer) {
-                    String originalFilename = "privilege_test_report." + ext;
+                    String originalFilename = "privilege_test_report_" + exportTimestamp + "." + ext;
                     ReportContainerWriter containerWriter = new ReportContainerWriter();
                     boolean success = containerWriter.write(finalFile, reportBytes, originalFilename,
                             encryptionMode, parent);

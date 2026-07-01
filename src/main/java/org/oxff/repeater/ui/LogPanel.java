@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.config.SessionDirectory;
 import org.oxff.repeater.logging.LogEntry;
 import org.oxff.repeater.logging.LogLevel;
 
@@ -589,7 +590,7 @@ public class LogPanel extends JPanel {
     private void exportLog() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
             org.oxff.repeater.utils.FileChooserHelper.OP_LOG_EXPORT, "导出日志", this,
-            new File("repeater_manager_log.txt"));
+            new File("repeater_manager_log_" + SessionDirectory.generateTimestamp() + ".txt"));
 
         if (selectedFile != null) {
             try (BufferedWriter bw = new BufferedWriter(
