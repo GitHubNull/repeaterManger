@@ -334,7 +334,10 @@ public class PdfReportGenerator extends ReportGenerator {
         if (binary) {
             return "[二进制数据 - " + body.length + " 字节]";
         }
+        // 使用 UTF-8 解码，对无法解码的字节使用替换字符
         String str = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+        // 移除 Unicode 替换字符 (U+FFFD)，这些是二进制数据被误解码的产物
+        str = str.replace("\uFFFD", "");
         str = truncateBase64InText(str);
         if (str.length() > PDF_BODY_LIMIT) {
             str = str.substring(0, PDF_BODY_LIMIT) + "\n... [PDF 中已截断 - 完整数据请查看 HTML 报告]";
@@ -363,17 +366,58 @@ public class PdfReportGenerator extends ReportGenerator {
         return sb.toString();
     }
 
+    /**
+     * 检测 body 是否为二进制数据
+     * 采用多层检测策略：魔数检测（头部）+ 非打印字符比例检测
+     * 阈值 20%，平衡检测灵敏度与 UTF-8 文本容错性
+     */
     private boolean isBinaryBody(byte[] data) {
         if (data == null || data.length == 0) return false;
+
+        // 第1层：魔数检测（常见二进制格式，仅检查数据头部）
+        if (hasBinaryMagicBytes(data)) return true;
+
+        // 第2层：非打印字符比例检测（无魔数命中时使用较高阈值避免误判）
         int nonPrintable = 0;
         int checkLen = Math.min(data.length, 1024);
         for (int i = 0; i < checkLen; i++) {
             byte b = data[i];
+            // 允许 \t(0x09) \n(0x0A) \r(0x0D)，其他 <0x20 的控制字符和 DEL(0x7F) 为不可打印
             if (b < 0x09 || (b > 0x0D && b < 0x20) || b == 0x7F) {
                 nonPrintable++;
             }
         }
-        return (double) nonPrintable / checkLen > 0.3;
+        // 阈值 20%：无魔数命中时采用折中阈值，避免 UTF-8 文本误判
+        return (double) nonPrintable / checkLen > 0.2;
+    }
+
+    /**
+     * 检测数据开头是否匹配常见二进制文件魔数
+     * 仅检查数据头部，因为真正的二进制文件魔数始终位于文件起始位置
+     */
+    private boolean hasBinaryMagicBytes(byte[] data) {
+        if (data == null || data.length < 4) return false;
+
+        // PDF: %PDF
+        if (data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46) return true;
+        // PNG: \x89PNG
+        if (data[0] == (byte) 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) return true;
+        // GIF: GIF8
+        if (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38) return true;
+        // ZIP: PK\x03\x04
+        if (data[0] == 0x50 && data[1] == 0x4B && data[2] == 0x03 && data[3] == 0x04) return true;
+        // BMP: BM
+        if (data[0] == 0x42 && data[1] == 0x4D) return true;
+        // GZIP: \x1F\x8B
+        if (data[0] == 0x1F && data[1] == (byte) 0x8B) return true;
+        // JPEG: \xFF\xD8\xFF (只需 3 字节)
+        if (data.length >= 3 && data[0] == (byte) 0xFF && data[1] == (byte) 0xD8 && data[2] == (byte) 0xFF) return true;
+        // WEBP: RIFF....WEBP (需要 12 字节)
+        if (data.length >= 12
+                && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46
+                && data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50) return true;
+
+        return false;
     }
 
     private static String trunc(String s, int max) {

@@ -9,6 +9,8 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.oxff.repeater.logging.LogManager;
+
 /**
  * PDF 内容写入器 — 从 PdfReportGenerator 提取出的 PDF 绘制引擎。
  * 负责页面管理、文本绘制、表格绘制、代码块绘制等底层 PDF 操作。
@@ -56,7 +58,7 @@ class PdfReportWriter {
         cs.beginText();
         cs.setFont(boldFont, fontSize);
         cs.newLineAtOffset(margin, y);
-        cs.showText(filter(text));
+        showTextSafe(filter(text));
         cs.endText();
         y -= fontSize * 1.5f + 12;
     }
@@ -66,7 +68,7 @@ class PdfReportWriter {
         cs.beginText();
         cs.setFont(boldFont, 9);
         cs.newLineAtOffset(margin + 10, y);
-        cs.showText(filter(text));
+        showTextSafe(filter(text));
         cs.endText();
         y -= 22;
     }
@@ -80,7 +82,7 @@ class PdfReportWriter {
         cs.beginText();
         cs.setFont(regularFont, fontSize);
         cs.newLineAtOffset(x, y);
-        cs.showText(filter(text));
+        showTextSafe(filter(text));
         cs.endText();
         y -= fontSize + 12;
     }
@@ -155,7 +157,7 @@ class PdfReportWriter {
                 cs.beginText();
                 cs.setFont(monoFont, codeFontSize);
                 cs.newLineAtOffset(codeX, y);
-                cs.showText(line);
+                showTextSafe(line);
                 cs.endText();
             }
 
@@ -181,7 +183,7 @@ class PdfReportWriter {
             cs.beginText();
             cs.setFont(boldFont, 9);
             cs.newLineAtOffset(colX, y - headerHeight + 5);
-            cs.showText(filter(headers[i]));
+            showTextSafe(filter(headers[i]));
             cs.endText();
             colX += tableWidth * colWidths[i];
         }
@@ -202,7 +204,7 @@ class PdfReportWriter {
                 cs.beginText();
                 cs.setFont(regularFont, 8);
                 cs.newLineAtOffset(colX, y - rowHeight + 4);
-                cs.showText(filter(row[i] != null ? row[i] : ""));
+                showTextSafe(filter(row[i] != null ? row[i] : ""));
                 cs.endText();
                 colX += tableWidth * colWidths[i];
             }
@@ -210,6 +212,58 @@ class PdfReportWriter {
             rowIdx++;
         }
         y -= 12;
+    }
+
+    /**
+     * 安全的 showText 调用，对每个字符进行字形可用性检查，
+     * 过滤掉当前字体中无 glyph 的字符，避免 PDFBox 抛出
+     * "could not find the glyphId for the character" 异常导致整个 PDF 生成失败。
+     *
+     * 采用二级防御策略：
+     * 1. 先用 isRenderableChar 预过滤（在 filter/filterLine 中完成）
+     * 2. 若 showText 仍失败，回退到 ASCII-only 安全渲染
+     */
+    private void showTextSafe(String text) throws Exception {
+        if (text == null || text.isEmpty()) return;
+
+        try {
+            cs.showText(text);
+        } catch (Exception e) {
+            LogManager.getInstance().debug("PDF showText 降级，使用 ASCII 安全渲染: "
+                    + text.substring(0, Math.min(20, text.length()))
+                    + "..., 原因: " + e.getMessage());
+            // 异常降级：将所有非 ASCII 字符替换为 ?，只保留可安全渲染的 ASCII
+            String safeText = toAsciiSafe(text);
+            if (!safeText.isEmpty()) {
+                try {
+                    cs.showText(safeText);
+                } catch (Exception ignored) {
+                    LogManager.getInstance().debug("PDF showText ASCII 降级也失败: "
+                            + text.substring(0, Math.min(20, text.length())) + "...");
+                }
+            }
+        }
+    }
+
+    /**
+     * 将文本降级为 ASCII 安全形式：
+     * 保留 0x20-0x7E 可打印 ASCII，连续非 ASCII 字符压缩为单个 '?'
+     */
+    private String toAsciiSafe(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder(text.length());
+        boolean lastWasReplacement = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c >= 0x20 && c <= 0x7E) {
+                sb.append(c);
+                lastWasReplacement = false;
+            } else if (!lastWasReplacement) {
+                sb.append('?');
+                lastWasReplacement = true;
+            }
+        }
+        return sb.toString();
     }
 
     private void ensureSpace(float needed) throws Exception {
@@ -222,24 +276,54 @@ class PdfReportWriter {
         }
     }
 
+    /**
+     * 检查字符是否可在当前 PDF 字体中渲染
+     * 基于常见 CJK 字体的字符覆盖范围进行过滤，
+     * 排除私用区、代理对、C0/C1 控制字符等无 glyph 的字符
+     */
+    private boolean isRenderableChar(char c) {
+        // C0 控制字符 (0x00-0x1F): 均不可直接渲染，由 filter/filterLine 单独处理
+        if (c < 0x20) {
+            return false;
+        }
+        // DEL (0x7F)
+        if (c == 0x7F) return false;
+        // C1 控制字符 (0x80-0x9F)
+        if (c >= 0x80 && c <= 0x9F) return false;
+        // 代理对区域 (0xD800-0xDFFF) — 不应出现在合法 UTF-16 中
+        if (c >= 0xD800 && c <= 0xDFFF) return false;
+        // 私用区 (0xE000-0xF8FF) — 常见 CJK 字体不覆盖
+        if (c >= 0xE000 && c <= 0xF8FF) return false;
+        // Unicode 替换字符 (0xFFFD) — 解码错误的标记
+        if (c == 0xFFFD) return false;
+        // Unicode 特殊区域 (0xFFF0-0xFFFF)
+        if (c >= 0xFFF0 && c <= 0xFFFF) return false;
+
+        // CJK 字体主要覆盖:
+        // - Basic Latin (0x0020-0x007E)
+        // - Latin-1 Supplement (0x00A0-0x00FF)
+        // - Latin Extended-A (0x0100-0x017F)
+        // - CJK 相关 (0x2000-0x206F, 0x3000-0x303F, 0x4E00-0x9FFF 等)
+        // 非 CJK 模式下仅保留 Latin-1
+        if (!cjkEnabled && c > 0xFF) {
+            return false;
+        }
+
+        return true;
+    }
+
     String filter(String s) {
         if (s == null) return "";
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            switch (c) {
-                case '\n': sb.append(' '); break;
-                case '\r': break;
-                case '\t': sb.append("    "); break;
-                case '\f': break;
-                case '\u0000': break;
-                default:
-                    if (cjkEnabled || c <= 0xFF) {
-                        sb.append(c);
-                    } else {
-                        sb.append('?');
-                    }
-            }
+            // 控制字符特殊处理（在 isRenderableChar 之前，避免死代码）
+            if (c == '\r') continue;           // \r 会导致 PDF showText 异常，必须丢弃
+            if (c == '\n') { sb.append(' '); continue; }
+            if (c == '\t') { sb.append("    "); continue; }
+            // 过滤不可渲染字符
+            if (!isRenderableChar(c)) continue;
+            sb.append(c);
         }
         return sb.toString();
     }
@@ -249,18 +333,12 @@ class PdfReportWriter {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            switch (c) {
-                case '\r': break;
-                case '\t': sb.append("    "); break;
-                case '\f': break;
-                case '\u0000': break;
-                default:
-                    if (cjkEnabled || c <= 0xFF) {
-                        sb.append(c);
-                    } else {
-                        sb.append('?');
-                    }
-            }
+            // 控制字符特殊处理（在 isRenderableChar 之前，避免死代码）
+            if (c == '\r') continue;           // \r 会导致 PDF showText 异常，必须丢弃
+            if (c == '\t') { sb.append("    "); continue; }
+            // 过滤不可渲染字符
+            if (!isRenderableChar(c)) continue;
+            sb.append(c);
         }
         return sb.toString();
     }

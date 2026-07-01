@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.3] - 2026-07-01
+
+### Fixed
+- PDF 报告二进制检测增强：新增魔数检测层（PDF/PNG/GIF/ZIP/GZIP/JPEG/WEBP/BMP），非打印字符阈值从30%降至20%，减少 UTF-8 文本误判
+- PDF 报告字形渲染安全防护：新增 showTextSafe 降级方案，showText 失败时自动回退 ASCII 安全渲染
+- PDF 报告 UTF-8 解码后移除 U+FFFD 替换字符，避免残余乱码
+- PDF 报告 filter/filterLine 重构，使用 isRenderableChar 统一字符过滤逻辑，优化 CJK 字体覆盖
+
 ## [2.32.2] - 2026-07-01
 
 ### Fixed
