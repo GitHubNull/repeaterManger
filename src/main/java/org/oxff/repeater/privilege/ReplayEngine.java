@@ -346,7 +346,7 @@ public class ReplayEngine {
                 boolean allFieldsEmpty = session.getFieldValues().values().stream()
                         .allMatch(v -> v == null || v.isEmpty());
 
-                JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
+                JudgmentOutcome outcome = JudgmentEngine.judge(
                         holder.statusCode, responseHeaders, responseBodyOnly,
                         baselineResponse, baselineStatusCode, baselineContentType, threshold,
                         holder.durationMs, allFieldsEmpty);

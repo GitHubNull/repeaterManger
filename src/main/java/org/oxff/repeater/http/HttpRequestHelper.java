@@ -329,4 +329,78 @@ public class HttpRequestHelper {
         }
         return result;
     }
+
+    /**
+     * URL 组件解析结果，包含 protocol/host/path/query。
+     * 统一 RequestDispatchHandler 等调用方中重复的 URL 解析逻辑。
+     */
+    public static class UrlParts {
+        public final String protocol;
+        public final String host;
+        public final String path;
+        public final String query;
+
+        public UrlParts(String protocol, String host, String path, String query) {
+            this.protocol = protocol;
+            this.host = host;
+            this.path = path;
+            this.query = query;
+        }
+    }
+
+    /**
+     * 从 URL 字符串解析结构化组件，支持主解析和备用解析两条路径。
+     * <p>
+     * 主路径：尝试用 java.net.URL 解析 primaryUrl，提取 protocol/host/path/query，
+     *         并调用 resolveDomainWithPort 处理非标准端口。
+     * 备用路径：当主路径失败时，对 fallbackUrl 进行纯字符串解析。
+     *
+     * @param primaryUrl  优先使用的 URL 字符串（通常来自 requestInfo.url()）
+     * @param fallbackUrl 备用 URL 字符串（通常来自 extractUrlFromRequest()）
+     * @param httpService HTTP 服务信息，用于端口解析（可为 null）
+     * @return 解析后的 UrlParts 对象
+     */
+    public static UrlParts parseUrlComponents(String primaryUrl, String fallbackUrl, HttpService httpService) {
+        String protocol = "http";
+        String host = "";
+        String path = "/";
+        String query = "";
+
+        try {
+            URL parsedUrl = new URL(primaryUrl);
+            protocol = parsedUrl.getProtocol();
+            host = resolveDomainWithPort(parsedUrl, httpService);
+            path = parsedUrl.getPath();
+            query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
+        } catch (Exception e) {
+            LogManager.getInstance().printOutput("[*] 使用备选方法解析URL组件: " + fallbackUrl);
+            String workingUrl = fallbackUrl;
+
+            if (workingUrl.startsWith("https://")) {
+                protocol = "https";
+                workingUrl = workingUrl.substring(8);
+            } else if (workingUrl.startsWith("http://")) {
+                workingUrl = workingUrl.substring(7);
+            }
+
+            int pathIndex = workingUrl.indexOf('/');
+            if (pathIndex > 0) {
+                host = workingUrl.substring(0, pathIndex);
+                workingUrl = workingUrl.substring(pathIndex);
+            } else {
+                host = workingUrl;
+                workingUrl = "/";
+            }
+
+            int queryIndex = workingUrl.indexOf('?');
+            if (queryIndex > 0) {
+                path = workingUrl.substring(0, queryIndex);
+                query = workingUrl.substring(queryIndex + 1);
+            } else {
+                path = workingUrl;
+            }
+        }
+
+        return new UrlParts(protocol, host, path, query);
+    }
 }

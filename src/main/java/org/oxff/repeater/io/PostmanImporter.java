@@ -716,31 +716,4 @@ public class PostmanImporter {
             return s;
         }
     }
-
-    private static class UrlComponents {
-        String protocol;
-        String domain;
-        String path;
-        String query;
-    }
-
-    private static class PostmanHeader {
-        String key;
-        String value;
-
-        PostmanHeader(String key, String value) {
-            this.key = key;
-            this.value = value;
-        }
-    }
-
-    private static class BodyResult {
-        byte[] bodyBytes;
-        String contentType;
-    }
-
-    private static class DescriptionParse {
-        String comment = "";
-        String color = "";
-    }
 }

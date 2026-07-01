@@ -395,15 +395,7 @@ public class RequestPanel extends JPanel {
             // 注意：Montoya API headers() 的第一个元素是请求行，不能使用 "name: value" 格式
             // 请求行使用 name + " " + value 格式（如 "GET /path HTTP/1.1"）
             // 其他头部使用 name + ": " + value 格式（如 "Host: example.com"）
-            List<String> headers = new ArrayList<>();
-            List<burp.api.montoya.http.message.HttpHeader> rawHeaders = requestInfo.headers();
-            for (int i = 0; i < rawHeaders.size(); i++) {
-                if (i == 0) {
-                    headers.add(rawHeaders.get(i).name() + " " + rawHeaders.get(i).value());
-                } else {
-                    headers.add(rawHeaders.get(i).name() + ": " + rawHeaders.get(i).value());
-                }
-            }
+            List<String> headers = headersToList(requestInfo);
             
             if (headers.isEmpty()) {
                 LogManager.getInstance().printError("[!] 请求头为空，使用默认值");
@@ -531,16 +523,7 @@ public class RequestPanel extends JPanel {
 
                     // 从Montoya API获取headers列表（第一个元素是请求行，其余是name:value格式的头）
                     // 重要：请求行不能使用 "name: value" 格式拼接，必须原样保留
-                    List<String> headers = new ArrayList<>();
-                    List<burp.api.montoya.http.message.HttpHeader> rawHeaders = reqInfo.headers();
-                    for (int i = 0; i < rawHeaders.size(); i++) {
-                        if (i == 0) {
-                            // 第一个header是请求行（如 "GET /path HTTP/1.1"），直接拼接 name + " " + value
-                            headers.add(rawHeaders.get(i).name() + " " + rawHeaders.get(i).value());
-                        } else {
-                            headers.add(rawHeaders.get(i).name() + ": " + rawHeaders.get(i).value());
-                        }
-                    }
+                    List<String> headers = headersToList(reqInfo);
                     
                     // 更新Host头
                     String newHost = hostField.getText().trim();
@@ -628,6 +611,23 @@ public class RequestPanel extends JPanel {
             LogManager.getInstance().printError("[!] 获取请求时出错: " + e.getMessage());
             return RequestDataHelper.createBasicRequest().getBytes();
         }
+    }
+
+    /**
+     * 将 Montoya HttpRequest 的 headers 转换为 List&lt;String&gt; 格式。
+     * 请求行用空格分隔 name 和 value，其余头用 ": " 分隔。
+     */
+    private static List<String> headersToList(burp.api.montoya.http.message.requests.HttpRequest requestInfo) {
+        List<String> headers = new ArrayList<>();
+        List<burp.api.montoya.http.message.HttpHeader> rawHeaders = requestInfo.headers();
+        for (int i = 0; i < rawHeaders.size(); i++) {
+            if (i == 0) {
+                headers.add(rawHeaders.get(i).name() + " " + rawHeaders.get(i).value());
+            } else {
+                headers.add(rawHeaders.get(i).name() + ": " + rawHeaders.get(i).value());
+            }
+        }
+        return headers;
     }
 
     /**

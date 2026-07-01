@@ -1,6 +1,7 @@
 package org.oxff.repeater.ui.privilege;
 
 import org.oxff.repeater.logging.LogManager;
+import org.oxff.repeater.privilege.ClipboardFormat;
 import org.oxff.repeater.privilege.FetchRequestParser;
 import org.oxff.repeater.privilege.SchemeMatch;
 import org.oxff.repeater.privilege.SessionManager;
@@ -68,17 +69,17 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
         publish("正在解析HTTP报文...");
 
         // 2. 检测格式并转换
-        FetchRequestParser.ClipboardFormat format = FetchRequestParser.detectFormat(clipboardText);
+        ClipboardFormat format = FetchRequestParser.detectFormat(clipboardText);
         byte[] httpMessage;
-        if (format == FetchRequestParser.ClipboardFormat.FETCH_BROWSER
-                || format == FetchRequestParser.ClipboardFormat.FETCH_NODEJS) {
+        if (format == ClipboardFormat.FETCH_BROWSER
+                || format == ClipboardFormat.FETCH_NODEJS) {
             publish("正在转换 fetch 格式...");
             try {
                 httpMessage = FetchRequestParser.convertToRawHttp(clipboardText);
             } catch (IllegalArgumentException e) {
                 return Result.error("fetch 格式转换失败: " + e.getMessage());
             }
-        } else if (format == FetchRequestParser.ClipboardFormat.RAW_HTTP) {
+        } else if (format == ClipboardFormat.RAW_HTTP) {
             httpMessage = clipboardText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         } else {
             return Result.error("无法识别剪贴板内容格式，请复制原始HTTP报文或Chrome fetch格式");

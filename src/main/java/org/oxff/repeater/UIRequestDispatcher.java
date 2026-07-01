@@ -46,7 +46,7 @@ public class UIRequestDispatcher {
     public void setRepeaterUIRequest(HttpRequestResponse requestResponse) {
         if (repeaterUI != null) {
             SwingUtilities.invokeLater(() -> {
-                repeaterUI.setRequest(requestResponse);
+                repeaterUI.getRequestLoader().setRequest(requestResponse);
                 logManager.success("[+] 已将请求发送到 Repeater Manager，请切换到相应标签页查看");
             });
         }
@@ -58,7 +58,7 @@ public class UIRequestDispatcher {
     public void setPrivilegeTestRequest(HttpRequestResponse requestResponse) {
         if (repeaterUI != null) {
             SwingUtilities.invokeLater(() -> {
-                repeaterUI.setPrivilegeTestRequest(requestResponse);
+                repeaterUI.getRequestLoader().setPrivilegeTestRequest(requestResponse);
                 logManager.success("[+] 已将请求发送到权限测试，重放结果将在请求管理标签页中显示");
             });
         }
@@ -72,7 +72,7 @@ public class UIRequestDispatcher {
     public void setRepeaterUIRequests(List<HttpRequestResponse> requestResponses) {
         if (repeaterUI != null && requestResponses != null && !requestResponses.isEmpty()) {
             SwingUtilities.invokeLater(() -> {
-                repeaterUI.setRequests(requestResponses);
+                repeaterUI.getRequestLoader().setRequests(requestResponses);
                 logManager.success(String.format("[+] 已将 %d 条请求发送到 Repeater Manager，请切换到相应标签页查看",
                         requestResponses.size()));
             });
@@ -85,7 +85,7 @@ public class UIRequestDispatcher {
     public void setPrivilegeTestRequests(List<HttpRequestResponse> requestResponses) {
         if (repeaterUI != null && requestResponses != null && !requestResponses.isEmpty()) {
             SwingUtilities.invokeLater(() -> {
-                repeaterUI.setPrivilegeTestRequests(requestResponses);
+                repeaterUI.getRequestLoader().setPrivilegeTestRequests(requestResponses);
                 logManager.success(String.format("[+] 已将 %d 条请求发送到权限测试，重放结果将在请求管理标签页中显示",
                         requestResponses.size()));
             });

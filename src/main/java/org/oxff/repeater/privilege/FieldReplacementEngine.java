@@ -131,12 +131,7 @@ public class FieldReplacementEngine {
 
         // 替换URL参数中的字段值（在header替换之前，因为URL参数在请求行中）
         for (FieldDefinition field : urlFields) {
-            String value = session.getFieldValue(field.getId());
-            // null表示该字段未配置值（如未授权用户），视为空字符串以删除对应字段
-            if (value == null) {
-                value = "";
-                nullValueFields.add(field.getType().getDisplayName() + "[" + field.getExpression() + "]");
-            }
+            String value = getFieldValueOrTrackNull(session, field, nullValueFields);
             value = sanitizeNewlines(value, field.getExpression());
             try {
                 headerStr = replaceUrlParam(headerStr, field.getExpression(), value);
@@ -147,12 +142,7 @@ public class FieldReplacementEngine {
 
         // 替换Header中的字段值
         for (FieldDefinition field : headerFields) {
-            String value = session.getFieldValue(field.getId());
-            // null表示该字段未配置值（如未授权用户），视为空字符串以删除对应header
-            if (value == null) {
-                value = "";
-                nullValueFields.add(field.getType().getDisplayName() + "[" + field.getExpression() + "]");
-            }
+            String value = getFieldValueOrTrackNull(session, field, nullValueFields);
             // 安全过滤：将换行符替换为空格，防止HTTP header注入
             value = sanitizeNewlines(value, field.getExpression());
             try {
@@ -727,6 +717,18 @@ public class FieldReplacementEngine {
     }
 
     // ==================== 工具方法 ====================
+
+    /**
+     * 获取字段值，若为 null 则记录到诊断列表并返回空字符串
+     */
+    private static String getFieldValueOrTrackNull(UserSession session, FieldDefinition field, List<String> nullValueFields) {
+        String value = session.getFieldValue(field.getId());
+        if (value == null) {
+            value = "";
+            nullValueFields.add(field.getType().getDisplayName() + "[" + field.getExpression() + "]");
+        }
+        return value;
+    }
 
     /**
      * 安全过滤字段值中的换行符

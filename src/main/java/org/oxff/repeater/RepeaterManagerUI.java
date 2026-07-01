@@ -3,7 +3,6 @@ package org.oxff.repeater;
 import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
-import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.http.HttpService;
 import org.oxff.repeater.http.RequestManager;
@@ -17,8 +16,6 @@ import org.oxff.repeater.ui.config.ConfigPanel;
 import org.oxff.repeater.ui.DataPanel;
 import org.oxff.repeater.ui.LogPanel;
 import org.oxff.repeater.ui.StatusPanel;
-import org.oxff.repeater.ui.SimilarityCalculatorDialog;
-import org.oxff.repeater.ui.SwitchButton;
 import org.oxff.repeater.ui.layout.LayoutManager;
 import org.oxff.repeater.ui.layout.LayoutManager.LayoutType;
 import org.oxff.repeater.ui.privilege.PrivilegeTestPanel;
@@ -27,14 +24,10 @@ import org.oxff.repeater.ui.AboutPanel;
 import org.oxff.repeater.db.history.HistoryReadDAO;
 import org.oxff.repeater.db.history.HistoryWriteDAO;
 import org.oxff.repeater.db.RequestDAO;
-import org.oxff.repeater.db.DatabaseManager;
-import org.oxff.repeater.service.GarbageCollectorService;
-import org.oxff.repeater.privilege.ReplayEngine;
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.net.URL;
 
 /**
  * Repeater Manager 主界面 - 组装和协调所有组件
@@ -68,26 +61,17 @@ public class RepeaterManagerUI {
     // 布局管理器
     private final LayoutManager layoutManager;
 
+    // 工具栏
+    private final EditorToolBar editorToolBar;
+
     // 功能组件
     private final RequestManager requestManager;
 
     // 请求调度处理器
     private final RequestDispatchHandler dispatchHandler;
 
-    // 模式切换按钮
-    private SwitchButton modeToggleButton;
-    private JLabel normalModeLabel;
-    private JLabel privilegeModeLabel;
-
-    // 判决调试切换按钮
-    private SwitchButton debugToggleButton;
-    private JLabel debugNormalLabel;
-    private JLabel debugModeLabel;
-
-    // 自动GC切换按钮
-    private SwitchButton gcToggleButton;
-    private JLabel gcOffLabel;
-    private JLabel gcOnLabel;
+    // 请求加载器
+    private final RequestLoader requestLoader;
 
     /**
      * 创建 Repeater Manager 界面
@@ -138,36 +122,37 @@ public class RepeaterManagerUI {
             SwingUtilities.invokeLater(() -> statusPanel.setModeIndicator(mode));
         });
 
-        // 注册模式变更监听器：同步切换按钮与标签状态
-        dispatchHandler.addModeChangeListener(mode -> {
-            SwingUtilities.invokeLater(() -> {
-                if (modeToggleButton != null) {
-                    modeToggleButton.setSelected(mode);
-                }
-                if (normalModeLabel != null && privilegeModeLabel != null) {
-                    if (mode) {
-                        normalModeLabel.setFont(normalModeLabel.getFont().deriveFont(Font.PLAIN));
-                        normalModeLabel.setForeground(UIManager.getColor("Label.foreground"));
-                        privilegeModeLabel.setFont(privilegeModeLabel.getFont().deriveFont(Font.BOLD));
-                        privilegeModeLabel.setForeground(new Color(200, 80, 0));
-                    } else {
-                        normalModeLabel.setFont(normalModeLabel.getFont().deriveFont(Font.BOLD));
-                        normalModeLabel.setForeground(new Color(0, 0, 0));
-                        privilegeModeLabel.setFont(privilegeModeLabel.getFont().deriveFont(Font.PLAIN));
-                        privilegeModeLabel.setForeground(UIManager.getColor("Label.foreground"));
-                    }
-                }
-            });
-        });
-
         // 设置发送请求按钮动作
         requestPanel.setSendButtonListener(e -> dispatchHandler.sendRequest());
 
         // 设置历史记录双击回调
         historyPanel.setOnSelectRecord(dispatchHandler::loadHistoryRecord);
 
-        // 创建编辑区控制面板
-        JPanel editorControlPanel = createEditorControlPanel();
+        // 创建编辑区工具栏（必须在模式变更监听器之前初始化，因为监听器引用其组件）
+        editorToolBar = new EditorToolBar(requestPanel, responsePanel, statusPanel, dispatchHandler, layoutManager, mainPanel, this::createNewRequest);
+        JPanel editorControlPanel = editorToolBar.build();
+
+        // 注册模式变更监听器：同步切换按钮与标签状态
+        dispatchHandler.addModeChangeListener(mode -> {
+            SwingUtilities.invokeLater(() -> {
+                if (editorToolBar.modeToggleButton != null) {
+                    editorToolBar.modeToggleButton.setSelected(mode);
+                }
+                if (editorToolBar.normalModeLabel != null && editorToolBar.privilegeModeLabel != null) {
+                    if (mode) {
+                        editorToolBar.normalModeLabel.setFont(editorToolBar.normalModeLabel.getFont().deriveFont(Font.PLAIN));
+                        editorToolBar.normalModeLabel.setForeground(UIManager.getColor("Label.foreground"));
+                        editorToolBar.privilegeModeLabel.setFont(editorToolBar.privilegeModeLabel.getFont().deriveFont(Font.BOLD));
+                        editorToolBar.privilegeModeLabel.setForeground(new Color(200, 80, 0));
+                    } else {
+                        editorToolBar.normalModeLabel.setFont(editorToolBar.normalModeLabel.getFont().deriveFont(Font.BOLD));
+                        editorToolBar.normalModeLabel.setForeground(new Color(0, 0, 0));
+                        editorToolBar.privilegeModeLabel.setFont(editorToolBar.privilegeModeLabel.getFont().deriveFont(Font.PLAIN));
+                        editorToolBar.privilegeModeLabel.setForeground(UIManager.getColor("Label.foreground"));
+                    }
+                }
+            });
+        });
 
         // 组合编辑区和控制面板
         JPanel editorPanel = new JPanel(new BorderLayout());
@@ -245,6 +230,9 @@ public class RepeaterManagerUI {
 
         // 添加到主面板
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
+
+        // 初始化请求加载器（必须在所有面板创建之后）
+        requestLoader = new RequestLoader(tabbedPane, requestPanel, responsePanel, historyPanel, requestListPanel, statusPanel, dispatchHandler);
     }
 
     /**
@@ -252,140 +240,6 @@ public class RepeaterManagerUI {
      */
     public Component getUiComponent() {
         return mainPanel;
-    }
-
-    /**
-     * 创建编辑区域的控制面板
-     */
-    private JPanel createEditorControlPanel() {
-        JPanel controlPanel = new JPanel(new BorderLayout());
-
-        // 左侧工具按钮区
-        JPanel leftToolPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-
-        JButton newRequestButton = new JButton("新建请求");
-        newRequestButton.setToolTipText("创建新的空白请求");
-        newRequestButton.addActionListener(e -> createNewRequest());
-
-        JButton clearButton = new JButton("清空");
-        clearButton.setToolTipText("清空当前请求和响应内容");
-        clearButton.addActionListener(e -> {
-            requestPanel.clear();
-            responsePanel.clear();
-            statusPanel.clear();
-        });
-
-        leftToolPanel.add(newRequestButton);
-        leftToolPanel.add(clearButton);
-
-        // 分隔符
-        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
-
-        // 普通模式标签
-        normalModeLabel = new JLabel("普通模式");
-        normalModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
-        leftToolPanel.add(normalModeLabel);
-
-        // 模式切换开关
-        modeToggleButton = new SwitchButton();
-        modeToggleButton.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
-        modeToggleButton.addActionListener(e -> {
-            boolean selected = modeToggleButton.isSelected();
-            dispatchHandler.setPrivilegeTestMode(selected);
-            LogManager.getInstance().printOutput("[*] 权限测试模式: " + (selected ? "已开启" : "已关闭"));
-        });
-        leftToolPanel.add(modeToggleButton);
-
-        // 权限测试标签
-        privilegeModeLabel = new JLabel("权限测试");
-        privilegeModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
-        leftToolPanel.add(privilegeModeLabel);
-
-        // 分隔符
-        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
-
-        // 相似度计算按钮
-        JButton similarityCalcBtn = new JButton("相似度计算");
-        similarityCalcBtn.setToolTipText("打开相似度计算工具，比较两个HTTP报文的相似度");
-        similarityCalcBtn.addActionListener(e -> {
-            SimilarityCalculatorDialog dialog = new SimilarityCalculatorDialog(
-                (Frame) SwingUtilities.getWindowAncestor(mainPanel));
-            dialog.setVisible(true);
-        });
-        leftToolPanel.add(similarityCalcBtn);
-
-        // 分隔符
-        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
-
-        // 判决调试标签(正常)
-        debugNormalLabel = new JLabel("正常");
-        debugNormalLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
-        leftToolPanel.add(debugNormalLabel);
-
-        // 判决调试切换开关
-        debugToggleButton = new SwitchButton();
-        debugToggleButton.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
-        debugToggleButton.addActionListener(e -> {
-            boolean selected = debugToggleButton.isSelected();
-            LogManager.getInstance().setJudgmentDebugEnabled(selected);
-            LogManager.getInstance().printOutput("[*] 判决调试模式: " + (selected ? "已开启" : "已关闭"));
-        });
-        leftToolPanel.add(debugToggleButton);
-
-        // 判决调试标签(调试)
-        debugModeLabel = new JLabel("调试");
-        debugModeLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
-        leftToolPanel.add(debugModeLabel);
-
-        // 分隔符
-        leftToolPanel.add(new JSeparator(SwingConstants.VERTICAL));
-
-        // 自动GC标签(关闭)
-        gcOffLabel = new JLabel("手动GC");
-        gcOffLabel.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
-        leftToolPanel.add(gcOffLabel);
-
-        // 自动GC切换开关
-        gcToggleButton = new SwitchButton();
-        gcToggleButton.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
-        gcToggleButton.addActionListener(e -> {
-            boolean selected = gcToggleButton.isSelected();
-            LogManager.getInstance().setAutoGcEnabled(selected);
-            LogManager.getInstance().printOutput("[*] 自动GC: " + (selected ? "已开启" : "已关闭"));
-        });
-        leftToolPanel.add(gcToggleButton);
-
-        // 自动GC标签(开启)
-        gcOnLabel = new JLabel("自动GC");
-        gcOnLabel.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
-        leftToolPanel.add(gcOnLabel);
-
-        // 右侧布局控制区
-        JPanel rightToolPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-
-        JComboBox<String> layoutComboBox = new JComboBox<>(new String[]{"左右布局", "上下布局", "仅请求", "仅响应"});
-        layoutComboBox.setToolTipText("切换请求和响应的布局方式");
-        layoutComboBox.addActionListener(e -> {
-            String selectedLayout = (String) layoutComboBox.getSelectedItem();
-            if ("左右布局".equals(selectedLayout)) {
-                layoutManager.setLayout(LayoutType.HORIZONTAL);
-            } else if ("上下布局".equals(selectedLayout)) {
-                layoutManager.setLayout(LayoutType.VERTICAL);
-            } else if ("仅请求".equals(selectedLayout)) {
-                layoutManager.setLayoutRequestOnly();
-            } else if ("仅响应".equals(selectedLayout)) {
-                layoutManager.setLayoutResponseOnly();
-            }
-        });
-
-        rightToolPanel.add(new JLabel("布局："));
-        rightToolPanel.add(layoutComboBox);
-
-        // 添加到控制面板
-        controlPanel.add(leftToolPanel, BorderLayout.WEST);
-        controlPanel.add(rightToolPanel, BorderLayout.EAST);
-
-        return controlPanel;
     }
 
     /**
@@ -666,389 +520,8 @@ public class RepeaterManagerUI {
         historyPanel.setBorderTitle("请求历史记录 - ID: " + requestId);
     }
 
-    /**
-     * 设置请求内容 - 用于从右键菜单接收请求
-     * @return 数据库生成的请求ID，失败返回-1
-     */
-    public int setRequest(HttpRequestResponse requestResponse) {
-        try {
-            if (requestResponse != null && requestResponse.request() != null) {
-                byte[] request = requestResponse.request().toByteArray().getBytes();
-
-                // 提取URL和方法信息
-                String url;
-                String method;
-                String protocol = "http";
-                String domain = "";
-                String path = "/";
-                String query = "";
-
-                // 提取HttpService（供后续保存使用）
-                HttpService httpService = requestResponse.httpService();
-                HttpRequest httpRequest = requestResponse.request();
-
-                try {
-                    url = httpRequest.url();
-                    method = httpRequest.method();
-
-                    // 解析URL组件
-                    URL parsedUrl = new URL(url);
-                    protocol = parsedUrl.getProtocol();
-                    // 保留非标准端口号：优先从HttpService获取端口（url()可能不含显式端口，getPort()返回-1）
-                    domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, httpService);
-                    path = parsedUrl.getPath();
-                    query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-                } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] 分析请求时出错: " + e.getMessage());
-                    method = "UNKNOWN";
-                    url = "分析请求出错";
-                }
-
-                // 保存请求到数据库，获取数据库生成的ID
-                RequestDAO requestDAO = new RequestDAO();
-                int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
-
-                if (dbId <= 0) {
-                    LogManager.getInstance().printError("[!] 保存请求到数据库失败");
-                    return -1;
-                }
-
-                // 提取API值用于列表显示
-                String apiValue = HttpRequestHelper.computeApiFromRequest(path, query, request);
-
-                // 添加到请求列表，使用数据库ID
-                requestListPanel.addRequest(dbId, apiValue, method, protocol, domain, path, query, request);
-                dispatchHandler.setCurrentRequestId(dbId);
-
-                // 保存原始HTTP服务信息，用于后续发送请求时保留正确的协议（如HTTPS）
-                dispatchHandler.setCurrentHttpService(httpService);
-
-                // 将HttpService保存到持久化映射，避免切换请求时丢失端口信息
-                dispatchHandler.saveHttpService(dbId, httpService);
-
-                // 保存原始HTTP协议版本（HTTP/2或HTTP/1.1），用于重放时保持协议不变
-                boolean isHttp2 = "HTTP/2".equals(httpRequest.httpVersion());
-                dispatchHandler.saveHttpVersion(dbId, isHttp2);
-                if (isHttp2) {
-                    LogManager.getInstance().printOutput("[+] 检测到 HTTP/2 请求，已记录协议版本，重放时将保持 HTTP/2");
-                }
-
-                // 保存原始响应基线（如果原始请求有响应数据）
-                // 当从 Proxy History / HTTP History 等处发送请求到插件时，原始响应已存在，
-                // 保存为基线以便点击请求时显示原始响应，而不是空白
-                if (requestResponse.response() != null) {
-                    saveOriginalResponseAsBaseline(dbId, requestResponse);
-                }
-
-                // 设置请求内容
-                requestPanel.setRequest(request);
-
-                // 显示原始响应（如果有），否则清空
-                if (requestResponse.response() != null) {
-                    byte[] originalResponse = requestResponse.response().toByteArray().getBytes();
-                    responsePanel.setResponse(originalResponse);
-                    int originalStatusCode = requestResponse.response().statusCode();
-                    boolean success = originalStatusCode >= 100 && originalStatusCode < 400;
-                    statusPanel.updateStatus(success, originalResponse.length, 0, 0, 0);
-                } else {
-                    responsePanel.clear();
-                    statusPanel.clear();
-                }
-
-                // 更新历史面板标题
-                historyPanel.setBorderTitle("请求历史记录 - " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
-
-                // 清空历史记录并初始化新的历史记录列表
-                historyPanel.clearHistory();
-                dispatchHandler.getRequestHistoryMap().put(dispatchHandler.getCurrentRequestId(), new ArrayList<>());
-
-                LogManager.getInstance().printOutput("[+] 请求已加载到 Repeater Manager: " + protocol + "://" + domain + path + (query.isEmpty() ? "" : "?" + query));
-
-                // 越权测试模式下自动触发越权重放
-                if (dispatchHandler.isPrivilegeTestMode()) {
-                    new RequestDAO().markAsPrivilegeTest(dbId);
-                    requestListPanel.updatePrivilegeTestFlag(dbId, true);
-                    LogManager.getInstance().printOutput("[*] 权限测试模式已开启，自动触发越权重放...");
-                    // 修复：直接使用参数化方法，避免EDT队列竞态导致currentRequestId被覆盖
-                    final int capturedId = dbId;
-                    final HttpService capturedSvc = httpService;
-                    final byte[] capturedReq = request;
-                    SwingUtilities.invokeLater(() ->
-                        dispatchHandler.sendPrivilegeTestRequestDirect(capturedReq, capturedSvc, capturedId));
-                }
-
-                return dbId;
-            }
-        } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 设置请求失败: " + e.getMessage());
-            e.printStackTrace();
-        }
-        return -1;
-    }
-
-    /**
-     * 设置请求内容并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收请求
-     * 自动加载请求、切换到请求管理标签页、开启权限测试模式、触发重放
-     *
-     * 关键修复（EDT竞态条件）：当用户快速连续发送多个请求到权限测试时，
-     * 多个setPrivilegeTestRequest调用在EDT上顺序执行，但通过invokeLater投递的
-     * sendRequest()会排到所有setPrivilegeTestRequest之后执行。此时volatile的
-     * currentRequestId已被最后一个调用覆盖为最后的ID，导致所有重放记录关联到同一个请求。
-     * 修复方案：在调用时立即捕获requestId/httpService/requestBytes，通过参数化方法直接传递。
-     */
-    public void setPrivilegeTestRequest(HttpRequestResponse requestResponse) {
-        try {
-            if (requestResponse != null && requestResponse.request() != null) {
-                // 先关闭权限测试模式，避免 setRequest() 内部误触发重放
-                // （setRequest() 在 privilegeTestMode=true 时会自动触发重放，
-                //   而本方法后续也会手动触发，导致双重重放）
-                dispatchHandler.setPrivilegeTestMode(false);
-
-                // 在调用setRequest之前，先捕获请求数据和HttpService
-                // 这些值在EDT队列中后续事件执行时仍然有效
-                final byte[] capturedRequestBytes = requestResponse.request().toByteArray().getBytes();
-                final HttpService capturedHttpService = requestResponse.httpService();
-
-                // 用常规方式加载请求（复用setRequest的逻辑）
-                int dbId = setRequest(requestResponse);
-
-                // 标记为越权测试请求
-                if (dbId > 0) {
-                    new RequestDAO().markAsPrivilegeTest(dbId);
-                    requestListPanel.updatePrivilegeTestFlag(dbId, true);
-
-                    // 保存原始响应作为基线 history 记录（user_session_name=NULL）
-                    // 从 Proxy History 等模块发送时，原始响应已存在，必须落库作为比对基线
-                    saveOriginalResponseAsBaseline(dbId, requestResponse);
-                }
-
-                // 切换到请求管理标签页
-                tabbedPane.setSelectedIndex(0);
-
-                // 开启权限测试模式
-                dispatchHandler.setPrivilegeTestMode(true);
-                LogManager.getInstance().printOutput(String.format("[*] 权限测试模式已开启，准备重放请求 (requestId=%d)...", dbId));
-
-                // 修复：直接使用参数化方法传递已捕获的requestId/httpService/requestBytes
-                // 不再依赖volatile共享状态currentRequestId（它可能被后续调用覆盖）
-                final int capturedRequestId = dbId;
-                SwingUtilities.invokeLater(() ->
-                    dispatchHandler.sendPrivilegeTestRequestDirect(
-                        capturedRequestBytes, capturedHttpService, capturedRequestId));
-            }
-        } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 设置权限测试请求失败: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * 批量设置请求内容 - 用于从右键菜单接收多条请求
-     * @return 成功保存的请求ID列表
-     */
-    public List<Integer> setRequests(List<HttpRequestResponse> requestResponses) {
-        List<Integer> dbIds = new ArrayList<>();
-        if (requestResponses == null || requestResponses.isEmpty()) return dbIds;
-
-        for (int i = 0; i < requestResponses.size(); i++) {
-            HttpRequestResponse rr = requestResponses.get(i);
-            try {
-                int dbId = setRequest(rr);
-                if (dbId > 0) {
-                    dbIds.add(dbId);
-                }
-            } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
-            }
-        }
-
-        if (!dbIds.isEmpty()) {
-            LogManager.getInstance().printOutput(String.format("[+] 批量加载完成：成功 %d / %d 条", dbIds.size(), requestResponses.size()));
-        }
-
-        return dbIds;
-    }
-
-    /**
-     * 批量设置请求内容并启动权限测试模式 - 用于从右键菜单"发送到权限测试"接收多条请求
-     * 自动加载所有请求、切换到请求管理标签页、开启权限测试模式、批量重放
-     *
-     * 优化：将DB保存和基线存储移到后台线程，仅将添加行到UI列表的操作留在EDT上，
-     * 避免150+请求的同步DB操作阻塞EDT导致UI卡顿。
-     * 使用RequestListPanel的batchAddMode暂停每行添加时的ListSelectionListener回调，
-     * 避免每行触发onRequestSelected→loadHistoryForRequest产生"没有历史记录"噪音日志。
-     */
-    public void setPrivilegeTestRequests(List<HttpRequestResponse> requestResponses) {
-        if (requestResponses == null || requestResponses.isEmpty()) return;
-
-        try {
-            // 先关闭权限测试模式，避免误触发重放
-            dispatchHandler.setPrivilegeTestMode(false);
-
-            // 清除ReplayEngine的去重记录，确保新批次从干净状态开始
-            ReplayEngine.getInstance().clearProcessedApis();
-
-            // 前置去重：在保存到DB之前，根据配置的去重策略过滤重复请求
-            org.oxff.repeater.privilege.DedupConfigManager dedupConfigManager =
-                    org.oxff.repeater.privilege.DedupConfigManager.getInstance();
-            final List<HttpRequestResponse> dedupedRequests;
-            int originalSize = requestResponses.size();
-            dedupedRequests = org.oxff.repeater.privilege.ApiDedupEngine.deduplicate(
-                    requestResponses,
-                    rr -> {
-                        if (rr == null || rr.request() == null) return "__NULL__";
-                        byte[] requestBytes = rr.request().toByteArray().getBytes();
-                        return dedupConfigManager.computeDedupKey(
-                                requestBytes, rr.httpService());
-                    },
-                    dedupConfigManager.getKeepPolicy()
-            );
-            if (dedupedRequests.size() < originalSize) {
-                LogManager.getInstance().printOutput(String.format(
-                        "[*] 批量权限测试：去重过滤 %d -> %d 条（去除 %d 条重复）",
-                        originalSize, dedupedRequests.size(), originalSize - dedupedRequests.size()));
-            }
-
-            // 开启批量添加模式，暂停每行添加时的ListSelectionListener回调
-            requestListPanel.setBatchAddMode(true);
-
-            // 设置等待光标
-            dispatchHandler.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-
-            // 切换到请求管理标签页
-            tabbedPane.setSelectedIndex(0);
-
-            int total = dedupedRequests.size();
-            LogManager.getInstance().printOutput(String.format("[*] 批量权限测试：开始处理 %d 条请求...", total));
-
-            // 暂停GC服务，避免批量操作期间GC抢占DB连接池资源
-            GarbageCollectorService gcService = DatabaseManager.getInstance().getGcService();
-            if (gcService != null) {
-                gcService.pause();
-            }
-
-            // 在后台线程中执行DB保存+基线存储，避免EDT阻塞
-            new Thread(() -> {
-                List<Integer> dbIds = new ArrayList<>();
-                RequestDAO requestDAO = new RequestDAO();
-
-                for (int i = 0; i < dedupedRequests.size(); i++) {
-                    HttpRequestResponse rr = dedupedRequests.get(i);
-                    try {
-                        if (rr == null || rr.request() == null) continue;
-
-                        byte[] request = rr.request().toByteArray().getBytes();
-                        HttpService httpService = rr.httpService();
-                        HttpRequest httpRequest = rr.request();
-
-                        // 解析URL组件
-                        String method;
-                        String protocol = "http";
-                        String domain = "";
-                        String path = "/";
-                        String query = "";
-
-                        try {
-                            method = httpRequest.method();
-                            URL parsedUrl = new URL(httpRequest.url());
-                            protocol = parsedUrl.getProtocol();
-                            domain = HttpRequestHelper.resolveDomainWithPort(parsedUrl, httpService);
-                            path = parsedUrl.getPath();
-                            query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-                        } catch (Exception e) {
-                            LogManager.getInstance().printError("[!] 分析请求URL时出错: " + e.getMessage());
-                            method = "UNKNOWN";
-                        }
-
-                        // DB保存（后台线程中执行，不阻塞EDT）
-                        int dbId = requestDAO.saveRequest(protocol, domain, path, query, method, request);
-                        if (dbId <= 0) {
-                            LogManager.getInstance().printError("[!] 批量权限测试：保存请求到数据库失败，第 " + (i + 1) + " 条");
-                            continue;
-                        }
-
-                        // 标记为越权测试请求
-                        requestDAO.markAsPrivilegeTest(dbId);
-
-                        // 保存HttpService映射
-                        if (httpService != null) {
-                            dispatchHandler.saveHttpService(dbId, httpService);
-                        }
-
-                        // 保存原始响应基线（后台线程中执行）
-                        saveOriginalResponseAsBaseline(dbId, rr);
-
-                        // 初始化内存历史映射（ConcurrentHashMap，后台线程put与EDT上get/put均线程安全）
-                        dispatchHandler.getRequestHistoryMap().put(dbId, new ArrayList<>());
-
-                        // 计算API值
-                        String apiValue = HttpRequestHelper.computeApiFromRequest(path, query, request);
-
-                        dbIds.add(dbId);
-
-                        // 在EDT上添加行到请求列表（最小化EDT占用）
-                        final int finalDbId = dbId;
-                        final String finalApi = apiValue;
-                        final String finalMethod = method;
-                        final String finalProtocol = protocol;
-                        final String finalDomain = domain;
-                        final String finalPath = path;
-                        final String finalQuery = query;
-                        final byte[] finalRequest = request;
-                        SwingUtilities.invokeLater(() -> {
-                            requestListPanel.addRequest(finalDbId, finalApi, finalMethod, finalProtocol,
-                                    finalDomain, finalPath, finalQuery, true, finalRequest);
-                        });
-
-                    } catch (Exception e) {
-                        LogManager.getInstance().printError("[!] 批量加载请求时第 " + (i + 1) + " 条失败: " + e.getMessage());
-                    }
-                }
-
-                if (dbIds.isEmpty()) {
-                    LogManager.getInstance().printError("[!] 批量权限测试：所有请求保存失败");
-                    // 恢复GC服务
-                    if (gcService != null) {
-                        gcService.resume();
-                    }
-                    SwingUtilities.invokeLater(() -> {
-                        requestListPanel.setBatchAddMode(false);
-                        dispatchHandler.setCursor(Cursor.getDefaultCursor());
-                    });
-                    return;
-                }
-
-                LogManager.getInstance().printOutput(String.format("[+] 批量权限测试：保存完成，成功 %d / %d 条，开始重放...",
-                        dbIds.size(), total));
-
-                // 恢复GC服务（批量保存完成，连接池压力已降低）
-                if (gcService != null) {
-                    gcService.resume();
-                }
-
-                // 全部保存完成后，在EDT上关闭批量模式、恢复光标、开启越权模式、触发批量重放
-                SwingUtilities.invokeLater(() -> {
-                    // 使用静默退出批量模式，避免触发onRequestSelected回调
-                    // （此时重放尚未开始，查询历史记录必然为空，会产生大量“没有历史记录”告警和无效DB查询）
-                    requestListPanel.exitBatchModeQuiet();
-                    dispatchHandler.setCurrentRequestId(dbIds.get(dbIds.size() - 1));
-                    dispatchHandler.setCursor(Cursor.getDefaultCursor());
-
-                    // 开启权限测试模式（联动代理监听器）
-                    dispatchHandler.setPrivilegeTestMode(true);
-                    LogManager.getInstance().printOutput(String.format("[*] 权限测试模式已开启，准备批量重放 %d 条请求...", dbIds.size()));
-
-                    // 批量触发权限测试重放
-                    dispatchHandler.batchSendPrivilegeTestRequests(dbIds);
-                });
-            }, "batch-privilege-test-setup").start();
-
-        } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 批量设置权限测试请求失败: " + e.getMessage());
-            e.printStackTrace();
-            requestListPanel.setBatchAddMode(false);
-            dispatchHandler.setCursor(Cursor.getDefaultCursor());
-        }
+    public RequestLoader getRequestLoader() {
+        return requestLoader;
     }
 
     /**
@@ -1088,38 +561,6 @@ public class RepeaterManagerUI {
             String protocol, String domain, String path, String query, byte[] requestData) {
         requestListPanel.addRequest(requestId, api, method, protocol, domain, path, query, true, requestData);
         dispatchHandler.getRequestHistoryMap().computeIfAbsent(requestId, k -> new ArrayList<>());
-    }
-
-    /**
-     * 保存原始响应报文到 requests 表（作为基线）
-     * 在越权测试入口处调用：从 Proxy History / 其他模块发送报文到插件时，
-     * HttpRequestResponse 已包含原始响应，必须将其持久化到 requests 表，供后续报文比对使用。
-     *
-     * @param requestId       请求在 requests 表中的 ID
-     * @param requestResponse 含原始请求+响应的 Montoya 对象
-     */
-    private void saveOriginalResponseAsBaseline(int requestId, HttpRequestResponse requestResponse) {
-        try {
-            // 无原始响应则跳过（例如从 Proxy Intercept 直接 Forward 的情况）
-            if (requestResponse.response() == null) {
-                LogManager.getInstance().printOutput("[*] 原始报文无响应数据，跳过基线保存");
-                return;
-            }
-
-            byte[] responseData = requestResponse.response().toByteArray().getBytes();
-            int statusCode = requestResponse.response().statusCode();
-
-            // 保存到 requests 表的响应字段
-            RequestDAO requestDAO = new RequestDAO();
-            boolean saved = requestDAO.saveOriginalResponse(requestId, responseData, statusCode, 0);
-            if (saved) {
-                LogManager.getInstance().printOutput("[+] 原始响应基线已保存到 requests 表，requestId: " + requestId);
-            } else {
-                LogManager.getInstance().printError("[!] 保存原始响应基线失败，requestId: " + requestId);
-            }
-        } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 保存原始响应基线异常: " + e.getMessage());
-        }
     }
 
     /**

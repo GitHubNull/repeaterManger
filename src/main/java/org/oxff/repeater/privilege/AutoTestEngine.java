@@ -191,7 +191,7 @@ public class AutoTestEngine {
                             LogManager.getInstance().judgmentDebug(String.format(
                                     "[判决] 当前响应体前200字: %s", truncateForLog(responseBodyOnly, 200)));
 
-                            JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
+                            JudgmentOutcome outcome = JudgmentEngine.judge(
                                     holder.statusCode, responseHeaders, responseBodyOnly,
                                     baselineResponse, baselineStatusCode, baselineContentType, threshold,
                                     holder.durationMs,

@@ -13,8 +13,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -31,7 +29,7 @@ public class DatabaseManager {
 
     // 连接池：复用数据库连接，避免每次请求都新建连接
     private static final int POOL_SIZE = 15;
-    private final BlockingQueue<Connection> connectionPool = new ArrayBlockingQueue<>(POOL_SIZE);
+    final BlockingQueue<Connection> connectionPool = new ArrayBlockingQueue<>(POOL_SIZE);
 
     // 连接池监控统计（线程安全由 volatile 保证基础可见性）
     private volatile long totalConnectionsCreated = 0;
@@ -304,62 +302,9 @@ public class DatabaseManager {
         return (Connection) Proxy.newProxyInstance(
             Connection.class.getClassLoader(),
             new Class[]{Connection.class},
-            new PooledConnectionInvocationHandler(realConnection)
+            new PooledConnectionInvocationHandler(realConnection, connectionPool,
+                    () -> totalConnectionsReturned++)
         );
-    }
-
-    /**
-     * 连接池代理的调用处理器
-     * 拦截close()方法，将连接归还到池中
-     */
-    private class PooledConnectionInvocationHandler implements InvocationHandler {
-        private final Connection realConnection;
-        private boolean closed = false;
-
-        PooledConnectionInvocationHandler(Connection realConnection) {
-            this.realConnection = realConnection;
-        }
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            // 拦截close()方法，归还连接到池中
-            if ("close".equals(method.getName())) {
-                if (!closed) {
-                    closed = true;
-                    // 确保连接处于自动提交模式（SQLite默认）
-                    try {
-                        if (!realConnection.getAutoCommit()) {
-                            realConnection.setAutoCommit(true);
-                        }
-                    } catch (SQLException e) {
-                        // 忽略
-                    }
-                    // 归还到连接池
-                    if (!realConnection.isClosed()) {
-                        if (connectionPool.offer(realConnection)) {
-                            totalConnectionsReturned++;
-                        } else {
-                            // 池已满，真正关闭连接
-                            realConnection.close();
-                        }
-                    }
-                }
-                return null;
-            }
-
-            // 拦截isClosed()方法，返回代理的关闭状态
-            if ("isClosed".equals(method.getName())) {
-                return closed || realConnection.isClosed();
-            }
-
-            // 如果代理已关闭，除close/isClosed外的方法都抛异常
-            if (closed) {
-                throw new SQLException("Connection is closed");
-            }
-
-            // 其他方法委托给真实连接
-            return method.invoke(realConnection, args);
-        }
     }
 
     /**

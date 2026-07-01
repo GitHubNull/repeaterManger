@@ -328,28 +328,7 @@ public class SessionDAO {
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
-                UserSession session = new UserSession();
-                session.setId(rs.getInt("id"));
-                session.setName(rs.getString("name"));
-                String colorHex = rs.getString("color");
-                if (colorHex != null && !colorHex.isEmpty()) {
-                    try {
-                        session.setColor(Color.decode(colorHex));
-                    } catch (NumberFormatException e) {
-                        // 忽略无效颜色
-                    }
-                }
-                session.setEnabled(rs.getInt("enabled") == 1);
-                // scheme_id 可能为 NULL
-                int schemeId = rs.getInt("scheme_id");
-                session.setSchemeId(rs.wasNull() ? null : schemeId);
-                session.setRequestTimeout(rs.getInt("request_timeout"));
-                session.setMaxConcurrent(rs.getInt("max_concurrent"));
-                session.setRetryCount(rs.getInt("retry_count"));
-                session.setRetryDelay(rs.getInt("retry_delay"));
-                session.setReplayDelay(rs.getInt("replay_delay"));
-                // 加载字段值
-                session.setFieldValues(loadFieldValues(conn, session.getId()));
+                UserSession session = buildUserSession(rs, conn);
                 sessions.add(session);
             }
         } catch (SQLException e) {
@@ -368,32 +347,42 @@ public class SessionDAO {
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
-                UserSession session = new UserSession();
-                session.setId(rs.getInt("id"));
-                session.setName(rs.getString("name"));
-                String colorHex = rs.getString("color");
-                if (colorHex != null && !colorHex.isEmpty()) {
-                    try {
-                        session.setColor(Color.decode(colorHex));
-                    } catch (NumberFormatException e) {
-                        // 忽略无效颜色
-                    }
-                }
-                session.setEnabled(true);
-                int schemeId = rs.getInt("scheme_id");
-                session.setSchemeId(rs.wasNull() ? null : schemeId);
-                session.setRequestTimeout(rs.getInt("request_timeout"));
-                session.setMaxConcurrent(rs.getInt("max_concurrent"));
-                session.setRetryCount(rs.getInt("retry_count"));
-                session.setRetryDelay(rs.getInt("retry_delay"));
-                session.setReplayDelay(rs.getInt("replay_delay"));
-                session.setFieldValues(loadFieldValues(conn, session.getId()));
+                UserSession session = buildUserSession(rs, conn);
                 sessions.add(session);
             }
         } catch (SQLException e) {
             LogManager.getInstance().printError("[!] 获取已启用用户会话列表失败: " + e.getMessage());
         }
         return sessions;
+    }
+
+    /**
+     * 从 ResultSet 构建 UserSession 对象（含字段值加载）
+     */
+    private UserSession buildUserSession(ResultSet rs, Connection conn) throws SQLException {
+        UserSession session = new UserSession();
+        session.setId(rs.getInt("id"));
+        session.setName(rs.getString("name"));
+        String colorHex = rs.getString("color");
+        if (colorHex != null && !colorHex.isEmpty()) {
+            try {
+                session.setColor(Color.decode(colorHex));
+            } catch (NumberFormatException e) {
+                // 忽略无效颜色
+            }
+        }
+        session.setEnabled(rs.getInt("enabled") == 1);
+        // scheme_id 可能为 NULL
+        int schemeId = rs.getInt("scheme_id");
+        session.setSchemeId(rs.wasNull() ? null : schemeId);
+        session.setRequestTimeout(rs.getInt("request_timeout"));
+        session.setMaxConcurrent(rs.getInt("max_concurrent"));
+        session.setRetryCount(rs.getInt("retry_count"));
+        session.setRetryDelay(rs.getInt("retry_delay"));
+        session.setReplayDelay(rs.getInt("replay_delay"));
+        // 加载字段值
+        session.setFieldValues(loadFieldValues(conn, session.getId()));
+        return session;
     }
 
     /**

@@ -52,43 +52,6 @@ public class DiffPane extends JPanel {
 
     // ==================== 数据类 ====================
 
-    /**
-     * 差异区域 — 记录文档中差异行的偏移位置，用于导航
-     */
-    public static class DiffRegion {
-        private final int startOffset;
-        private final int endOffset;
-        private final DiffType diffType;
-        private final int lineNumber;
-
-        public DiffRegion(int startOffset, int endOffset, DiffType diffType, int lineNumber) {
-            this.startOffset = startOffset;
-            this.endOffset = endOffset;
-            this.diffType = diffType;
-            this.lineNumber = lineNumber;
-        }
-
-        public int getStartOffset() { return startOffset; }
-        public int getEndOffset() { return endOffset; }
-        public DiffType getDiffType() { return diffType; }
-        public int getLineNumber() { return lineNumber; }
-    }
-
-    /**
-     * 行属性快照 — 记录每行在文档中的偏移和差异背景色
-     */
-    private static class LineAttributeSnapshot {
-        final int startOffset;
-        final int length;
-        final Color backgroundColor;
-
-        LineAttributeSnapshot(int startOffset, int length, Color backgroundColor) {
-            this.startOffset = startOffset;
-            this.length = length;
-            this.backgroundColor = backgroundColor;
-        }
-    }
-
     public DiffPane() {
         super(new BorderLayout());
 

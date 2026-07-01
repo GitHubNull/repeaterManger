@@ -430,6 +430,57 @@ public class ErmArchiveWriter {
         raf.write(footer);
     }
 
+    // ========== 条目序列化（共享实现） ==========
+
+    /**
+     * 构建序列化的条目字节数组（头部 + 压缩数据）。
+     * 处理 CRC32 校验、DEFLATE 压缩（失败时回退 STORED）、条目头序列化。
+     */
+    private byte[] buildEntryBytes(String entryPath, byte[] data, byte compressionMethod) throws IOException {
+        byte[] pathBytes = entryPath.getBytes(StandardCharsets.UTF_8);
+        int pathLength = pathBytes.length;
+
+        CRC32 crc32 = new CRC32();
+        crc32.update(data);
+        int entryCrc = (int) crc32.getValue();
+        long uncompressedSize = data.length;
+
+        byte[] compressedData;
+        if (compressionMethod == ErmFormatConstants.COMPRESSION_DEFLATED) {
+            compressedData = compressData(data);
+        } else {
+            compressedData = data;
+        }
+        long compressedSize = compressedData.length;
+
+        if (compressionMethod == ErmFormatConstants.COMPRESSION_DEFLATED
+                && compressedSize >= uncompressedSize) {
+            compressionMethod = ErmFormatConstants.COMPRESSION_STORED;
+            compressedData = data;
+            compressedSize = data.length;
+        }
+
+        ByteArrayOutputStream entryBaos = new ByteArrayOutputStream();
+
+        entryBaos.write((pathLength >> 8) & 0xFF);
+        entryBaos.write(pathLength & 0xFF);
+        entryBaos.write(pathBytes);
+        entryBaos.write(compressionMethod);
+        for (int i = 7; i >= 0; i--) {
+            entryBaos.write((byte) ((compressedSize >> (i * 8)) & 0xFF));
+        }
+        for (int i = 7; i >= 0; i--) {
+            entryBaos.write((byte) ((uncompressedSize >> (i * 8)) & 0xFF));
+        }
+        entryBaos.write((entryCrc >> 24) & 0xFF);
+        entryBaos.write((entryCrc >> 16) & 0xFF);
+        entryBaos.write((entryCrc >> 8) & 0xFF);
+        entryBaos.write(entryCrc & 0xFF);
+        entryBaos.write(compressedData);
+
+        return entryBaos.toByteArray();
+    }
+
     // ========== 条目写入（到 RandomAccessFile） ==========
 
     /**
@@ -446,61 +497,7 @@ public class ErmArchiveWriter {
      */
     private void writeEntryFromBytes(RandomAccessFile raf, String entryPath, byte[] data,
                                       byte compressionMethod) throws IOException {
-        byte[] pathBytes = entryPath.getBytes(StandardCharsets.UTF_8);
-        int pathLength = pathBytes.length;
-
-        // 计算原始数据的 CRC32
-        CRC32 crc32 = new CRC32();
-        crc32.update(data);
-        int entryCrc = (int) crc32.getValue();
-        long uncompressedSize = data.length;
-
-        // 压缩数据
-        byte[] compressedData;
-        if (compressionMethod == ErmFormatConstants.COMPRESSION_DEFLATED) {
-            compressedData = compressData(data);
-        } else {
-            compressedData = data;
-        }
-        long compressedSize = compressedData.length;
-
-        // 如果压缩后更大，改用 STORED
-        if (compressionMethod == ErmFormatConstants.COMPRESSION_DEFLATED
-                && compressedSize >= uncompressedSize) {
-            compressionMethod = ErmFormatConstants.COMPRESSION_STORED;
-            compressedData = data;
-            compressedSize = data.length;
-        }
-
-        // 写入条目头
-        // path_length (2 bytes, big-endian)
-        raf.write((pathLength >> 8) & 0xFF);
-        raf.write(pathLength & 0xFF);
-
-        // path
-        raf.write(pathBytes);
-
-        // compression_method (1 byte)
-        raf.write(compressionMethod);
-
-        // compressed_size (8 bytes, big-endian)
-        for (int i = 7; i >= 0; i--) {
-            raf.write((byte) ((compressedSize >> (i * 8)) & 0xFF));
-        }
-
-        // uncompressed_size (8 bytes, big-endian)
-        for (int i = 7; i >= 0; i--) {
-            raf.write((byte) ((uncompressedSize >> (i * 8)) & 0xFF));
-        }
-
-        // entry_crc (4 bytes, big-endian)
-        raf.write((entryCrc >> 24) & 0xFF);
-        raf.write((entryCrc >> 16) & 0xFF);
-        raf.write((entryCrc >> 8) & 0xFF);
-        raf.write(entryCrc & 0xFF);
-
-        // data
-        raf.write(compressedData);
+        raf.write(buildEntryBytes(entryPath, data, compressionMethod));
     }
 
     // ========== 条目写入（到 ByteArrayOutputStream，用于加密模式） ==========
@@ -519,63 +516,7 @@ public class ErmArchiveWriter {
      */
     private void writeEntryBytesToStream(ByteArrayOutputStream baos, String entryPath, byte[] data,
                                           byte compressionMethod) throws IOException {
-        // 与 writeEntryFromBytes 逻辑相同，但写入 baos
-        byte[] pathBytes = entryPath.getBytes(StandardCharsets.UTF_8);
-        int pathLength = pathBytes.length;
-
-        CRC32 crc32 = new CRC32();
-        crc32.update(data);
-        int entryCrc = (int) crc32.getValue();
-        long uncompressedSize = data.length;
-
-        byte[] compressedData;
-        if (compressionMethod == ErmFormatConstants.COMPRESSION_DEFLATED) {
-            compressedData = compressData(data);
-        } else {
-            compressedData = data;
-        }
-        long compressedSize = compressedData.length;
-
-        if (compressionMethod == ErmFormatConstants.COMPRESSION_DEFLATED
-                && compressedSize >= uncompressedSize) {
-            compressionMethod = ErmFormatConstants.COMPRESSION_STORED;
-            compressedData = data;
-            compressedSize = data.length;
-        }
-
-        // 构建条目字节
-        ByteArrayOutputStream entryBaos = new ByteArrayOutputStream();
-
-        // path_length (2 bytes)
-        entryBaos.write((pathLength >> 8) & 0xFF);
-        entryBaos.write(pathLength & 0xFF);
-
-        // path
-        entryBaos.write(pathBytes);
-
-        // compression_method
-        entryBaos.write(compressionMethod);
-
-        // compressed_size (8 bytes)
-        for (int i = 7; i >= 0; i--) {
-            entryBaos.write((byte) ((compressedSize >> (i * 8)) & 0xFF));
-        }
-
-        // uncompressed_size (8 bytes)
-        for (int i = 7; i >= 0; i--) {
-            entryBaos.write((byte) ((uncompressedSize >> (i * 8)) & 0xFF));
-        }
-
-        // entry_crc (4 bytes)
-        entryBaos.write((entryCrc >> 24) & 0xFF);
-        entryBaos.write((entryCrc >> 16) & 0xFF);
-        entryBaos.write((entryCrc >> 8) & 0xFF);
-        entryBaos.write(entryCrc & 0xFF);
-
-        // data
-        entryBaos.write(compressedData);
-
-        baos.write(entryBaos.toByteArray());
+        baos.write(buildEntryBytes(entryPath, data, compressionMethod));
     }
 
     // ========== 压缩 ==========

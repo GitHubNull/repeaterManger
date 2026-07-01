@@ -16,7 +16,7 @@ public class BodyRenderer {
             return "<pre>[空]</pre>\n";
         }
 
-        BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
+        TieredRenderContent content = renderBinaryBody(body, contentType);
 
         if (content.tier == null) {
             return "<pre>" + escapeHtml(sanitizeBody(body, contentType)) + "</pre>\n";
@@ -33,7 +33,7 @@ public class BodyRenderer {
             return "```\n[空]\n```\n\n";
         }
 
-        BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
+        TieredRenderContent content = renderBinaryBody(body, contentType);
 
         if (content.tier == null) {
             return "```http\n" + sanitizeBody(body, contentType) + "\n```\n\n";
@@ -44,7 +44,7 @@ public class BodyRenderer {
 
     // ========== HTML 渲染 ==========
 
-    private String buildBinaryContentHtml(BinaryContentRenderer.TieredRenderContent content) {
+    private String buildBinaryContentHtml(TieredRenderContent content) {
         StringBuilder sb = new StringBuilder();
         sb.append("<div class=\"binary-card\">\n");
 
@@ -65,7 +65,7 @@ public class BodyRenderer {
         if (content.multipartParts != null && !content.multipartParts.isEmpty()) {
             sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">多部分数量:</span> ")
                     .append("<span class=\"meta-value\">").append(content.multipartParts.size()).append("</span></div>\n");
-            for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
+            for (MultipartPartInfo part : content.multipartParts) {
                 sb.append(buildMultipartPartHtml(part));
             }
         }
@@ -85,7 +85,7 @@ public class BodyRenderer {
         return sb.toString();
     }
 
-    private String buildMultipartPartHtml(BinaryContentRenderer.MultipartPartInfo part) {
+    private String buildMultipartPartHtml(MultipartPartInfo part) {
         StringBuilder sb = new StringBuilder();
         String partClass = part.isText ? "multipart-part" : "multipart-part multipart-binary-part";
 
@@ -112,7 +112,7 @@ public class BodyRenderer {
 
     // ========== Markdown 渲染 ==========
 
-    private String buildBinaryContentMd(BinaryContentRenderer.TieredRenderContent content) {
+    private String buildBinaryContentMd(TieredRenderContent content) {
         StringBuilder sb = new StringBuilder();
 
         sb.append("**二进制内容 (").append(content.contentCategory)
@@ -134,7 +134,7 @@ public class BodyRenderer {
         sb.append("\n");
 
         if (content.multipartParts != null) {
-            for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
+            for (MultipartPartInfo part : content.multipartParts) {
                 sb.append(buildMultipartPartMd(part));
             }
         }
@@ -153,7 +153,7 @@ public class BodyRenderer {
         return sb.toString();
     }
 
-    private String buildMultipartPartMd(BinaryContentRenderer.MultipartPartInfo part) {
+    private String buildMultipartPartMd(MultipartPartInfo part) {
         StringBuilder sb = new StringBuilder();
 
         sb.append("##### 部分: ");
@@ -177,15 +177,15 @@ public class BodyRenderer {
 
     // ========== 共享工具方法 ==========
 
-    private BinaryContentRenderer.TieredRenderContent renderBinaryBody(byte[] body, String contentTypeHeader) {
+    private TieredRenderContent renderBinaryBody(byte[] body, String contentTypeHeader) {
         if (body == null || body.length == 0) {
-            return new BinaryContentRenderer.TieredRenderContent(null, "", "", null, null,
+            return new TieredRenderContent(null, "", "", null, null,
                     "text/plain", "text", "0 bytes");
         }
 
-        BinaryContentRenderer.BinaryAnalysisResult analysis = binaryRenderer.analyzeBody(body, contentTypeHeader);
+        BinaryAnalysisResult analysis = binaryRenderer.analyzeBody(body, contentTypeHeader);
         if (!analysis.isBinary) {
-            return new BinaryContentRenderer.TieredRenderContent(null, "", "", null, null,
+            return new TieredRenderContent(null, "", "", null, null,
                     analysis.contentType, "text", analysis.humanSize);
         }
 

@@ -17,38 +17,38 @@ class FetchRequestParserTest {
     @Test
     void testDetectRawHttp() {
         String rawHttp = "GET /api/users HTTP/1.1\r\nHost: example.com\r\n\r\n";
-        assertEquals(FetchRequestParser.ClipboardFormat.RAW_HTTP,
+        assertEquals(ClipboardFormat.RAW_HTTP,
                 FetchRequestParser.detectFormat(rawHttp));
     }
 
     @Test
     void testDetectRawHttpPost() {
         String rawHttp = "POST /api/login HTTP/1.1\r\nHost: example.com\r\n\r\n";
-        assertEquals(FetchRequestParser.ClipboardFormat.RAW_HTTP,
+        assertEquals(ClipboardFormat.RAW_HTTP,
                 FetchRequestParser.detectFormat(rawHttp));
     }
 
     @Test
     void testDetectFetchBrowser() {
         String fetch = "fetch(\"https://example.com/api\", {\"method\":\"GET\"});";
-        assertEquals(FetchRequestParser.ClipboardFormat.FETCH_BROWSER,
+        assertEquals(ClipboardFormat.FETCH_BROWSER,
                 FetchRequestParser.detectFormat(fetch));
     }
 
     @Test
     void testDetectFetchNodeJs() {
         String fetch = "fetch(\"https://example.com/api\", {\"headers\":{\"cookie\":\"session=abc\"}});";
-        assertEquals(FetchRequestParser.ClipboardFormat.FETCH_NODEJS,
+        assertEquals(ClipboardFormat.FETCH_NODEJS,
                 FetchRequestParser.detectFormat(fetch));
     }
 
     @Test
     void testDetectUnknown() {
-        assertEquals(FetchRequestParser.ClipboardFormat.UNKNOWN,
+        assertEquals(ClipboardFormat.UNKNOWN,
                 FetchRequestParser.detectFormat("some random text"));
-        assertEquals(FetchRequestParser.ClipboardFormat.UNKNOWN,
+        assertEquals(ClipboardFormat.UNKNOWN,
                 FetchRequestParser.detectFormat(null));
-        assertEquals(FetchRequestParser.ClipboardFormat.UNKNOWN,
+        assertEquals(ClipboardFormat.UNKNOWN,
                 FetchRequestParser.detectFormat(""));
     }
 

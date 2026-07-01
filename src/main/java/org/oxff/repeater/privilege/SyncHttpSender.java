@@ -1,6 +1,7 @@
 package org.oxff.repeater.privilege;
 
 import burp.api.montoya.http.HttpService;
+import org.oxff.repeater.http.RequestCallback;
 import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.logging.LogManager;
 
@@ -79,7 +80,7 @@ public final class SyncHttpSender {
         boolean[] done = {false};
 
         requestManager.makeHttpRequestAsync(requestBytes, timeoutSeconds, -1, httpService, useHttp2,
-                new RequestManager.RequestCallback() {
+                new RequestCallback() {
                     @Override
                     public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                         holder.response = response;

@@ -39,30 +39,6 @@ public class ErmArchiveReader {
 
     // ========== 数据类 ==========
 
-    /**
-     * 文件头解析结果
-     */
-    public static class HeaderData {
-        public int formatVersion;
-        public int flags;
-        public int entryCount;
-        public long manifestOffset;
-        public int schemaVersion;
-        public int headerSize;
-        public boolean isEncrypted;
-    }
-
-    /**
-     * 数据条目头解析结果
-     */
-    public static class EntryHeader {
-        public String path;
-        public int compressionMethod;
-        public long compressedSize;
-        public long uncompressedSize;
-        public long entryCrc;
-    }
-
     // ========== 公开接口 ==========
 
     /**
@@ -426,20 +402,6 @@ public class ErmArchiveReader {
     }
 
     // ========== 清单解析 ==========
-
-    /**
-     * 清单信息
-     */
-    private static class ManifestInfo {
-        int formatVersion;
-        String appVersion;
-        long createdAt;
-        int schemaVersion;
-        boolean encrypted;
-        String dbEntry;
-        int blobCount;
-        int totalEntries;
-    }
 
     /**
      * 从条目数据中解析清单

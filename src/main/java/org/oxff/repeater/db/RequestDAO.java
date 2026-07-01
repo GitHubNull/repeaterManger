@@ -78,25 +78,7 @@ public class RequestDAO {
                         reqBodyStorage = bodyResult[1];
                     }
 
-                    // Extract headers for API extraction
-                    java.util.List<String> headerList = new java.util.ArrayList<>();
-                    String contentType = null;
-                    if (split.getHeaders() != null) {
-                        String headersStr = new String(split.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
-                        for (String line : headersStr.split("\r\n")) {
-                            if (!line.isEmpty()) headerList.add(line);
-                            if (line.toLowerCase().startsWith("content-type:")) {
-                                contentType = line.substring("content-type:".length()).trim();
-                            }
-                        }
-                    }
-
-                    // Compute API value
-                    java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
-                    String apiValue = ApiExtractionEngine.extractApi(path, query, headerList,
-                            (split.hasBody() ? split.getBody() : null),
-                            contentType, activeRules);
-                    apiHash = (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
+                    apiHash = extractApiHash(conn, split, path, query);
                 }
 
                 // 插入记录
@@ -175,25 +157,7 @@ public class RequestDAO {
                         reqBodyStorage = bodyResult[1];
                     }
 
-                    // Extract headers for API extraction
-                    java.util.List<String> headerList = new java.util.ArrayList<>();
-                    String contentType = null;
-                    if (split.getHeaders() != null) {
-                        String headersStr = new String(split.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
-                        for (String line : headersStr.split("\r\n")) {
-                            if (!line.isEmpty()) headerList.add(line);
-                            if (line.toLowerCase().startsWith("content-type:")) {
-                                contentType = line.substring("content-type:".length()).trim();
-                            }
-                        }
-                    }
-
-                    // Compute API value
-                    java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
-                    String apiValue = ApiExtractionEngine.extractApi(path, query, headerList,
-                            (split.hasBody() ? split.getBody() : null),
-                            contentType, activeRules);
-                    apiHash = (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
+                    apiHash = extractApiHash(conn, split, path, query);
                 }
 
                 // 更新记录
@@ -292,54 +256,7 @@ public class RequestDAO {
 
             while (rs.next()) {
                 try {
-                    Map<String, Object> request = new HashMap<>();
-                    int id = rs.getInt("id");
-                    request.put("id", id);
-                    request.put("protocol", HttpEnum.intToProtocol(rs.getInt("protocol")));
-                    request.put("domain", getStringWithDefault(rs, "domain", "example.com"));
-                    request.put("path", getStringWithDefault(rs, "path", "/"));
-                    request.put("query", getStringWithDefault(rs, "query", ""));
-                    request.put("method", HttpEnum.intToMethod(rs.getInt("method")));
-                    request.put("add_time", getStringWithDefault(rs, "add_time", ""));
-                    request.put("comment", getStringWithDefault(rs, "comment", ""));
-
-                    // 处理越权测试标记
-                    request.put("is_privilege_test", rs.getInt("is_privilege_test") == 1);
-
-                    // 处理API值（如果api为null，使用path作为默认值）
-                    String apiValue = rs.getString("api");
-                    request.put("api", (apiValue != null) ? apiValue : getStringWithDefault(rs, "path", "/"));
-
-                    // 处理颜色
-                    String colorStr = rs.getString("color");
-                    if (colorStr != null && !colorStr.isEmpty()) {
-                        try {
-                            request.put("color", Color.decode(colorStr));
-                        } catch (NumberFormatException e) {
-                            request.put("color", null);
-                        }
-                    } else {
-                        request.put("color", null);
-                    }
-
-                    // 重构请求数据
-                    String reqHeaderHash = rs.getString("req_header_hash");
-                    String reqBodyHash = rs.getString("req_body_hash");
-                    String reqBodyStorage = rs.getString("req_body_storage");
-
-                    byte[] requestData = reconstructor.reconstructRequest(conn, reqHeaderHash, reqBodyHash, reqBodyStorage);
-                    if (requestData != null && requestData.length > 0) {
-                        request.put("request_data", requestData);
-                    } else {
-                        String basicRequest = createBasicRequest(
-                                (String) request.get("method"),
-                                (String) request.get("domain"),
-                                (String) request.get("path"),
-                                (String) request.get("query")
-                        );
-                        request.put("request_data", basicRequest.getBytes());
-                    }
-
+                    Map<String, Object> request = buildRequestMap(rs, conn);
                     requests.add(request);
                 } catch (Exception e) {
                     LogManager.getInstance().printError("[!] 处理请求记录时出错: " + e.getMessage());
@@ -377,49 +294,7 @@ public class RequestDAO {
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     try {
-                        Map<String, Object> request = new HashMap<>();
-                        request.put("id", rs.getInt("id"));
-                        request.put("protocol", HttpEnum.intToProtocol(rs.getInt("protocol")));
-                        request.put("domain", getStringWithDefault(rs, "domain", "example.com"));
-                        request.put("path", getStringWithDefault(rs, "path", "/"));
-                        request.put("query", getStringWithDefault(rs, "query", ""));
-                        request.put("method", HttpEnum.intToMethod(rs.getInt("method")));
-                        request.put("add_time", getStringWithDefault(rs, "add_time", ""));
-                        request.put("comment", getStringWithDefault(rs, "comment", ""));
-
-                        // 处理API值（如果api为null，使用path作为默认值）
-                        String apiValue = rs.getString("api");
-                        request.put("api", (apiValue != null) ? apiValue : getStringWithDefault(rs, "path", "/"));
-
-                        String colorStr = rs.getString("color");
-                        if (colorStr != null && !colorStr.isEmpty()) {
-                            try {
-                                request.put("color", Color.decode(colorStr));
-                            } catch (NumberFormatException e) {
-                                request.put("color", null);
-                            }
-                        } else {
-                            request.put("color", null);
-                        }
-
-                        String reqHeaderHash = rs.getString("req_header_hash");
-                        String reqBodyHash = rs.getString("req_body_hash");
-                        String reqBodyStorage = rs.getString("req_body_storage");
-
-                        byte[] requestData = reconstructor.reconstructRequest(conn, reqHeaderHash, reqBodyHash, reqBodyStorage);
-                        if (requestData != null && requestData.length > 0) {
-                            request.put("request_data", requestData);
-                        } else {
-                            String basicRequest = createBasicRequest(
-                                    (String) request.get("method"),
-                                    (String) request.get("domain"),
-                                    (String) request.get("path"),
-                                    (String) request.get("query")
-                            );
-                            request.put("request_data", basicRequest.getBytes());
-                        }
-
-                        return request;
+                        return buildRequestMap(rs, conn);
                     } catch (Exception e) {
                         LogManager.getInstance().printError("[!] 处理请求ID: " + requestId + " 时出错: " + e.getMessage());
                     }
@@ -787,5 +662,78 @@ public class RequestDAO {
         // 释放响应基线引用
         poolManager.releaseHeader(conn, refs[7]);                    // resp_header_hash
         poolManager.releaseBody(conn, refs[8], refs[9]);            // resp_body_hash + storage
+    }
+
+    /**
+     * 从 SplitResult 中解析请求头并计算 API hash
+     */
+    private String extractApiHash(Connection conn, SplitResult split, String path, String query) throws SQLException {
+        java.util.List<String> headerList = new java.util.ArrayList<>();
+        String contentType = null;
+        if (split.getHeaders() != null) {
+            String headersStr = new String(split.getHeaders(), java.nio.charset.StandardCharsets.UTF_8);
+            for (String line : headersStr.split("\r\n")) {
+                if (!line.isEmpty()) headerList.add(line);
+                if (line.toLowerCase().startsWith("content-type:")) {
+                    contentType = line.substring("content-type:".length()).trim();
+                }
+            }
+        }
+
+        java.util.List<ApiExtractionRule> activeRules = ApiRuleManager.getInstance().getActiveRules();
+        String apiValue = ApiExtractionEngine.extractApi(path, query, headerList,
+                (split.hasBody() ? split.getBody() : null),
+                contentType, activeRules);
+        return (apiValue != null && !apiValue.isEmpty()) ? poolManager.ensureString(conn, apiValue) : null;
+    }
+
+    /**
+     * 从 ResultSet 构建请求 Map
+     */
+    private Map<String, Object> buildRequestMap(ResultSet rs, Connection conn) throws SQLException {
+        Map<String, Object> request = new HashMap<>();
+        int id = rs.getInt("id");
+        request.put("id", id);
+        request.put("protocol", HttpEnum.intToProtocol(rs.getInt("protocol")));
+        request.put("domain", getStringWithDefault(rs, "domain", "example.com"));
+        request.put("path", getStringWithDefault(rs, "path", "/"));
+        request.put("query", getStringWithDefault(rs, "query", ""));
+        request.put("method", HttpEnum.intToMethod(rs.getInt("method")));
+        request.put("add_time", getStringWithDefault(rs, "add_time", ""));
+        request.put("comment", getStringWithDefault(rs, "comment", ""));
+        request.put("is_privilege_test", rs.getInt("is_privilege_test") == 1);
+
+        String apiValue = rs.getString("api");
+        request.put("api", (apiValue != null) ? apiValue : getStringWithDefault(rs, "path", "/"));
+
+        String colorStr = rs.getString("color");
+        if (colorStr != null && !colorStr.isEmpty()) {
+            try {
+                request.put("color", Color.decode(colorStr));
+            } catch (NumberFormatException e) {
+                request.put("color", null);
+            }
+        } else {
+            request.put("color", null);
+        }
+
+        String reqHeaderHash = rs.getString("req_header_hash");
+        String reqBodyHash = rs.getString("req_body_hash");
+        String reqBodyStorage = rs.getString("req_body_storage");
+
+        byte[] requestData = reconstructor.reconstructRequest(conn, reqHeaderHash, reqBodyHash, reqBodyStorage);
+        if (requestData != null && requestData.length > 0) {
+            request.put("request_data", requestData);
+        } else {
+            String basicRequest = createBasicRequest(
+                    (String) request.get("method"),
+                    (String) request.get("domain"),
+                    (String) request.get("path"),
+                    (String) request.get("query")
+            );
+            request.put("request_data", basicRequest.getBytes());
+        }
+
+        return request;
     }
 }

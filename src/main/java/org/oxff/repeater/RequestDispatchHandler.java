@@ -8,6 +8,7 @@ import burp.api.montoya.http.message.responses.HttpResponse;
 import org.oxff.repeater.db.history.HistoryWriteDAO;
 import org.oxff.repeater.http.HttpRequestHelper;
 import org.oxff.repeater.http.RequestDataHelper;
+import org.oxff.repeater.http.RequestCallback;
 import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.http.RequestResponseRecord;
 import org.oxff.repeater.privilege.ReplayEngine;
@@ -22,7 +23,6 @@ import org.oxff.repeater.ui.StatusPanel;
 
 import javax.swing.*;
 import java.awt.*;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -65,13 +65,6 @@ public class RequestDispatchHandler {
 
     // 模式变更监听器列表
     private final List<ModeChangeListener> modeListeners = new ArrayList<>();
-
-    /**
-     * 模式变更监听器接口
-     */
-    public interface ModeChangeListener {
-        void onModeChanged(boolean privilegeTestMode);
-    }
 
     // 请求历史记录映射: 请求ID -> 历史记录列表（ConcurrentHashMap: 多线程并发读写安全）
     private final Map<Integer, List<RequestResponseRecord>> requestHistoryMap = new ConcurrentHashMap<>();
@@ -245,7 +238,7 @@ public class RequestDispatchHandler {
                 setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
             });
 
-            requestManager.makeHttpRequestAsync(finalRequestBytes, timeout, currentRequestId, currentHttpService, isHttp2(currentRequestId), new RequestManager.RequestCallback() {
+            requestManager.makeHttpRequestAsync(finalRequestBytes, timeout, currentRequestId, currentHttpService, isHttp2(currentRequestId), new RequestCallback() {
                 @Override
                 public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                     SwingUtilities.invokeLater(() -> {
@@ -300,12 +293,7 @@ public class RequestDispatchHandler {
             try {
                 responsePanel.setResponse(response);
 
-                HttpRequest requestInfo;
-                if (currentHttpService != null) {
-                    requestInfo = HttpRequest.httpRequest(currentHttpService, ByteArray.byteArray(requestBytes));
-                } else {
-                    requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
-                }
+                HttpRequest requestInfo = createRequestInfo(requestBytes);
                 HttpResponse responseInfo = HttpResponse.httpResponse(ByteArray.byteArray(response));
 
                 String method = requestInfo.method();
@@ -316,115 +304,14 @@ public class RequestDispatchHandler {
                 boolean success = statusCode >= 100 && statusCode < 400;
                 statusPanel.updateStatus(success, response.length, requestTimeMs, responseTimeMs, durationMs);
 
+                HttpRequestHelper.UrlParts parts = HttpRequestHelper.parseUrlComponents(requestInfo.url(), url, currentHttpService);
+
                 if (currentRequestId >= 0) {
-                    String protocol = "http";
-                    String host = "";
-                    String path = "/";
-                    String query = "";
-
-                    try {
-                        URL parsedUrl = new URL(requestInfo.url());
-                        protocol = parsedUrl.getProtocol();
-                        host = HttpRequestHelper.resolveDomainWithPort(parsedUrl, currentHttpService);
-                        path = parsedUrl.getPath();
-                        query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-                    } catch (Exception e) {
-                        LogManager.getInstance().printOutput("[*] 使用备选方法解析URL组件: " + url);
-                        if (url.startsWith("https://")) {
-                            protocol = "https";
-                            url = url.substring(8);
-                        } else if (url.startsWith("http://")) {
-                            url = url.substring(7);
-                        }
-
-                        int pathIndex = url.indexOf('/');
-                        if (pathIndex > 0) {
-                            host = url.substring(0, pathIndex);
-                            url = url.substring(pathIndex);
-                        } else {
-                            host = url;
-                            url = "/";
-                        }
-
-                        int queryIndex = url.indexOf('?');
-                        if (queryIndex > 0) {
-                            path = url.substring(0, queryIndex);
-                            query = url.substring(queryIndex + 1);
-                        } else {
-                            path = url;
-                        }
-                    }
-
-                    String reqApiValue = HttpRequestHelper.computeApiFromRequest(path, query, requestBytes);
-                    requestListPanel.updateRequest(currentRequestId, reqApiValue, protocol, host, path, query, method);
+                    String reqApiValue = HttpRequestHelper.computeApiFromRequest(parts.path, parts.query, requestBytes);
+                    requestListPanel.updateRequest(currentRequestId, reqApiValue, parts.protocol, parts.host, parts.path, parts.query, method);
                 }
 
-                RequestResponseRecord record;
-                try {
-                    URL parsedUrl = new URL(requestInfo.url());
-                    String recordHost = HttpRequestHelper.resolveDomainWithPort(parsedUrl, currentHttpService);
-                    record = new RequestResponseRecord(
-                        currentRequestId,
-                        parsedUrl.getProtocol(),
-                        recordHost,
-                        parsedUrl.getPath(),
-                        parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "",
-                        method
-                    );
-                } catch (Exception e) {
-                    LogManager.getInstance().printOutput("[*] 使用备选方法解析URL: " + url);
-
-                    String protocol = "http";
-                    String host = "";
-                    String path = "/";
-                    String query = "";
-
-                    if (url.startsWith("https://")) {
-                        protocol = "https";
-                        url = url.substring(8);
-                    } else if (url.startsWith("http://")) {
-                        url = url.substring(7);
-                    }
-
-                    int pathIndex = url.indexOf('/');
-                    if (pathIndex > 0) {
-                        host = url.substring(0, pathIndex);
-                        url = url.substring(pathIndex);
-                    } else {
-                        host = url;
-                        url = "/";
-                    }
-
-                    int queryIndex = url.indexOf('?');
-                    if (queryIndex > 0) {
-                        path = url.substring(0, queryIndex);
-                        query = url.substring(queryIndex + 1);
-                    } else {
-                        path = url;
-                    }
-
-                    record = new RequestResponseRecord(
-                        currentRequestId,
-                        protocol,
-                        host,
-                        path,
-                        query,
-                        method
-                    );
-                }
-
-                record.setStatusCode(statusCode);
-                record.setResponseLength(response.length);
-                record.setResponseTime((int) durationMs);
-                record.setRequestData(requestBytes);
-                record.setResponseData(response);
-                record.setTimestamp(new Date());
-
-                addHistoryRecord(currentRequestId, record);
-
-                record.setApi(HttpRequestHelper.computeApiFromRequest(record.getPath(),
-                        record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
-                historyPanel.addHistoryRecord(record);
+                buildAndAddRecord(requestBytes, parts.protocol, parts.host, parts.path, parts.query, method, statusCode, response.length, response, (int) durationMs, null);
 
                 LogManager.getInstance().printOutput(String.format(
                     "%s 请求完成: %s %s → HTTP %d (%d 字节)",
@@ -452,81 +339,23 @@ public class RequestDispatchHandler {
     public void handleResponseFailure(byte[] requestBytes, String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs) {
         statusPanel.updateStatus(false, 0, requestTimeMs, responseTimeMs, durationMs);
         try {
-            HttpRequest requestInfo;
-            if (currentHttpService != null) {
-                requestInfo = HttpRequest.httpRequest(currentHttpService, ByteArray.byteArray(requestBytes));
-            } else {
-                requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
-            }
+            HttpRequest requestInfo = createRequestInfo(requestBytes);
 
             String method = requestInfo.method();
             String url = HttpRequestHelper.extractUrlFromRequest(requestBytes, requestInfo, currentHttpService);
 
-            String protocol = "http";
-            String host = "";
-            String path = "/";
-            String query = "";
-
-            try {
-                URL parsedUrl = new URL(requestInfo.url());
-                protocol = parsedUrl.getProtocol();
-                host = HttpRequestHelper.resolveDomainWithPort(parsedUrl, currentHttpService);
-                path = parsedUrl.getPath();
-                query = parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "";
-            } catch (Exception e) {
-                LogManager.getInstance().printOutput("[*] 使用备选方法解析URL组件: " + url);
-                if (url.startsWith("https://")) {
-                    protocol = "https";
-                    url = url.substring(8);
-                } else if (url.startsWith("http://")) {
-                    url = url.substring(7);
-                }
-
-                int pathIndex = url.indexOf('/');
-                if (pathIndex > 0) {
-                    host = url.substring(0, pathIndex);
-                    url = url.substring(pathIndex);
-                } else {
-                    host = url;
-                    url = "/";
-                }
-
-                int queryIndex = url.indexOf('?');
-                if (queryIndex > 0) {
-                    path = url.substring(0, queryIndex);
-                    query = url.substring(queryIndex + 1);
-                } else {
-                    path = url;
-                }
-            }
+            HttpRequestHelper.UrlParts parts = HttpRequestHelper.parseUrlComponents(requestInfo.url(), url, currentHttpService);
+            String protocol = parts.protocol;
+            String host = parts.host;
+            String path = parts.path;
+            String query = parts.query;
 
             if (currentRequestId >= 0) {
                 String reqApiValue = HttpRequestHelper.computeApiFromRequest(path, query, requestBytes);
                 requestListPanel.updateRequest(currentRequestId, reqApiValue, protocol, host, path, query, method);
             }
 
-            RequestResponseRecord record = new RequestResponseRecord(
-                currentRequestId,
-                protocol,
-                host,
-                path,
-                query,
-                method
-            );
-
-            record.setStatusCode(0);
-            record.setResponseLength(0);
-            record.setResponseTime((int) durationMs);
-            record.setRequestData(requestBytes);
-            record.setResponseData(new byte[0]);
-            record.setTimestamp(new Date());
-            record.setComment("请求失败: " + errorMessage);
-
-            addHistoryRecord(currentRequestId, record);
-
-            record.setApi(HttpRequestHelper.computeApiFromRequest(record.getPath(),
-                    record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
-            historyPanel.addHistoryRecord(record);
+            buildAndAddRecord(requestBytes, protocol, host, path, query, method, 0, 0, new byte[0], (int) durationMs, "请求失败: " + errorMessage);
 
             LogManager.getInstance().printOutput(String.format(
                 "[+] 请求失败已记录: %s %s → 错误: %s",
@@ -534,6 +363,41 @@ public class RequestDispatchHandler {
         } catch (Exception ex) {
             LogManager.getInstance().printError("[!] 处理失败响应时发生异常: " + ex.getMessage());
         }
+    }
+
+    /**
+     * 根据当前 HttpService 创建 HttpRequest 对象
+     */
+    private HttpRequest createRequestInfo(byte[] requestBytes) {
+        if (currentHttpService != null) {
+            return HttpRequest.httpRequest(currentHttpService, ByteArray.byteArray(requestBytes));
+        } else {
+            return HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
+        }
+    }
+
+    /**
+     * 构建响应记录并添加到历史面板，统一 handleResponseSuccess/handleResponseFailure 的记录构建逻辑。
+     *
+     * @param comment 备注信息（失败时传入错误描述，成功时传 null）
+     */
+    private void buildAndAddRecord(byte[] requestBytes, String protocol, String host, String path,
+                                    String query, String method, int statusCode, int responseLength,
+                                    byte[] responseData, int durationMs, String comment) {
+        RequestResponseRecord record = new RequestResponseRecord(currentRequestId, protocol, host, path, query, method);
+        record.setStatusCode(statusCode);
+        record.setResponseLength(responseLength);
+        record.setResponseTime(durationMs);
+        record.setRequestData(requestBytes);
+        record.setResponseData(responseData);
+        record.setTimestamp(new Date());
+        if (comment != null) {
+            record.setComment(comment);
+        }
+        addHistoryRecord(currentRequestId, record);
+        record.setApi(HttpRequestHelper.computeApiFromRequest(record.getPath(),
+                record.getQueryParameters() != null ? record.getQueryParameters() : "", requestBytes));
+        historyPanel.addHistoryRecord(record);
     }
 
     /**
@@ -906,7 +770,7 @@ public class RequestDispatchHandler {
                     java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
 
                     requestManager.makeHttpRequestAsync(requestBytes, requestPanel.getTimeout(),
-                            requestId, httpService, isHttp2(requestId), new RequestManager.RequestCallback() {
+                            requestId, httpService, isHttp2(requestId), new RequestCallback() {
                                 @Override
                                 public void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs) {
                                     SwingUtilities.invokeLater(() -> {

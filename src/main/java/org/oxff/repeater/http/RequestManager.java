@@ -10,18 +10,6 @@ import burp.api.montoya.http.message.responses.HttpResponse;
 import org.oxff.repeater.api.MontoyaApiHolder;
 import org.oxff.repeater.service.HistoryRecordingService;
 
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.Proxy;
-import java.net.URL;
-import java.security.cert.X509Certificate;
 import burp.api.montoya.http.message.HttpHeader;
 
 import java.util.ArrayList;
@@ -29,7 +17,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.*;
 
 /**
@@ -37,18 +24,11 @@ import java.util.concurrent.*;
  */
 public class RequestManager {
     
-    /**
-     * 请求回调接口
-     */
-    public interface RequestCallback {
-        void onSuccess(byte[] response, long requestTimeMs, long responseTimeMs, long durationMs);
-        void onFailure(String errorMessage, long requestTimeMs, long responseTimeMs, long durationMs);
-    }
-    
     // 不再重试，单次请求直接返回结果（重试会导致请求耗时翻倍）
     private final ExecutorService executor;
     private final HistoryRecordingService recordingService;
     private final MontoyaApi api;
+    private final ProxyHttpSender proxyHttpSender;
     
     /**
      * 创建请求管理器
@@ -62,6 +42,7 @@ public class RequestManager {
      */
     public RequestManager(MontoyaApi api) {
         this.api = api;
+        this.proxyHttpSender = new ProxyHttpSender();
 
         // 创建线程池执行器，避免阻塞UI线程
         executor = Executors.newCachedThreadPool(r -> {
@@ -125,137 +106,34 @@ public class RequestManager {
             LogManager.getInstance().printError("[!] 请求数据为空");
             return null;
         }
-        
-        // 构建HTTP服务对象
+
+        // 构建HTTP服务对象和请求信息
         HttpService service = buildHttpService(requestBytes, httpService);
-        
-        // 使用Montoya API解析请求，确保协议正确
-        HttpRequest httpRequest = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-        
-        String host = service.host();
-        int port = service.port();
-        boolean isSecure = service.secure();
-        
-        LogManager.getInstance().printOutput(
-            String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)", 
-                isSecure ? "https" : "http", host, port, useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
-        
-        // 记录请求开始时间
+        HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+
+        logSendStart(service, useHttp2, timeoutSeconds);
         long startTime = System.currentTimeMillis();
-        
-        // 创建Future任务（单次请求，不重试，避免耗时翻倍）
+
         Future<byte[]> future = executor.submit(() -> {
             try {
-                // 检查是否启用代理模式（同步路径也需要支持代理）
-                ProxyConfig proxyConfig = ProxyConfig.getInstance();
-                if (proxyConfig.isProxyEnabled()) {
-                    LogManager.getInstance().printOutput(
-                        String.format("[D] 通过代理 %s:%d 发送请求",
-                            proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
-                    byte[] proxyResponse = makeHttpRequestWithProxy(requestBytes, service, timeoutSeconds);
-                    long responseTime = System.currentTimeMillis() - startTime;
-                    if (proxyResponse != null) {
-                        HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
-                        // 仅在requestId > 0时由RequestManager记录历史（调用方会自行处理requestId<=0的场景）
-                        if (requestId > 0) {
-                            recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
-                                httpRequest, httpResponse, responseTime, service);
-                        }
-                        return proxyResponse;
-                    } else {
-                        LogManager.getInstance().printError("[!] 代理请求返回空响应");
-                        if (requestId > 0) {
-                            recordingService.recordFailure(requestId, requestBytes, httpRequest,
-                                "代理请求返回空响应", responseTime, service);
-                        }
-                        return null;
-                    }
-                }
+                // 代理路径：委托给 ProxyHttpSender
+                byte[] proxyResponse = tryProxySend(requestBytes, service, requestInfo, requestId, startTime, timeoutSeconds);
+                if (proxyResponse != null) return proxyResponse;
 
-                // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正）
-                byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
-
-                // 单次发送，不重试
-                // 根据原始协议版本选择构建方式：HTTP/2 使用 http2Request，否则使用 httpRequest
-                HttpRequest requestToSend = buildRequestToSend(service, fixedBytes, useHttp2);
-                HttpRequestResponse requestResponse = api.http().sendRequest(requestToSend);
-
-                long responseTime = System.currentTimeMillis() - startTime;
-
-                // 检查响应是否为null（连接失败、超时等情况）
-                boolean needFallback = false;
-                if (requestResponse == null || requestResponse.response() == null) {
-                    if (useHttp2) {
-                        LogManager.getInstance().printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
-                        needFallback = true;
-                    } else {
-                        LogManager.getInstance().printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
-                        if (requestId > 0) {
-                            recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                         "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
-                        }
-                        return null;
-                    }
-                }
-
-                byte[] response = null;
-                if (!needFallback && requestResponse != null && requestResponse.response() != null) {
-                    response = requestResponse.response().toByteArray().getBytes();
-                }
-
-                // HTTP/2 空响应回退到 HTTP/1.1
-                if (needFallback || (response == null || response.length == 0)) {
-                    if (useHttp2) {
-                        LogManager.getInstance().printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
-                        HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
-                        requestResponse = api.http().sendRequest(http1Request);
-                        responseTime = System.currentTimeMillis() - startTime;
-                        if (requestResponse != null && requestResponse.response() != null) {
-                            response = requestResponse.response().toByteArray().getBytes();
-                        }
-                    }
-                }
-
-                if (response != null && response.length > 0) {
-                    HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
-                    // 检测 Burp 内部错误响应（如 HTTP/0.9 1337 表示未收到有效响应头）
-                    int statusCode = httpResponse.statusCode();
-                    if (isBurpErrorResponse(statusCode, response)) {
-                        String errorMsg = String.format(
-                            "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
-                        LogManager.getInstance().printError("[!] " + errorMsg);
-                        if (requestId > 0) {
-                            recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                     errorMsg, responseTime, service);
-                        }
-                        return null;
-                    }
-                    if (requestId > 0) {
-                        recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                      httpRequest, httpResponse, responseTime, service);
-                    }
-                    return response;
-                } else {
-                    LogManager.getInstance().printError("[!] 收到空响应");
-                    if (requestId > 0) {
-                        recordingService.recordFailure(requestId, fixedBytes, httpRequest,
-                                                     "收到空响应", responseTime, service);
-                    }
-                    return null;
-                }
+                // 直接发送路径
+                return doSendAndProcess(requestBytes, service, requestInfo, requestId, useHttp2, timeoutSeconds, startTime, null);
             } catch (Exception e) {
                 long responseTime = System.currentTimeMillis() - startTime;
                 LogManager.getInstance().printError("[!] 请求发送失败: " + e.getMessage());
                 if (requestId > 0) {
-                    recordingService.recordFailure(requestId, requestBytes, httpRequest,
-                                                 "请求发送失败: " + e.getMessage(), responseTime, service);
+                    recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                            "请求发送失败: " + e.getMessage(), responseTime, service);
                 }
                 return null;
             }
         });
-        
+
         try {
-            // 设置超时
             return future.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
@@ -330,234 +208,249 @@ public class RequestManager {
             }
             return;
         }
-        
+
         // 在后台线程中执行请求
         executor.submit(() -> {
-            // 记录请求开始时间（在外层try之前，确保异常分支也能访问）
             final long startTime = System.currentTimeMillis();
-            
-            try {
-                // 构建HTTP服务对象
-                HttpService service = buildHttpService(requestBytes, httpService);
-                
-                // 使用Montoya API解析请求，确保协议正确
-                HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-                
-                String host = service.host();
-                int port = service.port();
-                boolean isSecure = service.secure();
-                
-                LogManager.getInstance().printOutput(
-                    String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)",
-                        isSecure ? "https" : "http", host, port, useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
 
-                // 检查是否启用代理模式
-                ProxyConfig proxyConfig = ProxyConfig.getInstance();
-                if (proxyConfig.isProxyEnabled()) {
-                    LogManager.getInstance().printOutput(
-                        String.format("[D] 通过代理 %s:%d 发送请求",
-                            proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
-                    byte[] proxyResponse = makeHttpRequestWithProxy(
-                        requestBytes, service, timeoutSeconds);
-                    long responseTime = System.currentTimeMillis() - startTime;
-                    if (proxyResponse != null) {
-                        HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
-                        // 仅在requestId > 0时由RequestManager记录历史（调用方会自行处理requestId<=0的场景）
-                        if (requestId > 0) {
-                            recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
-                                requestInfo, httpResponse, responseTime, service);
-                        }
+            try {
+                // 构建HTTP服务对象和请求信息
+                HttpService service = buildHttpService(requestBytes, httpService);
+                HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
+
+                logSendStart(service, useHttp2, timeoutSeconds);
+
+                // 代理路径：委托给 ProxyHttpSender
+                byte[] proxyResponse = tryProxySend(requestBytes, service, requestInfo, requestId, startTime, timeoutSeconds);
+                if (proxyResponse != null) {
+                    if (proxyResponse.length > 0) {
                         LogManager.getInstance().printOutput(
                             String.format("[+] 代理请求成功完成，耗时: %d ms，响应大小: %d 字节",
-                                responseTime, proxyResponse.length));
+                                System.currentTimeMillis() - startTime, proxyResponse.length));
                         if (callback != null) {
-                            callback.onSuccess(proxyResponse, startTime, System.currentTimeMillis(), responseTime);
-                        }
-                    } else {
-                        LogManager.getInstance().printError("[!] 代理请求返回空响应");
-                        if (requestId > 0) {
-                            recordingService.recordFailure(requestId, requestBytes, requestInfo,
-                                                         "代理请求返回空响应", responseTime, service);
-                        }
-                        if (callback != null) {
-                            callback.onFailure("代理请求返回空响应", startTime, System.currentTimeMillis(), responseTime);
+                            callback.onSuccess(proxyResponse, startTime, System.currentTimeMillis(),
+                                    System.currentTimeMillis() - startTime);
                         }
                     }
                     return;
                 }
 
-                // 修正 Content-Length，确保与实际 body 一致（类似 Burp Repeater 的自动修正功能）
-                byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
-
-                // 单次发送，不重试，避免请求耗时翻倍
-                // 根据原始协议版本选择构建方式：HTTP/2 使用 http2Request，否则使用 httpRequest
-                HttpRequest requestToSend = buildRequestToSend(service, fixedBytes, useHttp2);
-
-                // BUG修复：原代码直接调用 api.http().sendRequest()，无超时控制。
-                // 异步路径中 timeoutSeconds 参数被忽略，导致偶发阻塞时无限等待。
-                // 修复：用独立线程执行 sendRequest，主线程用 join(timeout) 等待，超时后中断发送线程。
-                // 确保批量场景下不会累积无限阻塞的超时线程。
-                final HttpRequestResponse[] resultHolder = {null};
-                final Exception[] errorHolder = {null};
-                Thread sendThread = new Thread(() -> {
-                    try {
-                        resultHolder[0] = api.http().sendRequest(requestToSend);
-                    } catch (Exception ex) {
-                        errorHolder[0] = ex;
-                    }
-                }, "RepeaterManager-HttpSend");
-                sendThread.setDaemon(true);
-                sendThread.start();
-                // 等待 HTTP 发送完成，超时时间基于 timeoutSeconds（额外增加10秒缓冲，避免正常请求被误杀）
-                long sendTimeoutMs = (timeoutSeconds + 10) * 1000L;
-                sendThread.join(sendTimeoutMs);
-
-                if (sendThread.isAlive()) {
-                    // 超时：中断发送线程（Montoya SDK 内部可能响应中断）
-                    sendThread.interrupt();
-                    long responseTime = System.currentTimeMillis() - startTime;
-                    String timeoutMsg = String.format("HTTP请求发送超时（%d秒）", timeoutSeconds + 10);
-                    LogManager.getInstance().printError("[!] " + timeoutMsg);
-                    if (requestId > 0) {
-                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                timeoutMsg, responseTime, service);
-                    }
-                    if (callback != null) {
-                        callback.onFailure(timeoutMsg, startTime, System.currentTimeMillis(), responseTime);
-                    }
-                    return;
-                }
-
-                // 获取发送结果（可能为异常）
-                if (errorHolder[0] != null) {
-                    throw errorHolder[0];
-                }
-                HttpRequestResponse requestResponse = resultHolder[0];
-
-                long responseTime = System.currentTimeMillis() - startTime;
-
-                // 检查响应是否为null（连接失败、超时等情况）
-                boolean needFallback = false;
-                if (requestResponse == null || requestResponse.response() == null) {
-                    if (useHttp2) {
-                        LogManager.getInstance().printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
-                        needFallback = true;
-                    } else {
-                        LogManager.getInstance().printError("[!] 请求发送失败：未收到响应（目标可能不可达或连接被拒绝）");
-                        if (requestId > 0) {
-                            recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                         "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service);
-                        }
-                        if (callback != null) {
-                            callback.onFailure("未收到响应（目标可能不可达或连接被拒绝）", startTime, System.currentTimeMillis(), responseTime);
-                        }
-                        return;
-                    }
-                }
-
-                byte[] response = null;
-                if (!needFallback && requestResponse != null && requestResponse.response() != null) {
-                    response = requestResponse.response().toByteArray().getBytes();
-                }
-
-                // HTTP/2 空响应回退到 HTTP/1.1
-                if (needFallback || (response == null || response.length == 0)) {
-                    if (useHttp2) {
-                        LogManager.getInstance().printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
-                        HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
-                        final HttpRequestResponse[] fallbackHolder = {null};
-                        final Exception[] fallbackError = {null};
-                        Thread fallbackThread = new Thread(() -> {
-                            try {
-                                fallbackHolder[0] = api.http().sendRequest(http1Request);
-                            } catch (Exception ex) {
-                                fallbackError[0] = ex;
-                            }
-                        }, "RepeaterManager-HttpSend-Fallback");
-                        fallbackThread.setDaemon(true);
-                        fallbackThread.start();
-                        fallbackThread.join(sendTimeoutMs);
-                        if (fallbackThread.isAlive()) {
-                            fallbackThread.interrupt();
-                        }
-                        if (fallbackError[0] != null) {
-                            throw fallbackError[0];
-                        }
-                        responseTime = System.currentTimeMillis() - startTime;
-                        if (fallbackHolder[0] != null && fallbackHolder[0].response() != null) {
-                            response = fallbackHolder[0].response().toByteArray().getBytes();
-                        }
-                    }
-                }
+                // 直接发送路径
+                byte[] response = doSendAndProcess(requestBytes, service, requestInfo, requestId,
+                        useHttp2, timeoutSeconds, startTime, callback);
 
                 if (response != null && response.length > 0) {
-                    HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
-                    // 检测 Burp 内部错误响应（如 HTTP/0.9 1337 表示未收到有效响应头）
-                    int statusCode = httpResponse.statusCode();
-                    if (isBurpErrorResponse(statusCode, response)) {
-                        String errorMsg = String.format(
-                            "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
-                        LogManager.getInstance().printError("[!] " + errorMsg);
-                        if (requestId > 0) {
-                            recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                         errorMsg, responseTime, service);
-                        }
-                        if (callback != null) {
-                            callback.onFailure(errorMsg, startTime, System.currentTimeMillis(), responseTime);
-                        }
-                        return;
-                    }
-                    if (requestId > 0) {
-                        recordingService.recordSuccess(requestId, fixedBytes, response,
-                                                      requestInfo, httpResponse, responseTime, service);
-                    }
                     LogManager.getInstance().printOutput(
                         String.format("[+] 请求成功完成，耗时: %d ms，响应大小: %d 字节",
-                            responseTime, response.length));
+                            System.currentTimeMillis() - startTime, response.length));
                     if (callback != null) {
-                        callback.onSuccess(response, startTime, System.currentTimeMillis(), responseTime);
+                        callback.onSuccess(response, startTime, System.currentTimeMillis(),
+                                System.currentTimeMillis() - startTime);
                     }
-                } else {
-                    LogManager.getInstance().printError("[!] 收到空响应");
-                    if (requestId > 0) {
-                        recordingService.recordFailure(requestId, fixedBytes, requestInfo,
-                                                     "收到空响应", responseTime, service);
-                    }
-                    if (callback != null) {
-                        callback.onFailure("收到空响应", startTime, System.currentTimeMillis(), responseTime);
-                    }
+                } else if (callback != null) {
+                    callback.onFailure("收到空响应", startTime, System.currentTimeMillis(),
+                            System.currentTimeMillis() - startTime);
                 }
             } catch (Exception e) {
                 LogManager.getInstance().printError("[!] 发送请求时发生异常: " + e.getMessage());
-                // 记录异常堆栈信息
                 e.printStackTrace();
-                
-                // 记录异常的历史记录
+
                 long responseTime = System.currentTimeMillis() - startTime;
                 if (requestId > 0) {
                     try {
-                        // 重新构建HTTP服务信息和请求信息
                         HttpService service = buildHttpService(requestBytes, httpService);
                         HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-                        
-                        recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                     "发送请求时发生异常: " + e.getMessage(), responseTime, service);
+                        recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                                "发送请求时发生异常: " + e.getMessage(), responseTime, service);
                     } catch (Exception ex) {
-                        // 如果创建HTTP服务失败，使用基本的请求分析
                         LogManager.getInstance().printError("[!] 创建HTTP服务失败，使用基本请求分析: " + ex.getMessage());
                         HttpRequest requestInfo = HttpRequest.httpRequest(ByteArray.byteArray(requestBytes));
-                        recordingService.recordFailure(requestId, requestBytes, requestInfo, 
-                                                     "发送请求时发生异常: " + e.getMessage(), responseTime);
+                        recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                                "发送请求时发生异常: " + e.getMessage(), responseTime);
                     }
                 }
-                
+
                 if (callback != null) {
-                    callback.onFailure("发送请求时发生异常: " + e.getMessage(), startTime, System.currentTimeMillis(), responseTime);
+                    callback.onFailure("发送请求时发生异常: " + e.getMessage(), startTime,
+                            System.currentTimeMillis(), responseTime);
                 }
             }
         });
     }
-    
+
+    // ==================== 共享核心方法 ====================
+
+    /**
+     * 记录发送开始日志
+     */
+    private void logSendStart(HttpService service, boolean useHttp2, int timeoutSeconds) {
+        LogManager.getInstance().printOutput(
+            String.format("[*] 正在发送请求到 %s://%s:%d (协议: %s, 超时时间: %d秒)",
+                service.secure() ? "https" : "http", service.host(), service.port(),
+                useHttp2 ? "HTTP/2" : "HTTP/1.1", timeoutSeconds));
+    }
+
+    /**
+     * 尝试通过代理发送请求。
+     * @return null = 代理未启用（调用方继续直接发送）；非空 = 代理已处理（含失败时返回空数组）
+     */
+    private byte[] tryProxySend(byte[] requestBytes, HttpService service, HttpRequest requestInfo,
+                                 int requestId, long startTime, int timeoutSeconds) {
+        ProxyConfig proxyConfig = ProxyConfig.getInstance();
+        if (!proxyConfig.isProxyEnabled()) {
+            return null;
+        }
+
+        LogManager.getInstance().printOutput(
+            String.format("[D] 通过代理 %s:%d 发送请求",
+                proxyConfig.getProxyHost(), proxyConfig.getProxyPort()));
+
+        byte[] proxyResponse = proxyHttpSender.send(requestBytes, service, timeoutSeconds);
+        long responseTime = System.currentTimeMillis() - startTime;
+
+        if (proxyResponse != null && proxyResponse.length > 0) {
+            HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(proxyResponse));
+            if (requestId > 0) {
+                recordingService.recordSuccess(requestId, requestBytes, proxyResponse,
+                    requestInfo, httpResponse, responseTime, service);
+            }
+            return proxyResponse;
+        } else {
+            LogManager.getInstance().printError("[!] 代理请求返回空响应");
+            if (requestId > 0) {
+                recordingService.recordFailure(requestId, requestBytes, requestInfo,
+                    "代理请求返回空响应", responseTime, service);
+            }
+            return new byte[0];
+        }
+    }
+
+    /**
+     * 直接发送HTTP请求并处理响应（含HTTP/2回退、Burp错误检测、历史记录）
+     */
+    private byte[] doSendAndProcess(byte[] requestBytes, HttpService service, HttpRequest requestInfo,
+                                     int requestId, boolean useHttp2, int timeoutSeconds,
+                                     long startTime, RequestCallback callback) throws Exception {
+        // 修正 Content-Length
+        byte[] fixedBytes = RequestDataHelper.fixContentLength(requestBytes, service);
+
+        // 构建请求
+        HttpRequest requestToSend = buildRequestToSend(service, fixedBytes, useHttp2);
+
+        // 带超时的发送
+        HttpRequestResponse requestResponse = sendWithTimeout(requestToSend, timeoutSeconds);
+        long responseTime = System.currentTimeMillis() - startTime;
+
+        // 检查空响应
+        if (requestResponse == null || requestResponse.response() == null) {
+            if (useHttp2) {
+                LogManager.getInstance().printOutput("[*] HTTP/2 请求未收到响应，尝试回退到 HTTP/1.1");
+                HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
+                requestResponse = sendWithTimeout(http1Request, timeoutSeconds);
+                responseTime = System.currentTimeMillis() - startTime;
+                if (requestResponse == null || requestResponse.response() == null) {
+                    recordAndCallback(requestId, fixedBytes, requestInfo,
+                        "HTTP/2 回退后仍未收到响应", responseTime, service, callback, startTime);
+                    return null;
+                }
+            } else {
+                recordAndCallback(requestId, fixedBytes, requestInfo,
+                    "未收到响应（目标可能不可达或连接被拒绝）", responseTime, service, callback, startTime);
+                return null;
+            }
+        }
+
+        byte[] response = requestResponse.response().toByteArray().getBytes();
+
+        // HTTP/2 空响应回退
+        if (response == null || response.length == 0) {
+            if (useHttp2) {
+                LogManager.getInstance().printOutput("[*] HTTP/2 请求返回空响应，自动回退到 HTTP/1.1 重试");
+                HttpRequest http1Request = buildRequestToSend(service, fixedBytes, false);
+                requestResponse = sendWithTimeout(http1Request, timeoutSeconds);
+                responseTime = System.currentTimeMillis() - startTime;
+                if (requestResponse != null && requestResponse.response() != null) {
+                    response = requestResponse.response().toByteArray().getBytes();
+                }
+            }
+        }
+
+        // 处理最终响应
+        if (response != null && response.length > 0) {
+            HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
+            int statusCode = httpResponse.statusCode();
+            if (isBurpErrorResponse(statusCode, response)) {
+                String errorMsg = String.format(
+                    "服务器返回异常响应 (HTTP %d)，可能是请求格式错误或目标不支持", statusCode);
+                LogManager.getInstance().printError("[!] " + errorMsg);
+                if (requestId > 0) {
+                    recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                        errorMsg, responseTime, service);
+                }
+                if (callback != null) {
+                    callback.onFailure(errorMsg, startTime, System.currentTimeMillis(), responseTime);
+                }
+                return null;
+            }
+            if (requestId > 0) {
+                recordingService.recordSuccess(requestId, fixedBytes, response,
+                    requestInfo, httpResponse, responseTime, service);
+            }
+            return response;
+        } else {
+            recordAndCallback(requestId, fixedBytes, requestInfo,
+                "收到空响应", responseTime, service, callback, startTime);
+            return null;
+        }
+    }
+
+    /**
+     * 带超时控制的HTTP请求发送（Thread+join模式）
+     */
+    private HttpRequestResponse sendWithTimeout(HttpRequest requestToSend, int timeoutSeconds) throws Exception {
+        final HttpRequestResponse[] resultHolder = {null};
+        final Exception[] errorHolder = {null};
+        Thread sendThread = new Thread(() -> {
+            try {
+                resultHolder[0] = api.http().sendRequest(requestToSend);
+            } catch (Exception ex) {
+                errorHolder[0] = ex;
+            }
+        }, "RepeaterManager-HttpSend");
+        sendThread.setDaemon(true);
+        sendThread.start();
+
+        long sendTimeoutMs = (timeoutSeconds + 10) * 1000L;
+        sendThread.join(sendTimeoutMs);
+
+        if (sendThread.isAlive()) {
+            sendThread.interrupt();
+            return null; // timeout
+        }
+
+        if (errorHolder[0] != null) {
+            throw errorHolder[0];
+        }
+
+        return resultHolder[0];
+    }
+
+    /**
+     * 记录历史失败 + 可选回调通知
+     */
+    private void recordAndCallback(int requestId, byte[] fixedBytes, HttpRequest requestInfo,
+                                    String errorMsg, long responseTime, HttpService service,
+                                    RequestCallback callback, long startTime) {
+        LogManager.getInstance().printError("[!] " + errorMsg);
+        if (requestId > 0) {
+            recordingService.recordFailure(requestId, fixedBytes, requestInfo,
+                errorMsg, responseTime, service);
+        }
+        if (callback != null) {
+            callback.onFailure(errorMsg, startTime, System.currentTimeMillis(), responseTime);
+        }
+    }
+
     /**
      * 根据协议版本构建要发送的HttpRequest
      * HTTP/2请求使用 http2Request 构建，包含伪头部和独立的headers/body；
@@ -699,244 +592,6 @@ public class RequestManager {
     }
     
     /**
-     * 通过代理发送HTTP请求
-     * 使用java.net.HttpURLConnection通过指定代理发送请求，绕过Burp的请求管道
-     *
-     * @param requestBytes 原始请求字节数组
-     * @param service HTTP服务信息
-     * @param timeoutSeconds 超时时间(秒)
-     * @return 响应字节数组（包含完整的HTTP响应：状态行+头+体），失败返回null
-     */
-    private byte[] makeHttpRequestWithProxy(byte[] requestBytes, HttpService service, int timeoutSeconds) {
-        HttpURLConnection conn = null;
-        try {
-            String protocol = service.secure() ? "https" : "http";
-            String host = service.host();
-            int port = service.port();
-
-            // 解析请求行获取方法和路径
-            String requestStr = new String(requestBytes, "UTF-8");
-            String firstLine = requestStr.substring(0, requestStr.indexOf("\r\n"));
-            String[] requestParts = firstLine.split("\\s+");
-            String method = requestParts[0];
-            String path = requestParts.length >= 2 ? requestParts[1] : "/";
-
-            // 构建完整URL
-            String urlStr = String.format("%s://%s:%d%s", protocol, host, port, path);
-            URL url = new URL(urlStr);
-
-            // 创建代理对象
-            ProxyConfig proxyConfig = ProxyConfig.getInstance();
-            Proxy proxy = proxyConfig.toJavaProxy();
-
-            // 打开连接并配置
-            conn = (HttpURLConnection) url.openConnection(proxy);
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(timeoutSeconds * 1000);
-            conn.setReadTimeout(timeoutSeconds * 1000);
-            conn.setInstanceFollowRedirects(false);
-
-            // 应用请求头
-            boolean hasContentType = applyProxyRequestHeaders(conn, service, requestBytes);
-
-            // 准备并写入请求体
-            int bodyOffset = findBodyOffset(requestBytes);
-            prepareAndWriteProxyBody(conn, requestBytes, bodyOffset, method, hasContentType);
-
-            // 读取并返回响应
-            return readConnectionResponse(conn);
-
-        } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 代理请求失败: " + e.getMessage());
-            return null;
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-    }
-
-    /**
-     * 将请求的HTTP头部应用到代理连接上
-     *
-     * @param conn         代理连接
-     * @param service      HTTP服务信息
-     * @param requestBytes 原始请求字节数组
-     * @return 是否包含Content-Type头
-     */
-    private boolean applyProxyRequestHeaders(HttpURLConnection conn, HttpService service, byte[] requestBytes) {
-        HttpRequest requestInfo = HttpRequest.httpRequest(service, ByteArray.byteArray(requestBytes));
-        List<String> headers = convertHeadersToStringList(requestInfo.headers());
-        boolean hasContentType = false;
-        for (int i = 0; i < headers.size(); i++) {
-            String header = headers.get(i);
-            int colonIdx = header.indexOf(':');
-            if (colonIdx > 0) {
-                String headerName = header.substring(0, colonIdx).trim();
-                String headerValue = header.substring(colonIdx + 1).trim();
-                if (headerName.equalsIgnoreCase("Host") || headerName.equalsIgnoreCase("Proxy-Connection")) {
-                    continue;
-                }
-                if (headerName.equalsIgnoreCase("Content-Type")) {
-                    hasContentType = true;
-                }
-                conn.setRequestProperty(headerName, headerValue);
-            }
-        }
-
-        // 处理HTTPS信任所有证书
-        if (conn instanceof HttpsURLConnection) {
-            setupTrustAllSSL((HttpsURLConnection) conn);
-        }
-
-        return hasContentType;
-    }
-
-    /**
-     * 准备代理连接的请求体输出并写入body数据
-     *
-     * @param conn          代理连接
-     * @param requestBytes  原始请求字节数组
-     * @param bodyOffset    请求体起始偏移量
-     * @param method        HTTP方法
-     * @param hasContentType 是否已有Content-Type头
-     */
-    private void prepareAndWriteProxyBody(HttpURLConnection conn, byte[] requestBytes,
-                                          int bodyOffset, String method, boolean hasContentType) throws IOException {
-        boolean hasBody = bodyOffset > 0 && bodyOffset < requestBytes.length;
-        boolean isBodyMethod = method.equalsIgnoreCase("POST")
-                || method.equalsIgnoreCase("PUT")
-                || method.equalsIgnoreCase("PATCH");
-
-        if (hasBody) {
-            conn.setDoOutput(true);
-            if (!hasContentType) {
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            }
-        } else if (isBodyMethod) {
-            conn.setDoOutput(true);
-            conn.setFixedLengthStreamingMode(0);
-        }
-
-        conn.connect();
-
-        if (hasBody) {
-            byte[] bodyBytes = new byte[requestBytes.length - bodyOffset];
-            System.arraycopy(requestBytes, bodyOffset, bodyBytes, 0, bodyBytes.length);
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(bodyBytes);
-                os.flush();
-            }
-        } else if (isBodyMethod) {
-            try (OutputStream os = conn.getOutputStream()) {
-                os.flush();
-            }
-        }
-    }
-
-    /**
-     * 从代理连接读取完整的HTTP响应（状态行 + 响应头 + 响应体）
-     *
-     * @param conn 代理连接（已发送请求）
-     * @return 完整的HTTP响应字节数组
-     * @throws IOException 读取失败时抛出
-     */
-    private byte[] readConnectionResponse(HttpURLConnection conn) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        int responseCode = conn.getResponseCode();
-        String responseMessage = conn.getResponseMessage();
-
-        // 构建状态行
-        String statusLine = String.format("HTTP/1.1 %d %s\r\n", responseCode,
-                responseMessage != null ? responseMessage : "");
-        baos.write(statusLine.getBytes("UTF-8"));
-
-        // 构建响应头
-        for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
-            String headerName = entry.getKey();
-            if (headerName == null) continue;
-            for (String headerValue : entry.getValue()) {
-                baos.write(String.format("%s: %s\r\n", headerName, headerValue).getBytes("UTF-8"));
-            }
-        }
-        baos.write("\r\n".getBytes("UTF-8"));
-
-        // 读取响应体
-        InputStream is = null;
-        try {
-            is = conn.getInputStream();
-        } catch (Exception e) {
-            is = conn.getErrorStream();
-            if (is == null) {
-                LogManager.getInstance().printError(
-                    "[!] 响应流获取失败，错误流也为空: " + e.getMessage());
-            }
-        }
-
-        if (is != null) {
-            try (InputStream inputStream = is) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    baos.write(buffer, 0, bytesRead);
-                }
-            }
-        }
-
-        byte[] response = baos.toByteArray();
-        LogManager.getInstance().printOutput(
-                String.format("[D] 代理响应: HTTP %d, 响应总大小: %d 字节", responseCode, response.length));
-        return response;
-    }
-
-    /**
-     * 查找请求体起始偏移量
-     * 在HTTP请求中，头部和正文之间以\r\n\r\n分隔
-     *
-     * @param requestBytes 原始请求字节数组
-     * @return 请求体起始偏移量，如果没有正文则返回-1
-     */
-    private int findBodyOffset(byte[] requestBytes) {
-        // 查找 \r\n\r\n 分隔符
-        for (int i = 0; i < requestBytes.length - 3; i++) {
-            if (requestBytes[i] == '\r' && requestBytes[i + 1] == '\n'
-                && requestBytes[i + 2] == '\r' && requestBytes[i + 3] == '\n') {
-                return i + 4;
-            }
-        }
-        // 查找 \n\n 分隔符（非标准但偶尔出现）
-        for (int i = 0; i < requestBytes.length - 1; i++) {
-            if (requestBytes[i] == '\n' && requestBytes[i + 1] == '\n') {
-                return i + 2;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * 配置HTTPS连接信任所有SSL证书
-     * 仅用于调试代理场景，生产环境慎用
-     *
-     * @param conn HTTPS连接对象
-     */
-    private void setupTrustAllSSL(HttpsURLConnection conn) {
-        try {
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, new TrustManager[]{
-                new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-                }
-            }, new java.security.SecureRandom());
-            conn.setSSLSocketFactory(sslContext.getSocketFactory());
-            conn.setHostnameVerifier((hostname, session) -> true);
-        } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 设置SSL信任失败: " + e.getMessage());
-        }
-    }
-
-    /**
      * 检测响应是否为 Burp Suite 内部错误响应。
      * Burp 使用特殊的状态码和协议标识来表示请求/响应层面的异常：
      * - HTTP/0.9 1337: 未收到有效的响应头（No response headers received）
@@ -992,7 +647,7 @@ public class RequestManager {
      * 注意：Montoya SDK 的 headers() 返回的是纯 HTTP 头部，不包含请求行
      * 若需要请求行信息，应使用 method()、path()、httpVersion() 等方法单独获取
      */
-    private static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
+    static List<String> convertHeadersToStringList(List<burp.api.montoya.http.message.HttpHeader> rawHeaders) {
         List<String> result = new ArrayList<>();
         for (burp.api.montoya.http.message.HttpHeader header : rawHeaders) {
             String name = header.name();

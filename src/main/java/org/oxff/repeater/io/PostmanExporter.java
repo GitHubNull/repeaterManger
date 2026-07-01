@@ -551,15 +551,4 @@ public class PostmanExporter {
             default: return "";
         }
     }
-
-    private static class ParsedHttpMessage {
-        String method;
-        String requestTarget;
-        JsonArray headers;
-        String body;
-        String contentType;
-        @SuppressWarnings("unused")
-        int statusCode;
-        String statusText;
-    }
 }

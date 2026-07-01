@@ -27,26 +27,6 @@ import java.util.Map;
 public class FetchRequestParser {
 
     /**
-     * Clipboard content format enum
-     */
-    public enum ClipboardFormat {
-        RAW_HTTP,       // Raw HTTP message (starts with METHOD / HTTP)
-        FETCH_BROWSER,  // Chrome "Copy as fetch"
-        FETCH_NODEJS,   // Chrome "Copy as fetch (Node.js)"
-        UNKNOWN         // Unrecognized
-    }
-
-    /**
-     * Internal data structure: parsed fetch request
-     */
-    private static class FetchRequest {
-        String url;
-        String method = "GET";
-        final Map<String, String> headers = new LinkedHashMap<>();
-        String body = null;
-    }
-
-    /**
      * Detect the format type of input text.
      *
      * @param text clipboard content

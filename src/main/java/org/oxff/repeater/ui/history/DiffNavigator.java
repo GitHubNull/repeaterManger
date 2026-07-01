@@ -68,15 +68,15 @@ public class DiffNavigator {
         mergedRegions.clear();
         currentDiffIndex = -1;
 
-        List<DiffPane.DiffRegion> leftRegions = leftDiffPane.getDiffRegions();
-        List<DiffPane.DiffRegion> rightRegions = rightDiffPane.getDiffRegions();
+        List<DiffRegion> leftRegions = leftDiffPane.getDiffRegions();
+        List<DiffRegion> rightRegions = rightDiffPane.getDiffRegions();
 
         // 使用归并方式按行号合并（两个列表本身是按行号顺序的）
         int li = 0, ri = 0;
 
         while (li < leftRegions.size() && ri < rightRegions.size()) {
-            DiffPane.DiffRegion left = leftRegions.get(li);
-            DiffPane.DiffRegion right = rightRegions.get(ri);
+            DiffRegion left = leftRegions.get(li);
+            DiffRegion right = rightRegions.get(ri);
 
             if (left.getLineNumber() == right.getLineNumber()) {
                 // 同一行号，合并为一个 MergedDiffRegion
@@ -109,7 +109,7 @@ public class DiffNavigator {
 
         // 处理剩余
         while (li < leftRegions.size()) {
-            DiffPane.DiffRegion left = leftRegions.get(li);
+            DiffRegion left = leftRegions.get(li);
             mergedRegions.add(new MergedDiffRegion(
                 left.getLineNumber(), left.getDiffType(),
                 left.getStartOffset(), left.getEndOffset(),
@@ -118,7 +118,7 @@ public class DiffNavigator {
             li++;
         }
         while (ri < rightRegions.size()) {
-            DiffPane.DiffRegion right = rightRegions.get(ri);
+            DiffRegion right = rightRegions.get(ri);
             mergedRegions.add(new MergedDiffRegion(
                 right.getLineNumber(), right.getDiffType(),
                 -1, -1,
