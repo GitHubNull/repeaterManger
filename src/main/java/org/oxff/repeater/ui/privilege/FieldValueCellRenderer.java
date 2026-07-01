@@ -5,10 +5,10 @@ import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 
 /**
- * 令牌值摘要列的单元格渲染器
+ * 字段值摘要列的单元格渲染器
  * 实现自动省略号显示和鼠标悬停tooltip
  */
-public class TokenValueCellRenderer extends DefaultTableCellRenderer {
+public class FieldValueCellRenderer extends DefaultTableCellRenderer {
 
     private static final int MAX_TOOLTIP_LENGTH = 500;
 

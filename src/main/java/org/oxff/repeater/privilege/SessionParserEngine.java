@@ -4,8 +4,8 @@ import org.oxff.repeater.logging.LogManager;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
@@ -21,21 +21,21 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * HTTP报文会话令牌解析引擎 - 无状态工具类
- * TokenReplacementEngine的反向操作：从HTTP报文中提取会话令牌值
+ * HTTP报文会话字段解析引擎 - 无状态工具类
+ * FieldReplacementEngine的反向操作：从HTTP报文中提取会话字段值
  *
  * 支持6种位置类型：HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM
  */
 public class SessionParserEngine {
 
     /**
-     * 解析HTTP报文，提取指定位置的令牌值
+     * 解析HTTP报文，提取指定位置的字段值
      *
      * @param httpMessage 原始HTTP请求字节数组
-     * @param locations  令牌位置列表
+     * @param locations  字段位置列表
      * @return 解析结果封装
      */
-    public static SessionParseResult parse(byte[] httpMessage, List<TokenLocation> locations) {
+    public static SessionParseResult parse(byte[] httpMessage, List<FieldDefinition> locations) {
         if (httpMessage == null || httpMessage.length == 0) {
             return new SessionParseResult("", "", null, new HashMap<>(), new HashMap<>());
         }
@@ -64,16 +64,16 @@ public class SessionParserEngine {
         // 提取Content-Type
         String contentType = extractContentType(headerStr);
 
-        // 构建locationId到TokenLocation的映射
-        Map<Integer, TokenLocation> locationMap = new HashMap<>();
-        for (TokenLocation loc : locations) {
+        // 构建locationId到FieldDefinition的映射
+        Map<Integer, FieldDefinition> locationMap = new HashMap<>();
+        for (FieldDefinition loc : locations) {
             locationMap.put(loc.getId(), loc);
         }
 
         // 提取各位置的值
         Map<Integer, String> extractedValues = new HashMap<>();
 
-        for (TokenLocation loc : locations) {
+        for (FieldDefinition loc : locations) {
             if (!loc.isEnabled()) {
                 continue;
             }
@@ -110,7 +110,7 @@ public class SessionParserEngine {
                         break;
                 }
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 令牌提取失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
+                LogManager.getInstance().printError("[!] 字段提取失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
             }
             if (value != null) {
                 extractedValues.put(loc.getId(), value);
@@ -121,29 +121,29 @@ public class SessionParserEngine {
     }
 
     /**
-     * 将解析结果与启用的TokenScheme进行匹配，返回第一个匹配的方案
+     * 将解析结果与启用的Scheme进行匹配，返回第一个匹配的方案
      *
      * @param result   解析结果
-     * @param schemes  TokenScheme列表
+     * @param schemes  Scheme列表
      * @return 包含第一个匹配SchemeMatch的列表（单元素），无匹配返回空列表
      */
-    public static List<SchemeMatch> matchSchemes(SessionParseResult result, List<TokenScheme> schemes) {
+    public static List<SchemeMatch> matchSchemes(SessionParseResult result, List<Scheme> schemes) {
         List<SchemeMatch> matches = new ArrayList<>();
         if (result == null || schemes == null || schemes.isEmpty()) {
             return matches;
         }
 
-        for (TokenScheme scheme : schemes) {
+        for (Scheme scheme : schemes) {
             if (!scheme.isEnabled()) {
                 continue;
             }
-            List<Integer> locationIds = scheme.getTokenLocationIds();
-            if (locationIds == null || locationIds.isEmpty()) {
+            List<Integer> fieldIds = scheme.getFieldIds();
+            if (fieldIds == null || fieldIds.isEmpty()) {
                 continue;
             }
 
             int matchedCount = 0;
-            for (Integer locId : locationIds) {
+            for (Integer locId : fieldIds) {
                 if (result.getExtractedValue(locId) != null) {
                     matchedCount++;
                 }
@@ -151,7 +151,7 @@ public class SessionParserEngine {
 
             // 返回第一个匹配率大于0的方案
             if (matchedCount > 0) {
-                matches.add(new SchemeMatch(scheme, matchedCount, locationIds.size()));
+                matches.add(new SchemeMatch(scheme, matchedCount, fieldIds.size()));
                 break;
             }
         }

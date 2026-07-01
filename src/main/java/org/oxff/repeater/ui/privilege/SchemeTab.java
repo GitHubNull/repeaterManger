@@ -1,9 +1,9 @@
 package org.oxff.repeater.ui.privilege;
 
 import org.oxff.repeater.privilege.SessionManager;
-import org.oxff.repeater.privilege.TokenSchemeYamlIO;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.SchemeYamlIO;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -15,17 +15,17 @@ import java.io.File;
 import java.util.List;
 
 /**
- * 令牌方案管理子标签页
- * 管理令牌方案的CRUD操作，方案为令牌位置的组合
+ * 方案管理子标签页
+ * 管理方案的CRUD操作，方案为字段定义的组合
  */
-public class TokenSchemeTab extends JPanel {
+public class SchemeTab extends JPanel {
 
     private final JTable schemeTable;
-    private final TokenSchemeTableModel schemeModel;
-    private TableRowSorter<TokenSchemeTableModel> schemeSorter;
+    private final SchemeTableModel schemeModel;
+    private TableRowSorter<SchemeTableModel> schemeSorter;
     private JTextField searchField;
 
-    public TokenSchemeTab() {
+    public SchemeTab() {
         super(new BorderLayout(0, 5));
 
         // ========== 搜索面板 ==========
@@ -52,12 +52,12 @@ public class TokenSchemeTab extends JPanel {
         add(searchPanel, BorderLayout.NORTH);
 
         // ========== 方案表格 ==========
-        schemeModel = new TokenSchemeTableModel();
+        schemeModel = new SchemeTableModel();
         schemeTable = new JTable(schemeModel);
         schemeTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         schemeTable.getColumnModel().getColumn(0).setPreferredWidth(150);  // 名称
         schemeTable.getColumnModel().getColumn(1).setPreferredWidth(200);  // 描述
-        schemeTable.getColumnModel().getColumn(2).setPreferredWidth(80);   // 令牌位置数
+        schemeTable.getColumnModel().getColumn(2).setPreferredWidth(80);   // 关联字段数
         schemeTable.getColumnModel().getColumn(3).setPreferredWidth(50);   // 全局
         schemeTable.getColumnModel().getColumn(4).setPreferredWidth(50);   // 启用
 
@@ -125,7 +125,7 @@ public class TokenSchemeTab extends JPanel {
     }
 
     public void refreshData() {
-        schemeModel.setData(SessionManager.getInstance().getTokenSchemes());
+        schemeModel.setData(SessionManager.getInstance().getSchemes());
     }
 
     private void applyFilter() {
@@ -142,13 +142,13 @@ public class TokenSchemeTab extends JPanel {
     }
 
     private void addScheme() {
-        TokenSchemeEditDialog dialog = new TokenSchemeEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加令牌方案", null);
+        SchemeEditDialog dialog = new SchemeEditDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this), "添加方案", null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
-            SessionManager.getInstance().addTokenScheme(
+            SessionManager.getInstance().addScheme(
                     dialog.getSchemeName(), dialog.getDescription(),
-                    dialog.isEnabled(), dialog.isPersistToGlobal(), dialog.getSelectedTokenLocationIds());
+                    dialog.isEnabled(), dialog.isPersistToGlobal(), dialog.getSelectedFieldIds());
             refreshData();
         }
     }
@@ -156,19 +156,19 @@ public class TokenSchemeTab extends JPanel {
     private void editScheme() {
         int viewRow = schemeTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个令牌方案", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "请先选择一个方案", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
-        TokenScheme selected = schemeModel.getTokenScheme(modelRow);
-        TokenSchemeEditDialog dialog = new TokenSchemeEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑令牌方案", selected);
+        Scheme selected = schemeModel.getScheme(modelRow);
+        SchemeEditDialog dialog = new SchemeEditDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this), "编辑方案", selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager sm = SessionManager.getInstance();
-            sm.updateTokenScheme(selected.getId(), dialog.getSchemeName(), dialog.getDescription(),
+            sm.updateScheme(selected.getId(), dialog.getSchemeName(), dialog.getDescription(),
                     dialog.isEnabled(), dialog.isPersistToGlobal());
-            sm.saveSchemeTokenLocations(selected.getId(), dialog.getSelectedTokenLocationIds());
+            sm.saveSchemeFields(selected.getId(), dialog.getSelectedFieldIds());
             refreshData();
         }
     }
@@ -176,20 +176,20 @@ public class TokenSchemeTab extends JPanel {
     private void deleteScheme() {
         int viewRow = schemeTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个令牌方案", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "请先选择一个方案", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
-        TokenScheme selected = schemeModel.getTokenScheme(modelRow);
+        Scheme selected = schemeModel.getScheme(modelRow);
 
         int refCount = SessionManager.getInstance().getSessionReferenceCountByScheme(selected.getId());
         String refMsg = refCount > 0 ? "\n该方案被 " + refCount + " 个用户会话引用，删除后这些会话将不再关联任何方案。" : "";
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除令牌方案: " + selected.getName() + "?" + refMsg,
+                "确认删除方案: " + selected.getName() + "?" + refMsg,
                 "删除确认", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
-            SessionManager.getInstance().deleteTokenScheme(selected.getId());
+            SessionManager.getInstance().deleteScheme(selected.getId());
             refreshData();
         }
     }
@@ -197,20 +197,20 @@ public class TokenSchemeTab extends JPanel {
     private void toggleSchemeEnabled() {
         int viewRow = schemeTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个令牌方案", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "请先选择一个方案", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
-        TokenScheme selected = schemeModel.getTokenScheme(modelRow);
-        SessionManager.getInstance().updateTokenScheme(
+        Scheme selected = schemeModel.getScheme(modelRow);
+        SessionManager.getInstance().updateScheme(
                 selected.getId(), selected.getName(), selected.getDescription(), selected.isPersistToGlobal(), !selected.isEnabled());
         refreshData();
     }
 
     private void exportSchemes() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出令牌方案", this,
-                new File("token_schemes.yaml"),
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出方案", this,
+                new File("schemes.yaml"),
                 new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
         if (selectedFile == null) return;
 
@@ -221,12 +221,12 @@ public class TokenSchemeTab extends JPanel {
 
         try {
             SessionManager sm = SessionManager.getInstance();
-            List<TokenScheme> schemes = sm.getTokenSchemes();
-            List<TokenLocation> locations = sm.getTokenLocations();
-            boolean success = TokenSchemeYamlIO.writeToFile(schemes, locations, file.getAbsolutePath());
+            List<Scheme> schemes = sm.getSchemes();
+            List<FieldDefinition> fields = sm.getFieldDefinitions();
+            boolean success = SchemeYamlIO.writeToFile(schemes, fields, file.getAbsolutePath());
             if (success) {
                 JOptionPane.showMessageDialog(this,
-                    "成功导出 " + schemes.size() + " 个令牌方案到:\n" + file.getAbsolutePath(),
+                    "成功导出 " + schemes.size() + " 个方案到:\n" + file.getAbsolutePath(),
                     "导出成功", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(this, "导出失败", "导出错误", JOptionPane.ERROR_MESSAGE);
@@ -239,31 +239,31 @@ public class TokenSchemeTab extends JPanel {
 
     private void importSchemes() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入令牌方案", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入方案", this,
                 new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
         if (selectedFile == null) return;
 
         try {
             SessionManager sm = SessionManager.getInstance();
-            List<TokenLocation> locations = sm.getTokenLocations();
-            List<TokenScheme> importedSchemes = TokenSchemeYamlIO.readFromFile(selectedFile.getAbsolutePath(), locations);
+            List<FieldDefinition> fields = sm.getFieldDefinitions();
+            List<Scheme> importedSchemes = SchemeYamlIO.readFromFile(selectedFile.getAbsolutePath(), fields);
 
             if (importedSchemes.isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                    "文件中没有找到令牌方案数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                    "文件中没有找到方案数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 
             int imported = 0;
-            for (TokenScheme scheme : importedSchemes) {
-                int id = sm.addTokenScheme(scheme.getName(), scheme.getDescription(),
-                        scheme.isEnabled(), scheme.isPersistToGlobal(), scheme.getTokenLocationIds());
+            for (Scheme scheme : importedSchemes) {
+                int id = sm.addScheme(scheme.getName(), scheme.getDescription(),
+                        scheme.isEnabled(), scheme.isPersistToGlobal(), scheme.getFieldIds());
                 if (id > 0) imported++;
             }
 
             refreshData();
             JOptionPane.showMessageDialog(this,
-                "成功导入 " + imported + " 个令牌方案",
+                "成功导入 " + imported + " 个方案",
                 "导入成功", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,

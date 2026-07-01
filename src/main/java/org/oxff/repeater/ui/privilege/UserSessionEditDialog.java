@@ -1,8 +1,8 @@
 package org.oxff.repeater.ui.privilege;
 
 import org.oxff.repeater.privilege.SessionManager;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 import org.oxff.repeater.utils.ScrollPaneWheelForwarder;
 import org.oxff.repeater.utils.TextLineNumber;
@@ -17,8 +17,8 @@ import java.util.Map;
 
 /**
  * 用户会话编辑对话框
- * 允许编辑用户名称、颜色、启用状态、方案选择，以及为每个令牌位置设置值
- * 令牌值区域仅在选中方案后显示
+ * 允许编辑用户名称、颜色、启用状态、方案选择，以及为每个字段定义设置值
+ * 字段值区域仅在选中方案后显示
  */
 public class UserSessionEditDialog extends JDialog {
 
@@ -34,26 +34,26 @@ public class UserSessionEditDialog extends JDialog {
     /** 方案名称到ID的映射 */
     private Map<String, Integer> schemeNameToId = new LinkedHashMap<>();
 
-    /** 令牌值输入框映射：tokenLocationId -> JTextArea */
-    private final Map<Integer, JTextArea> tokenValueFields = new LinkedHashMap<>();
+    /** 字段值输入框映射：fieldId -> JTextArea */
+    private final Map<Integer, JTextArea> fieldInputAreas = new LinkedHashMap<>();
 
     /** 收集所有内层 JScrollPane，用于安装滚轮转发器 */
     private final List<JScrollPane> innerScrollPanes = new ArrayList<>();
 
-    /** 最终的令牌值 */
-    private Map<Integer, String> tokenValues = new LinkedHashMap<>();
+    /** 最终的字段值 */
+    private Map<Integer, String> fieldValues = new LinkedHashMap<>();
 
-    /** 令牌值容器面板 */
-    private JPanel tokenValuesPanel;
+    /** 字段值容器面板 */
+    private JPanel fieldValuesPanel;
 
-    /** 令牌值区域的标签 */
-    private JLabel tokenValuesLabel;
+    /** 字段值区域的标签 */
+    private JLabel fieldValuesLabel;
 
     /** 外层滚动面板 */
     private JScrollPane outerScrollPane;
 
-    /** 当前会话已有的令牌值（编辑模式） */
-    private Map<Integer, String> existingTokenValues = new LinkedHashMap<>();
+    /** 当前会话已有的字段值（编辑模式） */
+    private Map<Integer, String> existingFieldValues = new LinkedHashMap<>();
 
     public UserSessionEditDialog(Frame owner, String title, UserSession existing) {
         super(owner, title, true);
@@ -103,36 +103,36 @@ public class UserSessionEditDialog extends JDialog {
 
         // 方案选择
         gbc.gridx = 0; gbc.gridy = 3;
-        mainPanel.add(new JLabel("令牌方案:"), gbc);
+        mainPanel.add(new JLabel("方案:"), gbc);
         gbc.gridx = 1;
         SessionManager sm = SessionManager.getInstance();
-        List<TokenScheme> schemes = sm.getTokenSchemes();
+        List<Scheme> schemes = sm.getSchemes();
         schemeComboBox = new JComboBox<>();
-        schemeComboBox.addItem("-- 请选择令牌方案 --");
+        schemeComboBox.addItem("-- 请选择方案 --");
         schemeNameToId.clear();
-        for (TokenScheme scheme : schemes) {
+        for (Scheme scheme : schemes) {
             schemeComboBox.addItem(scheme.getName());
             schemeNameToId.put(scheme.getName(), scheme.getId());
         }
-        // 选择变更时刷新令牌值区域
-        schemeComboBox.addActionListener(e -> refreshTokenValuesPanel());
+        // 选择变更时刷新字段值区域
+        schemeComboBox.addActionListener(e -> refreshFieldValuesPanel());
         mainPanel.add(schemeComboBox, gbc);
 
-        // 令牌值区域标签
+        // 字段值区域标签
         gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
-        tokenValuesLabel = new JLabel("令牌值:");
-        tokenValuesLabel.setVisible(false);
-        mainPanel.add(tokenValuesLabel, gbc);
+        fieldValuesLabel = new JLabel("字段值:");
+        fieldValuesLabel.setVisible(false);
+        mainPanel.add(fieldValuesLabel, gbc);
 
-        // 令牌值容器面板
-        tokenValuesPanel = new JPanel();
-        tokenValuesPanel.setLayout(new BoxLayout(tokenValuesPanel, BoxLayout.Y_AXIS));
+        // 字段值容器面板
+        fieldValuesPanel = new JPanel();
+        fieldValuesPanel.setLayout(new BoxLayout(fieldValuesPanel, BoxLayout.Y_AXIS));
 
         gbc.gridy = 5;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weighty = 1.0;
         gbc.insets = new Insets(8, 10, 8, 10);
-        mainPanel.add(tokenValuesPanel, gbc);
+        mainPanel.add(fieldValuesPanel, gbc);
 
         gbc.gridwidth = 1;
         gbc.weighty = 0;
@@ -146,10 +146,10 @@ public class UserSessionEditDialog extends JDialog {
                 JOptionPane.showMessageDialog(this, "名称不能为空", "提示", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            // 收集令牌值
-            tokenValues = new LinkedHashMap<>();
-            for (Map.Entry<Integer, JTextArea> entry : tokenValueFields.entrySet()) {
-                tokenValues.put(entry.getKey(), entry.getValue().getText());
+            // 收集字段值
+            fieldValues = new LinkedHashMap<>();
+            for (Map.Entry<Integer, JTextArea> entry : fieldInputAreas.entrySet()) {
+                fieldValues.put(entry.getKey(), entry.getValue().getText());
             }
             confirmed = true;
             dispose();
@@ -171,12 +171,12 @@ public class UserSessionEditDialog extends JDialog {
                 selectedColor = existing.getColor();
                 colorPreview.setBackground(selectedColor);
             }
-            // 保存现有令牌值
-            Map<Integer, String> existingTokens = existing.getTokenValues();
-            existingTokenValues = existingTokens != null ? new LinkedHashMap<>(existingTokens) : new LinkedHashMap<>();
-            // 方案选择（最后执行，因为会触发 refreshTokenValuesPanel() 使用 outerScrollPane）
+            // 保存现有字段值
+            Map<Integer, String> existingTokens = existing.getFieldValues();
+            existingFieldValues = existingTokens != null ? new LinkedHashMap<>(existingTokens) : new LinkedHashMap<>();
+            // 方案选择（最后执行，因为会触发 refreshFieldValuesPanel() 使用 outerScrollPane）
             if (existing.getSchemeId() != null) {
-                for (TokenScheme scheme : schemes) {
+                for (Scheme scheme : schemes) {
                     if (scheme.getId() == existing.getSchemeId()) {
                         schemeComboBox.setSelectedItem(scheme.getName());
                         break;
@@ -184,40 +184,40 @@ public class UserSessionEditDialog extends JDialog {
                 }
             }
         } else {
-            // 初始化令牌值区域（仅新建模式需要，编辑模式已在 setSelectedItem 触发）
-            refreshTokenValuesPanel();
+            // 初始化字段值区域（仅新建模式需要，编辑模式已在 setSelectedItem 触发）
+            refreshFieldValuesPanel();
         }
     }
 
     /**
-     * 根据当前选中的方案刷新令牌值输入区域
-     * 仅在选择方案后显示令牌值输入框
+     * 根据当前选中的方案刷新字段值输入区域
+     * 仅在选择方案后显示字段值输入框
      */
-    private void refreshTokenValuesPanel() {
-        tokenValueFields.clear();
+    private void refreshFieldValuesPanel() {
+        fieldInputAreas.clear();
         innerScrollPanes.clear();
-        tokenValuesPanel.removeAll();
+        fieldValuesPanel.removeAll();
 
         Integer schemeId = getSelectedSchemeId();
 
         if (schemeId == null) {
-            // 未选择方案：隐藏令牌值区域，显示提示
-            tokenValuesLabel.setVisible(false);
-            JLabel hintLabel = new JLabel("请先选择令牌方案以配置令牌值");
+            // 未选择方案：隐藏字段值区域，显示提示
+            fieldValuesLabel.setVisible(false);
+            JLabel hintLabel = new JLabel("请先选择方案以配置字段值");
             hintLabel.setForeground(Color.GRAY);
-            tokenValuesPanel.add(hintLabel);
+            fieldValuesPanel.add(hintLabel);
         } else {
-            // 选择了方案：显示方案关联的令牌位置
-            tokenValuesLabel.setVisible(true);
-            List<TokenLocation> locations = SessionManager.getInstance().getTokenLocationsByScheme(schemeId);
+            // 选择了方案：显示方案关联的字段定义
+            fieldValuesLabel.setVisible(true);
+            List<FieldDefinition> locations = SessionManager.getInstance().getFieldDefinitionsByScheme(schemeId);
 
             if (locations.isEmpty()) {
-                JLabel noLocationsLabel = new JLabel("该方案暂无关联的令牌位置");
+                JLabel noLocationsLabel = new JLabel("该方案暂无关联的字段定义");
                 noLocationsLabel.setForeground(Color.GRAY);
-                tokenValuesPanel.add(noLocationsLabel);
+                fieldValuesPanel.add(noLocationsLabel);
             } else {
                 for (int i = 0; i < locations.size(); i++) {
-                    TokenLocation loc = locations.get(i);
+                    FieldDefinition loc = locations.get(i);
 
                     JPanel tokenPanel = new JPanel(new BorderLayout());
                     tokenPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
@@ -250,16 +250,16 @@ public class UserSessionEditDialog extends JDialog {
                     innerScrollPanes.add(scrollPane);
                     textArea.setComponentPopupMenu(createTextContextMenu(textArea));
 
-                    tokenValuesPanel.add(tokenPanel);
+                    fieldValuesPanel.add(tokenPanel);
 
                     if (i < locations.size() - 1) {
-                        tokenValuesPanel.add(Box.createVerticalStrut(8));
+                        fieldValuesPanel.add(Box.createVerticalStrut(8));
                     }
 
-                    tokenValueFields.put(loc.getId(), textArea);
+                    fieldInputAreas.put(loc.getId(), textArea);
 
                     // 填充现有值
-                    String existingValue = existingTokenValues.get(loc.getId());
+                    String existingValue = existingFieldValues.get(loc.getId());
                     if (existingValue != null) {
                         textArea.setText(existingValue);
                         textArea.setCaretPosition(0);
@@ -268,8 +268,8 @@ public class UserSessionEditDialog extends JDialog {
             }
         }
 
-        tokenValuesPanel.revalidate();
-        tokenValuesPanel.repaint();
+        fieldValuesPanel.revalidate();
+        fieldValuesPanel.repaint();
 
         // 重新安装滚轮转发器
         for (JScrollPane innerPane : innerScrollPanes) {
@@ -319,7 +319,7 @@ public class UserSessionEditDialog extends JDialog {
     }
 
     /**
-     * 获取选中的方案ID，如果选择"请选择令牌方案"则返回null
+     * 获取选中的方案ID，如果选择"请选择方案"则返回null
      */
     public Integer getSchemeId() {
         return getSelectedSchemeId();
@@ -327,12 +327,12 @@ public class UserSessionEditDialog extends JDialog {
 
     private Integer getSelectedSchemeId() {
         int idx = schemeComboBox.getSelectedIndex();
-        if (idx <= 0) return null; // 0 = "请选择令牌方案"
+        if (idx <= 0) return null; // 0 = "请选择方案"
         String selectedName = (String) schemeComboBox.getSelectedItem();
         return schemeNameToId.get(selectedName);
     }
 
-    public Map<Integer, String> getTokenValues() {
-        return tokenValues;
+    public Map<Integer, String> getFieldValues() {
+        return fieldValues;
     }
 }

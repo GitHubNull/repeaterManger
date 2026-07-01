@@ -88,7 +88,7 @@ public class PdfReportGenerator extends ReportGenerator {
 
             // Title
             writer.drawTitle(data.getTitle(), 20);
-            writer.drawText("Generated: " + DATE_FORMAT.format(data.getGeneratedAt())
+            writer.drawText("生成时间: " + DATE_FORMAT.format(data.getGeneratedAt())
                     + " | Repeater Manager v" + data.getPluginVersion(), 10);
             writer.drawLine();
 
@@ -99,7 +99,7 @@ public class PdfReportGenerator extends ReportGenerator {
             buildSessionBreakdown(writer, data.getSessionBreakdown());
 
             // Endpoints
-            writer.drawTitle("Findings by Endpoint", 14);
+            writer.drawTitle("端点发现详情", 14);
             for (ReportData.EndpointSection endpoint : data.getEndpoints()) {
                 buildEndpoint(writer, endpoint);
             }
@@ -182,16 +182,16 @@ public class PdfReportGenerator extends ReportGenerator {
     }
 
     private void buildSummary(InnerWriter writer, ReportData.ReportSummary s) throws Exception {
-        writer.drawTitle("Summary", 14);
-        String[] headers = {"Metric", "Count"};
+        writer.drawTitle("摘要", 14);
+        String[] headers = {"指标", "数量"};
         float[] widths = {0.6f, 0.4f};
         List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"Total Tests", String.valueOf(s.getTotalTests())});
-        rows.add(new String[]{"Escalated", String.valueOf(s.getEscalatedCount())});
-        rows.add(new String[]{"Safe", String.valueOf(s.getSafeCount())});
-        rows.add(new String[]{"Errors", String.valueOf(s.getErrorCount())});
-        rows.add(new String[]{"Baseline", String.valueOf(s.getBaselineCount())});
-        rows.add(new String[]{"Unique Endpoints", String.valueOf(s.getEndpointsTested())});
+        rows.add(new String[]{"测试总数", String.valueOf(s.getTotalTests())});
+        rows.add(new String[]{"越权", String.valueOf(s.getEscalatedCount())});
+        rows.add(new String[]{"安全", String.valueOf(s.getSafeCount())});
+        rows.add(new String[]{"错误", String.valueOf(s.getErrorCount())});
+        rows.add(new String[]{"基线", String.valueOf(s.getBaselineCount())});
+        rows.add(new String[]{"唯一端点", String.valueOf(s.getEndpointsTested())});
         writer.drawTable(headers, rows, widths);
         writer.drawLine();
     }
@@ -199,8 +199,8 @@ public class PdfReportGenerator extends ReportGenerator {
     private void buildSessionBreakdown(InnerWriter writer,
                                         List<ReportData.SessionBreakdown> sessions) throws Exception {
         if (sessions.isEmpty()) return;
-        writer.drawTitle("Session Breakdown", 14);
-        String[] headers = {"Session", "Escalated", "Safe", "Errors", "Total"};
+        writer.drawTitle("会话分布", 14);
+        String[] headers = {"会话", "越权", "安全", "错误", "总计"};
         float[] widths = {0.35f, 0.15f, 0.15f, 0.15f, 0.2f};
         List<String[]> rows = new ArrayList<>();
         for (ReportData.SessionBreakdown s : sessions) {
@@ -221,12 +221,12 @@ public class PdfReportGenerator extends ReportGenerator {
         writer.drawTitle(epLabel + "  " + endpoint.getMethod() + " " + endpoint.getUrl(), 11);
         StringBuilder stats = new StringBuilder();
         if (endpoint.getBaselineCount() > 0) {
-            stats.append("Baseline: ").append(endpoint.getBaselineCount()).append(" | ");
+            stats.append("基线: ").append(endpoint.getBaselineCount()).append(" | ");
         }
-        stats.append("Tests: ").append(endpoint.getTotalTests())
-                .append(" | Escalated: ").append(endpoint.getEscalatedCount())
-                .append(" | Safe: ").append(endpoint.getSafeCount())
-                .append(" | Errors: ").append(endpoint.getErrorCount());
+        stats.append("测试: ").append(endpoint.getTotalTests())
+                .append(" | 越权: ").append(endpoint.getEscalatedCount())
+                .append(" | 安全: ").append(endpoint.getSafeCount())
+                .append(" | 错误: ").append(endpoint.getErrorCount());
         writer.drawText(stats.toString(), 9, MARGIN + 15);
         writer.drawLine();
 
@@ -245,17 +245,17 @@ public class PdfReportGenerator extends ReportGenerator {
      * 渲染基准报文区域（orin http data，每个端点顶部展示一次）
      */
     private void buildBaselineSection(InnerWriter writer, ReportData.BaselineData baseline) throws Exception {
-        writer.drawTitle("orin http data  |  BASELINE", 10);
+        writer.drawTitle("原始 HTTP 数据  |  基线", 10);
 
         RequestResponseRecord rec = baseline.getRecord();
 
-        // Request
-        writer.drawSectionTitle("Request:");
+        // 请求
+        writer.drawSectionTitle("请求:");
         writer.drawCodeBlock(sanitizeBodyForPdf(rec.getRequestData()));
 
-        // Response
-        writer.drawSectionTitle("Response  -  HTTP " + rec.getStatusCode()
-                + " (" + rec.getResponseLength() + " bytes, "
+        // 响应
+        writer.drawSectionTitle("响应  -  HTTP " + rec.getStatusCode()
+                + " (" + rec.getResponseLength() + " 字节, "
                 + rec.getResponseTime() + "ms):");
         writer.drawCodeBlock(sanitizeBodyForPdf(rec.getResponseData()));
 
@@ -268,14 +268,14 @@ public class PdfReportGenerator extends ReportGenerator {
     private void buildUserSessionSection(InnerWriter writer, ReportData.SessionFinding session) throws Exception {
         if (session.isBaseline()) {
             // baseline 用户的 SessionFinding — 只显示用户名和报文，不显示 cURL/Postman
-            writer.drawTitle(session.getSessionName() + " http data  |  BASELINE", 10);
+            writer.drawTitle(session.getSessionName() + " HTTP 数据  |  基线", 10);
 
             RequestResponseRecord rec = session.getRecord();
-            writer.drawSectionTitle("Request:");
+            writer.drawSectionTitle("请求:");
             writer.drawCodeBlock(sanitizeBodyForPdf(rec.getRequestData()));
 
-            writer.drawSectionTitle("Response  -  HTTP " + rec.getStatusCode()
-                    + " (" + rec.getResponseLength() + " bytes, "
+            writer.drawSectionTitle("响应  -  HTTP " + rec.getStatusCode()
+                    + " (" + rec.getResponseLength() + " 字节, "
                     + rec.getResponseTime() + "ms):");
             writer.drawCodeBlock(sanitizeBodyForPdf(rec.getResponseData()));
         } else {
@@ -289,39 +289,39 @@ public class PdfReportGenerator extends ReportGenerator {
                 judgmentLabel = "错误";
             }
 
-            writer.drawTitle(session.getSessionName() + " http data  |  " + judgmentLabel, 10);
+            writer.drawTitle(session.getSessionName() + " HTTP 数据  |  " + judgmentLabel, 10);
 
-            // Metadata
+            // 元数据
             StringBuilder meta = new StringBuilder();
-            meta.append("Similarity: ").append(String.format("%.2f", session.getSimilarity()));
+            meta.append("相似度: ").append(String.format("%.2f", session.getSimilarity()));
             RequestResponseRecord rec = session.getRecord();
             meta.append("  |  HTTP ").append(rec.getStatusCode());
-            meta.append("  |  ").append(rec.getResponseLength()).append(" bytes");
+            meta.append("  |  ").append(rec.getResponseLength()).append(" 字节");
             meta.append("  |  ").append(rec.getResponseTime()).append("ms");
             writer.drawText(meta.toString(), 9, MARGIN + 15);
 
             if (session.getMatchedRuleName() != null) {
-                writer.drawText("Rule: " + session.getMatchedRuleName(), 9, MARGIN + 15);
+                writer.drawText("规则: " + session.getMatchedRuleName(), 9, MARGIN + 15);
             }
 
             writer.drawLine();
 
-            // Request
-            writer.drawSectionTitle("Request:");
+            // 请求
+            writer.drawSectionTitle("请求:");
             writer.drawCodeBlock(sanitizeBodyForPdf(rec.getRequestData()));
 
-            // Response
-            writer.drawSectionTitle("Response  -  HTTP " + rec.getStatusCode()
-                    + " (" + rec.getResponseLength() + " bytes, "
+            // 响应
+            writer.drawSectionTitle("响应  -  HTTP " + rec.getStatusCode()
+                    + " (" + rec.getResponseLength() + " 字节, "
                     + rec.getResponseTime() + "ms):");
             writer.drawCodeBlock(sanitizeBodyForPdf(rec.getResponseData()));
 
             // cURL
-            writer.drawSectionTitle("Reproduction  -  cURL:");
+            writer.drawSectionTitle("复现命令  -  cURL:");
             writer.drawCodeBlock(truncForPdf(session.getCurlCommand()));
 
             // Postman
-            writer.drawSectionTitle("Reproduction  -  Postman Import:");
+            writer.drawSectionTitle("复现导入  -  Postman:");
             writer.drawCodeBlock(truncForPdf(session.getPostmanSnippet()));
         }
 
@@ -334,16 +334,16 @@ public class PdfReportGenerator extends ReportGenerator {
      */
     private String sanitizeBodyForPdf(byte[] body) {
         if (body == null || body.length == 0) {
-            return "[Empty]";
+            return "[空]";
         }
         boolean binary = isBinaryBody(body);
         if (binary) {
-            return "[Binary data - " + body.length + " bytes]";
+            return "[二进制数据 - " + body.length + " 字节]";
         }
         String str = new String(body, java.nio.charset.StandardCharsets.UTF_8);
         str = truncateBase64InText(str);
         if (str.length() > PDF_BODY_LIMIT) {
-            str = str.substring(0, PDF_BODY_LIMIT) + "\n... [Truncated in PDF - see HTML report for full data]";
+            str = str.substring(0, PDF_BODY_LIMIT) + "\n... [PDF 中已截断 - 完整数据请查看 HTML 报告]";
         }
         return str;
     }
@@ -361,7 +361,7 @@ public class PdfReportGenerator extends ReportGenerator {
             String b64 = matcher.group(1);
             if (b64.length() > PDF_BASE64_LIMIT) {
                 String truncated = b64.substring(0, PDF_BASE64_LIMIT)
-                        + "... [Base64 truncated in PDF - " + b64.length() + " chars total]";
+                        + "... [Base64 在 PDF 中已截断 - " + b64.length() + " 字符]";
                 matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(truncated));
             }
         }
@@ -390,7 +390,7 @@ public class PdfReportGenerator extends ReportGenerator {
     private static String truncForPdf(String s) {
         if (s == null) return "";
         if (s.length() > PDF_BODY_LIMIT) {
-            return s.substring(0, PDF_BODY_LIMIT) + "\n... [Truncated in PDF - see HTML report for full data]";
+            return s.substring(0, PDF_BODY_LIMIT) + "\n... [PDF 中已截断 - 完整数据请查看 HTML 报告]";
         }
         return s;
     }

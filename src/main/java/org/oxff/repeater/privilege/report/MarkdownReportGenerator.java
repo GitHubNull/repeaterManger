@@ -33,7 +33,7 @@ public class MarkdownReportGenerator extends ReportGenerator {
             FreeMarkerConfig.getInstance().getMdTemplate("md_report.ftl").process(model, writer);
             return writer.toString();
         } catch (Exception e) {
-            throw new RuntimeException("Markdown report generation failed: " + e.getMessage(), e);
+            throw new RuntimeException("Markdown 报告生成失败: " + e.getMessage(), e);
         }
     }
 }

@@ -2,9 +2,9 @@ package org.oxff.repeater.privilege.dao;
 
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenLocationType;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.FieldType;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import java.awt.Color;
@@ -20,44 +20,44 @@ import java.util.Map;
 
 /**
  * 会话数据访问对象
- * 管理 token_locations、token_schemes、scheme_token_locations、user_sessions、token_values 五张表的 CRUD
+ * 管理 field_definitions、schemes、scheme_fields、user_sessions、field_values 五张表的 CRUD
  */
 public class SessionDAO {
 
-    // ==================== TokenLocation CRUD ====================
+    // ==================== FieldDefinition CRUD ====================
 
     /**
-     * 获取所有令牌位置
+     * 获取所有字段
      */
-    public List<TokenLocation> getAllTokenLocations() {
-        List<TokenLocation> locations = new ArrayList<>();
-        String sql = "SELECT id, type, expression, description, persist_to_global, enabled FROM token_locations ORDER BY id ASC";
+    public List<FieldDefinition> getAllFieldDefinitions() {
+        List<FieldDefinition> fields = new ArrayList<>();
+        String sql = "SELECT id, type, expression, description, persist_to_global, enabled FROM field_definitions ORDER BY id ASC";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
-                TokenLocation location = new TokenLocation();
-                location.setId(rs.getInt("id"));
-                location.setType(TokenLocationType.fromString(rs.getString("type")));
-                location.setExpression(rs.getString("expression"));
-                location.setDescription(rs.getString("description"));
-                location.setPersistToGlobal(rs.getInt("persist_to_global") == 1);
-                location.setEnabled(rs.getInt("enabled") == 1);
-                locations.add(location);
+                FieldDefinition field = new FieldDefinition();
+                field.setId(rs.getInt("id"));
+                field.setType(FieldType.fromString(rs.getString("type")));
+                field.setExpression(rs.getString("expression"));
+                field.setDescription(rs.getString("description"));
+                field.setPersistToGlobal(rs.getInt("persist_to_global") == 1);
+                field.setEnabled(rs.getInt("enabled") == 1);
+                fields.add(field);
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 获取令牌位置列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取字段列表失败: " + e.getMessage());
         }
-        return locations;
+        return fields;
     }
 
     /**
-     * 添加令牌位置
+     * 添加字段
      * @return 新记录ID，失败返回-1
      */
-    public int addTokenLocation(TokenLocationType type, String expression, String description,
-                                boolean persistToGlobal, boolean enabled) {
-        String sql = "INSERT INTO token_locations (type, expression, description, persist_to_global, enabled) VALUES (?, ?, ?, ?, ?)";
+    public int addFieldDefinition(FieldType type, String expression, String description,
+                                   boolean persistToGlobal, boolean enabled) {
+        String sql = "INSERT INTO field_definitions (type, expression, description, persist_to_global, enabled) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, type.name());
@@ -72,17 +72,17 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 添加令牌位置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加字段失败: " + e.getMessage());
         }
         return -1;
     }
 
     /**
-     * 更新令牌位置
+     * 更新字段
      */
-    public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description,
-                                       boolean persistToGlobal, boolean enabled) {
-        String sql = "UPDATE token_locations SET type = ?, expression = ?, description = ?, persist_to_global = ?, enabled = ? WHERE id = ?";
+    public boolean updateFieldDefinition(int id, FieldType type, String expression, String description,
+                                          boolean persistToGlobal, boolean enabled) {
+        String sql = "UPDATE field_definitions SET type = ?, expression = ?, description = ?, persist_to_global = ?, enabled = ? WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, type.name());
@@ -93,103 +93,103 @@ public class SessionDAO {
             pstmt.setInt(6, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 更新令牌位置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新字段失败: " + e.getMessage());
         }
         return false;
     }
 
     /**
-     * 删除令牌位置（级联删除关联的token_values和scheme_token_locations）
+     * 删除字段（级联删除关联的field_values和scheme_fields）
      */
-    public boolean deleteTokenLocation(int id) {
-        String sql = "DELETE FROM token_locations WHERE id = ?";
+    public boolean deleteFieldDefinition(int id) {
+        String sql = "DELETE FROM field_definitions WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 删除令牌位置失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除字段失败: " + e.getMessage());
         }
         return false;
     }
 
     /**
-     * 获取引用指定令牌位置的方案数量
+     * 获取引用指定字段的方案数量
      */
-    public int getSchemeReferenceCountByTokenLocation(int tokenLocationId) {
-        String sql = "SELECT COUNT(DISTINCT scheme_id) FROM scheme_token_locations WHERE token_location_id = ?";
+    public int getSchemeReferenceCountByField(int fieldId) {
+        String sql = "SELECT COUNT(DISTINCT scheme_id) FROM scheme_fields WHERE field_id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, tokenLocationId);
+            pstmt.setInt(1, fieldId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     return rs.getInt(1);
                 }
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 获取令牌位置引用方案数失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取字段引用方案数失败: " + e.getMessage());
         }
         return 0;
     }
 
-    // ==================== TokenScheme CRUD ====================
+    // ==================== Scheme CRUD ====================
 
     /**
-     * 获取所有令牌方案（含关联的令牌位置ID列表）
+     * 获取所有方案（含关联的字段ID列表）
      */
-    public List<TokenScheme> getAllTokenSchemes() {
-        List<TokenScheme> schemes = new ArrayList<>();
-        String sql = "SELECT id, name, description, persist_to_global, enabled FROM token_schemes ORDER BY id ASC";
+    public List<Scheme> getAllSchemes() {
+        List<Scheme> schemes = new ArrayList<>();
+        String sql = "SELECT id, name, description, persist_to_global, enabled FROM schemes ORDER BY id ASC";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
-                TokenScheme scheme = new TokenScheme();
+                Scheme scheme = new Scheme();
                 scheme.setId(rs.getInt("id"));
                 scheme.setName(rs.getString("name"));
                 scheme.setDescription(rs.getString("description"));
                 scheme.setPersistToGlobal(rs.getInt("persist_to_global") == 1);
                 scheme.setEnabled(rs.getInt("enabled") == 1);
-                scheme.setTokenLocationIds(loadSchemeTokenLocationIds(conn, scheme.getId()));
+                scheme.setFieldIds(loadSchemeFieldIds(conn, scheme.getId()));
                 schemes.add(scheme);
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 获取令牌方案列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取方案列表失败: " + e.getMessage());
         }
         return schemes;
     }
 
     /**
-     * 获取所有已启用的令牌方案
+     * 获取所有已启用的方案
      */
-    public List<TokenScheme> getEnabledTokenSchemes() {
-        List<TokenScheme> schemes = new ArrayList<>();
-        String sql = "SELECT id, name, description, persist_to_global, enabled FROM token_schemes WHERE enabled = 1 ORDER BY id ASC";
+    public List<Scheme> getEnabledSchemes() {
+        List<Scheme> schemes = new ArrayList<>();
+        String sql = "SELECT id, name, description, persist_to_global, enabled FROM schemes WHERE enabled = 1 ORDER BY id ASC";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
-                TokenScheme scheme = new TokenScheme();
+                Scheme scheme = new Scheme();
                 scheme.setId(rs.getInt("id"));
                 scheme.setName(rs.getString("name"));
                 scheme.setDescription(rs.getString("description"));
                 scheme.setPersistToGlobal(rs.getInt("persist_to_global") == 1);
                 scheme.setEnabled(true);
-                scheme.setTokenLocationIds(loadSchemeTokenLocationIds(conn, scheme.getId()));
+                scheme.setFieldIds(loadSchemeFieldIds(conn, scheme.getId()));
                 schemes.add(scheme);
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 获取已启用令牌方案列表失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 获取已启用方案列表失败: " + e.getMessage());
         }
         return schemes;
     }
 
     /**
-     * 添加令牌方案
+     * 添加方案
      * @return 新记录ID，失败返回-1
      */
-    public int addTokenScheme(String name, String description, boolean persistToGlobal, boolean enabled) {
-        String sql = "INSERT INTO token_schemes (name, description, persist_to_global, enabled) VALUES (?, ?, ?, ?)";
+    public int addScheme(String name, String description, boolean persistToGlobal, boolean enabled) {
+        String sql = "INSERT INTO schemes (name, description, persist_to_global, enabled) VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, name);
@@ -203,16 +203,16 @@ public class SessionDAO {
                 }
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 添加令牌方案失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 添加方案失败: " + e.getMessage());
         }
         return -1;
     }
 
     /**
-     * 更新令牌方案
+     * 更新方案
      */
-    public boolean updateTokenScheme(int id, String name, String description, boolean persistToGlobal, boolean enabled) {
-        String sql = "UPDATE token_schemes SET name = ?, description = ?, persist_to_global = ?, enabled = ? WHERE id = ?";
+    public boolean updateScheme(int id, String name, String description, boolean persistToGlobal, boolean enabled) {
+        String sql = "UPDATE schemes SET name = ?, description = ?, persist_to_global = ?, enabled = ? WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, name);
@@ -222,46 +222,46 @@ public class SessionDAO {
             pstmt.setInt(5, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 更新令牌方案失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 更新方案失败: " + e.getMessage());
         }
         return false;
     }
 
     /**
-     * 删除令牌方案（级联删除关联的scheme_token_locations）
+     * 删除方案（级联删除关联的scheme_fields）
      */
-    public boolean deleteTokenScheme(int id) {
-        String sql = "DELETE FROM token_schemes WHERE id = ?";
+    public boolean deleteScheme(int id) {
+        String sql = "DELETE FROM schemes WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, id);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 删除令牌方案失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 删除方案失败: " + e.getMessage());
         }
         return false;
     }
 
     /**
-     * 保存方案关联的令牌位置（先删后插）
+     * 保存方案关联的字段（先删后插）
      */
-    public boolean saveSchemeTokenLocations(int schemeId, List<Integer> tokenLocationIds) {
+    public boolean saveSchemeFields(int schemeId, List<Integer> fieldIds) {
         try (Connection conn = DatabaseManager.getInstance().getConnection()) {
             conn.setAutoCommit(false);
             try {
                 // 删除旧的关联
-                String deleteSql = "DELETE FROM scheme_token_locations WHERE scheme_id = ?";
+                String deleteSql = "DELETE FROM scheme_fields WHERE scheme_id = ?";
                 try (PreparedStatement pstmt = conn.prepareStatement(deleteSql)) {
                     pstmt.setInt(1, schemeId);
                     pstmt.executeUpdate();
                 }
 
                 // 插入新的关联
-                String insertSql = "INSERT INTO scheme_token_locations (scheme_id, token_location_id) VALUES (?, ?)";
+                String insertSql = "INSERT INTO scheme_fields (scheme_id, field_id) VALUES (?, ?)";
                 try (PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
-                    for (int locationId : tokenLocationIds) {
+                    for (int fid : fieldIds) {
                         pstmt.setInt(1, schemeId);
-                        pstmt.setInt(2, locationId);
+                        pstmt.setInt(2, fid);
                         pstmt.executeUpdate();
                     }
                 }
@@ -270,31 +270,31 @@ public class SessionDAO {
                 return true;
             } catch (SQLException e) {
                 conn.rollback();
-                LogManager.getInstance().printError("[!] 保存方案令牌位置关联失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 保存方案字段关联失败: " + e.getMessage());
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 保存方案令牌位置关联数据库操作失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存方案字段关联数据库操作失败: " + e.getMessage());
         }
         return false;
     }
 
     /**
-     * 加载指定方案关联的令牌位置ID列表
+     * 加载指定方案关联的字段ID列表
      */
-    private List<Integer> loadSchemeTokenLocationIds(Connection conn, int schemeId) {
-        List<Integer> locationIds = new ArrayList<>();
-        String sql = "SELECT token_location_id FROM scheme_token_locations WHERE scheme_id = ? ORDER BY token_location_id ASC";
+    private List<Integer> loadSchemeFieldIds(Connection conn, int schemeId) {
+        List<Integer> ids = new ArrayList<>();
+        String sql = "SELECT field_id FROM scheme_fields WHERE scheme_id = ? ORDER BY field_id ASC";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, schemeId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    locationIds.add(rs.getInt("token_location_id"));
+                    ids.add(rs.getInt("field_id"));
                 }
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 加载方案令牌位置关联失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 加载方案字段关联失败: " + e.getMessage());
         }
-        return locationIds;
+        return ids;
     }
 
     /**
@@ -319,7 +319,7 @@ public class SessionDAO {
     // ==================== UserSession CRUD ====================
 
     /**
-     * 获取所有用户会话（含令牌值）
+     * 获取所有用户会话（含字段值）
      */
     public List<UserSession> getAllUserSessions() {
         List<UserSession> sessions = new ArrayList<>();
@@ -348,8 +348,8 @@ public class SessionDAO {
                 session.setRetryCount(rs.getInt("retry_count"));
                 session.setRetryDelay(rs.getInt("retry_delay"));
                 session.setReplayDelay(rs.getInt("replay_delay"));
-                // 加载令牌值
-                session.setTokenValues(loadTokenValues(conn, session.getId()));
+                // 加载字段值
+                session.setFieldValues(loadFieldValues(conn, session.getId()));
                 sessions.add(session);
             }
         } catch (SQLException e) {
@@ -387,7 +387,7 @@ public class SessionDAO {
                 session.setRetryCount(rs.getInt("retry_count"));
                 session.setRetryDelay(rs.getInt("retry_delay"));
                 session.setReplayDelay(rs.getInt("replay_delay"));
-                session.setTokenValues(loadTokenValues(conn, session.getId()));
+                session.setFieldValues(loadFieldValues(conn, session.getId()));
                 sessions.add(session);
             }
         } catch (SQLException e) {
@@ -460,7 +460,7 @@ public class SessionDAO {
     }
 
     /**
-     * 删除用户会话（级联删除关联的token_values）
+     * 删除用户会话（级联删除关联的field_values）
      */
     public boolean deleteUserSession(int id) {
         String sql = "DELETE FROM user_sessions WHERE id = ?";
@@ -475,7 +475,7 @@ public class SessionDAO {
     }
 
     /**
-     * 删除所有用户会话（级联删除关联的token_values）
+     * 删除所有用户会话（级联删除关联的field_values）
      */
     public boolean deleteAllUserSessions() {
         String sql = "DELETE FROM user_sessions";
@@ -489,41 +489,41 @@ public class SessionDAO {
         return false;
     }
 
-    // ==================== TokenValue CRUD ====================
+    // ==================== FieldValue CRUD ====================
 
     /**
-     * 加载指定用户会话的所有令牌值
+     * 加载指定用户会话的所有字段值
      */
-    private Map<Integer, String> loadTokenValues(Connection conn, int userSessionId) {
+    private Map<Integer, String> loadFieldValues(Connection conn, int userSessionId) {
         Map<Integer, String> values = new LinkedHashMap<>();
-        String sql = "SELECT token_location_id, value FROM token_values WHERE user_session_id = ?";
+        String sql = "SELECT field_id, value FROM field_values WHERE user_session_id = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, userSessionId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    values.put(rs.getInt("token_location_id"), rs.getString("value"));
+                    values.put(rs.getInt("field_id"), rs.getString("value"));
                 }
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 加载令牌值失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 加载字段值失败: " + e.getMessage());
         }
         return values;
     }
 
     /**
-     * 保存指定用户会话的所有令牌值。
+     * 保存指定用户会话的所有字段值。
      *
      * 使用 INSERT OR REPLACE 逐条 upsert + 清理旧值，替代先删后插模式。
-     * 利用 token_values(token_location_id, user_session_id) UNIQUE 约束实现幂等写入，
+     * 利用 field_values(field_id, user_session_id) UNIQUE 约束实现幂等写入，
      * 避免 DELETE 回滚时丢失全部旧值的风险。
      */
-    public boolean saveTokenValues(int userSessionId, Map<Integer, String> tokenValues) {
+    public boolean saveFieldValues(int userSessionId, Map<Integer, String> fieldValues) {
         try (Connection conn = DatabaseManager.getInstance().getConnection()) {
             conn.setAutoCommit(false);
             try {
-                String upsertSql = "INSERT OR REPLACE INTO token_values (token_location_id, user_session_id, value) VALUES (?, ?, ?)";
+                String upsertSql = "INSERT OR REPLACE INTO field_values (field_id, user_session_id, value) VALUES (?, ?, ?)";
                 try (PreparedStatement pstmt = conn.prepareStatement(upsertSql)) {
-                    for (Map.Entry<Integer, String> entry : tokenValues.entrySet()) {
+                    for (Map.Entry<Integer, String> entry : fieldValues.entrySet()) {
                         pstmt.setInt(1, entry.getKey());
                         pstmt.setInt(2, userSessionId);
                         pstmt.setString(3, entry.getValue() != null ? entry.getValue() : "");
@@ -531,10 +531,10 @@ public class SessionDAO {
                     }
                 }
 
-                // 清理不再存在于新集合中的旧令牌值（如被移除的 token_location）
-                if (!tokenValues.isEmpty()) {
-                    StringBuilder deleteSql = new StringBuilder("DELETE FROM token_values WHERE user_session_id = ? AND token_location_id NOT IN (");
-                    for (int i = 0; i < tokenValues.size(); i++) {
+                // 清理不再存在于新集合中的旧字段值（如被移除的 field）
+                if (!fieldValues.isEmpty()) {
+                    StringBuilder deleteSql = new StringBuilder("DELETE FROM field_values WHERE user_session_id = ? AND field_id NOT IN (");
+                    for (int i = 0; i < fieldValues.size(); i++) {
                         if (i > 0) deleteSql.append(",");
                         deleteSql.append("?");
                     }
@@ -542,8 +542,8 @@ public class SessionDAO {
                     try (PreparedStatement pstmt = conn.prepareStatement(deleteSql.toString())) {
                         pstmt.setInt(1, userSessionId);
                         int idx = 2;
-                        for (Integer locId : tokenValues.keySet()) {
-                            pstmt.setInt(idx++, locId);
+                        for (Integer fid : fieldValues.keySet()) {
+                            pstmt.setInt(idx++, fid);
                         }
                         pstmt.executeUpdate();
                     }
@@ -553,10 +553,10 @@ public class SessionDAO {
                 return true;
             } catch (SQLException e) {
                 conn.rollback();
-                LogManager.getInstance().printError("[!] 保存令牌值失败: " + e.getMessage());
+                LogManager.getInstance().printError("[!] 保存字段值失败: " + e.getMessage());
             }
         } catch (SQLException e) {
-            LogManager.getInstance().printError("[!] 保存令牌值数据库操作失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 保存字段值数据库操作失败: " + e.getMessage());
         }
         return false;
     }

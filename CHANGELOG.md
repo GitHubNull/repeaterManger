@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.0] - 2026-07-01
+
+### Added
+- 全新 Scheme（方案）/ FieldDefinition（字段定义）体系，替代旧的 TokenScheme / TokenLocation 令牌方案体系，统一管理会话替换字段
+- 新增 `Scheme` / `FieldDefinition` / `FieldType` 模型类，替代旧的方案/令牌位置模型
+- 新增 `SchemeYamlIO` / `FieldDefinitionYamlIO` 序列化工具，支持全局持久化
+- 新增 `GlobalSchemeManager` / `GlobalFieldDefinitionManager` 全局管理器，跨项目配置同步
+- 新增 `FieldReplacementEngine` 字段替换引擎，替代旧的 TokenReplacementEngine
+- 新增 `JsonPathHelper` JSON 路径辅助工具
+- 新增 `SchemeEditDialog` / `SchemeTab` / `SchemeTableModel` 方案管理 UI 组件
+- 新增 `FieldDefinitionEditDialog` / `FieldDefinitionTab` / `FieldDefinitionTableModel` / `FieldValueCellRenderer` 字段定义 UI 组件
+
+### Changed
+- 重构 `SessionManager` / `SessionDAO` / `SessionParser` / `SessionParserEngine` / `UserSession` / `UserSessionYamlIO` 适配新方案/字段定义体系
+- 重构 `AutoTestEngine` / `ReplayEngine` / `JudgmentEngine` / `SchemeMatch` 适配新方案模式
+- 重构 `SelectSchemeDialog` / `SessionConfigTab` / `ParseSessionWorker` / `ParseSessionFromClipboardDialog` / `UserSessionEditDialog` / `UserSessionTab` / `UserSessionTableModel` UI 适配新体系
+- 重构报告生成器（`HtmlReportGenerator` / `MarkdownReportGenerator` / `PdfReportGenerator` / `BinaryContentRenderer` / `BodyRenderer` / `ReportData`）适配新体系
+- 重构 `SchemaInitializer` / `SchemaMigrator` 数据库 schema 适配
+- 更新 FreeMarker 报告模板（`html_report.ftl` / `md_report.ftl`）
+- 更新 `RepeaterManagerExtension` / `RequestDispatchHandler` / `PopMenu` / `HistoryContextMenu` 适配新体系
+- 更新文档：`AGENT.md` / `CLAUDE.md` / `README.md` / `README_EN.md` / usage 文档 / `分离式架构_PRD.md` / `data_flow_analysis.md`
+- 代码审查报告整理归档至 `doc/code_review_report/` 目录
+
+### Removed
+- 移除旧的 `TokenScheme` / `TokenLocation` / `TokenLocationType` 模型类
+- 移除旧的 `TokenSchemeYamlIO` / `TokenLocationYamlIO` 序列化工具
+- 移除旧的 `GlobalTokenSchemeManager` / `GlobalTokenLocationManager` 全局管理器
+- 移除旧的 `TokenReplacementEngine` 替换引擎
+- 移除旧的 `TokenSchemeEditDialog` / `TokenSchemeTab` / `TokenSchemeTableModel` / `TokenValueCellRenderer` UI 组件
+- 移除旧的 `TokenLocationEditDialog` / `TokenLocationTab` / `TokenLocationTableModel` UI 组件
+
 ## [2.31.0] - 2026-07-01
 
 ### Added

@@ -373,7 +373,7 @@ public class HistoryContextMenu {
     /**
      * 从 requests 表构造基线记录（用于越权测试直接入口、history 表无原始基线记录的场景）
      *
-     * 请求数据：来自 requests 表中存储的原始请求字节（未经令牌替换）
+     * 请求数据：来自 requests 表中存储的原始请求字节（未经字段替换）
      * 响应数据：从 requests 表的响应字段获取（v10新增），包含发送到插件时携带的原始响应
      *           如果无原始响应（如从 Proxy Intercept 发过来的），则置空
      */

@@ -1,7 +1,7 @@
 package org.oxff.repeater.ui.privilege;
 
 import org.oxff.repeater.privilege.SessionManager;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import javax.swing.table.DefaultTableModel;
@@ -10,11 +10,11 @@ import java.util.List;
 
 /**
  * 用户会话表格模型
- * 列：名称、颜色、关联方案、启用、令牌值摘要
+ * 列：名称、颜色、关联方案、启用、字段值摘要
  */
 public class UserSessionTableModel extends DefaultTableModel {
 
-    private static final String[] COLUMN_NAMES = {"名称", "颜色", "关联方案", "启用", "令牌值摘要"};
+    private static final String[] COLUMN_NAMES = {"名称", "颜色", "关联方案", "启用", "字段值摘要"};
 
     private final List<UserSession> sessions = new ArrayList<>();
 
@@ -34,7 +34,7 @@ public class UserSessionTableModel extends DefaultTableModel {
                         session.getColorHex() != null ? session.getColorHex() : "",
                         schemeName,
                         session.isEnabled() ? "是" : "否",
-                        session.getTokenValuesSummary()
+                        session.getFieldValuesSummary()
                 });
             }
         }
@@ -44,7 +44,7 @@ public class UserSessionTableModel extends DefaultTableModel {
     private String resolveSchemeName(Integer schemeId) {
         if (schemeId == null) return "";
         SessionManager sm = SessionManager.getInstance();
-        TokenScheme scheme = sm.getTokenSchemeById(schemeId);
+        Scheme scheme = sm.getSchemeById(schemeId);
         return scheme != null ? scheme.getName() : "";
     }
 

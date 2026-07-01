@@ -1,27 +1,26 @@
 package org.oxff.repeater.privilege.model;
 
 /**
- * 令牌位置模型
- * 定义会话令牌在HTTP请求中的具体位置
- * 所有用户会话共享同一组令牌位置定义，每个用户为每个位置提供不同的值
+ * 字段定义模型
+ * 定义凭证字段在HTTP请求中的位置和表达式
  */
-public class TokenLocation {
+public class FieldDefinition {
     private int id;
-    private TokenLocationType type;
+    private FieldType type;
     private String expression;
     private String description;
     private boolean persistToGlobal;
     private boolean enabled;
 
-    public TokenLocation() {
-        this.type = TokenLocationType.HEADER;
+    public FieldDefinition() {
+        this.type = FieldType.HEADER;
         this.expression = "";
         this.description = "";
         this.persistToGlobal = true;
         this.enabled = true;
     }
 
-    public TokenLocation(TokenLocationType type, String expression, String description) {
+    public FieldDefinition(FieldType type, String expression, String description) {
         this.type = type;
         this.expression = expression;
         this.description = description != null ? description : "";
@@ -29,8 +28,8 @@ public class TokenLocation {
         this.enabled = true;
     }
 
-    public TokenLocation(TokenLocationType type, String expression, String description,
-                         boolean persistToGlobal, boolean enabled) {
+    public FieldDefinition(FieldType type, String expression, String description,
+                           boolean persistToGlobal, boolean enabled) {
         this.type = type;
         this.expression = expression;
         this.description = description != null ? description : "";
@@ -38,7 +37,7 @@ public class TokenLocation {
         this.enabled = enabled;
     }
 
-    public TokenLocation(int id, TokenLocationType type, String expression, String description) {
+    public FieldDefinition(int id, FieldType type, String expression, String description) {
         this.id = id;
         this.type = type;
         this.expression = expression;
@@ -47,8 +46,8 @@ public class TokenLocation {
         this.enabled = true;
     }
 
-    public TokenLocation(int id, TokenLocationType type, String expression, String description,
-                         boolean persistToGlobal, boolean enabled) {
+    public FieldDefinition(int id, FieldType type, String expression, String description,
+                           boolean persistToGlobal, boolean enabled) {
         this.id = id;
         this.type = type;
         this.expression = expression;
@@ -67,11 +66,11 @@ public class TokenLocation {
         this.id = id;
     }
 
-    public TokenLocationType getType() {
+    public FieldType getType() {
         return type;
     }
 
-    public void setType(TokenLocationType type) {
+    public void setType(FieldType type) {
         this.type = type;
     }
 
@@ -109,6 +108,6 @@ public class TokenLocation {
 
     @Override
     public String toString() {
-        return String.format("TokenLocation{id=%d, type=%s, expression='%s'}", id, type, expression);
+        return String.format("FieldDefinition{id=%d, type=%s, expression='%s'}", id, type, expression);
     }
 }

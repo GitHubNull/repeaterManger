@@ -60,21 +60,21 @@ public class RepeaterManagerExtension implements BurpExtension {
                 logManager.error("[!] 全局API提取规则加载失败: " + e.getMessage());
             }
 
-            // 阶段4.6：加载全局令牌位置
+            // 阶段4.6：加载全局字段定义
             try {
-                org.oxff.repeater.privilege.GlobalTokenLocationManager.getInstance().loadLocations();
-                org.oxff.repeater.privilege.SessionManager.getInstance().loadGlobalTokenLocations();
-                logManager.success("[+] 全局令牌位置加载完成");
+                org.oxff.repeater.privilege.GlobalFieldDefinitionManager.getInstance().loadFields();
+                org.oxff.repeater.privilege.SessionManager.getInstance().loadGlobalFieldDefinitions();
+                logManager.success("[+] 全局字段定义加载完成");
             } catch (Exception e) {
-                logManager.error("[!] 全局令牌位置加载失败: " + e.getMessage());
+                logManager.error("[!] 全局字段定义加载失败: " + e.getMessage());
             }
 
-            // 阶段4.6.1：加载全局令牌方案
+            // 阶段4.6.1：加载全局方案
             try {
-                org.oxff.repeater.privilege.SessionManager.getInstance().loadGlobalTokenSchemes();
-                logManager.success("[+] 全局令牌方案加载完成");
+                org.oxff.repeater.privilege.SessionManager.getInstance().loadGlobalSchemes();
+                logManager.success("[+] 全局方案加载完成");
             } catch (Exception e) {
-                logManager.error("[!] 全局令牌方案加载失败: " + e.getMessage());
+                logManager.error("[!] 全局方案加载失败: " + e.getMessage());
             }
 
             // 阶段4.7：加载全局去重配置

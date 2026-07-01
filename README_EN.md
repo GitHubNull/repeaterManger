@@ -28,9 +28,9 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Column Display Control | Customizable table columns for better information density and readability |
 | API Rule Extraction | Configurable API extraction rule engine, supporting 4 extraction sources × 4 extraction methods, auto-extracting API paths from irregular requests |
 | Privilege Testing | Automated privilege escalation vulnerability testing framework with user session token replacement and response comparison |
-| Token Scheme Management | Multi-scheme token location management with scheme-session association and global persistence |
+| Scheme Management | Multi-scheme field management with scheme-session association and global persistence |
 | Rule Group Judgment | Single active rule group + AND/OR/NOT multi-condition judgment, replacing legacy priority iteration mode |
-| Anonymous User Creation | One-click guest user creation with all empty token values, intelligent token scheme matching |
+| Anonymous User Creation | One-click guest user creation with all empty field values, intelligent scheme matching |
 | Dedup Configuration | Priority-chain API deduplication with 6 strategies and 3 keep policies |
 | Session Parsing | Auto-parse user sessions from clipboard, supporting Chrome DevTools fetch format |
 | Data Import/Export | Support ERM encrypted archives (AES-256-CBC + HMAC-SHA256), Postman Collection v2.1, and more formats |
@@ -70,9 +70,9 @@ Repeater Manager
 │   └── Project Rules (SQLite independent storage)
 ├── Privilege Testing Module
 │   ├── Multi-user Session Management
-│   ├── Token Scheme Management (scheme-location-session 3-tier architecture)
-│   ├── Token Location Configuration (Header/Cookie/Body/URL Param)
-│   ├── Automated Token Replacement Engine
+│   ├── Scheme Management (scheme-field-session 3-tier architecture)
+│   ├── Field Configuration (Header/Cookie/Body/URL Param)
+│   ├── Automated Field Replacement Engine
 │   ├── Judgment Rule Group Configuration (single active rule set + AND/OR/NOT multi-condition)
 │   ├── One-click Anonymous User Creation
 │   ├── Dedup Configuration (6 strategies × 3 keep policies priority-chain matching)
@@ -144,7 +144,7 @@ Repeater Manager
 
 ### Privilege Testing
 
-1. Configure user sessions (with credentials/tokens) and token locations in the configuration panel
+1. Configure user sessions (with credentials/tokens) and fields in the configuration panel
 2. Set up judgment rules (how to detect successful privilege escalation)
 3. Define request scope (which URLs to test)
 4. Enable auto-testing: the plugin intercepts scope-matched proxy traffic, auto-replaces tokens and replays
@@ -249,13 +249,13 @@ src/main/java/
     │   ├── AutoTestEngine.java         # Automated testing engine (intercept → replay → judge)
     │   ├── ReplayEngine.java           # Request replay engine
     │   ├── JudgmentEngine.java         # Response judgment engine
-    │   ├── TokenReplacementEngine.java # Token replacement engine
+    │   ├── FieldReplacementEngine.java # Field replacement engine
     │   ├── LevenshteinCalculator.java  # String similarity calculation
     │   ├── SessionManager.java         # User session manager
     │   ├── JudgmentRuleManager.java    # Judgment rule manager
     │   ├── ScopeManager.java           # Request scope manager
     │   ├── JudgmentRuleYamlIO.java     # Judgment rule YAML serialization
-    │   ├── GlobalTokenSchemeManager.java # Global token scheme manager
+    │   ├── GlobalSchemeManager.java # Global scheme manager
     │   ├── DedupConfigManager.java     # Dedup config manager
     │   ├── ApiDedupEngine.java         # API dedup engine
     │   ├── FetchRequestParser.java     # Chrome fetch format parser
@@ -265,12 +265,12 @@ src/main/java/
     │   │   ├── UserSession.java        # User session (credentials/tokens)
     │   │   ├── JudgmentRule.java       # Judgment rule
     │   │   ├── JudgmentResult.java     # Test result
-    │   │   ├── TokenLocation.java      # Token location
-    │   │   ├── TokenLocationType.java  # Enum: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
+    │   │   ├── FieldDefinition.java      # Field definition
+    │   │   ├── FieldType.java   # Enum: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
     │   │   ├── RuleTarget.java         # Enum: STATUS_CODE/RESPONSE_HEADER/RESPONSE_BODY/RESPONSE_TIME/SIMILARITY
     │   │   ├── RuleMethod.java         # Enum: REGEX/CONTAINS/NOT_CONTAINS/EQUALS/NOT_EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/LENGTH_DIFF
     │   │   ├── RuleCondition.java      # Rule condition model (AND/OR/NOT operators)
-    │   │   ├── TokenScheme.java        # Token scheme model
+    │   │   ├── Scheme.java        # Scheme model
     │   │   └── ScopeEntry.java         # Scope configuration
     │   └── dao/
     │       ├── SessionDAO.java         # User session CRUD
@@ -291,8 +291,8 @@ src/main/java/
     │   │   ├── PostmanSnippetBuilder.java # Postman code snippet builder
     │   │   └── FreeMarkerConfig.java    # FreeMarker configuration
     │   ├── UserSessionYamlIO.java       # User session YAML import/export
-    │   ├── TokenLocationYamlIO.java     # Token location YAML import/export
-    │   └── GlobalTokenLocationManager.java # Global token location manager
+    │   ├── FieldDefinitionYamlIO.java     # Field YAML import/export
+    │   └── GlobalFieldDefinitionManager.java # Global field manager
     ├── service/
     │   ├── AutoSaveService.java        # Auto-save service
     │   ├── GarbageCollectorService.java # Garbage collection service (Pool zero-ref cleanup)
@@ -344,11 +344,11 @@ src/main/java/
     │       ├── ScopeConfigTab.java     # Scope config tab
     │       ├── UserSessionTableModel.java
     │       ├── JudgmentRuleTableModel.java
-    │       ├── TokenLocationTableModel.java
+    │       ├── FieldDefinitionTableModel.java
     │       ├── UserSessionEditDialog.java
     │       ├── JudgmentRuleEditDialog.java
-    │       ├── TokenLocationEditDialog.java
-    │       └── TokenValueCellRenderer.java # Token value cell renderer
+    │       ├── FieldDefinitionEditDialog.java
+    │       └── FieldValueCellRenderer.java # Field value cell renderer
     ├── RequestDispatchHandler.java     # Central request dispatch handler
     └── utils/
         ├── TextLineNumber.java         # Text line number utility
@@ -364,7 +364,7 @@ src/main/java/
 | SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` | SQLite JDBC driver |
 | HikariCP | 5.0.1 | `com.zaxxer:HikariCP` | Connection pool (declared, custom pool used instead) |
 | Gson | 2.10.1 | `com.google.code.gson:gson` | JSON serialization/deserialization |
-| SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML serialization (API extraction, judgment rules, user sessions, token locations) |
+| SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML serialization (API extraction, judgment rules, user sessions, field definitions) |
 | Commons IO | 2.11.0 | `commons-io:commons-io` | Apache file I/O utilities |
 | Commons Lang3 | 3.12.0 | `org.apache.commons:commons-lang3` | Apache common utilities |
 | Apache PDFBox | 3.0.1 | `org.apache.pdfbox:pdfbox` | Native PDF report generation with embedded Chinese fonts |

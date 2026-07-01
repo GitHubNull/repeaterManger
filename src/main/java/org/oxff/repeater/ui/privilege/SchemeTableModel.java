@@ -1,22 +1,22 @@
 package org.oxff.repeater.ui.privilege;
 
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.Scheme;
 
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 令牌方案表格模型
- * 列：名称、描述、令牌位置数、全局、启用
+ * 方案表格模型
+ * 列：名称、描述、关联字段数、全局、启用
  */
-public class TokenSchemeTableModel extends AbstractTableModel {
+public class SchemeTableModel extends AbstractTableModel {
 
-    private static final String[] COLUMN_NAMES = {"名称", "描述", "令牌位置数", "全局", "启用"};
+    private static final String[] COLUMN_NAMES = {"名称", "描述", "关联字段数", "全局", "启用"};
 
-    private List<TokenScheme> schemes = new ArrayList<>();
+    private List<Scheme> schemes = new ArrayList<>();
 
-    public void setData(List<TokenScheme> schemes) {
+    public void setData(List<Scheme> schemes) {
         this.schemes = schemes != null ? schemes : new ArrayList<>();
         fireTableDataChanged();
     }
@@ -48,18 +48,18 @@ public class TokenSchemeTableModel extends AbstractTableModel {
 
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
-        TokenScheme scheme = schemes.get(rowIndex);
+        Scheme scheme = schemes.get(rowIndex);
         switch (columnIndex) {
             case 0: return scheme.getName();
             case 1: return scheme.getDescription();
-            case 2: return scheme.getTokenLocationCount();
+            case 2: return scheme.getFieldCount();
             case 3: return scheme.isPersistToGlobal();
             case 4: return scheme.isEnabled();
             default: return null;
         }
     }
 
-    public TokenScheme getTokenScheme(int rowIndex) {
+    public Scheme getScheme(int rowIndex) {
         if (rowIndex >= 0 && rowIndex < schemes.size()) {
             return schemes.get(rowIndex);
         }

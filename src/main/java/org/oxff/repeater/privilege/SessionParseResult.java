@@ -1,6 +1,6 @@
 package org.oxff.repeater.privilege;
 
-import org.oxff.repeater.privilege.model.TokenLocation;
+import org.oxff.repeater.privilege.model.FieldDefinition;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -10,19 +10,19 @@ import java.util.Map;
 
 /**
  * HTTP报文解析结果
- * 封装从HTTP报文中根据TokenLocation提取到的令牌值
+ * 封装从HTTP报文中根据FieldDefinition提取到的字段值
  */
 public class SessionParseResult {
 
     private final Map<Integer, String> extractedValues; // locationId -> value
-    private final Map<Integer, TokenLocation> locationMap; // locationId -> TokenLocation
+    private final Map<Integer, FieldDefinition> locationMap; // locationId -> FieldDefinition
     private final String rawHeader;
     private final String rawBody;
     private final String contentType;
 
     public SessionParseResult(String rawHeader, String rawBody, String contentType,
                               Map<Integer, String> extractedValues,
-                              Map<Integer, TokenLocation> locationMap) {
+                              Map<Integer, FieldDefinition> locationMap) {
         this.rawHeader = rawHeader;
         this.rawBody = rawBody;
         this.contentType = contentType;
@@ -47,11 +47,11 @@ public class SessionParseResult {
     }
 
     /**
-     * 获取未匹配到值的TokenLocation列表
+     * 获取未匹配到值的FieldDefinition列表
      */
-    public List<TokenLocation> getUnmatchedLocations() {
-        List<TokenLocation> unmatched = new ArrayList<>();
-        for (Map.Entry<Integer, TokenLocation> entry : locationMap.entrySet()) {
+    public List<FieldDefinition> getUnmatchedLocations() {
+        List<FieldDefinition> unmatched = new ArrayList<>();
+        for (Map.Entry<Integer, FieldDefinition> entry : locationMap.entrySet()) {
             if (!extractedValues.containsKey(entry.getKey())) {
                 unmatched.add(entry.getValue());
             }
@@ -62,12 +62,12 @@ public class SessionParseResult {
     /**
      * 获取匹配率（0.0 ~ 1.0）
      */
-    public double getMatchRate(List<TokenLocation> targetLocations) {
+    public double getMatchRate(List<FieldDefinition> targetLocations) {
         if (targetLocations == null || targetLocations.isEmpty()) {
             return 0.0;
         }
         int matched = 0;
-        for (TokenLocation loc : targetLocations) {
+        for (FieldDefinition loc : targetLocations) {
             if (extractedValues.containsKey(loc.getId())) {
                 matched++;
             }
@@ -87,7 +87,7 @@ public class SessionParseResult {
         return contentType;
     }
 
-    public Map<Integer, TokenLocation> getLocationMap() {
+    public Map<Integer, FieldDefinition> getLocationMap() {
         return Collections.unmodifiableMap(locationMap);
     }
 

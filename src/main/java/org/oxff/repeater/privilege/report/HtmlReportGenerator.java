@@ -33,7 +33,7 @@ public class HtmlReportGenerator extends ReportGenerator {
             FreeMarkerConfig.getInstance().getHtmlTemplate("html_report.ftl").process(model, writer);
             return writer.toString();
         } catch (Exception e) {
-            throw new RuntimeException("HTML report generation failed: " + e.getMessage(), e);
+            throw new RuntimeException("HTML 报告生成失败: " + e.getMessage(), e);
         }
     }
 }

@@ -7,8 +7,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import org.oxff.repeater.http.RequestDataHelper;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenLocationType;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.FieldType;
 import org.oxff.repeater.privilege.model.UserSession;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -33,32 +33,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 令牌替换引擎 - 无状态工具类
- * 根据配置的令牌位置和用户会话值，替换HTTP请求中的会话令牌
+ * 字段替换引擎 - 无状态工具类
+ * 根据配置的字段定义和用户会话值，替换HTTP请求中的会话字段
  *
  * 支持6种位置类型：HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM
  * 替换后自动修正Content-Length
  */
-public class TokenReplacementEngine {
+public class FieldReplacementEngine {
 
     /**
-     * 替换请求中的令牌
+     * 替换请求中的字段值
      *
      * @param originalRequest 原始请求字节数组
-     * @param locations       令牌位置列表
-     * @param session         用户会话（包含各位置的值）
+     * @param fields          字段定义列表
+     * @param session         用户会话（包含各字段的值）
      * @return 替换后的请求字节数组，如果某项替换失败则跳过该项继续
      */
-    public static byte[] replaceTokens(byte[] originalRequest, List<TokenLocation> locations, UserSession session) {
+    public static byte[] replaceFields(byte[] originalRequest, List<FieldDefinition> fields, UserSession session) {
         if (originalRequest == null || originalRequest.length == 0) {
             return originalRequest;
         }
-        if (locations == null || locations.isEmpty()) {
-            LogManager.getInstance().printOutput("[!] 令牌位置列表为空，跳过令牌替换（请检查令牌位置配置）");
+        if (fields == null || fields.isEmpty()) {
+            LogManager.getInstance().printOutput("[!] 字段定义列表为空，跳过字段替换（请检查字段定义配置）");
             return originalRequest;
         }
         if (session == null) {
-            LogManager.getInstance().printOutput("[!] 用户会话为空，跳过令牌替换（请检查用户会话配置）");
+            LogManager.getInstance().printOutput("[!] 用户会话为空，跳过字段替换（请检查用户会话配置）");
             return originalRequest;
         }
 
@@ -84,104 +84,104 @@ public class TokenReplacementEngine {
         String contentType = extractContentType(headerStr);
 
         // 分类处理：URL参数、header类型和body类型的分开
-        List<TokenLocation> urlLocations = new ArrayList<>();
-        List<TokenLocation> headerLocations = new ArrayList<>();
-        List<TokenLocation> bodyLocations = new ArrayList<>();
+        List<FieldDefinition> urlFields = new ArrayList<>();
+        List<FieldDefinition> headerFields = new ArrayList<>();
+        List<FieldDefinition> bodyFields = new ArrayList<>();
 
-        for (TokenLocation loc : locations) {
-            if (loc.getType() == TokenLocationType.HEADER) {
-                headerLocations.add(loc);
-            } else if (loc.getType() == TokenLocationType.URL_PARAM) {
-                urlLocations.add(loc);
+        for (FieldDefinition field : fields) {
+            if (field.getType() == FieldType.HEADER) {
+                headerFields.add(field);
+            } else if (field.getType() == FieldType.URL_PARAM) {
+                urlFields.add(field);
             } else {
-                bodyLocations.add(loc);
+                bodyFields.add(field);
             }
         }
 
-        // 收集令牌值为 null 的位置，用于诊断日志
-        List<String> nullValueLocations = new ArrayList<>();
+        // 收集字段值为 null 的位置，用于诊断日志
+        List<String> nullValueFields = new ArrayList<>();
 
-        // 替换URL参数中的令牌（在header替换之前，因为URL参数在请求行中）
-        for (TokenLocation loc : urlLocations) {
-            String value = session.getTokenValue(loc.getId());
-            // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应token
+        // 替换URL参数中的字段值（在header替换之前，因为URL参数在请求行中）
+        for (FieldDefinition field : urlFields) {
+            String value = session.getFieldValue(field.getId());
+            // null表示该字段未配置值（如未授权用户），视为空字符串以删除对应字段
             if (value == null) {
                 value = "";
-                nullValueLocations.add(loc.getType().getDisplayName() + "[" + loc.getExpression() + "]");
+                nullValueFields.add(field.getType().getDisplayName() + "[" + field.getExpression() + "]");
             }
-            value = sanitizeNewlines(value, loc.getExpression());
+            value = sanitizeNewlines(value, field.getExpression());
             try {
-                headerStr = replaceUrlParam(headerStr, loc.getExpression(), value);
+                headerStr = replaceUrlParam(headerStr, field.getExpression(), value);
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] URL参数令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
+                LogManager.getInstance().printError("[!] URL参数字段替换失败 (expression=" + field.getExpression() + "): " + e.getMessage());
             }
         }
 
-        // 替换Header中的令牌
-        for (TokenLocation loc : headerLocations) {
-            String value = session.getTokenValue(loc.getId());
-            // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应header
+        // 替换Header中的字段值
+        for (FieldDefinition field : headerFields) {
+            String value = session.getFieldValue(field.getId());
+            // null表示该字段未配置值（如未授权用户），视为空字符串以删除对应header
             if (value == null) {
                 value = "";
-                nullValueLocations.add(loc.getType().getDisplayName() + "[" + loc.getExpression() + "]");
+                nullValueFields.add(field.getType().getDisplayName() + "[" + field.getExpression() + "]");
             }
             // 安全过滤：将换行符替换为空格，防止HTTP header注入
-            value = sanitizeNewlines(value, loc.getExpression());
+            value = sanitizeNewlines(value, field.getExpression());
             try {
-                headerStr = replaceHeader(headerStr, loc.getExpression(), value);
+                headerStr = replaceHeader(headerStr, field.getExpression(), value);
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] Header令牌替换失败 (expression=" + loc.getExpression() + "): " + e.getMessage());
+                LogManager.getInstance().printError("[!] Header字段替换失败 (expression=" + field.getExpression() + "): " + e.getMessage());
             }
         }
 
-        // 替换Body中的令牌
-        if (!bodyStr.isEmpty() && !bodyLocations.isEmpty()) {
-            for (TokenLocation loc : bodyLocations) {
-                String value = session.getTokenValue(loc.getId());
-                // null表示该令牌位置未配置值（如未授权用户），视为空字符串以删除对应字段
+        // 替换Body中的字段值
+        if (!bodyStr.isEmpty() && !bodyFields.isEmpty()) {
+            for (FieldDefinition field : bodyFields) {
+                String value = session.getFieldValue(field.getId());
+                // null表示该字段未配置值（如未授权用户），视为空字符串以删除对应字段
                 if (value == null) {
                     value = "";
-                    nullValueLocations.add(loc.getType().getDisplayName() + "[" + loc.getExpression() + "]");
+                    nullValueFields.add(field.getType().getDisplayName() + "[" + field.getExpression() + "]");
                 }
                 // 安全过滤：将换行符替换为空格，防止JSON/XML/body结构破坏
-                value = sanitizeNewlines(value, loc.getExpression());
+                value = sanitizeNewlines(value, field.getExpression());
                 try {
-                    switch (loc.getType()) {
+                    switch (field.getType()) {
                         case JSON_BODY:
                             if (contentType != null && contentType.contains("application/json")) {
-                                bodyStr = replaceJsonBody(bodyStr, loc.getExpression(), value);
+                                bodyStr = replaceJsonBody(bodyStr, field.getExpression(), value);
                             }
                             break;
                         case XML_BODY:
                             if (contentType != null && contentType.contains("xml")) {
-                                bodyStr = replaceXmlBody(bodyStr, loc.getExpression(), value);
+                                bodyStr = replaceXmlBody(bodyStr, field.getExpression(), value);
                             }
                             break;
                         case FORM_FIELD:
                             if (contentType != null && contentType.contains("x-www-form-urlencoded")) {
-                                bodyStr = replaceFormField(bodyStr, loc.getExpression(), value);
+                                bodyStr = replaceFormField(bodyStr, field.getExpression(), value);
                             }
                             break;
                         case MULTIPART_FIELD:
                             if (contentType != null && contentType.contains("multipart/form-data")) {
-                                bodyStr = replaceMultipartField(bodyStr, contentType, loc.getExpression(), value);
+                                bodyStr = replaceMultipartField(bodyStr, contentType, field.getExpression(), value);
                             }
                             break;
                         default:
                             break;
                     }
                 } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] Body令牌替换失败 (type=" + loc.getType() + ", expression=" + loc.getExpression() + "): " + e.getMessage());
+                    LogManager.getInstance().printError("[!] Body字段替换失败 (type=" + field.getType() + ", expression=" + field.getExpression() + "): " + e.getMessage());
                 }
             }
         }
 
-        // 诊断：令牌值缺失汇总 — 警告用户哪些令牌未配置值
-        if (!nullValueLocations.isEmpty()) {
+        // 诊断：字段值缺失汇总 — 警告用户哪些字段未配置值
+        if (!nullValueFields.isEmpty()) {
             LogManager.getInstance().printError(String.format(
-                    "[!] 令牌替换: 用户 '%s' 在 %d/%d 个令牌位置未配置值 → 将从请求中删除: %s",
-                    session.getName(), nullValueLocations.size(), locations.size(),
-                    String.join(", ", nullValueLocations)));
+                    "[!] 字段替换: 用户 '%s' 在 %d/%d 个字段位置未配置值 → 将从请求中删除: %s",
+                    session.getName(), nullValueFields.size(), fields.size(),
+                    String.join(", ", nullValueFields)));
         }
 
         // 重新组装请求
@@ -288,13 +288,13 @@ public class TokenReplacementEngine {
      * 保留原始值类型：如果原始值是数字或布尔值，替换值会自动转换类型
      */
     private static void setJsonValueAtPath(JsonElement root, String path, String value) {
-        String[] segments = splitJsonPath(path);
+        String[] segments = JsonPathHelper.splitJsonPath(path);
         if (segments.length == 0) return;
 
         JsonElement current = root;
         for (int i = 0; i < segments.length - 1; i++) {
             String segment = segments[i];
-            current = navigateJsonSegment(current, segment);
+            current = JsonPathHelper.navigateJsonSegment(current, segment);
             if (current == null) {
                 return; // 路径不存在，跳过
             }
@@ -309,30 +309,30 @@ public class TokenReplacementEngine {
                 int idx = Integer.parseInt(lastSegment.substring(1, lastSegment.length() - 1));
                 if (idx >= 0 && idx < array.size()) {
                     JsonElement original = array.get(idx);
-                    array.set(idx, coerceJsonValue(original, value));
+                    array.set(idx, JsonPathHelper.coerceJsonValue(original, value));
                 }
             }
         } else {
             if (current.isJsonObject()) {
                 JsonObject obj = current.getAsJsonObject();
                 JsonElement original = obj.has(lastSegment) ? obj.get(lastSegment) : null;
-                obj.add(lastSegment, coerceJsonValue(original, value));
+                obj.add(lastSegment, JsonPathHelper.coerceJsonValue(original, value));
             }
         }
     }
 
     /**
      * 在JSON结构中按路径移除属性
-     * 用于未授权测试场景：空令牌值时移除对应参数，模拟请求中不存在此字段
+     * 用于未授权测试场景：空字段值时移除对应参数，模拟请求中不存在此字段
      */
     private static void removeJsonValueAtPath(JsonElement root, String path) {
-        String[] segments = splitJsonPath(path);
+        String[] segments = JsonPathHelper.splitJsonPath(path);
         if (segments.length == 0) return;
 
         JsonElement current = root;
         for (int i = 0; i < segments.length - 1; i++) {
             String segment = segments[i];
-            current = navigateJsonSegment(current, segment);
+            current = JsonPathHelper.navigateJsonSegment(current, segment);
             if (current == null) return;
         }
 
@@ -354,63 +354,7 @@ public class TokenReplacementEngine {
         }
     }
 
-    /**
-     * 根据原始JSON值类型，将替换字符串转换为对应类型的JsonElement
-     * 如果原始值为数字/布尔值，则尝试将替换值转换为相同类型；
-     * 如果无法转换，回退为字符串类型
-     */
-    private static JsonElement coerceJsonValue(JsonElement original, String value) {
-        if (original != null && original.isJsonPrimitive()) {
-            JsonPrimitive prim = original.getAsJsonPrimitive();
-            if (prim.isBoolean()) {
-                // 尝试解析为布尔值
-                if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
-                    return new JsonPrimitive(Boolean.parseBoolean(value));
-                }
-                // 无法转换为布尔值，保持字符串
-                return new JsonPrimitive(value);
-            } else if (prim.isNumber()) {
-                // 尝试解析为数字
-                try {
-                    if (value.contains(".") || value.contains("e") || value.contains("E")) {
-                        return new JsonPrimitive(Double.parseDouble(value));
-                    } else {
-                        long longVal = Long.parseLong(value);
-                        // 如果在 int 范围内，用 int 避免不必要的小数点
-                        if (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE) {
-                            return new JsonPrimitive((int) longVal);
-                        }
-                        return new JsonPrimitive(longVal);
-                    }
-                } catch (NumberFormatException e) {
-                    // 无法转换为数字，保持字符串
-                    return new JsonPrimitive(value);
-                }
-            }
-        }
-        // 默认：原始值为字符串或无原始值，直接使用字符串
-        return new JsonPrimitive(value);
-    }
 
-    /**
-     * 导航到JSON的指定段
-     */
-    private static JsonElement navigateJsonSegment(JsonElement current, String segment) {
-        if (current == null || current.isJsonNull()) return null;
-
-        if (segment.startsWith("[") && segment.endsWith("]")) {
-            if (!current.isJsonArray()) return null;
-            JsonArray array = current.getAsJsonArray();
-            int idx = Integer.parseInt(segment.substring(1, segment.length() - 1));
-            if (idx < 0 || idx >= array.size()) return null;
-            return array.get(idx);
-        } else {
-            if (!current.isJsonObject()) return null;
-            JsonObject obj = current.getAsJsonObject();
-            if (!obj.has(segment)) return null;
-            return obj.get(segment);
-        }
-    }
 
     // ==================== XML Body 替换 ====================
 
@@ -753,17 +697,17 @@ public class TokenReplacementEngine {
     // ==================== 工具方法 ====================
 
     /**
-     * 安全过滤令牌值中的换行符
+     * 安全过滤字段值中的换行符
      * 将换行符替换为空格，防止HTTP header注入或body结构破坏
      * 此过滤仅影响运行时替换，不影响数据库存储的原始值
      *
-     * @param value      原始令牌值
-     * @param expression 令牌位置表达式（用于日志提示）
+     * @param value      原始字段值
+     * @param expression 字段位置表达式（用于日志提示）
      * @return 过滤后的安全值
      */
     private static String sanitizeNewlines(String value, String expression) {
         if (value.contains("\n") || value.contains("\r")) {
-            LogManager.getInstance().printOutput("[*] 令牌值包含换行符，替换时已转换为空格 (location=" + expression + ")");
+            LogManager.getInstance().printOutput("[*] 字段值包含换行符，替换时已转换为空格 (field=" + expression + ")");
             value = value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ");
         }
         return value;
@@ -805,42 +749,6 @@ public class TokenReplacementEngine {
         return null;
     }
 
-    /**
-     * 分割JSONPath路径段
-     * 处理 "field.subfield[0].name" → ["field", "subfield", "[0]", "name"]
-     */
-    private static String[] splitJsonPath(String path) {
-        List<String> segments = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inBracket = false;
 
-        for (int i = 0; i < path.length(); i++) {
-            char c = path.charAt(i);
-            if (c == '[') {
-                if (current.length() > 0) {
-                    segments.add(current.toString());
-                    current = new StringBuilder();
-                }
-                inBracket = true;
-                current.append(c);
-            } else if (c == ']') {
-                current.append(c);
-                segments.add(current.toString());
-                current = new StringBuilder();
-                inBracket = false;
-            } else if (c == '.' && !inBracket) {
-                if (current.length() > 0) {
-                    segments.add(current.toString());
-                    current = new StringBuilder();
-                }
-            } else {
-                current.append(c);
-            }
-        }
-        if (current.length() > 0) {
-            segments.add(current.toString());
-        }
-
-        return segments.toArray(new String[0]);
-    }
 }
+

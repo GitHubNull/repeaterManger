@@ -47,10 +47,10 @@ public class PopMenu implements ContextMenuItemsProvider {
                 });
 
                 JMenuItem parseSessionItem = new JMenuItem("解析为用户会话");
-                boolean hasSchemes = !SessionManager.getInstance().getTokenSchemes().isEmpty();
+                boolean hasSchemes = !SessionManager.getInstance().getSchemes().isEmpty();
                 parseSessionItem.setEnabled(hasSchemes);
                 if (!hasSchemes) {
-                    parseSessionItem.setToolTipText("请先配置令牌方案");
+                    parseSessionItem.setToolTipText("请先配置方案");
                 }
                 parseSessionItem.addActionListener(e -> {
                     UIRequestDispatcher.getInstance().parseSessionFromRequest(requestResponse.request());

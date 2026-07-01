@@ -1,6 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.Scheme;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -14,13 +14,13 @@ import java.util.List;
 public class SelectSchemeDialog extends JDialog {
 
     private boolean confirmed = false;
-    private TokenScheme selectedScheme = null;
+    private Scheme selectedScheme = null;
 
-    private final JList<TokenScheme> schemeList;
-    private final DefaultListModel<TokenScheme> listModel;
+    private final JList<Scheme> schemeList;
+    private final DefaultListModel<Scheme> listModel;
 
-    public SelectSchemeDialog(Frame owner, List<TokenScheme> allSchemes, String message) {
-        super(owner, "选择令牌方案", true);
+    public SelectSchemeDialog(Frame owner, List<Scheme> allSchemes, String message) {
+        super(owner, "选择方案", true);
 
         setSize(450, 350);
         setLocationRelativeTo(owner);
@@ -38,7 +38,7 @@ public class SelectSchemeDialog extends JDialog {
         // 中部方案列表
         listModel = new DefaultListModel<>();
         if (allSchemes != null) {
-            for (TokenScheme scheme : allSchemes) {
+            for (Scheme scheme : allSchemes) {
                 listModel.addElement(scheme);
             }
         }
@@ -86,7 +86,7 @@ public class SelectSchemeDialog extends JDialog {
         return confirmed;
     }
 
-    public TokenScheme getSelectedScheme() {
+    public Scheme getSelectedScheme() {
         return selectedScheme;
     }
 
@@ -98,10 +98,10 @@ public class SelectSchemeDialog extends JDialog {
         public Component getListCellRendererComponent(JList<?> list, Object value,
                                                       int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-            if (value instanceof TokenScheme scheme) {
+            if (value instanceof Scheme scheme) {
                 String status = scheme.isEnabled() ? "[已启用]" : "[未启用]";
-                int locCount = scheme.getTokenLocationCount();
-                setText(String.format("%s %s (%d个位置)", scheme.getName(), status, locCount));
+                int locCount = scheme.getFieldCount();
+                setText(String.format("%s %s (%d个字段)", scheme.getName(), status, locCount));
                 if (!scheme.isEnabled()) {
                     setForeground(isSelected ? list.getSelectionForeground() : Color.GRAY);
                 }

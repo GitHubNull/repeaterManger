@@ -1,23 +1,23 @@
 package org.oxff.repeater.privilege;
 
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.Scheme;
 
 /**
- * TokenScheme匹配结果
- * 封装从HTTP报文解析后与某个TokenScheme的匹配程度
+ * Scheme匹配结果
+ * 封装从HTTP报文解析后与某个Scheme的匹配程度
  */
 public class SchemeMatch {
-    private final TokenScheme scheme;
+    private final Scheme scheme;
     private final int matchedCount;
     private final int totalCount;
 
-    public SchemeMatch(TokenScheme scheme, int matchedCount, int totalCount) {
+    public SchemeMatch(Scheme scheme, int matchedCount, int totalCount) {
         this.scheme = scheme;
         this.matchedCount = matchedCount;
         this.totalCount = totalCount;
     }
 
-    public TokenScheme getScheme() {
+    public Scheme getScheme() {
         return scheme;
     }
 

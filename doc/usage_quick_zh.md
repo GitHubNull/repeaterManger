@@ -165,9 +165,9 @@
 自动化越权漏洞检测功能：
 
 1. 进入 **"配置"** 面板，配置：
-   - **令牌位置**：配置 Token 在请求中的位置（HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM，共 6 种）
-   - **令牌方案**：创建一组令牌位置的组合（如"Bearer 认证方案"仅含 Authorization Header），关联方案到用户会话
-   - **用户会话**：添加不同权限用户的凭证/Token；支持一键 **"添加匿名用户"**（所有令牌值为空，模拟未登录状态）
+   - **字段**：配置 Token 在请求中的位置（HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM，共 6 种）
+   - **方案**：创建一组字段的组合（如"Bearer 认证方案"仅含 Authorization Header），关联方案到用户会话
+   - **用户会话**：添加不同权限用户的凭证/Token；支持一键 **"添加匿名用户"**（所有字段值为空，模拟未登录状态）
    - **判断规则组**：创建规则组（组内条件 AND 组合），设置一个为**活跃规则组**（全局唯一），支持 AND/OR/NOT 运算符
    - **请求范围**：指定需要测试的 URL 模式
 2. 开启自动检测，插件会拦截匹配范围的代理流量

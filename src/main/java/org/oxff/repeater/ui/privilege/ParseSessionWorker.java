@@ -6,8 +6,8 @@ import org.oxff.repeater.privilege.SchemeMatch;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.SessionParseResult;
 import org.oxff.repeater.privilege.SessionParserEngine;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -84,19 +84,19 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
             return Result.error("无法识别剪贴板内容格式，请复制原始HTTP报文或Chrome fetch格式");
         }
 
-        // 3. 获取令牌位置和方案
+        // 3. 获取字段定义和方案
         SessionManager sm = SessionManager.getInstance();
-        List<TokenLocation> locations = sm.getTokenLocations();
-        List<TokenScheme> schemes = sm.getTokenSchemes();
+        List<FieldDefinition> locations = sm.getFieldDefinitions();
+        List<Scheme> schemes = sm.getSchemes();
 
         if (locations.isEmpty()) {
-            return Result.error("未配置任何令牌位置，请先配置令牌位置");
+            return Result.error("未配置任何字段定义，请先配置字段定义");
         }
 
         // 3. 调用解析引擎
         SessionParseResult parseResult = SessionParserEngine.parse(httpMessage, locations);
 
-        publish("正在匹配令牌方案...");
+        publish("正在匹配方案...");
 
         // 4. 匹配最佳方案
         List<SchemeMatch> schemeMatches = SessionParserEngine.matchSchemes(parseResult, schemes);
@@ -130,17 +130,17 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
 
             SessionManager sm = SessionManager.getInstance();
             List<SchemeMatch> schemeMatches = result.getSchemeMatches();
-            List<TokenScheme> allSchemes = sm.getTokenSchemes();
+            List<Scheme> allSchemes = sm.getSchemes();
 
             // 检查是否有启用的方案
-            boolean hasEnabledScheme = allSchemes.stream().anyMatch(TokenScheme::isEnabled);
+            boolean hasEnabledScheme = allSchemes.stream().anyMatch(Scheme::isEnabled);
 
             // 如果没有匹配到任何方案，或者没有任何启用的方案，让用户选择
             if (schemeMatches.isEmpty() || !hasEnabledScheme) {
                 Frame owner = (Frame) SwingUtilities.getWindowAncestor(parentComponent);
                 String message;
                 if (!hasEnabledScheme) {
-                    message = "<html>没有任何启用的令牌方案。<br>请选择一个方案，选中后将自动启用。</html>";
+                    message = "<html>没有任何启用的方案。<br>请选择一个方案，选中后将自动启用。</html>";
                 } else {
                     message = "<html>没有启用的方案匹配当前报文。<br>请选择一个方案，选中后将自动启用。</html>";
                 }
@@ -152,7 +152,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     return; // 用户取消
                 }
 
-                TokenScheme selectedScheme = selectDialog.getSelectedScheme();
+                Scheme selectedScheme = selectDialog.getSelectedScheme();
                 if (selectedScheme == null) {
                     return;
                 }
@@ -160,9 +160,9 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 // 自动启用用户选择的方案
                 if (!selectedScheme.isEnabled()) {
                     selectedScheme.setEnabled(true);
-                    sm.updateTokenScheme(selectedScheme.getId(), selectedScheme.getName(),
+                    sm.updateScheme(selectedScheme.getId(), selectedScheme.getName(),
                             selectedScheme.getDescription(), true, selectedScheme.isPersistToGlobal());
-                    LogManager.getInstance().printOutput("[+] 已自动启用令牌方案: " + selectedScheme.getName());
+                    LogManager.getInstance().printOutput("[+] 已自动启用方案: " + selectedScheme.getName());
                 }
 
                 // 重新解析匹配（使用刚启用的方案）
@@ -177,7 +177,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 // 如果重新匹配后仍然没有匹配，构造一个手动匹配结果
                 if (schemeMatches.isEmpty()) {
                     schemeMatches = java.util.Collections.singletonList(
-                            new SchemeMatch(selectedScheme, 0, selectedScheme.getTokenLocationCount()));
+                            new SchemeMatch(selectedScheme, 0, selectedScheme.getFieldCount()));
                 }
             }
 
@@ -210,11 +210,11 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 }
 
                 if (sessionId > 0) {
-                    // 保存令牌值
+                    // 保存字段值
                     java.util.Map<Integer, String> extractedValues = result.getParseResult().getAllExtractedValues();
                     if (!extractedValues.isEmpty()) {
-                        sm.saveTokenValues(sessionId, extractedValues);
-                        LogManager.getInstance().printOutput("[+] 已保存 " + extractedValues.size() + " 个令牌值");
+                        sm.saveFieldValues(sessionId, extractedValues);
+                        LogManager.getInstance().printOutput("[+] 已保存 " + extractedValues.size() + " 个字段值");
                     }
 
                     // 刷新UI
@@ -345,11 +345,11 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
         private final String errorMessage;
         private final SessionParseResult parseResult;
         private final List<SchemeMatch> schemeMatches;
-        private final List<TokenLocation> allLocations;
+        private final List<FieldDefinition> allLocations;
         private final String suggestedName;
 
         private Result(boolean error, String errorMessage, SessionParseResult parseResult,
-                       List<SchemeMatch> schemeMatches, List<TokenLocation> allLocations,
+                       List<SchemeMatch> schemeMatches, List<FieldDefinition> allLocations,
                        String suggestedName) {
             this.error = error;
             this.errorMessage = errorMessage;
@@ -364,7 +364,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
         }
 
         public static Result success(SessionParseResult parseResult, List<SchemeMatch> schemeMatches,
-                                      List<TokenLocation> allLocations, String suggestedName) {
+                                      List<FieldDefinition> allLocations, String suggestedName) {
             return new Result(false, null, parseResult, schemeMatches, allLocations, suggestedName);
         }
 
@@ -384,7 +384,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
             return schemeMatches;
         }
 
-        public List<TokenLocation> getAllLocations() {
+        public List<FieldDefinition> getAllLocations() {
             return allLocations;
         }
 

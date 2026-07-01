@@ -1,8 +1,8 @@
 package org.oxff.repeater.privilege;
 
 import org.oxff.repeater.logging.LogManager;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -17,7 +17,7 @@ import java.util.*;
  * 用户会话YAML读写工具类
  * 用于用户会话数据的导入导出功能
  *
- * token_values使用type+expression作为键（而非数据库ID），
+ * field_values使用type+expression作为键（而非数据库ID），
  * 确保跨项目导入导出的可移植性
  */
 public class UserSessionYamlIO {
@@ -28,11 +28,11 @@ public class UserSessionYamlIO {
      * 将用户会话列表序列化为YAML字符串
      *
      * @param sessions  用户会话列表
-     * @param locations 令牌位置列表（用于将tokenLocationId解析为type+expression）
-     * @param schemes   令牌方案列表（用于将schemeId解析为方案名称）
+     * @param locations 字段定义列表（用于将fieldId解析为type+expression）
+     * @param schemes   方案列表（用于将schemeId解析为方案名称）
      * @return YAML格式字符串
      */
-    public static String toYaml(List<UserSession> sessions, List<TokenLocation> locations, List<TokenScheme> schemes) {
+    public static String toYaml(List<UserSession> sessions, List<FieldDefinition> locations, List<Scheme> schemes) {
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setPrettyFlow(true);
@@ -40,15 +40,15 @@ public class UserSessionYamlIO {
 
         Yaml yaml = new Yaml(options);
 
-        // 构建ID到TokenLocation的映射
-        Map<Integer, TokenLocation> locationMap = new HashMap<>();
-        for (TokenLocation loc : locations) {
+        // 构建ID到FieldDefinition的映射
+        Map<Integer, FieldDefinition> locationMap = new HashMap<>();
+        for (FieldDefinition loc : locations) {
             locationMap.put(loc.getId(), loc);
         }
 
-        // 构建ID到TokenScheme名称的映射
+        // 构建ID到Scheme名称的映射
         Map<Integer, String> schemeNameMap = new HashMap<>();
-        for (TokenScheme scheme : schemes) {
+        for (Scheme scheme : schemes) {
             schemeNameMap.put(scheme.getId(), scheme.getName());
         }
 
@@ -79,19 +79,19 @@ public class UserSessionYamlIO {
             replayMap.put("replay_delay", session.getReplayDelay());
             sessionMap.put("replay_config", replayMap);
 
-            // 序列化token_values：将ID映射的token值转换为type+expression格式
-            List<Map<String, Object>> tokenValuesList = new ArrayList<>();
-            for (Map.Entry<Integer, String> entry : session.getTokenValues().entrySet()) {
-                TokenLocation loc = locationMap.get(entry.getKey());
+            // 序列化field_values：将ID映射的字段值转换为type+expression格式
+            List<Map<String, Object>> fieldValuesList = new ArrayList<>();
+            for (Map.Entry<Integer, String> entry : session.getFieldValues().entrySet()) {
+                FieldDefinition loc = locationMap.get(entry.getKey());
                 if (loc != null) {
                     Map<String, Object> tvMap = new LinkedHashMap<>();
                     tvMap.put("type", loc.getType().name());
                     tvMap.put("expression", loc.getExpression());
                     tvMap.put("value", entry.getValue() != null ? entry.getValue() : "");
-                    tokenValuesList.add(tvMap);
+                    fieldValuesList.add(tvMap);
                 }
             }
-            sessionMap.put("token_values", tokenValuesList);
+            sessionMap.put("field_values", fieldValuesList);
 
             sessionList.add(sessionMap);
         }
@@ -104,26 +104,26 @@ public class UserSessionYamlIO {
      * 从YAML字符串反序列化用户会话列表
      *
      * @param yamlContent YAML格式字符串
-     * @param locations   当前项目的令牌位置列表（用于将type+expression解析为tokenLocationId）
-     * @param schemes     当前项目的令牌方案列表（用于将scheme_name解析为schemeId）
+     * @param locations   当前项目的字段定义列表（用于将type+expression解析为fieldId）
+     * @param schemes     当前项目的方案列表（用于将scheme_name解析为schemeId）
      * @return 用户会话列表，解析失败返回空列表
      */
     @SuppressWarnings("unchecked")
-    public static List<UserSession> fromYaml(String yamlContent, List<TokenLocation> locations, List<TokenScheme> schemes) {
+    public static List<UserSession> fromYaml(String yamlContent, List<FieldDefinition> locations, List<Scheme> schemes) {
         List<UserSession> sessions = new ArrayList<>();
         if (yamlContent == null || yamlContent.trim().isEmpty()) {
             return sessions;
         }
 
-        // 构建type|expression到tokenLocationId的映射
+        // 构建type|expression到fieldId的映射
         Map<String, Integer> locationKeyToId = new HashMap<>();
-        for (TokenLocation loc : locations) {
+        for (FieldDefinition loc : locations) {
             locationKeyToId.put(loc.getType().name() + "|" + loc.getExpression(), loc.getId());
         }
 
         // 构建方案名称到schemeId的映射
         Map<String, Integer> schemeNameToId = new HashMap<>();
-        for (TokenScheme scheme : schemes) {
+        for (Scheme scheme : schemes) {
             schemeNameToId.put(scheme.getName(), scheme.getId());
         }
 
@@ -206,11 +206,11 @@ public class UserSessionYamlIO {
             session.setReplayDelay(getIntValue(replayMap, "replay_delay", 0));
         }
 
-        // 解析token_values
-        Object tokenValuesObj = map.get("token_values");
-        if (tokenValuesObj instanceof List) {
-            List<Object> tvList = (List<Object>) tokenValuesObj;
-            Map<Integer, String> tokenValues = new LinkedHashMap<>();
+        // 解析field_values
+        Object fieldValuesObj = map.get("field_values");
+        if (fieldValuesObj instanceof List) {
+            List<Object> tvList = (List<Object>) fieldValuesObj;
+            Map<Integer, String> fieldValues = new LinkedHashMap<>();
             int matched = 0;
             int unmatched = 0;
 
@@ -226,18 +226,18 @@ public class UserSessionYamlIO {
                 String key = type + "|" + expression;
                 Integer locationId = locationKeyToId.get(key);
                 if (locationId != null) {
-                    tokenValues.put(locationId, value);
+                    fieldValues.put(locationId, value);
                     matched++;
                 } else {
                     unmatched++;
-                    LogManager.getInstance().printError("[!] 导入用户会话时未匹配的令牌位置: " + type + " [" + expression + "]");
+                    LogManager.getInstance().printError("[!] 导入用户会话时未匹配的字段定义: " + type + " [" + expression + "]");
                 }
             }
-
-            session.setTokenValues(tokenValues);
-
+            
+            session.setFieldValues(fieldValues);
+            
             if (unmatched > 0) {
-                LogManager.getInstance().printOutput("[*] 用户会话 '" + name + "' 导入: " + matched + " 个令牌值匹配, " + unmatched + " 个未匹配（已跳过）");
+                LogManager.getInstance().printOutput("[*] 用户会话 '" + name + "' 导入: " + matched + " 个字段值匹配, " + unmatched + " 个未匹配（已跳过）");
             }
         }
 
@@ -248,12 +248,12 @@ public class UserSessionYamlIO {
      * 将用户会话列表写入YAML文件（原子写入：先写临时文件再重命名）
      *
      * @param sessions  用户会话列表
-     * @param locations 令牌位置列表
+     * @param locations 字段定义列表
      * @param filePath  目标文件路径
      * @return 是否写入成功
      */
-    public static boolean writeToFile(List<UserSession> sessions, List<TokenLocation> locations,
-                                      List<TokenScheme> schemes, String filePath) {
+    public static boolean writeToFile(List<UserSession> sessions, List<FieldDefinition> locations,
+                                      List<Scheme> schemes, String filePath) {
         File targetFile = new File(filePath);
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
@@ -296,11 +296,11 @@ public class UserSessionYamlIO {
      * 从YAML文件读取用户会话列表
      *
      * @param filePath  YAML文件路径
-     * @param locations 当前项目的令牌位置列表
+     * @param locations 当前项目的字段定义列表
      * @return 用户会话列表，读取失败返回空列表
      */
-    public static List<UserSession> readFromFile(String filePath, List<TokenLocation> locations,
-                                                 List<TokenScheme> schemes) {
+    public static List<UserSession> readFromFile(String filePath, List<FieldDefinition> locations,
+                                                 List<Scheme> schemes) {
         File file = new File(filePath);
         if (!file.exists() || !file.canRead()) {
             return new ArrayList<>();

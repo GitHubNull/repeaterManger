@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v13）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '13')");
+        // 初始化元数据（v14）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '14')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // 创建池表
@@ -131,13 +131,13 @@ public class SchemaInitializer {
         // 创建索引
         createV3Indexes(stmt);
 
-        // 创建v6权限测试相关表
+        // 创建v6权限测试相关表（v14 已重命名：token_locations→field_definitions 等）
         createV6PrivilegeTables(stmt);
 
         // 创建v7 Scope表
         createV7ScopeTables(stmt);
 
-        LogManager.getInstance().printOutput("[+] v13 Schema 初始化完成");
+        LogManager.getInstance().printOutput("[+] v14 Schema 初始化完成");
     }
 
     /**
@@ -218,12 +218,12 @@ public class SchemaInitializer {
     }
 
     /**
-     * 创建 v6 权限测试相关表
+     * 创建 v6 权限测试相关表（v14：表名已从 token_* 迁移为 field_* 和 schemes）
      */
     private static void createV6PrivilegeTables(Statement stmt) throws SQLException {
-        // 令牌位置定义表（v9 结构：v6 + persist_to_global + enabled）
+        // 字段定义表（v9 结构：v6 + persist_to_global + enabled，v14 从 token_locations 重命名）
         stmt.execute(
-            "CREATE TABLE IF NOT EXISTS token_locations (" +
+            "CREATE TABLE IF NOT EXISTS field_definitions (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "type TEXT NOT NULL, " +
             "expression TEXT NOT NULL, " +
@@ -234,9 +234,9 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 令牌方案表（v11 新增）
+        // 方案表（v11 新增，v14 从 token_schemes 重命名）
         stmt.execute(
-            "CREATE TABLE IF NOT EXISTS token_schemes (" +
+            "CREATE TABLE IF NOT EXISTS schemes (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "name TEXT NOT NULL, " +
             "description TEXT DEFAULT '', " +
@@ -246,15 +246,15 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 方案-令牌位置关联表（v11 新增）
+        // 方案-字段关联表（v11 新增，v14 从 scheme_token_locations 重命名）
         stmt.execute(
-            "CREATE TABLE IF NOT EXISTS scheme_token_locations (" +
+            "CREATE TABLE IF NOT EXISTS scheme_fields (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "scheme_id INTEGER NOT NULL, " +
-            "token_location_id INTEGER NOT NULL, " +
-            "FOREIGN KEY (scheme_id) REFERENCES token_schemes(id) ON DELETE CASCADE, " +
-            "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
-            "UNIQUE (scheme_id, token_location_id)" +
+            "field_id INTEGER NOT NULL, " +
+            "FOREIGN KEY (scheme_id) REFERENCES schemes(id) ON DELETE CASCADE, " +
+            "FOREIGN KEY (field_id) REFERENCES field_definitions(id) ON DELETE CASCADE, " +
+            "UNIQUE (scheme_id, field_id)" +
             ")"
         );
 
@@ -275,16 +275,16 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 令牌值关联表
+        // 字段值关联表（v14 从 token_values 重命名）
         stmt.execute(
-            "CREATE TABLE IF NOT EXISTS token_values (" +
+            "CREATE TABLE IF NOT EXISTS field_values (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-            "token_location_id INTEGER NOT NULL, " +
+            "field_id INTEGER NOT NULL, " +
             "user_session_id INTEGER NOT NULL, " +
             "value TEXT NOT NULL, " +
-            "FOREIGN KEY (token_location_id) REFERENCES token_locations(id) ON DELETE CASCADE, " +
+            "FOREIGN KEY (field_id) REFERENCES field_definitions(id) ON DELETE CASCADE, " +
             "FOREIGN KEY (user_session_id) REFERENCES user_sessions(id) ON DELETE CASCADE, " +
-            "UNIQUE (token_location_id, user_session_id)" +
+            "UNIQUE (field_id, user_session_id)" +
             ")"
         );
 
@@ -323,17 +323,17 @@ public class SchemaInitializer {
             ")"
         );
 
-        // v6 新增索引
-        stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_location ON token_values(token_location_id)");
-        stmt.execute("CREATE INDEX IF NOT EXISTS idx_token_values_session ON token_values(user_session_id)");
+        // v6 新增索引（v14 重命名对应索引）
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_field_values_field ON field_values(field_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_field_values_session ON field_values(user_session_id)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_judgment ON history(judgment)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_history_session ON history(user_session_name)");
         // v13 新索引
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_rule_groups_active ON judgment_rule_groups(is_active)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_conditions_group ON judgment_rule_conditions(group_id, sort_order)");
-        // v11 新增索引
-        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_scheme ON scheme_token_locations(scheme_id)");
-        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_token_locations_location ON scheme_token_locations(token_location_id)");
+        // v11 新增索引（v14 重命名）
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_fields_scheme ON scheme_fields(scheme_id)");
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_scheme_fields_field ON scheme_fields(field_id)");
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_scheme ON user_sessions(scheme_id)");
     }
 

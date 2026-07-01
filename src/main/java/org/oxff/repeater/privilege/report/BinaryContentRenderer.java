@@ -210,16 +210,16 @@ public class BinaryContentRenderer {
      */
     private String buildMetadataCard(BinaryAnalysisResult analysis, BinarySizeTier tier) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Binary Content\n");
+        sb.append("二进制内容\n");
         sb.append("Content-Type: ").append(analysis.contentType).append("\n");
         sb.append("Content-Length: ").append(analysis.contentLength).append(" bytes (").append(analysis.humanSize).append(")\n");
         sb.append("SHA-256: ").append(analysis.sha256Hash).append("\n");
         if (analysis.multipartParts != null && !analysis.multipartParts.isEmpty()) {
-            sb.append("Multipart Parts: ").append(analysis.multipartParts.size()).append("\n");
+            sb.append("多部分数量: ").append(analysis.multipartParts.size()).append("\n");
         }
         // 大文件显示简短 hex 预览
         if (tier == BinarySizeTier.LARGE && analysis.previewBytes != null && analysis.previewBytes.length > 0) {
-            sb.append("Preview (first ").append(HEX_PREVIEW_LARGE).append(" bytes):\n");
+            sb.append("预览 (前 ").append(HEX_PREVIEW_LARGE).append(" 字节):\n");
             sb.append(generateHexDump(analysis.previewBytes, HEX_PREVIEW_LARGE));
         }
         return sb.toString();
@@ -592,7 +592,7 @@ public class BinaryContentRenderer {
             String textContent = decodeBody(partBody, partContentType);
             // 限制文本长度
             if (textContent.length() > 50000) {
-                textContent = textContent.substring(0, 50000) + "\n... [Truncated — total " + partSize + " bytes]";
+                textContent = textContent.substring(0, 50000) + "\n... [已截断 — 总计 " + partSize + " 字节]";
             }
             return new MultipartPartInfo(name, fileName, partContentType, true,
                     textContent, null, partSize);

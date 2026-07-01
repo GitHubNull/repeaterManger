@@ -593,7 +593,7 @@ public class RequestDispatchHandler {
 
     /**
      * 权限测试模式发送请求
-     * 使用ReplayEngine遍历所有已启用用户会话，替换令牌后重放
+     * 使用ReplayEngine遍历所有已启用用户会话，替换字段后重放
      */
     private void sendPrivilegeTestRequest(byte[] requestBytes) {
         // 委托给参数化版本，使用当前共享状态（仅在非并发单次调用时安全）

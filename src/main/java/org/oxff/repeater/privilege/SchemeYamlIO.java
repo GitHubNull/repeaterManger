@@ -1,8 +1,8 @@
 package org.oxff.repeater.privilege;
 
 import org.oxff.repeater.logging.LogManager;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
@@ -13,24 +13,24 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 /**
- * 令牌方案YAML读写工具类
- * 用于令牌方案数据的导入导出功能
+ * 方案YAML读写工具类
+ * 用于方案数据的导入导出功能
  *
- * 令牌位置使用type+expression作为标识（而非数据库ID），
+ * 字段定义使用type+expression作为标识（而非数据库ID），
  * 确保跨项目导入导出的可移植性
  */
-public class TokenSchemeYamlIO {
+public class SchemeYamlIO {
 
     private static final String YAML_VERSION = "1";
 
     /**
-     * 将令牌方案列表序列化为YAML字符串
+     * 将方案列表序列化为YAML字符串
      *
-     * @param schemes   令牌方案列表
-     * @param locations 令牌位置列表（用于将tokenLocationId解析为type+expression）
+     * @param schemes 方案列表
+     * @param fields  字段定义列表（用于将fieldId解析为type+expression）
      * @return YAML格式字符串
      */
-    public static String toYaml(List<TokenScheme> schemes, List<TokenLocation> locations) {
+    public static String toYaml(List<Scheme> schemes, List<FieldDefinition> fields) {
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setPrettyFlow(true);
@@ -38,61 +38,61 @@ public class TokenSchemeYamlIO {
 
         Yaml yaml = new Yaml(options);
 
-        // 构建ID到TokenLocation的映射
-        Map<Integer, TokenLocation> locationMap = new HashMap<>();
-        for (TokenLocation loc : locations) {
-            locationMap.put(loc.getId(), loc);
+        // 构建ID到FieldDefinition的映射
+        Map<Integer, FieldDefinition> fieldMap = new HashMap<>();
+        for (FieldDefinition field : fields) {
+            fieldMap.put(field.getId(), field);
         }
 
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("version", YAML_VERSION);
 
         List<Map<String, Object>> schemeList = new ArrayList<>();
-        for (TokenScheme scheme : schemes) {
+        for (Scheme scheme : schemes) {
             Map<String, Object> schemeMap = new LinkedHashMap<>();
             schemeMap.put("name", scheme.getName() != null ? scheme.getName() : "");
             schemeMap.put("description", scheme.getDescription() != null ? scheme.getDescription() : "");
             schemeMap.put("persistToGlobal", scheme.isPersistToGlobal());
             schemeMap.put("enabled", scheme.isEnabled());
 
-            // 序列化令牌位置引用：将ID解析为type+expression
-            List<Map<String, Object>> tokenLocList = new ArrayList<>();
-            for (int locId : scheme.getTokenLocationIds()) {
-                TokenLocation loc = locationMap.get(locId);
-                if (loc != null) {
-                    Map<String, Object> locMap = new LinkedHashMap<>();
-                    locMap.put("type", loc.getType().name());
-                    locMap.put("expression", loc.getExpression());
-                    tokenLocList.add(locMap);
+            // 序列化字段引用：将ID解析为type+expression
+            List<Map<String, Object>> fieldRefList = new ArrayList<>();
+            for (int fieldId : scheme.getFieldIds()) {
+                FieldDefinition field = fieldMap.get(fieldId);
+                if (field != null) {
+                    Map<String, Object> fieldRefMap = new LinkedHashMap<>();
+                    fieldRefMap.put("type", field.getType().name());
+                    fieldRefMap.put("expression", field.getExpression());
+                    fieldRefList.add(fieldRefMap);
                 }
             }
-            schemeMap.put("token_locations", tokenLocList);
+            schemeMap.put("fields", fieldRefList);
 
             schemeList.add(schemeMap);
         }
-        root.put("token_schemes", schemeList);
+        root.put("schemes", schemeList);
 
         return yaml.dump(root);
     }
 
     /**
-     * 从YAML字符串反序列化令牌方案列表
+     * 从YAML字符串反序列化方案列表
      *
      * @param yamlContent YAML格式字符串
-     * @param locations   当前项目的令牌位置列表（用于将type+expression解析为tokenLocationId）
-     * @return 令牌方案列表，解析失败返回空列表
+     * @param fields      当前项目的字段定义列表（用于将type+expression解析为fieldId）
+     * @return 方案列表，解析失败返回空列表
      */
     @SuppressWarnings("unchecked")
-    public static List<TokenScheme> fromYaml(String yamlContent, List<TokenLocation> locations) {
-        List<TokenScheme> schemes = new ArrayList<>();
+    public static List<Scheme> fromYaml(String yamlContent, List<FieldDefinition> fields) {
+        List<Scheme> schemes = new ArrayList<>();
         if (yamlContent == null || yamlContent.trim().isEmpty()) {
             return schemes;
         }
 
-        // 构建type|expression到tokenLocationId的映射
-        Map<String, Integer> locationKeyToId = new HashMap<>();
-        for (TokenLocation loc : locations) {
-            locationKeyToId.put(loc.getType().name() + "|" + loc.getExpression(), loc.getId());
+        // 构建type|expression到fieldId的映射
+        Map<String, Integer> fieldKeyToId = new HashMap<>();
+        for (FieldDefinition field : fields) {
+            fieldKeyToId.put(field.getType().name() + "|" + field.getExpression(), field.getId());
         }
 
         try {
@@ -102,12 +102,9 @@ public class TokenSchemeYamlIO {
                 return schemes;
             }
 
-            Object schemesObj = root.get("token_schemes");
-            if (schemesObj == null) {
-                schemesObj = root.get("schemes");
-            }
+            Object schemesObj = root.get("schemes");
             if (!(schemesObj instanceof List)) {
-                LogManager.getInstance().printError("[!] 令牌方案YAML格式错误：缺少token_schemes列表");
+                LogManager.getInstance().printError("[!] 方案YAML格式错误：缺少schemes列表");
                 return schemes;
             }
 
@@ -118,25 +115,25 @@ public class TokenSchemeYamlIO {
                 }
                 Map<String, Object> schemeMap = (Map<String, Object>) item;
                 try {
-                    TokenScheme scheme = parseSchemeFromMap(schemeMap, locationKeyToId);
+                    Scheme scheme = parseSchemeFromMap(schemeMap, fieldKeyToId);
                     if (scheme != null) {
                         schemes.add(scheme);
                     }
                 } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] 解析YAML令牌方案条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML方案条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 令牌方案YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 方案YAML解析失败: " + e.getMessage());
         }
         return schemes;
     }
 
     /**
-     * 从Map解析单条令牌方案
+     * 从Map解析单条方案
      */
     @SuppressWarnings("unchecked")
-    private static TokenScheme parseSchemeFromMap(Map<String, Object> map, Map<String, Integer> locationKeyToId) {
+    private static Scheme parseSchemeFromMap(Map<String, Object> map, Map<String, Integer> fieldKeyToId) {
         String name = getStringValue(map, "name", "");
         String description = getStringValue(map, "description", "");
         boolean persistToGlobal = getBooleanValue(map, "persistToGlobal", true);
@@ -146,43 +143,43 @@ public class TokenSchemeYamlIO {
             return null;
         }
 
-        TokenScheme scheme = new TokenScheme();
+        Scheme scheme = new Scheme();
         scheme.setName(name);
         scheme.setDescription(description);
         scheme.setPersistToGlobal(persistToGlobal);
         scheme.setEnabled(enabled);
 
-        // 解析token_locations
-        Object tokenLocsObj = map.get("token_locations");
-        if (tokenLocsObj instanceof List) {
-            List<Object> locList = (List<Object>) tokenLocsObj;
-            List<Integer> locationIds = new ArrayList<>();
+        // 解析fields
+        Object fieldsObj = map.get("fields");
+        if (fieldsObj instanceof List) {
+            List<Object> fieldRefList = (List<Object>) fieldsObj;
+            List<Integer> fieldIds = new ArrayList<>();
             int matched = 0;
             int unmatched = 0;
 
-            for (Object locItem : locList) {
-                if (!(locItem instanceof Map)) {
+            for (Object fieldRefItem : fieldRefList) {
+                if (!(fieldRefItem instanceof Map)) {
                     continue;
                 }
-                Map<String, Object> locMap = (Map<String, Object>) locItem;
-                String type = getStringValue(locMap, "type", "");
-                String expression = getStringValue(locMap, "expression", "");
+                Map<String, Object> fieldRefMap = (Map<String, Object>) fieldRefItem;
+                String type = getStringValue(fieldRefMap, "type", "");
+                String expression = getStringValue(fieldRefMap, "expression", "");
 
                 String key = type + "|" + expression;
-                Integer locationId = locationKeyToId.get(key);
-                if (locationId != null) {
-                    locationIds.add(locationId);
+                Integer fieldId = fieldKeyToId.get(key);
+                if (fieldId != null) {
+                    fieldIds.add(fieldId);
                     matched++;
                 } else {
                     unmatched++;
-                    LogManager.getInstance().printError("[!] 导入令牌方案时未匹配的令牌位置: " + type + " [" + expression + "]");
+                    LogManager.getInstance().printError("[!] 导入方案时未匹配的字段: " + type + " [" + expression + "]");
                 }
             }
 
-            scheme.setTokenLocationIds(locationIds);
+            scheme.setFieldIds(fieldIds);
 
             if (unmatched > 0) {
-                LogManager.getInstance().printOutput("[*] 令牌方案 '" + name + "' 导入: " + matched + " 个令牌位置匹配, " + unmatched + " 个未匹配（已跳过）");
+                LogManager.getInstance().printOutput("[*] 方案 '" + name + "' 导入: " + matched + " 个字段匹配, " + unmatched + " 个未匹配（已跳过）");
             }
         }
 
@@ -190,9 +187,9 @@ public class TokenSchemeYamlIO {
     }
 
     /**
-     * 将令牌方案列表写入YAML文件（原子写入）
+     * 将方案列表写入YAML文件（原子写入）
      */
-    public static boolean writeToFile(List<TokenScheme> schemes, List<TokenLocation> locations, String filePath) {
+    public static boolean writeToFile(List<Scheme> schemes, List<FieldDefinition> fields, String filePath) {
         File targetFile = new File(filePath);
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
@@ -204,10 +201,10 @@ public class TokenSchemeYamlIO {
 
         File tempFile = new File(filePath + ".tmp");
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
-            writer.write(toYaml(schemes, locations));
+            writer.write(toYaml(schemes, fields));
             writer.flush();
         } catch (IOException e) {
-            LogManager.getInstance().printError("[!] 写入令牌方案YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入方案YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -221,7 +218,7 @@ public class TokenSchemeYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                LogManager.getInstance().printError("[!] 替换令牌方案YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换方案YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -229,9 +226,9 @@ public class TokenSchemeYamlIO {
     }
 
     /**
-     * 从YAML文件读取令牌方案列表
+     * 从YAML文件读取方案列表
      */
-    public static List<TokenScheme> readFromFile(String filePath, List<TokenLocation> locations) {
+    public static List<Scheme> readFromFile(String filePath, List<FieldDefinition> fields) {
         File file = new File(filePath);
         if (!file.exists() || !file.canRead()) {
             return new ArrayList<>();
@@ -244,9 +241,9 @@ public class TokenSchemeYamlIO {
             while ((len = reader.read(buffer)) != -1) {
                 sb.append(buffer, 0, len);
             }
-            return fromYaml(sb.toString(), locations);
+            return fromYaml(sb.toString(), fields);
         } catch (IOException e) {
-            LogManager.getInstance().printError("[!] 读取令牌方案YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取方案YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

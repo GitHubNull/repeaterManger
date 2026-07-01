@@ -3,9 +3,9 @@ package org.oxff.repeater.privilege;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.dao.SessionDAO;
 import org.oxff.repeater.privilege.model.ReplayConfig;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenLocationType;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.FieldType;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import java.util.ArrayList;
@@ -15,7 +15,7 @@ import java.util.Set;
 
 /**
  * 会话管理器（单例）
- * 管理令牌位置、令牌方案和用户会话的CRUD操作，缓存已启用的会话列表
+ * 管理字段、方案和用户会话的CRUD操作，缓存已启用的会话列表
  */
 public class SessionManager {
 
@@ -23,11 +23,11 @@ public class SessionManager {
 
     private final SessionDAO sessionDAO;
 
-    /** 缓存的令牌位置列表 */
-    private List<TokenLocation> cachedTokenLocations;
+    /** 缓存的字段列表 */
+    private List<FieldDefinition> cachedFields;
 
-    /** 缓存的令牌方案列表 */
-    private List<TokenScheme> cachedTokenSchemes;
+    /** 缓存的方案列表 */
+    private List<Scheme> cachedSchemes;
 
     /** 缓存的用户会话列表 */
     private List<UserSession> cachedUserSessions;
@@ -40,8 +40,8 @@ public class SessionManager {
 
     private SessionManager() {
         this.sessionDAO = new SessionDAO();
-        this.cachedTokenLocations = new ArrayList<>();
-        this.cachedTokenSchemes = new ArrayList<>();
+        this.cachedFields = new ArrayList<>();
+        this.cachedSchemes = new ArrayList<>();
         this.cachedUserSessions = new ArrayList<>();
         this.cachedEnabledSessions = new ArrayList<>();
         this.replayConfig = new ReplayConfig();
@@ -61,86 +61,86 @@ public class SessionManager {
      * 刷新缓存，从数据库重新加载
      */
     public void refreshCache() {
-        cachedTokenLocations = sessionDAO.getAllTokenLocations();
-        cachedTokenSchemes = sessionDAO.getAllTokenSchemes();
+        cachedFields = sessionDAO.getAllFieldDefinitions();
+        cachedSchemes = sessionDAO.getAllSchemes();
         cachedUserSessions = sessionDAO.getAllUserSessions();
         cachedEnabledSessions = sessionDAO.getEnabledUserSessions();
-        LogManager.getInstance().printOutput("[+] 会话缓存已刷新: " + cachedTokenLocations.size() +
-                "个令牌位置, " + cachedTokenSchemes.size() + "个令牌方案, " +
+        LogManager.getInstance().printOutput("[+] 会话缓存已刷新: " + cachedFields.size() +
+                "个字段, " + cachedSchemes.size() + "个方案, " +
                 cachedUserSessions.size() + "个用户会话, " +
                 cachedEnabledSessions.size() + "个已启用");
     }
 
-    // ==================== TokenLocation 操作 ====================
+    // ==================== FieldDefinition 操作 ====================
 
-    public List<TokenLocation> getTokenLocations() {
-        if (cachedTokenLocations.isEmpty()) {
+    public List<FieldDefinition> getFieldDefinitions() {
+        if (cachedFields.isEmpty()) {
             refreshCache();
         }
-        return cachedTokenLocations;
+        return cachedFields;
     }
 
-    public int addTokenLocation(TokenLocationType type, String expression, String description,
+    public int addFieldDefinition(FieldType type, String expression, String description,
                                 boolean persistToGlobal, boolean enabled) {
-        int id = sessionDAO.addTokenLocation(type, expression, description, persistToGlobal, enabled);
+        int id = sessionDAO.addFieldDefinition(type, expression, description, persistToGlobal, enabled);
         if (id > 0) {
             refreshCache();
             // 同步到全局YAML
             if (persistToGlobal) {
-                TokenLocation loc = new TokenLocation(type, expression, description, true, enabled);
-                GlobalTokenLocationManager.getInstance().addLocation(loc);
+                FieldDefinition loc = new FieldDefinition(type, expression, description, true, enabled);
+                GlobalFieldDefinitionManager.getInstance().addField(loc);
             }
         }
         return id;
     }
 
-    public boolean updateTokenLocation(int id, TokenLocationType type, String expression, String description,
+    public boolean updateFieldDefinition(int id, FieldType type, String expression, String description,
                                        boolean persistToGlobal, boolean enabled) {
-        // 先获取旧的令牌位置（用于全局YAML更新时的旧键匹配）
-        TokenLocation oldLocation = null;
-        for (TokenLocation loc : cachedTokenLocations) {
+        // 先获取旧的字段定义（用于全局YAML更新时的旧键匹配）
+        FieldDefinition oldLocation = null;
+        for (FieldDefinition loc : cachedFields) {
             if (loc.getId() == id) {
                 oldLocation = loc;
                 break;
             }
         }
 
-        boolean result = sessionDAO.updateTokenLocation(id, type, expression, description, persistToGlobal, enabled);
+        boolean result = sessionDAO.updateFieldDefinition(id, type, expression, description, persistToGlobal, enabled);
         if (result) {
             refreshCache();
             // 同步到全局YAML
-            TokenLocation newLocation = new TokenLocation(type, expression, description, persistToGlobal, enabled);
-            GlobalTokenLocationManager globalMgr = GlobalTokenLocationManager.getInstance();
+            FieldDefinition newLocation = new FieldDefinition(type, expression, description, persistToGlobal, enabled);
+            GlobalFieldDefinitionManager globalMgr = GlobalFieldDefinitionManager.getInstance();
             if (oldLocation != null) {
                 if (persistToGlobal) {
-                    globalMgr.updateLocation(oldLocation.getType().name(), oldLocation.getExpression(), newLocation);
+                    globalMgr.updateField(oldLocation.getType().name(), oldLocation.getExpression(), newLocation);
                 } else {
                     // 取消持久化：从全局中移除旧记录
-                    globalMgr.removeLocation(oldLocation.getType().name(), oldLocation.getExpression());
+                    globalMgr.removeField(oldLocation.getType().name(), oldLocation.getExpression());
                 }
             } else {
-                globalMgr.syncLocation(newLocation, persistToGlobal);
+                globalMgr.syncField(newLocation, persistToGlobal);
             }
         }
         return result;
     }
 
-    public boolean deleteTokenLocation(int id) {
-        // 先获取被删除的令牌位置（用于全局YAML同步）
-        TokenLocation toDelete = null;
-        for (TokenLocation loc : cachedTokenLocations) {
+    public boolean deleteFieldDefinition(int id) {
+        // 先获取被删除的字段定义（用于全局YAML同步）
+        FieldDefinition toDelete = null;
+        for (FieldDefinition loc : cachedFields) {
             if (loc.getId() == id) {
                 toDelete = loc;
                 break;
             }
         }
 
-        boolean result = sessionDAO.deleteTokenLocation(id);
+        boolean result = sessionDAO.deleteFieldDefinition(id);
         if (result) {
             refreshCache();
             // 从全局YAML中移除
             if (toDelete != null && toDelete.isPersistToGlobal()) {
-                GlobalTokenLocationManager.getInstance().removeLocation(
+                GlobalFieldDefinitionManager.getInstance().removeField(
                         toDelete.getType().name(), toDelete.getExpression());
             }
         }
@@ -148,27 +148,27 @@ public class SessionManager {
     }
 
     /**
-     * 获取引用指定令牌位置的方案数量
+     * 获取引用指定字段定义的方案数量
      */
-    public int getSchemeReferenceCountByTokenLocation(int tokenLocationId) {
-        return sessionDAO.getSchemeReferenceCountByTokenLocation(tokenLocationId);
+    public int getSchemeReferenceCountByField(int fieldId) {
+        return sessionDAO.getSchemeReferenceCountByField(fieldId);
     }
 
-    // ==================== TokenScheme 操作 ====================
+    // ==================== Scheme 操作 ====================
 
-    public List<TokenScheme> getTokenSchemes() {
-        if (cachedTokenSchemes.isEmpty()) {
+    public List<Scheme> getSchemes() {
+        if (cachedSchemes.isEmpty()) {
             refreshCache();
         }
-        return cachedTokenSchemes;
+        return cachedSchemes;
     }
 
-    public List<TokenScheme> getEnabledTokenSchemes() {
-        if (cachedTokenSchemes.isEmpty()) {
+    public List<Scheme> getEnabledSchemes() {
+        if (cachedSchemes.isEmpty()) {
             refreshCache();
         }
-        List<TokenScheme> enabled = new ArrayList<>();
-        for (TokenScheme scheme : cachedTokenSchemes) {
+        List<Scheme> enabled = new ArrayList<>();
+        for (Scheme scheme : cachedSchemes) {
             if (scheme.isEnabled()) {
                 enabled.add(scheme);
             }
@@ -176,8 +176,8 @@ public class SessionManager {
         return enabled;
     }
 
-    public TokenScheme getTokenSchemeById(int id) {
-        for (TokenScheme scheme : cachedTokenSchemes) {
+    public Scheme getSchemeById(int id) {
+        for (Scheme scheme : cachedSchemes) {
             if (scheme.getId() == id) {
                 return scheme;
             }
@@ -185,10 +185,10 @@ public class SessionManager {
         return null;
     }
 
-    public int addTokenScheme(String name, String description, boolean enabled, boolean persistToGlobal, List<Integer> tokenLocationIds) {
-        int id = sessionDAO.addTokenScheme(name, description, persistToGlobal, enabled);
-        if (id > 0 && tokenLocationIds != null && !tokenLocationIds.isEmpty()) {
-            sessionDAO.saveSchemeTokenLocations(id, tokenLocationIds);
+    public int addScheme(String name, String description, boolean enabled, boolean persistToGlobal, List<Integer> fieldIds) {
+        int id = sessionDAO.addScheme(name, description, persistToGlobal, enabled);
+        if (id > 0 && fieldIds != null && !fieldIds.isEmpty()) {
+            sessionDAO.saveSchemeFields(id, fieldIds);
         }
         if (id > 0) {
             refreshCache();
@@ -198,8 +198,8 @@ public class SessionManager {
         return id;
     }
 
-    public boolean updateTokenScheme(int id, String name, String description, boolean enabled, boolean persistToGlobal) {
-        boolean result = sessionDAO.updateTokenScheme(id, name, description, persistToGlobal, enabled);
+    public boolean updateScheme(int id, String name, String description, boolean enabled, boolean persistToGlobal) {
+        boolean result = sessionDAO.updateScheme(id, name, description, persistToGlobal, enabled);
         if (result) {
             refreshCache();
             // 同步到全局
@@ -208,21 +208,21 @@ public class SessionManager {
         return result;
     }
 
-    public boolean deleteTokenScheme(int id) {
+    public boolean deleteScheme(int id) {
         // 先获取被删除的方案（用于全局YAML同步）
-        TokenScheme toDelete = null;
-        for (TokenScheme scheme : cachedTokenSchemes) {
+        Scheme toDelete = null;
+        for (Scheme scheme : cachedSchemes) {
             if (scheme.getId() == id) {
                 toDelete = scheme;
                 break;
             }
         }
-        boolean result = sessionDAO.deleteTokenScheme(id);
+        boolean result = sessionDAO.deleteScheme(id);
         if (result) {
             refreshCache();
             // 从全局YAML中移除
             if (toDelete != null && toDelete.isPersistToGlobal()) {
-                GlobalTokenSchemeManager.getInstance().removeScheme(toDelete.getName(), getTokenLocations());
+                GlobalSchemeManager.getInstance().removeScheme(toDelete.getName(), getFieldDefinitions());
             }
         }
         return result;
@@ -232,25 +232,25 @@ public class SessionManager {
      * 将方案同步到全局YAML（添加或移除）
      */
     private void syncSchemeToGlobal(int schemeId, boolean persistToGlobal) {
-        TokenScheme scheme = getTokenSchemeById(schemeId);
+        Scheme scheme = getSchemeById(schemeId);
         if (scheme == null) return;
 
-        List<TokenLocation> locations = getTokenLocations();
+        List<FieldDefinition> locations = getFieldDefinitions();
         if (persistToGlobal) {
-            GlobalTokenSchemeManager.getInstance().addScheme(scheme, locations);
+            GlobalSchemeManager.getInstance().addScheme(scheme, locations);
         } else {
-            GlobalTokenSchemeManager.getInstance().removeScheme(scheme.getName(), locations);
+            GlobalSchemeManager.getInstance().removeScheme(scheme.getName(), locations);
         }
     }
 
-    public boolean saveSchemeTokenLocations(int schemeId, List<Integer> tokenLocationIds) {
-        boolean result = sessionDAO.saveSchemeTokenLocations(schemeId, tokenLocationIds);
+    public boolean saveSchemeFields(int schemeId, List<Integer> fieldIds) {
+        boolean result = sessionDAO.saveSchemeFields(schemeId, fieldIds);
         if (result) {
             refreshCache();
             // 如果方案持久化到全局，同步更新全局YAML中的位置关联
-            TokenScheme scheme = getTokenSchemeById(schemeId);
+            Scheme scheme = getSchemeById(schemeId);
             if (scheme != null && scheme.isPersistToGlobal()) {
-                GlobalTokenSchemeManager.getInstance().addScheme(scheme, getTokenLocations());
+                GlobalSchemeManager.getInstance().addScheme(scheme, getFieldDefinitions());
             }
         }
         return result;
@@ -264,26 +264,26 @@ public class SessionManager {
     }
 
     /**
-     * 根据方案ID获取关联的令牌位置列表
-     * 如果方案不存在或方案无关联位置，返回所有令牌位置作为回退
+     * 根据方案ID获取关联的字段定义列表
+     * 如果方案不存在或方案无关联字段，返回所有字段作为回退
      */
-    public List<TokenLocation> getTokenLocationsByScheme(Integer schemeId) {
+    public List<FieldDefinition> getFieldDefinitionsByScheme(Integer schemeId) {
         if (schemeId == null) {
-            // 未关联方案时，回退到所有令牌位置
-            return getTokenLocations();
+            // 未关联方案时，回退到所有字段
+            return getFieldDefinitions();
         }
 
-        TokenScheme scheme = getTokenSchemeById(schemeId);
-        if (scheme == null || scheme.getTokenLocationIds().isEmpty()) {
-            // 方案不存在或方案无关联位置，回退到所有令牌位置
-            return getTokenLocations();
+        Scheme scheme = getSchemeById(schemeId);
+        if (scheme == null || scheme.getFieldIds().isEmpty()) {
+            // 方案不存在或方案无关联位置，回退到所有字段
+            return getFieldDefinitions();
         }
 
-        // 根据方案中的令牌位置ID筛选
-        List<TokenLocation> allLocations = getTokenLocations();
-        List<TokenLocation> filtered = new ArrayList<>();
-        for (TokenLocation loc : allLocations) {
-            if (scheme.getTokenLocationIds().contains(loc.getId())) {
+        // 根据方案中的字段ID筛选
+        List<FieldDefinition> allLocations = getFieldDefinitions();
+        List<FieldDefinition> filtered = new ArrayList<>();
+        for (FieldDefinition loc : allLocations) {
+            if (scheme.getFieldIds().contains(loc.getId())) {
                 filtered.add(loc);
             }
         }
@@ -344,8 +344,8 @@ public class SessionManager {
         return result;
     }
 
-    public boolean saveTokenValues(int userSessionId, Map<Integer, String> tokenValues) {
-        boolean result = sessionDAO.saveTokenValues(userSessionId, tokenValues);
+    public boolean saveFieldValues(int userSessionId, Map<Integer, String> fieldValues) {
+        boolean result = sessionDAO.saveFieldValues(userSessionId, fieldValues);
         if (result) {
             refreshCache();
         }
@@ -374,8 +374,8 @@ public class SessionManager {
                     session.getSchemeId(), session.getRequestTimeout(), session.getMaxConcurrent(),
                     session.getRetryCount(), session.getRetryDelay(), session.getReplayDelay());
             if (id > 0) {
-                if (!session.getTokenValues().isEmpty()) {
-                    sessionDAO.saveTokenValues(id, session.getTokenValues());
+                if (!session.getFieldValues().isEmpty()) {
+                    sessionDAO.saveFieldValues(id, session.getFieldValues());
                 }
                 imported++;
             }
@@ -402,8 +402,8 @@ public class SessionManager {
                     session.getSchemeId(), session.getRequestTimeout(), session.getMaxConcurrent(),
                     session.getRetryCount(), session.getRetryDelay(), session.getReplayDelay());
             if (id > 0) {
-                if (!session.getTokenValues().isEmpty()) {
-                    sessionDAO.saveTokenValues(id, session.getTokenValues());
+                if (!session.getFieldValues().isEmpty()) {
+                    sessionDAO.saveFieldValues(id, session.getFieldValues());
                 }
                 imported++;
             }
@@ -413,32 +413,32 @@ public class SessionManager {
         return imported;
     }
 
-    // ==================== 全局令牌位置加载 ====================
+    // ==================== 全局字段定义加载 ====================
 
     /**
-     * 从全局YAML加载令牌位置到项目数据库
+     * 从全局YAML加载字段定义到项目数据库
      * 启动时调用，自动去重（按 type+expression）
      */
-    public void loadGlobalTokenLocations() {
-        GlobalTokenLocationManager globalMgr = GlobalTokenLocationManager.getInstance();
-        List<TokenLocation> globalLocations = globalMgr.getAllLocations();
+    public void loadGlobalFieldDefinitions() {
+        GlobalFieldDefinitionManager globalMgr = GlobalFieldDefinitionManager.getInstance();
+        List<FieldDefinition> globalLocations = globalMgr.getAllFields();
         if (globalLocations.isEmpty()) {
             return;
         }
 
-        // 获取当前项目数据库中已有的令牌位置，用于去重
-        List<TokenLocation> existingLocations = getTokenLocations();
+        // 获取当前项目数据库中已有的字段定义，用于去重
+        List<FieldDefinition> existingLocations = getFieldDefinitions();
         Set<String> existingKeys = new java.util.HashSet<>();
-        for (TokenLocation loc : existingLocations) {
+        for (FieldDefinition loc : existingLocations) {
             existingKeys.add(loc.getType().name() + "|" + loc.getExpression());
         }
 
-        // 插入不存在于项目数据库的全局令牌位置
+        // 插入不存在于项目数据库的全局字段
         int added = 0;
-        for (TokenLocation globalLoc : globalLocations) {
+        for (FieldDefinition globalLoc : globalLocations) {
             String key = globalLoc.getType().name() + "|" + globalLoc.getExpression();
             if (!existingKeys.contains(key)) {
-                int id = sessionDAO.addTokenLocation(globalLoc.getType(), globalLoc.getExpression(),
+                int id = sessionDAO.addFieldDefinition(globalLoc.getType(), globalLoc.getExpression(),
                         globalLoc.getDescription(), true, globalLoc.isEnabled());
                 if (id > 0) {
                     added++;
@@ -448,43 +448,43 @@ public class SessionManager {
 
         if (added > 0) {
             refreshCache();
-            LogManager.getInstance().printOutput("[+] 从全局加载了 " + added + " 条令牌位置到项目数据库");
+            LogManager.getInstance().printOutput("[+] 从全局加载了 " + added + " 条字段到项目数据库");
         }
     }
 
-    // ==================== 全局令牌方案加载 ====================
+    // ==================== 全局方案加载 ====================
 
     /**
-     * 从全局YAML加载令牌方案到项目数据库
+     * 从全局YAML加载方案到项目数据库
      * 启动时调用，自动去重（按 name）
      */
-    public void loadGlobalTokenSchemes() {
-        GlobalTokenSchemeManager globalMgr = GlobalTokenSchemeManager.getInstance();
+    public void loadGlobalSchemes() {
+        GlobalSchemeManager globalMgr = GlobalSchemeManager.getInstance();
         // 先加载全局YAML到内存
-        globalMgr.loadSchemes(getTokenLocations());
-        List<TokenScheme> globalSchemes = globalMgr.getAllSchemes();
+        globalMgr.loadSchemes(getFieldDefinitions());
+        List<Scheme> globalSchemes = globalMgr.getAllSchemes();
         if (globalSchemes.isEmpty()) {
             return;
         }
 
-        // 获取当前项目数据库中已有的令牌方案，用于去重
-        List<TokenScheme> existingSchemes = getTokenSchemes();
+        // 获取当前项目数据库中已有的方案，用于去重
+        List<Scheme> existingSchemes = getSchemes();
         Set<String> existingNames = new java.util.HashSet<>();
-        for (TokenScheme scheme : existingSchemes) {
+        for (Scheme scheme : existingSchemes) {
             existingNames.add(scheme.getName());
         }
 
-        // 插入不存在于项目数据库的全局令牌方案
+        // 插入不存在于项目数据库的全局方案
         int added = 0;
-        for (TokenScheme globalScheme : globalSchemes) {
+        for (Scheme globalScheme : globalSchemes) {
             if (!existingNames.contains(globalScheme.getName())) {
-                int id = sessionDAO.addTokenScheme(globalScheme.getName(), globalScheme.getDescription(),
+                int id = sessionDAO.addScheme(globalScheme.getName(), globalScheme.getDescription(),
                         globalScheme.isPersistToGlobal(), globalScheme.isEnabled());
                 if (id > 0) {
-                    // 保存关联的令牌位置
-                    List<Integer> locationIds = globalScheme.getTokenLocationIds();
+                    // 保存关联的字段
+                    List<Integer> locationIds = globalScheme.getFieldIds();
                     if (locationIds != null && !locationIds.isEmpty()) {
-                        sessionDAO.saveSchemeTokenLocations(id, locationIds);
+                        sessionDAO.saveSchemeFields(id, locationIds);
                     }
                     added++;
                 }
@@ -493,7 +493,7 @@ public class SessionManager {
 
         if (added > 0) {
             refreshCache();
-            LogManager.getInstance().printOutput("[+] 从全局加载了 " + added + " 条令牌方案到项目数据库");
+            LogManager.getInstance().printOutput("[+] 从全局加载了 " + added + " 条方案到项目数据库");
         }
     }
 

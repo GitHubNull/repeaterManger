@@ -3,8 +3,8 @@ package org.oxff.repeater.privilege;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import org.oxff.repeater.RepeaterManagerUI;
 import org.oxff.repeater.logging.LogManager;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.ui.privilege.ParseSessionFromClipboardDialog;
 import org.oxff.repeater.ui.privilege.SelectSchemeDialog;
 
@@ -49,14 +49,14 @@ public class SessionParser {
                 // 获取请求字节数组
                 byte[] httpMessage = request.toByteArray().getBytes();
 
-                // 获取令牌位置和方案
+                // 获取字段定义和方案
                 SessionManager sm = SessionManager.getInstance();
-                List<TokenLocation> locations = sm.getTokenLocations();
-                List<TokenScheme> schemes = sm.getTokenSchemes();
+                List<FieldDefinition> locations = sm.getFieldDefinitions();
+                List<Scheme> schemes = sm.getSchemes();
 
                 if (locations.isEmpty()) {
                     JOptionPane.showMessageDialog(repeaterUI.getUiComponent(),
-                            "未配置任何令牌位置，请先配置令牌位置",
+                            "未配置任何字段定义，请先配置字段定义",
                             "提示", JOptionPane.INFORMATION_MESSAGE);
                     return;
                 }
@@ -66,14 +66,14 @@ public class SessionParser {
                 List<SchemeMatch> schemeMatches = SessionParserEngine.matchSchemes(parseResult, schemes);
 
                 // 检查是否有启用的方案
-                boolean hasEnabledScheme = schemes.stream().anyMatch(TokenScheme::isEnabled);
+                boolean hasEnabledScheme = schemes.stream().anyMatch(Scheme::isEnabled);
 
                 // 如果没有匹配到任何方案，或者没有任何启用的方案，让用户选择
                 if (schemeMatches.isEmpty() || !hasEnabledScheme) {
                     Frame owner = (Frame) SwingUtilities.getWindowAncestor(repeaterUI.getUiComponent());
                     String message;
                     if (!hasEnabledScheme) {
-                        message = "<html>没有任何启用的令牌方案。<br>请选择一个方案，选中后将自动启用。</html>";
+                        message = "<html>没有任何启用的方案。<br>请选择一个方案，选中后将自动启用。</html>";
                     } else {
                         message = "<html>没有启用的方案匹配当前报文。<br>请选择一个方案，选中后将自动启用。</html>";
                     }
@@ -85,7 +85,7 @@ public class SessionParser {
                         return; // 用户取消
                     }
 
-                    TokenScheme selectedScheme = selectDialog.getSelectedScheme();
+                    Scheme selectedScheme = selectDialog.getSelectedScheme();
                     if (selectedScheme == null) {
                         return;
                     }
@@ -93,9 +93,9 @@ public class SessionParser {
                     // 自动启用用户选择的方案
                     if (!selectedScheme.isEnabled()) {
                         selectedScheme.setEnabled(true);
-                        sm.updateTokenScheme(selectedScheme.getId(), selectedScheme.getName(),
+                        sm.updateScheme(selectedScheme.getId(), selectedScheme.getName(),
                                 selectedScheme.getDescription(), true, selectedScheme.isPersistToGlobal());
-                        logManager.success("[+] 已自动启用令牌方案: " + selectedScheme.getName());
+                        logManager.success("[+] 已自动启用方案: " + selectedScheme.getName());
                     }
 
                     // 重新解析匹配（使用刚启用的方案）
@@ -105,7 +105,7 @@ public class SessionParser {
                     // 如果重新匹配后仍然没有匹配，构造一个手动匹配结果
                     if (schemeMatches.isEmpty()) {
                         schemeMatches = java.util.Collections.singletonList(
-                                new SchemeMatch(selectedScheme, 0, selectedScheme.getTokenLocationCount()));
+                                new SchemeMatch(selectedScheme, 0, selectedScheme.getFieldCount()));
                     }
                 }
 
@@ -139,8 +139,8 @@ public class SessionParser {
                     if (sessionId > 0) {
                         java.util.Map<Integer, String> extractedValues = parseResult.getAllExtractedValues();
                         if (!extractedValues.isEmpty()) {
-                            sm.saveTokenValues(sessionId, extractedValues);
-                            logManager.success("[+] 已保存 " + extractedValues.size() + " 个令牌值");
+                            sm.saveFieldValues(sessionId, extractedValues);
+                            logManager.success("[+] 已保存 " + extractedValues.size() + " 个字段值");
                         }
                         org.oxff.repeater.UIRequestDispatcher.getInstance().refreshPrivilegeTestData();
                     }

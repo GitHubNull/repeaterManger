@@ -3,8 +3,8 @@ package org.oxff.repeater.ui.privilege;
 import org.oxff.repeater.privilege.SchemeMatch;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.SessionParseResult;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import javax.swing.*;
@@ -35,12 +35,12 @@ public class ParseSessionFromClipboardDialog extends JDialog {
     private final SessionParseResult parseResult;
     private final List<SchemeMatch> schemeMatches;
     @SuppressWarnings("unused")
-    private final List<TokenLocation> allLocations;
+    private final List<FieldDefinition> allLocations;
 
     private Integer existingSessionId = null;
 
     public ParseSessionFromClipboardDialog(Frame owner, SessionParseResult parseResult,
-                                            List<SchemeMatch> schemeMatches, List<TokenLocation> allLocations,
+                                            List<SchemeMatch> schemeMatches, List<FieldDefinition> allLocations,
                                             String suggestedName) {
         super(owner, "从HTTP报文解析用户会话", true);
         this.parseResult = parseResult;
@@ -62,7 +62,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
         // 匹配到的Scheme
         if (schemeMatches != null && !schemeMatches.isEmpty()) {
             SchemeMatch selectedMatch = schemeMatches.get(0);
-            JLabel schemeLabel = new JLabel(String.format("已选方案: %s (%d/%d 令牌匹配, %.0f%%)",
+            JLabel schemeLabel = new JLabel(String.format("已选方案: %s (%d/%d 字段匹配, %.0f%%)",
                     selectedMatch.getScheme().getName(),
                     selectedMatch.getMatchedCount(),
                     selectedMatch.getTotalCount(),
@@ -71,19 +71,19 @@ public class ParseSessionFromClipboardDialog extends JDialog {
             summaryPanel.add(schemeLabel);
             summaryPanel.add(Box.createVerticalStrut(5));
         } else {
-            JLabel noSchemeLabel = new JLabel("未匹配到任何令牌方案");
+            JLabel noSchemeLabel = new JLabel("未匹配到任何方案");
             noSchemeLabel.setForeground(Color.RED);
             summaryPanel.add(noSchemeLabel);
         }
 
-        // 提取到的令牌值列表
-        JLabel tokensLabel = new JLabel("提取到的令牌值:");
+        // 提取到的字段值列表
+        JLabel tokensLabel = new JLabel("提取到的字段值:");
         tokensLabel.setFont(tokensLabel.getFont().deriveFont(Font.BOLD));
         summaryPanel.add(tokensLabel);
 
         JPanel tokensPanel = new JPanel(new GridLayout(0, 1, 2, 2));
         boolean anyExtracted = false;
-        for (TokenLocation loc : allLocations) {
+        for (FieldDefinition loc : allLocations) {
             String value = parseResult.getExtractedValue(loc.getId());
             JPanel tokenRow = new JPanel(new BorderLayout(5, 0));
             JLabel locLabel = new JLabel(loc.getType().getDisplayName() + " [" + loc.getExpression() + "]: ");
@@ -104,7 +104,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
             tokensPanel.add(tokenRow);
         }
         if (!anyExtracted) {
-            JLabel noneLabel = new JLabel("  未提取到任何令牌值");
+            JLabel noneLabel = new JLabel("  未提取到任何字段值");
             noneLabel.setForeground(Color.RED);
             tokensPanel.add(noneLabel);
         }
@@ -161,14 +161,14 @@ public class ParseSessionFromClipboardDialog extends JDialog {
 
         // 方案选择
         gbc.gridx = 0; gbc.gridy = 3;
-        configPanel.add(new JLabel("令牌方案:"), gbc);
+        configPanel.add(new JLabel("方案:"), gbc);
         gbc.gridx = 1;
         schemeComboBox = new JComboBox<>();
         schemeNameToId.clear();
 
         // 加载所有方案到下拉框
-        List<TokenScheme> allSchemes = SessionManager.getInstance().getTokenSchemes();
-        for (TokenScheme scheme : allSchemes) {
+        List<Scheme> allSchemes = SessionManager.getInstance().getSchemes();
+        for (Scheme scheme : allSchemes) {
             schemeComboBox.addItem(scheme.getName());
             schemeNameToId.put(scheme.getName(), scheme.getId());
         }

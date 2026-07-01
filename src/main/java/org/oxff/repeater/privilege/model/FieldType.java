@@ -1,10 +1,10 @@
 package org.oxff.repeater.privilege.model;
 
 /**
- * 令牌位置类型枚举
- * 定义会话令牌在HTTP请求中可能出现的位置
+ * 字段类型枚举
+ * 定义会话凭证字段在HTTP请求中可能出现的位置
  */
-public enum TokenLocationType {
+public enum FieldType {
     /** HTTP请求头中，如 Authorization、Cookie */
     HEADER("Header"),
     /** JSON请求体中，如 $.data.token */
@@ -20,7 +20,7 @@ public enum TokenLocationType {
 
     private final String displayName;
 
-    TokenLocationType(String displayName) {
+    FieldType(String displayName) {
         this.displayName = displayName;
     }
 
@@ -31,11 +31,11 @@ public enum TokenLocationType {
     /**
      * 从字符串解析枚举值
      */
-    public static TokenLocationType fromString(String text) {
+    public static FieldType fromString(String text) {
         if (text == null) {
             return HEADER;
         }
-        for (TokenLocationType type : TokenLocationType.values()) {
+        for (FieldType type : FieldType.values()) {
             if (type.name().equalsIgnoreCase(text) || type.displayName.equalsIgnoreCase(text)) {
                 return type;
             }

@@ -1,44 +1,44 @@
 # ${title}
 
-> Generated: ${generatedAt} | Repeater Manager v${pluginVersion}
+> 生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}
 
-## Summary
+## 摘要
 
-| Metric | Count |
+| 指标 | 数量 |
 |--------|-------|
-| Total Tests | ${summary.totalTests} |
-| Escalated (&#9888;) | ${summary.escalatedCount} |
-| Safe (&#10004;) | ${summary.safeCount} |
-| Errors (&#10007;) | ${summary.errorCount} |
-| Baseline | ${summary.baselineCount} |
-| Unique Endpoints | ${summary.endpointsTested} |
+| 测试总数 | ${summary.totalTests} |
+| 越权 (&#9888;) | ${summary.escalatedCount} |
+| 安全 (&#10004;) | ${summary.safeCount} |
+| 错误 (&#10007;) | ${summary.errorCount} |
+| 基线 | ${summary.baselineCount} |
+| 唯一端点 | ${summary.endpointsTested} |
 
 <#if sessionBreakdown?? && sessionBreakdown?size gt 0>
-## Session Breakdown
+## 会话分布
 
-| Session | Escalated | Safe | Errors | Total |
+| 会话 | 越权 | 安全 | 错误 | 总计 |
 |---------|-----------|------|--------|-------|
 <#list sessionBreakdown as sb>
 | ${sb.sessionName} | ${sb.escalatedCount} | ${sb.safeCount} | ${sb.errorCount} | ${sb.totalTests} |
 </#list>
 
 </#if>
-## Findings by Endpoint
+## 端点发现详情
 
 <#list endpoints as ep>
 ### api_${ep.endpointIndex?string("00")} ${ep.method} ${ep.url}
 
-**<#if ep.baselineCount gt 0>Baseline: ${ep.baselineCount} | </#if>Tests: ${ep.totalTests} | Escalated: ${ep.escalatedCount} | Safe: ${ep.safeCount}**
+**<#if ep.baselineCount gt 0>基线: ${ep.baselineCount} | </#if>测试: ${ep.totalTests} | 越权: ${ep.escalatedCount} | 安全: ${ep.safeCount}**
 
 <#-- Baseline (orin) -->
 <#if ep.baselineData??>
-#### orin http data BASELINE
+#### 原始 HTTP 数据 基线
 
-##### Request
+##### 请求
 
 ${ep.baselineData.requestMd}
 
-##### Response — HTTP ${ep.baselineData.record.statusCode} (${ep.baselineData.record.responseLength} bytes, ${ep.baselineData.record.responseTime}ms)
+##### 响应 — HTTP ${ep.baselineData.record.statusCode} (${ep.baselineData.record.responseLength} bytes, ${ep.baselineData.record.responseTime}ms)
 
 ${ep.baselineData.responseMd}
 
@@ -48,29 +48,29 @@ ${ep.baselineData.responseMd}
 
 <#-- User sessions -->
 <#list ep.userSessions as us>
-#### ${us.sessionName} http data <#if us.judgment == 'ESCALATED'>&#9888; 越权<#elseif us.judgment == 'NOT_ESCALATED'>&#10004; 安全<#else>&#10007; 错误</#if>
+#### ${us.sessionName} HTTP 数据 <#if us.judgment == 'ESCALATED'>&#9888; 越权<#elseif us.judgment == 'NOT_ESCALATED'>&#10004; 安全<#else>&#10007; 错误</#if>
 
 <#if us.matchedRuleName??>
-- **Rule**: ${us.matchedRuleName}
+- **规则**: ${us.matchedRuleName}
 </#if>
-- **Similarity**: ${us.similarity?string["0.00"]}
-- **Status**: HTTP ${us.record.statusCode} | ${us.record.responseLength} bytes | ${us.record.responseTime}ms
+- **相似度**: ${us.similarity?string["0.00"]}
+- **状态**: HTTP ${us.record.statusCode} | ${us.record.responseLength} bytes | ${us.record.responseTime}ms
 
-##### Request
+##### 请求
 
 ${us.requestMd}
 
-##### Response — HTTP ${us.record.statusCode} (${us.record.responseLength} bytes, ${us.record.responseTime}ms)
+##### 响应 — HTTP ${us.record.statusCode} (${us.record.responseLength} bytes, ${us.record.responseTime}ms)
 
 ${us.responseMd}
 
-**Reproduction (cURL):**
+**复现命令 (cURL):**
 
 ```bash
 ${us.curlCommand}
 ```
 
-**Reproduction (Postman):**
+**复现导入 (Postman):**
 
 ```json
 ${us.postmanSnippet}

@@ -13,7 +13,7 @@ public class BodyRenderer {
      */
     public String renderBodyHtml(byte[] body, String contentType) {
         if (body == null || body.length == 0) {
-            return "<pre>[Empty]</pre>\n";
+            return "<pre>[空]</pre>\n";
         }
 
         BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
@@ -30,7 +30,7 @@ public class BodyRenderer {
      */
     public String renderBodyMd(byte[] body, String contentType) {
         if (body == null || body.length == 0) {
-            return "```\n[Empty]\n```\n\n";
+            return "```\n[空]\n```\n\n";
         }
 
         BinaryContentRenderer.TieredRenderContent content = renderBinaryBody(body, contentType);
@@ -48,12 +48,12 @@ public class BodyRenderer {
         StringBuilder sb = new StringBuilder();
         sb.append("<div class=\"binary-card\">\n");
 
-        sb.append("  <div class=\"card-header\">Binary Content (").append(escapeHtml(content.contentCategory))
+        sb.append("  <div class=\"card-header\">二进制内容 (").append(escapeHtml(content.contentCategory))
                 .append(" — ").append(escapeHtml(content.humanSize)).append(")</div>\n");
 
         sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">Content-Type:</span> ")
                 .append("<span class=\"meta-value\">").append(escapeHtml(content.contentType)).append("</span></div>\n");
-        sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">Size:</span> ")
+        sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">大小:</span> ")
                 .append("<span class=\"meta-value\">").append(escapeHtml(content.humanSize)).append("</span></div>\n");
 
         if (content.metadataCardText != null && content.metadataCardText.contains("SHA-256:")) {
@@ -63,7 +63,7 @@ public class BodyRenderer {
         }
 
         if (content.multipartParts != null && !content.multipartParts.isEmpty()) {
-            sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">Multipart Parts:</span> ")
+            sb.append("  <div class=\"meta-row\"><span class=\"meta-key\">多部分数量:</span> ")
                     .append("<span class=\"meta-value\">").append(content.multipartParts.size()).append("</span></div>\n");
             for (BinaryContentRenderer.MultipartPartInfo part : content.multipartParts) {
                 sb.append(buildMultipartPartHtml(part));
@@ -76,7 +76,7 @@ public class BodyRenderer {
 
         if (content.base64Content != null && !content.base64Content.isEmpty()) {
             sb.append("  <details class=\"base64-section\"><summary>Base64 (")
-                    .append(content.base64Content.length()).append(" chars)</summary>\n");
+                    .append(content.base64Content.length()).append(" 字符)</summary>\n");
             sb.append("    <pre>").append(escapeHtml(content.base64Content)).append("</pre>\n");
             sb.append("  </details>\n");
         }
@@ -91,9 +91,9 @@ public class BodyRenderer {
 
         sb.append("  <div class=\"").append(partClass).append("\">\n");
         sb.append("    <div class=\"part-header\">");
-        if (part.name != null) sb.append("Field: ").append(escapeHtml(part.name));
-        if (part.fileName != null) sb.append(" | File: ").append(escapeHtml(part.fileName));
-        sb.append(" | Type: ").append(escapeHtml(part.partContentType));
+        if (part.name != null) sb.append("字段: ").append(escapeHtml(part.name));
+        if (part.fileName != null) sb.append(" | 文件: ").append(escapeHtml(part.fileName));
+        sb.append(" | 类型: ").append(escapeHtml(part.partContentType));
         sb.append(" | ").append(BinaryContentRenderer.formatHumanSize(part.partSize));
         sb.append("</div>\n");
 
@@ -115,13 +115,13 @@ public class BodyRenderer {
     private String buildBinaryContentMd(BinaryContentRenderer.TieredRenderContent content) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("**Binary Content (").append(content.contentCategory)
+        sb.append("**二进制内容 (").append(content.contentCategory)
                 .append(" — ").append(content.humanSize).append(")**\n\n");
 
-        sb.append("| Property | Value |\n");
+        sb.append("| 属性 | 值 |\n");
         sb.append("|----------|-------|\n");
         sb.append("| Content-Type | ").append(escapeMd(content.contentType)).append(" |\n");
-        sb.append("| Size | ").append(escapeMd(content.humanSize)).append(" |\n");
+        sb.append("| 大小 | ").append(escapeMd(content.humanSize)).append(" |\n");
         if (content.metadataCardText != null) {
             String sha = extractShaFromMetadata(content.metadataCardText);
             if (!sha.isEmpty()) {
@@ -129,7 +129,7 @@ public class BodyRenderer {
             }
         }
         if (content.multipartParts != null && !content.multipartParts.isEmpty()) {
-            sb.append("| Multipart Parts | ").append(content.multipartParts.size()).append(" |\n");
+            sb.append("| 多部分数量 | ").append(content.multipartParts.size()).append(" |\n");
         }
         sb.append("\n");
 
@@ -145,7 +145,7 @@ public class BodyRenderer {
 
         if (content.base64Content != null && !content.base64Content.isEmpty()) {
             sb.append("<details><summary>Base64 (").append(content.base64Content.length())
-                    .append(" chars)</summary>\n\n");
+                    .append(" 字符)</summary>\n\n");
             sb.append("```base64\n").append(content.base64Content).append("\n```\n\n");
             sb.append("</details>\n\n");
         }
@@ -156,7 +156,7 @@ public class BodyRenderer {
     private String buildMultipartPartMd(BinaryContentRenderer.MultipartPartInfo part) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("##### Part: ");
+        sb.append("##### 部分: ");
         if (part.name != null) sb.append(part.name);
         if (part.fileName != null) sb.append(" (").append(part.fileName).append(")");
         sb.append(" — ").append(part.partContentType)
@@ -206,11 +206,11 @@ public class BodyRenderer {
     }
 
     private String sanitizeBody(byte[] body, String contentType) {
-        if (body == null || body.length == 0) return "[Empty]";
-        if (isBinaryBody(body)) return "[Binary data — " + body.length + " bytes]";
+        if (body == null || body.length == 0) return "[空]";
+        if (isBinaryBody(body)) return "[二进制数据 — " + body.length + " 字节]";
         String text = BinaryContentRenderer.decodeBody(body, contentType);
         if (text.length() > 50000) {
-            text = text.substring(0, 50000) + "\n\n... [Truncated — total " + body.length + " bytes]";
+            text = text.substring(0, 50000) + "\n\n... [已截断 — 总计 " + body.length + " 字节]";
         }
         return text;
     }

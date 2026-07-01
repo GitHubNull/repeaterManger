@@ -2,8 +2,8 @@ package org.oxff.repeater.ui.privilege;
 
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.UserSessionYamlIO;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenScheme;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.Scheme;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import javax.swing.*;
@@ -66,9 +66,9 @@ public class UserSessionTab extends JPanel {
         userSessionTable.getColumnModel().getColumn(1).setPreferredWidth(50);   // 颜色
         userSessionTable.getColumnModel().getColumn(2).setPreferredWidth(100);  // 关联方案
         userSessionTable.getColumnModel().getColumn(3).setPreferredWidth(50);   // 启用
-        userSessionTable.getColumnModel().getColumn(4).setPreferredWidth(250);  // 令牌值摘要
+        userSessionTable.getColumnModel().getColumn(4).setPreferredWidth(250);  // 字段值摘要
         userSessionTable.getColumnModel().getColumn(4).setMinWidth(100);
-        userSessionTable.getColumnModel().getColumn(4).setCellRenderer(new TokenValueCellRenderer());
+        userSessionTable.getColumnModel().getColumn(4).setCellRenderer(new FieldValueCellRenderer());
 
         userSessionSorter = new TableRowSorter<>(userSessionModel);
         userSessionTable.setRowSorter(userSessionSorter);
@@ -133,12 +133,12 @@ public class UserSessionTab extends JPanel {
     }
 
     private void parseSessionFromClipboard() {
-        // 检查是否配置了TokenScheme
+        // 检查是否配置了方案
         SessionManager sm = SessionManager.getInstance();
-        List<TokenScheme> schemes = sm.getTokenSchemes();
+        List<Scheme> schemes = sm.getSchemes();
         if (schemes.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "未配置任何令牌方案，请先配置令牌方案后再使用此功能。",
+                    "未配置任何方案，请先配置方案后再使用此功能。",
                     "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
@@ -182,15 +182,15 @@ public class UserSessionTab extends JPanel {
             int id = sm.addUserSession(dialog.getName(), dialog.getColorHex(), dialog.isEnabled(),
                     dialog.getSchemeId());
             if (id > 0) {
-                sm.saveTokenValues(id, dialog.getTokenValues());
+                sm.saveFieldValues(id, dialog.getFieldValues());
             }
             refreshData();
         }
     }
 
     /**
-     * 一键添加匿名用户（所有令牌值留空，用于未授权测试）
-     * 令牌方案智能选择：优先复用已有用户方案，其次自动匹配唯一方案，多方案时弹窗选择
+     * 一键添加匿名用户（所有字段值留空，用于未授权测试）
+     * 方案智能选择：优先复用已有用户方案，其次自动匹配唯一方案，多方案时弹窗选择
      */
     private void addAnonymousUser() {
         SessionManager sm = SessionManager.getInstance();
@@ -205,7 +205,7 @@ public class UserSessionTab extends JPanel {
             candidateName = baseName + "_" + suffix++;
         }
 
-        // 智能确定令牌方案
+        // 智能确定方案
         Integer schemeId = determineAnonymousScheme(candidateName);
         if (schemeId == null) {
             return; // 用户取消
@@ -224,7 +224,7 @@ public class UserSessionTab extends JPanel {
     }
 
     /**
-     * 为匿名用户智能确定令牌方案：
+     * 为匿名用户智能确定方案：
      * 1. 优先使用已有测试用户所使用的方案
      * 2. 若无用户，且只有一个启用的方案或只有一个方案，自动使用
      * 3. 否则弹出 UserSessionEditDialog 让用户手动选择方案
@@ -246,8 +246,8 @@ public class UserSessionTab extends JPanel {
         }
 
         // Priority 2: 无已有用户时，检查可用方案数量
-        List<TokenScheme> allSchemes = sm.getTokenSchemes();
-        List<TokenScheme> enabledSchemes = sm.getEnabledTokenSchemes();
+        List<Scheme> allSchemes = sm.getSchemes();
+        List<Scheme> enabledSchemes = sm.getEnabledSchemes();
 
         if (enabledSchemes.size() == 1) {
             return enabledSchemes.get(0).getId();
@@ -262,7 +262,7 @@ public class UserSessionTab extends JPanel {
 
     /**
      * 多方案时弹出 UserSessionEditDialog 让用户选择方案
-     * 对话框预填充名称和灰色，令牌值区域默认为空
+     * 对话框预填充名称和灰色，字段值区域默认为空
      *
      * @param candidateName 预填充的名称
      * @return 用户选择的 schemeId，若取消则返回 null
@@ -326,10 +326,10 @@ public class UserSessionTab extends JPanel {
                             "更新用户会话失败，请检查日志", "错误", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                boolean saved = sm.saveTokenValues(selected.getId(), dialog.getTokenValues());
+                boolean saved = sm.saveFieldValues(selected.getId(), dialog.getFieldValues());
                 if (!saved) {
                     JOptionPane.showMessageDialog(this,
-                            "保存令牌值失败，请检查日志", "警告", JOptionPane.WARNING_MESSAGE);
+                            "保存字段值失败，请检查日志", "警告", JOptionPane.WARNING_MESSAGE);
                 }
                 refreshData();
                 JOptionPane.showMessageDialog(this,
@@ -388,8 +388,8 @@ public class UserSessionTab extends JPanel {
         try {
             SessionManager sm = SessionManager.getInstance();
             List<UserSession> sessions = sm.getUserSessions();
-            List<TokenLocation> locations = sm.getTokenLocations();
-            List<TokenScheme> schemes = sm.getTokenSchemes();
+            List<FieldDefinition> locations = sm.getFieldDefinitions();
+            List<Scheme> schemes = sm.getSchemes();
 
             boolean success = UserSessionYamlIO.writeToFile(sessions, locations, schemes, file.getAbsolutePath());
             if (success) {
@@ -413,8 +413,8 @@ public class UserSessionTab extends JPanel {
 
         try {
             SessionManager sm = SessionManager.getInstance();
-            List<TokenLocation> locations = sm.getTokenLocations();
-            List<TokenScheme> schemes = sm.getTokenSchemes();
+            List<FieldDefinition> locations = sm.getFieldDefinitions();
+            List<Scheme> schemes = sm.getSchemes();
             List<UserSession> importedSessions = UserSessionYamlIO.readFromFile(
                     selectedFile.getAbsolutePath(), locations, schemes);
 

@@ -64,7 +64,7 @@ graph TB
 
     subgraph Privilege["越权测试子系统"]
         RE["ReplayEngine"]
-        TRE["TokenReplacementEngine"]
+        TRE["FieldReplacementEngine"]
         JE["JudgmentEngine"]
         SE["SimilarityEngine"]
         SM["SessionManager"]
@@ -128,7 +128,7 @@ graph LR
     D --> E["SchemaInitializer + SchemaMigrator"]
     E --> F["GC + AutoSave 启动"]
     F --> G["GlobalRuleManager.loadRules()"]
-    G --> H["GlobalTokenLocationManager.loadLocations()"]
+    G --> H["GlobalFieldDefinitionManager.loadLocations()"]
     H --> I["RepeaterManagerUI 构造"]
     I --> J["registerSuiteTab"]
     J --> K["registerContextMenuItemsProvider"]
@@ -385,10 +385,10 @@ graph TB
         A3["AutoTestEngine: 代理拦截自动测试"]
     end
 
-    subgraph 配置["会话与令牌配置"]
+    subgraph 配置["会话与字段配置"]
         B1["SessionManager<br/>管理 UserSession 列表"]
-        B2["TokenLocation<br/>令牌位置定义"]
-        B3["TokenScheme<br/>令牌方案(绑定会话)"]
+        B2["FieldDefinition<br/>字段定义"]
+        B3["Scheme<br/>方案(绑定会话)"]
         B4["ReplayConfig<br/>超时/重试/延迟/阈值"]
     end
 
@@ -399,7 +399,7 @@ graph TB
 
     subgraph 重放["请求重放引擎"]
         D1["ReplayEngine"]
-        D2["TokenReplacementEngine"]
+        D2["FieldReplacementEngine"]
         D3["RequestManager"]
         D4["MontoyaApi.http()"]
     end
@@ -439,7 +439,7 @@ sequenceDiagram
     participant RDH as RequestDispatchHandler
     participant RE as ReplayEngine
     participant SM as SessionManager
-    participant TRE as TokenReplacementEngine
+    participant TRE as FieldReplacementEngine
     participant RM as RequestManager
     participant JE as JudgmentEngine
     participant SE as SimilarityEngine
@@ -457,10 +457,10 @@ sequenceDiagram
     RE->>SM: getEnabledSessions()
 
     loop 遍历每个启用会话
-        RE->>SM: getTokenLocationsByScheme(session.schemeId)
-        RE->>TRE: replaceTokens(requestBytes, locations, session)
-        TRE->>TRE: 替换Header令牌(Cookie/Authorization/X-Header)
-        TRE->>TRE: 替换Body令牌(JSON/XML/Form/Multipart)
+        RE->>SM: getFieldDefinitionsByScheme(session.schemeId)
+        RE->>TRE: replaceFields(requestBytes, fields, session)
+        TRE->>TRE: 替换Header字段(Cookie/Authorization/X-Header)
+        TRE->>TRE: 替换Body字段(JSON/XML/Form/Multipart)
         TRE-->>RE: modifiedRequestBytes
         RE->>RM: makeHttpRequest(modifiedRequest, httpService)
         RM-->>RE: responseBytes + statusCode + timings
@@ -491,20 +491,20 @@ sequenceDiagram
 
 4. **`latch.await()` 无超时**：批量重放中 `onAllComplete` 通过 `SwingUtilities.invokeLater` 在 EDT 上执行 `latch.countDown()`。批量100+请求时 EDT 队列积压大量 `onReplayComplete` 任务，`onAllComplete` 排在队尾延迟执行，导致 `batch-privilege-test` 线程无限阻塞。修复：`latch.await(timeout)` 添加基于会话数和请求超时的动态超时，超时后跳过当前请求继续下一条。
 
-### 4.3 Token替换数据流
+### 4.3 字段替换数据流
 
 ```mermaid
 graph TB
     subgraph Input["输入"]
         A1["原始请求字节数组"]
-        A2["TokenLocation列表<br/>HEADER / JSON_BODY / XML_BODY<br/>FORM_FIELD / MULTIPART_FIELD"]
-        A3["UserSession.tokenValues<br/>locationId → value映射"]
+        A2["FieldDefinition列表<br/>HEADER / JSON_BODY / XML_BODY<br/>FORM_FIELD / MULTIPART_FIELD"]
+        A3["UserSession.fieldValues<br/>fieldId → value映射"]
     end
 
-    subgraph Process["TokenReplacementEngine处理"]
+    subgraph Process["FieldReplacementEngine处理"]
         B1["ContentSplitter: 分离Header和Body"]
-        B2["Header令牌替换<br/>replaceHeader(expression, value)"]
-        B3["Body令牌路由"]
+        B2["Header字段替换<br/>replaceHeader(expression, value)"]
+        B3["Body字段路由"]
         B4["JSON: replaceJsonBody()"]
         B5["XML: replaceXmlBody()"]
         B6["Form: replaceFormField()"]
@@ -527,7 +527,7 @@ graph TB
     B2 --> B8
 ```
 
-**Token替换类型路由**：
+**字段替换类型路由**：
 - **Header替换**：匹配 `expression`（如 `Cookie`、`Authorization`），替换整个值
 - **JSON_BODY**：仅在 Content-Type 包含 `application/json` 时生效
 - **XML_BODY**：仅在 Content-Type 包含 `xml` 时生效
@@ -569,7 +569,7 @@ sequenceDiagram
     participant Scope as ScopeManager
     participant ATE as AutoTestEngine
     participant SM as SessionManager
-    participant TRE as TokenReplacementEngine
+    participant TRE as FieldReplacementEngine
     participant RM as RequestManager
     participant JE as JudgmentEngine
     participant BE as BurpExtender
@@ -581,8 +581,8 @@ sequenceDiagram
     ATE->>SM: getEnabledSessions()
 
     loop 遍历启用会话
-        ATE->>SM: getTokenLocationsByScheme(session.schemeId)
-        ATE->>TRE: replaceTokens(requestBytes, locations, session)
+        ATE->>SM: getFieldDefinitionsByScheme(session.schemeId)
+        ATE->>TRE: replaceFields(requestBytes, fields, session)
         ATE->>RM: makeHttpRequest(modifiedRequest, httpService)
         RM-->>ATE: response
 
@@ -836,7 +836,7 @@ graph TB
         V3["BurpRequestPanel<br/>Montoya HttpRequestEditor"]
         V4["BurpResponsePanel<br/>Montoya HttpResponseEditor"]
         V5["HistoryPanel<br/>历史记录表格"]
-        V6["PrivilegeTestPanel<br/>会话/令牌配置"]
+        V6["PrivilegeTestPanel<br/>会话/字段配置"]
         V7["ConfigPanel<br/>存储/日志/代理设置"]
         V8["DataPanel<br/>导入导出操作"]
         V9["StatusPanel<br/>状态栏"]
@@ -854,10 +854,10 @@ graph TB
         M2["RequestDAO / HistoryDAO<br/>数据访问对象"]
         M3["PoolManager<br/>SHA-256去重存储"]
         M4["DatabaseManager<br/>连接池+Schema"]
-        M5["SessionManager<br/>会话/令牌缓存"]
+        M5["SessionManager<br/>会话/字段缓存"]
         M6["ApiExtractionRule<br/>API提取规则"]
         M7["UserSession<br/>用户会话"]
-        M8["TokenLocation<br/>令牌位置定义"]
+        M8["FieldDefinition<br/>字段定义"]
     end
 
     V1 --> C1
@@ -1098,10 +1098,10 @@ graph TB
     end
 
     subgraph Privilege["越权测试相关表"]
-        TL["token_locations<br/>id | type | expression | enabled"]
-        TS["token_schemes<br/>id | name | enabled"]
+        TL["field_definitions<br/>id | type | expression | enabled"]
+        TS["schemes<br/>id | name | enabled"]
         US["user_sessions<br/>id | name | color | scheme_id(FK)"]
-        TV["token_values<br/>id | session_id(FK) | location_id(FK) | value"]
+        TV["field_values<br/>id | session_id(FK) | field_id(FK) | value"]
         RC["replay_config<br/>similarity_threshold | timeout | retry"]
         SCOPE["scope_rules<br/>id | host_pattern | path_pattern | auto_test"]
         JR["judgment_rules<br/>id | target | method | expression | priority"]
@@ -1145,7 +1145,7 @@ graph LR
 
     subgraph GlobalDir["全局配置 ~/.burp/repeater_manager/"]
         Y1["api_extraction_rules.yaml"]
-        Y2["token_locations.yaml"]
+        Y2["field_definitions.yaml"]
         Y3["dedup_configs.yaml"]
         Y4["judgment_rules.yaml"]
     end
@@ -1175,11 +1175,11 @@ graph LR
 | GarbageCollectorService | `oxff/top/service/GarbageCollectorService.java` | 定期清理零引用数据 | ScheduledExecutorService + gc_queue |
 | AutoSaveService | `oxff/top/service/AutoSaveService.java` | 定时数据库检查点 | ScheduledExecutorService |
 | ReplayEngine | `oxff/top/privilege/ReplayEngine.java` | 越权测试重放引擎 | 多会话遍历 + 同步发送 + 重试 |
-| TokenReplacementEngine | `oxff/top/privilege/TokenReplacementEngine.java` | 请求令牌替换 | Header/JSON/XML/Form/Multipart路由 |
+| FieldReplacementEngine | `oxff/top/privilege/FieldReplacementEngine.java` | 请求字段替换 | Header/JSON/XML/Form/Multipart路由 |
 | JudgmentEngine | `oxff/top/privilege/JudgmentEngine.java` | 响应越权判决 | 规则优先匹配 + 相似度回退 |
 | SimilarityEngine | `oxff/top/privilege/SimilarityEngine.java` | 内容感知相似度 | JSON/XML/Jaccard/Binary路由 |
 | AutoTestEngine | `oxff/top/privilege/AutoTestEngine.java` | 代理拦截自动测试 | Scope匹配 + API去重 |
-| SessionManager | `oxff/top/privilege/SessionManager.java` | 会话/令牌/方案缓存 | DAO + 缓存列表 |
+| SessionManager | `oxff/top/privilege/SessionManager.java` | 会话/字段/方案缓存 | DAO + 缓存列表 |
 | ApiExtractionEngine | `oxff/top/api/ApiExtractionEngine.java` | API标识提取 | 4源×4方法 + First-Match-Wins |
 | ApiRuleManager | `oxff/top/api/ApiRuleManager.java` | 项目级API规则管理 | SQLite持久化 |
 | GlobalRuleManager | `oxff/top/api/GlobalRuleManager.java` | 全局API规则管理 | YAML文件 + 负数ID |

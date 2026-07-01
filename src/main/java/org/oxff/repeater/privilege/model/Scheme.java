@@ -4,11 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 令牌方案模型
- * 定义一组令牌位置的组合，作为令牌位置与用户会话之间的中间层
- * 不同方案对应不同的安全测试目标（如仅测试Bearer认证、仅测试Cookie认证等）
+ * 方案模型
+ * 定义一组字段的集合，作为"字段定义"与"用户会话"之间的中间层
  */
-public class TokenScheme {
+public class Scheme {
 
     private int id;
     private String name;
@@ -16,35 +15,35 @@ public class TokenScheme {
     private boolean enabled;
     /** 是否持久化到全局（默认true） */
     private boolean persistToGlobal = true;
-    /** 关联的令牌位置ID列表 */
-    private List<Integer> tokenLocationIds;
+    /** 关联的字段ID列表 */
+    private List<Integer> fieldIds;
     private long createdAt;
 
-    public TokenScheme() {
+    public Scheme() {
         this.name = "";
         this.description = "";
         this.enabled = true;
         this.persistToGlobal = true;
-        this.tokenLocationIds = new ArrayList<>();
+        this.fieldIds = new ArrayList<>();
         this.createdAt = System.currentTimeMillis();
     }
 
-    public TokenScheme(String name, String description, boolean enabled) {
+    public Scheme(String name, String description, boolean enabled) {
         this.name = name;
         this.description = description != null ? description : "";
         this.enabled = enabled;
         this.persistToGlobal = true;
-        this.tokenLocationIds = new ArrayList<>();
+        this.fieldIds = new ArrayList<>();
         this.createdAt = System.currentTimeMillis();
     }
 
-    public TokenScheme(int id, String name, String description, boolean enabled) {
+    public Scheme(int id, String name, String description, boolean enabled) {
         this.id = id;
         this.name = name;
         this.description = description != null ? description : "";
         this.enabled = enabled;
         this.persistToGlobal = true;
-        this.tokenLocationIds = new ArrayList<>();
+        this.fieldIds = new ArrayList<>();
         this.createdAt = System.currentTimeMillis();
     }
 
@@ -90,12 +89,12 @@ public class TokenScheme {
         this.persistToGlobal = persistToGlobal;
     }
 
-    public List<Integer> getTokenLocationIds() {
-        return tokenLocationIds;
+    public List<Integer> getFieldIds() {
+        return fieldIds;
     }
 
-    public void setTokenLocationIds(List<Integer> tokenLocationIds) {
-        this.tokenLocationIds = tokenLocationIds != null ? tokenLocationIds : new ArrayList<>();
+    public void setFieldIds(List<Integer> fieldIds) {
+        this.fieldIds = fieldIds != null ? fieldIds : new ArrayList<>();
     }
 
     public long getCreatedAt() {
@@ -107,15 +106,15 @@ public class TokenScheme {
     }
 
     /**
-     * 获取关联令牌位置的数量
+     * 获取关联字段的数量
      */
-    public int getTokenLocationCount() {
-        return tokenLocationIds != null ? tokenLocationIds.size() : 0;
+    public int getFieldCount() {
+        return fieldIds != null ? fieldIds.size() : 0;
     }
 
     @Override
     public String toString() {
-        return String.format("TokenScheme{id=%d, name='%s', enabled=%s, locationCount=%d}",
-                id, name, enabled, getTokenLocationCount());
+        return String.format("Scheme{id=%d, name='%s', enabled=%s, fieldCount=%d}",
+                id, name, enabled, getFieldCount());
     }
 }

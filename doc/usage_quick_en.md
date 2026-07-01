@@ -165,13 +165,13 @@ Configure dedup strategies to avoid duplicate privilege testing of the same API:
 Automated privilege escalation vulnerability detection:
 
 1. Navigate to the **"Configuration"** panel and configure:
-   - **Token Locations**: Configure where tokens are in the request (HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM, 6 types total)
-   - **Token Schemes**: Create a named group of token locations (e.g., "Bearer Auth" with Authorization Header only), associate schemes with user sessions
-   - **User Sessions**: Add credentials/tokens for users with different privilege levels; one-click **"Add Anonymous User"** (all token values empty, simulating unauthenticated state)
+   - **Fields**: Configure where fields are in the request (HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM, 6 types total)
+   - **Schemes**: Create a named group of field locations (e.g., "Bearer Auth" with Authorization Header only), associate schemes with user sessions
+   - **User Sessions**: Add credentials/fields for users with different privilege levels; one-click **"Add Anonymous User"** (all field values empty, simulating unauthenticated state)
    - **Judgment Rule Groups**: Create rule groups (conditions within a group are AND-combined), set one as the **active rule group** (globally unique), supports AND/OR/NOT operators
    - **Request Scope**: Specify URL patterns to test
 2. Enable auto-testing; the plugin intercepts scope-matched proxy traffic
-3. Auto-replaces tokens and replays requests (empty tokens for anonymous users perform "removal" operations), judges risk based on the active rule group
+3. Auto-replaces fields and replays requests (empty fields for anonymous users perform "removal" operations), judges risk based on the active rule group
 4. View results in the **"Privilege Test"** panel (color coded: red = potential escalation, green = safe)
 
 > Three-layer judgment flow: Invalid baseline → Error; Active rule group match → Escalated/Safe; No active rule group → Similarity fallback (≥0.90 → Escalated). Supports session parsing from clipboard (raw HTTP / Chrome fetch format).

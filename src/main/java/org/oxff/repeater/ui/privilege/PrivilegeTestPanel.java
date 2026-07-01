@@ -204,7 +204,7 @@ public class PrivilegeTestPanel extends JPanel {
         // row 7: 警告
         gbc.gridy = 7;
         JEditorPane warningPane = createHtmlLabel(
-                "<p class='warning'>⚠ 报告可能包含敏感令牌数据（Bearer Token、Session Cookie等），请妥善保管导出的文件。<br>"
+                "<p class='warning'>⚠ 报告可能包含敏感字段数据（Bearer Token、Session Cookie等），请妥善保管导出的文件。<br>"
               + "加密模式的报告文件(.ermr)需要密码才能查看，请妥善保管密码。</p>");
         panel.add(warningPane, gbc);
 

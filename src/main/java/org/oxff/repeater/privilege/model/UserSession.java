@@ -7,14 +7,14 @@ import java.util.Map;
 /**
  * 用户会话模型
  * 代表权限测试中的一个用户身份
- * 每个用户为所有令牌位置提供不同的值
+ * 每个用户为所有字段提供不同的值
  */
 public class UserSession {
     private int id;
     private String name;
     private Color color;
     private boolean enabled;
-    /** 关联的令牌方案ID（一对一） */
+    /** 关联的方案ID（一对一） */
     private Integer schemeId;
 
     /** 请求超时时间（秒） */
@@ -32,8 +32,8 @@ public class UserSession {
     /** 重放间隔延迟（毫秒） */
     private int replayDelay;
 
-    /** 令牌值映射：tokenLocationId -> value */
-    private Map<Integer, String> tokenValues;
+    /** 字段值映射：fieldId -> value */
+    private Map<Integer, String> fieldValues;
     private long createdAt;
 
     public UserSession() {
@@ -45,7 +45,7 @@ public class UserSession {
         this.retryCount = 0;
         this.retryDelay = 1000;
         this.replayDelay = 0;
-        this.tokenValues = new LinkedHashMap<>();
+        this.fieldValues = new LinkedHashMap<>();
         this.createdAt = System.currentTimeMillis();
     }
 
@@ -59,7 +59,7 @@ public class UserSession {
         this.retryCount = 0;
         this.retryDelay = 1000;
         this.replayDelay = 0;
-        this.tokenValues = new LinkedHashMap<>();
+        this.fieldValues = new LinkedHashMap<>();
         this.createdAt = System.currentTimeMillis();
     }
 
@@ -74,7 +74,7 @@ public class UserSession {
         this.retryCount = 0;
         this.retryDelay = 1000;
         this.replayDelay = 0;
-        this.tokenValues = new LinkedHashMap<>();
+        this.fieldValues = new LinkedHashMap<>();
         this.createdAt = System.currentTimeMillis();
     }
 
@@ -137,26 +137,26 @@ public class UserSession {
         this.enabled = enabled;
     }
 
-    public Map<Integer, String> getTokenValues() {
-        return tokenValues;
+    public Map<Integer, String> getFieldValues() {
+        return fieldValues;
     }
 
-    public void setTokenValues(Map<Integer, String> tokenValues) {
-        this.tokenValues = tokenValues != null ? tokenValues : new LinkedHashMap<>();
-    }
-
-    /**
-     * 设置指定令牌位置的值
-     */
-    public void setTokenValue(int tokenLocationId, String value) {
-        tokenValues.put(tokenLocationId, value);
+    public void setFieldValues(Map<Integer, String> fieldValues) {
+        this.fieldValues = fieldValues != null ? fieldValues : new LinkedHashMap<>();
     }
 
     /**
-     * 获取指定令牌位置的值
+     * 设置指定字段的值
      */
-    public String getTokenValue(int tokenLocationId) {
-        return tokenValues.get(tokenLocationId);
+    public void setFieldValue(int fieldId, String value) {
+        fieldValues.put(fieldId, value);
+    }
+
+    /**
+     * 获取指定字段的值
+     */
+    public String getFieldValue(int fieldId) {
+        return fieldValues.get(fieldId);
     }
 
     public Integer getSchemeId() {
@@ -216,16 +216,16 @@ public class UserSession {
     }
 
     /**
-     * 获取令牌值的摘要文本，用于表格展示
+     * 获取字段值的摘要文本，用于表格展示
      * 两层截断：单值超过30字符截断，整体超过80字符截断
      */
-    public String getTokenValuesSummary() {
-        if (tokenValues.isEmpty()) {
+    public String getFieldValuesSummary() {
+        if (fieldValues.isEmpty()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
         boolean first = true;
-        for (Map.Entry<Integer, String> entry : tokenValues.entrySet()) {
+        for (Map.Entry<Integer, String> entry : fieldValues.entrySet()) {
             if (!first) {
                 sb.append(" | ");
             }
@@ -251,7 +251,7 @@ public class UserSession {
 
     @Override
     public String toString() {
-        return String.format("UserSession{id=%d, name='%s', enabled=%s, tokenCount=%d}",
-                id, name, enabled, tokenValues.size());
+        return String.format("UserSession{id=%d, name='%s', enabled=%s, fieldCount=%d}",
+                id, name, enabled, fieldValues.size());
     }
 }

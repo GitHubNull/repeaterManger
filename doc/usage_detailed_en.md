@@ -89,7 +89,7 @@ Contains multiple sub-tabs:
 - **Proxy Debugging**: HTTP proxy configuration
 - **Data Import/Export**: ERM archive / Postman Collection import/export
 - **API Rule Config**: CRUD operations for global and project rules
-- **Privilege Testing**: Token Schemes / Token Locations / User Sessions / Judgment Rule Groups / Request Scope / Replay Config / Dedup Config
+- **Privilege Testing**: Schemes / Field Definitions / User Sessions / Judgment Rule Groups / Request Scope / Replay Config / Dedup Config
 
 ### 2.3 Log Tab
 
@@ -411,30 +411,30 @@ Global and project rules are sorted by the `priority` field, using a **first-mat
 
 ### 11.1 Feature Overview
 
-The privilege testing module provides automated horizontal/vertical privilege escalation vulnerability detection. It supports a **3-tier architecture** (Token Location → Token Scheme → User Session), uses a **single active rule group** mechanism with AND/OR/NOT multi-condition judgment, and features a three-layer fallback judgment engine (active rule group → default similarity → status code).
+The privilege testing module provides automated horizontal/vertical privilege escalation vulnerability detection. It supports a **3-tier architecture** (Field Definition → Scheme → User Session), uses a **single active rule group** mechanism with AND/OR/NOT multi-condition judgment, and features a three-layer fallback judgment engine (active rule group → default similarity → status code).
 
 Key capabilities:
-- **Token Scheme Management**: Group token locations into reusable schemes, bridging locations and sessions
+- **Scheme Management**: Group fields into reusable schemes, bridging locations and sessions
 - **User Session Management**: Configure sessions for users with different privilege levels
 - **Rule Group Judgment**: Single active rule group + AND/OR/NOT condition combinations
-- **Anonymous User Creation**: One-click guest user with all empty token values
+- **Anonymous User Creation**: One-click guest user with all empty field values
 - **Dedup Configuration**: Priority-chain API deduplication with 6 strategies × 3 keep policies
 - **Session Parsing**: Auto-parse user sessions from clipboard (raw HTTP / Chrome fetch format)
 
-### 11.2 Token Scheme Management
+### 11.2 Scheme Management
 
-**Concept**: A token scheme is a named group of token locations, serving as an intermediate layer between token locations and user sessions. Different schemes correspond to different security testing targets (e.g., testing only Bearer authentication, testing only Cookie authentication, etc.).
+**Concept**: A token scheme is a named group of fields, serving as an intermediate layer between fields and user sessions. Different schemes correspond to different security testing targets (e.g., testing only Bearer authentication, testing only Cookie authentication, etc.).
 
 **Scheme Operations**:
-- **Create**: Define a scheme name, description, and select associated token locations
+- **Create**: Define a scheme name, description, and select associated fields
 - **Edit**: Modify scheme name, description, or location membership
 - **Delete**: Remove a scheme (associated sessions are unaffected; their location bindings persist)
 - **Enable/Disable**: Toggle scheme availability
-- **Persist to Global**: Save scheme to `~/.burp/repeater_manager/token_schemes.yaml` for cross-project reuse
+- **Persist to Global**: Save scheme to `~/.burp/repeater_manager/schemes.yaml` for cross-project reuse
 
 **Session-to-Scheme Association**:
-- Each user session is associated with one token scheme
-- Token values in the session are filled according to the locations defined in the scheme
+- Each user session is associated with one scheme
+- Field values in the session are filled according to the locations defined in the scheme
 - Changing a scheme's locations automatically affects all sessions associated with that scheme
 
 **Global Scheme Synchronization**:
@@ -442,16 +442,16 @@ Key capabilities:
 - Schemes marked as `persistToGlobal=true` are synced to YAML on save
 
 **Configuration Examples**:
-| Scheme Name | Token Locations | Use Case |
+| Scheme Name | Field Definitions | Use Case |
 |-------------|----------------|----------|
 | Bearer Auth | Authorization Header only | Testing JWT/Bearer token replacement |
 | Cookie Session | Cookie: JSESSIONID | Testing session cookie hijacking |
 | Hybrid Auth | Authorization Header + CSRF Token | Testing APIs requiring multiple auth factors |
 | API Key | URL Param: api_key | Testing API key leakage scenarios |
 
-### 11.3 Token Location Configuration
+### 11.3 Field Definition Configuration
 
-Configure where tokens are located in the request. The plugin supports **6 token location types**:
+Configure where tokens are located in the request. The plugin supports **6 field types**:
 
 | Location Type | Description | Expression Example |
 |---------------|-------------|-------------------|
@@ -463,7 +463,7 @@ Configure where tokens are located in the request. The plugin supports **6 token
 | URL_PARAM | URL query parameter | `token` (parameter name) |
 
 **Additional Features**:
-- **Persist to Global**: Save location to `~/.burp/repeater_manager/token_locations.yaml` for cross-project sharing
+- **Persist to Global**: Save location to `~/.burp/repeater_manager/field_definitions.yaml` for cross-project sharing
 - **Enable/Disable**: Temporarily disable a location without deleting it
 - **Expression Support**: JSON_BODY and XML_BODY types support JSONPath/XPath expressions for extracting tokens from complex nested structures
 
@@ -559,7 +559,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 
 ### 11.6 Anonymous User
 
-**Feature Overview**: One-click creation of a guest user with all token values empty, used for unauthorized access testing.
+**Feature Overview**: One-click creation of a guest user with all field values empty, used for unauthorized access testing.
 
 **Workflow**:
 1. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
@@ -569,7 +569,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
    - **Priority 2**: Auto-match the single enabled scheme
    - **Priority 3**: Show a selection dialog when multiple schemes exist
 
-**Empty Token Value Semantics**: All token values for the anonymous user are empty strings. During request replay:
+**Empty Field Value Semantics**: All field values for the anonymous user are empty strings. During request replay:
 - **HEADER**: Remove the header entirely (rather than setting an empty value)
 - **JSON_BODY**: Remove the JSON property
 - **XML_BODY**: Remove the XML node
@@ -617,7 +617,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 
 ### 11.8 Session Parsing
 
-**Feature Overview**: Automatically parse user session token values and locations from clipboard HTTP messages, greatly simplifying session configuration.
+**Feature Overview**: Automatically parse user session field values and locations from clipboard HTTP messages, greatly simplifying session configuration.
 
 **Supported Formats**:
 1. **Raw HTTP Request**: Standard HTTP request message (e.g., copied from Burp Proxy)
@@ -629,7 +629,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 2. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
 3. Click the **"Parse from Clipboard"** button
 4. The plugin auto-detects clipboard format and converts it to raw HTTP
-5. Automatically extracts token values and location information
+5. Automatically extracts field values and location information
 6. Select the target token scheme (a selection dialog appears if no matching scheme exists)
 7. Confirm to create or update the user session
 
@@ -640,7 +640,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 1. After completing the above configuration, set an **active rule group** in the privilege testing panel (check the "Active" column for the target rule group)
 2. Enable the **"Auto-testing"** switch
 3. The plugin intercepts scope-matched proxy traffic
-4. Automatically replaces tokens and replays requests (anonymous user's empty token values trigger "removal" operations)
+4. Automatically replaces tokens and replays requests (anonymous user's empty field values trigger "removal" operations)
 5. Evaluates privilege escalation risk based on the active rule group (all conditions AND-matched → ESCALATED; any condition fails → fallback to similarity judgment)
 6. View results in the **"Privilege Test"** panel:
    - **Red**: Potential privilege escalation, requires manual confirmation

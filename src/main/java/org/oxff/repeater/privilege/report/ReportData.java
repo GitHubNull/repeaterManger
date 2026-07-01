@@ -12,7 +12,7 @@ import java.util.List;
  */
 public class ReportData {
 
-    private String title = "Privilege Escalation Test Report";
+    private String title = "越权测试报告";
     private Date generatedAt = new Date();
     private String pluginVersion = "2.23.0";
 

@@ -48,11 +48,11 @@
 | 全局规则管理 | `org/oxff/repeater/api/GlobalRuleManager.java` | 全局 API 提取规则管理（YAML 文件） |
 | 项目规则管理 | `org/oxff/repeater/api/ApiRuleManager.java` | 项目级 API 提取规则管理（SQLite） |
 | 越权测试引擎 | `org/oxff/repeater/privilege/AutoTestEngine.java` | 自动化越权测试（拦截代理 → 重放 → 判断） |
-| Token 替换 | `org/oxff/repeater/privilege/TokenReplacementEngine.java` | 请求中 Token 自动替换 |
+| 字段替换 | `org/oxff/repeater/privilege/FieldReplacementEngine.java` | 请求中字段自动替换 |
 | 判断引擎 | `org/oxff/repeater/privilege/JudgmentEngine.java` | 响应判断引擎（三层：基准无效→活跃规则组→兜底相似度） |
 | 规则条件模型 | `org/oxff/repeater/privilege/model/RuleCondition.java` | 规则条件（target + method + expression + AND/OR/NOT） |
-| 令牌方案模型 | `org/oxff/repeater/privilege/model/TokenScheme.java` | 令牌方案（一组令牌位置的组合，会话-方案关联） |
-| 全局令牌方案管理 | `org/oxff/repeater/privilege/GlobalTokenSchemeManager.java` | 跨会话全局令牌方案 CRUD 与 YAML 持久化 |
+| 方案模型 | `org/oxff/repeater/privilege/model/Scheme.java` | 方案（一组字段的组合，会话-方案关联） |
+| 全局方案管理 | `org/oxff/repeater/privilege/GlobalSchemeManager.java` | 跨会话全局方案 CRUD 与 YAML 持久化 |
 | 去重配置管理 | `org/oxff/repeater/privilege/DedupConfigManager.java` | 多配置优先级链式去重（6策略 × 3保留策略） |
 | API 去重引擎 | `org/oxff/repeater/privilege/ApiDedupEngine.java` | 从 HTTP 请求中提取去重键 |
 | 会话解析 | `org/oxff/repeater/privilege/FetchRequestParser.java` | Chrome DevTools fetch 格式报文解析 |
@@ -67,7 +67,7 @@
 | PDF 报告 | `org/oxff/repeater/privilege/report/PdfReportGenerator.java` | 原生 PDF 报告 (Apache PDFBox，内嵌中文字体) |
 | HTML/MD 报告 | `org/oxff/repeater/privilege/report/HtmlReportGenerator.java` / `MarkdownReportGenerator.java` | FreeMarker 模板渲染报告 |
 | 身体渲染器 | `org/oxff/repeater/privilege/report/BodyRenderer.java` / `BinaryContentRenderer.java` | 请求/响应体渲染与二进制内容转换 |
-| 全局Token管理 | `org/oxff/repeater/privilege/GlobalTokenLocationManager.java` | 跨会话全局 Token 位置管理 |
+| 全局字段管理 | `org/oxff/repeater/privilege/GlobalFieldDefinitionManager.java` | 跨会话全局 字段管理 |
 | 用户会话导入导出 | `org/oxff/repeater/privilege/UserSessionYamlIO.java` | 用户会话 YAML 导入导出 |
 | 文件选择器 | `org/oxff/repeater/utils/FileChooserHelper.java` | 统一文件选择器工具 |
 
@@ -108,22 +108,22 @@
 ### 越权测试模块
 
 自动化越权测试工作流（v2.30.0 规则组重构）：
-1. 定义令牌方案（Token Scheme）— 一组令牌位置的组合
-2. 定义令牌位置（Token Location）— Token 在请求中的位置（6 种类型）
-3. 创建用户会话（User Session）— 关联令牌方案，填充各位置的 Token 值
+1. 定义方案（Scheme）— 一组字段的组合
+2. 定义字段（Field Definition）— 字段在请求中的位置（6 种类型）
+3. 创建用户会话（User Session）— 关联方案，填充各位置的 字段值
 4. 配置判断规则组（Judgment Rule Group）— 设置活跃规则组（全局唯一活跃），组内条件纯 AND 组合
 5. 设置请求范围（Scope）— URL 匹配模式
 6. 配置去重规则（Dedup Config）— 避免同一 API 重复测试
 7. `AutoTestEngine` 拦截匹配范围的代理流量
-8. `TokenReplacementEngine` 注入不同用户 Token
+8. `FieldReplacementEngine` 注入不同用户字段
 9. `JudgmentEngine` 按三层逻辑判决：基准无效→ERROR → 活跃规则组匹配 → 兜底相似度
 10. 结果在越权测试面板展示（颜色标记：红=越权/绿=安全）
 
-### 令牌方案系统（v2.21.0）
+### 方案系统（v2.21.0）
 
-- `TokenScheme` 作为令牌位置与用户会话之间的中间层
+- `Scheme` 作为字段与用户会话之间的中间层
 - 支持多方案管理，不同方案对应不同安全测试目标
-- `GlobalTokenSchemeManager` 单例管理跨会话全局方案持久化（YAML）
+- `GlobalSchemeManager` 单例管理跨会话全局方案持久化（YAML）
 - 用户会话通过 `schemeId` 一对一关联方案
 - 匿名用户创建时智能匹配方案（v2.31.0）
 
@@ -138,7 +138,7 @@
 
 - `FetchRequestParser` 支持 Chrome DevTools "Copy as fetch" 格式解析
 - 自动检测剪贴板内容格式（原始 HTTP / fetch browser / fetch Node.js）
-- `SessionParserEngine` 从报文自动提取 Token 值和位置
+- `SessionParserEngine` 从报文自动提取 字段值和位置
 - 方案匹配：无匹配方案时弹出 `SelectSchemeDialog`
 
 ### 会话目录
@@ -186,12 +186,12 @@
 5. `SynchronizedScrollPanel` 保证原始/修改两端面板同步滚动
 6. `SearchBar` 提供可折叠的搜索栏，支持关键字/正则匹配、大小写敏感
 
-### 全局 Token 位置管理
+### 全局 字段管理
 
-`GlobalTokenLocationManager` 单例管理跨会话共享的 Token 位置配置：
-1. Token 位置通过 `TokenLocationYamlIO` 序列化到 YAML 文件
+`GlobalFieldDefinitionManager` 单例管理跨会话共享的 字段配置：
+1. 字段通过 `FieldDefinitionYamlIO` 序列化到 YAML 文件
 2. 支持 4 种位置类型：HEADER、COOKIE、BODY、URL_PARAM
-3. 全局 Token 位置可用于所有用户会话的自动填充
+3. 全局 字段可用于所有用户会话的自动填充
 
 ## 构建命令
 
@@ -223,9 +223,9 @@ api_extraction_rules (id, name, source, method, expression, enabled, priority, p
 
 -- 越权测试表
 user_sessions (id, name, scheme_id, request_timeout, max_concurrent, retry_count, retry_delay, replay_delay, ...)
-token_schemes (id, name, description, enabled, persist_to_global, ...)
-scheme_token_locations (scheme_id, token_location_id)
-token_locations (id, type, expression, enabled, persist_to_global, ...)
+schemes (id, name, description, enabled, persist_to_global, ...)
+scheme_field_definitions (scheme_id, field_id)
+field_definitions (id, type, expression, enabled, persist_to_global, ...)
 judgment_rules (id, name, enabled, is_active, success_color, failure_color, ...)
 judgment_rule_conditions (id, group_id, target, method, expression, negate, operator, sort_order, enabled, ...)
 scopes (id, pattern, ...)

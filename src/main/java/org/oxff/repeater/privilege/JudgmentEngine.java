@@ -64,7 +64,7 @@ public class JudgmentEngine {
      * @param baselineContentType 基准用户响应的 Content-Type（优先使用，为 null 时回退到测试用户 Content-Type）
      * @param similarityThreshold 相似度阈值（0.0~1.0），默认0.7，用于区分越权与安全
      * @param responseTimeMs    响应时间（毫秒）
-     * @param allTokensEmpty    当前测试用户是否所有令牌值均为空（用于未登录用户的401/403降级判决）
+     * @param allFieldsEmpty    当前测试用户是否所有字段值均为空（用于未登录用户的401/403降级判决）
      * @return 判决结果
      */
     public static JudgmentOutcome judge(int statusCode, String responseHeaders,
@@ -73,7 +73,7 @@ public class JudgmentEngine {
                                          String baselineContentType,
                                          double similarityThreshold,
                                          long responseTimeMs,
-                                         boolean allTokensEmpty) {
+                                         boolean allFieldsEmpty) {
         // 防护守卫：拒绝对无效基准进行判决，防止因基准响应丢失导致误判
         if (baselineResponse == null) {
             if (baselineStatusCode <= 0) {
@@ -143,11 +143,11 @@ public class JudgmentEngine {
         if (activeRule != null && activeRule.isEnabled() && activeRule.isValid()) {
             return judgeWithActiveRule(activeRule, statusCode, responseHeaders, responseBody,
                     baselineResponse, baselineStatusCode, similarity, similarityThreshold, responseTimeMs,
-                    allTokensEmpty);
+                    allFieldsEmpty);
         }
 
         // 无活跃规则组时：回退到第3层兜底
-        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allTokensEmpty);
+        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allFieldsEmpty);
     }
 
     /**
@@ -159,7 +159,7 @@ public class JudgmentEngine {
                                                         int baselineStatusCode,
                                                         double similarity, double similarityThreshold,
                                                         long responseTimeMs,
-                                                        boolean allTokensEmpty) {
+                                                        boolean allFieldsEmpty) {
         String bodyStr = responseBody != null ? new String(responseBody, StandardCharsets.UTF_8) : "";
 
         LogManager.getInstance().judgmentDebug(String.format(
@@ -211,7 +211,7 @@ public class JudgmentEngine {
                     "[判决] 默认规则组未命中: '%s' → 回退默认判决", defaultRule.getName()));
         }
 
-        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allTokensEmpty);
+        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allFieldsEmpty);
     }
 
     /**
@@ -219,14 +219,14 @@ public class JudgmentEngine {
      * 
      * 判决语义（优先级从高到低）：
      * - 相似度 >= 阈值 → ESCALATED（响应高度相似，低权限用户拿到了高权限数据）
-     * - 相似度 < 阈值 && 状态码显著差异(2xx vs 401/403) && allTokensEmpty → NOT_ESCALATED（未登录被正确拒绝）
-     * - 相似度 < 阈值 && 状态码显著差异(2xx vs 401/403) && !allTokensEmpty → PENDING（疑似令牌配置错误）
+     * - 相似度 < 阈值 && 状态码显著差异(2xx vs 401/403) && allFieldsEmpty → NOT_ESCALATED（未登录被正确拒绝）
+     * - 相似度 < 阈值 && 状态码显著差异(2xx vs 401/403) && !allFieldsEmpty → PENDING（疑似字段配置错误）
      * - 0 <= 相似度 < 阈值 && 状态码无明显差异 → NOT_ESCALATED（响应差异显著但非权限相关）
      * - 相似度 < 0（无法计算）→ 回退到状态码检查，状态码不同 → PENDING
      */
     private static JudgmentOutcome judgeDefault(int statusCode, int baselineStatusCode,
                                                  double similarity, double similarityThreshold,
-                                                 boolean allTokensEmpty) {
+                                                 boolean allFieldsEmpty) {
         // 能够计算相似度时，以相似度为主要判决依据
         if (similarity >= 0) {
             if (similarity >= similarityThreshold) {
@@ -240,16 +240,16 @@ public class JudgmentEngine {
 
             // === 状态码差异检测：相似度低但状态码显著不同的情况 ===
             // 当基准返回2xx(成功)而测试用户返回401/403(认证/授权失败)时，
-            // 这通常意味着令牌未配置或权限不足，不应简单标记为"安全"
+            // 这通常意味着字段未配置或权限不足，不应简单标记为"安全"
             boolean baselineSuccess = (baselineStatusCode >= 200 && baselineStatusCode < 300);
             boolean testAuthFailure = (statusCode == 401 || statusCode == 403);
             boolean testOther4xx = (statusCode >= 400 && statusCode < 500 && !testAuthFailure);
 
             if (baselineSuccess && testAuthFailure) {
-                // 区分：令牌全部为空（游客/未登录）→ 预期被拒绝，安全；否则可能是令牌配置错误 → 需确认
-                if (allTokensEmpty) {
+                // 区分：字段全部为空（游客/未登录）→ 预期被拒绝，安全；否则可能是字段配置错误 → 需确认
+                if (allFieldsEmpty) {
                     LogManager.getInstance().judgmentDebug(String.format(
-                            "[判决] 默认判决: similarity=%.4f < threshold=%.2f, baseline=%d(成功) vs test=%d(认证失败), allTokensEmpty=true → NOT_ESCALATED(未登录被正确拒绝)",
+                            "[判决] 默认判决: similarity=%.4f < threshold=%.2f, baseline=%d(成功) vs test=%d(认证失败), allFieldsEmpty=true → NOT_ESCALATED(未登录被正确拒绝)",
                             similarity, similarityThreshold, baselineStatusCode, statusCode));
                     return new JudgmentOutcome(JudgmentResult.NOT_ESCALATED, new Color(0, 130, 0),
                             String.format("未登录用户被正确拒绝访问 (%d)", statusCode),
@@ -259,7 +259,7 @@ public class JudgmentEngine {
                         "[判决] 默认判决: similarity=%.4f < threshold=%.2f, baseline=%d(成功) vs test=%d(认证失败) → PENDING",
                         similarity, similarityThreshold, baselineStatusCode, statusCode));
                 return new JudgmentOutcome(JudgmentResult.PENDING, new Color(255, 140, 0),
-                        String.format("状态码差异: 基准=%d(成功) → 测试=%d(认证失败)，疑似令牌未配置或无权限",
+                        String.format("状态码差异: 基准=%d(成功) → 测试=%d(认证失败)，疑似字段未配置或无权限",
                                 baselineStatusCode, statusCode),
                         similarity, null);
             }

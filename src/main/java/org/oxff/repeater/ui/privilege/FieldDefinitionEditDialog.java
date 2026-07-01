@@ -1,25 +1,25 @@
 package org.oxff.repeater.ui.privilege;
 
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenLocationType;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.FieldType;
 
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * 令牌位置编辑对话框
+ * 字段定义编辑对话框
  */
-public class TokenLocationEditDialog extends JDialog {
+public class FieldDefinitionEditDialog extends JDialog {
 
     private boolean confirmed = false;
 
-    private final JComboBox<TokenLocationType> typeCombo;
+    private final JComboBox<FieldType> typeCombo;
     private final JTextField expressionField;
     private final JTextField descriptionField;
     private final JCheckBox persistToGlobalCheckbox;
     private final JCheckBox enabledCheckbox;
 
-    public TokenLocationEditDialog(Frame owner, String title, TokenLocation existing) {
+    public FieldDefinitionEditDialog(Frame owner, String title, FieldDefinition existing) {
         super(owner, title, true);
         setSize(500, 280);
         setLocationRelativeTo(owner);
@@ -34,7 +34,7 @@ public class TokenLocationEditDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = 0;
         mainPanel.add(new JLabel("类型:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
-        typeCombo = new JComboBox<>(TokenLocationType.values());
+        typeCombo = new JComboBox<>(FieldType.values());
         mainPanel.add(typeCombo, gbc);
 
         // 表达式
@@ -99,8 +99,8 @@ public class TokenLocationEditDialog extends JDialog {
         return confirmed;
     }
 
-    public TokenLocationType getLocationType() {
-        return (TokenLocationType) typeCombo.getSelectedItem();
+    public FieldType getFieldType() {
+        return (FieldType) typeCombo.getSelectedItem();
     }
 
     public String getExpression() {

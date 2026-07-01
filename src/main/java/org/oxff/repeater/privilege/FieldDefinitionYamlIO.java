@@ -1,8 +1,8 @@
 package org.oxff.repeater.privilege;
 
 import org.oxff.repeater.logging.LogManager;
-import org.oxff.repeater.privilege.model.TokenLocation;
-import org.oxff.repeater.privilege.model.TokenLocationType;
+import org.oxff.repeater.privilege.model.FieldDefinition;
+import org.oxff.repeater.privilege.model.FieldType;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
@@ -13,20 +13,20 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 /**
- * 令牌位置YAML读写工具类
- * 用于全局令牌位置持久化
+ * 字段定义YAML读写工具类
+ * 用于全局字段定义持久化
  */
-public class TokenLocationYamlIO {
+public class FieldDefinitionYamlIO {
 
     private static final String YAML_VERSION = "1";
 
     /**
-     * 将令牌位置列表序列化为YAML字符串
+     * 将字段定义列表序列化为YAML字符串
      *
-     * @param locations 令牌位置列表
+     * @param fields 字段定义列表
      * @return YAML格式字符串
      */
-    public static String toYaml(List<TokenLocation> locations) {
+    public static String toYaml(List<FieldDefinition> fields) {
         DumperOptions options = new DumperOptions();
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
         options.setPrettyFlow(true);
@@ -37,72 +37,72 @@ public class TokenLocationYamlIO {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("version", YAML_VERSION);
 
-        List<Map<String, Object>> locationList = new ArrayList<>();
-        for (TokenLocation loc : locations) {
-            Map<String, Object> locMap = new LinkedHashMap<>();
-            locMap.put("type", loc.getType().name());
-            locMap.put("expression", loc.getExpression());
-            locMap.put("description", loc.getDescription());
-            locMap.put("persistToGlobal", loc.isPersistToGlobal());
-            locMap.put("enabled", loc.isEnabled());
-            locationList.add(locMap);
+        List<Map<String, Object>> fieldList = new ArrayList<>();
+        for (FieldDefinition field : fields) {
+            Map<String, Object> fieldMap = new LinkedHashMap<>();
+            fieldMap.put("type", field.getType().name());
+            fieldMap.put("expression", field.getExpression());
+            fieldMap.put("description", field.getDescription());
+            fieldMap.put("persistToGlobal", field.isPersistToGlobal());
+            fieldMap.put("enabled", field.isEnabled());
+            fieldList.add(fieldMap);
         }
-        root.put("locations", locationList);
+        root.put("fields", fieldList);
 
         return yaml.dump(root);
     }
 
     /**
-     * 从YAML字符串反序列化令牌位置列表
+     * 从YAML字符串反序列化字段定义列表
      *
      * @param yamlContent YAML格式字符串
-     * @return 令牌位置列表，解析失败返回空列表
+     * @return 字段定义列表，解析失败返回空列表
      */
     @SuppressWarnings("unchecked")
-    public static List<TokenLocation> fromYaml(String yamlContent) {
-        List<TokenLocation> locations = new ArrayList<>();
+    public static List<FieldDefinition> fromYaml(String yamlContent) {
+        List<FieldDefinition> fields = new ArrayList<>();
         if (yamlContent == null || yamlContent.trim().isEmpty()) {
-            return locations;
+            return fields;
         }
 
         try {
             Yaml yaml = new Yaml();
             Map<String, Object> root = yaml.load(yamlContent);
             if (root == null) {
-                return locations;
+                return fields;
             }
 
-            Object locationsObj = root.get("locations");
-            if (!(locationsObj instanceof List)) {
-                LogManager.getInstance().printError("[!] 令牌位置YAML格式错误：缺少locations列表");
-                return locations;
+            Object fieldsObj = root.get("fields");
+            if (!(fieldsObj instanceof List)) {
+                LogManager.getInstance().printError("[!] 字段定义YAML格式错误：缺少fields列表");
+                return fields;
             }
 
-            List<Object> locationList = (List<Object>) locationsObj;
-            for (Object item : locationList) {
+            List<Object> fieldList = (List<Object>) fieldsObj;
+            for (Object item : fieldList) {
                 if (!(item instanceof Map)) {
                     continue;
                 }
-                Map<String, Object> locMap = (Map<String, Object>) item;
+                Map<String, Object> fieldMap = (Map<String, Object>) item;
                 try {
-                    TokenLocation loc = parseLocationFromMap(locMap);
-                    if (loc != null) {
-                        locations.add(loc);
+                    FieldDefinition field = parseFieldFromMap(fieldMap);
+                    if (field != null) {
+                        fields.add(field);
                     }
                 } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] 解析YAML令牌位置条目失败: " + e.getMessage());
+                    LogManager.getInstance().printError("[!] 解析YAML字段定义条目失败: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 令牌位置YAML解析失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 字段定义YAML解析失败: " + e.getMessage());
         }
-        return locations;
+        return fields;
     }
 
     /**
-     * 从Map解析单条令牌位置
+     * 从Map解析单条字段定义
      */
-    private static TokenLocation parseLocationFromMap(Map<String, Object> map) {
+    private static FieldDefinition parseFieldFromMap(Map<String, Object> map) {
         String typeStr = getStringValue(map, "type", "HEADER");
         String expression = getStringValue(map, "expression", "");
         String description = getStringValue(map, "description", "");
@@ -113,23 +113,23 @@ public class TokenLocationYamlIO {
             return null;
         }
 
-        TokenLocation loc = new TokenLocation();
-        loc.setType(TokenLocationType.fromString(typeStr));
-        loc.setExpression(expression);
-        loc.setDescription(description);
-        loc.setPersistToGlobal(persistToGlobal);
-        loc.setEnabled(enabled);
-        return loc;
+        FieldDefinition field = new FieldDefinition();
+        field.setType(FieldType.fromString(typeStr));
+        field.setExpression(expression);
+        field.setDescription(description);
+        field.setPersistToGlobal(persistToGlobal);
+        field.setEnabled(enabled);
+        return field;
     }
 
     /**
-     * 将令牌位置列表写入YAML文件（原子写入：先写临时文件再重命名）
+     * 将字段定义列表写入YAML文件（原子写入：先写临时文件再重命名）
      *
-     * @param locations 令牌位置列表
-     * @param filePath  目标文件路径
+     * @param fields   字段定义列表
+     * @param filePath 目标文件路径
      * @return 是否写入成功
      */
-    public static boolean writeToFile(List<TokenLocation> locations, String filePath) {
+    public static boolean writeToFile(List<FieldDefinition> fields, String filePath) {
         File targetFile = new File(filePath);
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
@@ -142,10 +142,10 @@ public class TokenLocationYamlIO {
         // 原子写入：先写临时文件
         File tempFile = new File(filePath + ".tmp");
         try (Writer writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
-            writer.write(toYaml(locations));
+            writer.write(toYaml(fields));
             writer.flush();
         } catch (IOException e) {
-            LogManager.getInstance().printError("[!] 写入令牌位置YAML临时文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 写入字段定义YAML临时文件失败: " + e.getMessage());
             tempFile.delete();
             return false;
         }
@@ -161,7 +161,7 @@ public class TokenLocationYamlIO {
                 Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 return true;
             } catch (IOException e2) {
-                LogManager.getInstance().printError("[!] 替换令牌位置YAML文件失败: " + e2.getMessage());
+                LogManager.getInstance().printError("[!] 替换字段定义YAML文件失败: " + e2.getMessage());
                 tempFile.delete();
                 return false;
             }
@@ -169,12 +169,12 @@ public class TokenLocationYamlIO {
     }
 
     /**
-     * 从YAML文件读取令牌位置列表
+     * 从YAML文件读取字段定义列表
      *
      * @param filePath YAML文件路径
-     * @return 令牌位置列表，读取失败返回空列表
+     * @return 字段定义列表，读取失败返回空列表
      */
-    public static List<TokenLocation> readFromFile(String filePath) {
+    public static List<FieldDefinition> readFromFile(String filePath) {
         File file = new File(filePath);
         if (!file.exists() || !file.canRead()) {
             return new ArrayList<>();
@@ -189,7 +189,7 @@ public class TokenLocationYamlIO {
             }
             return fromYaml(sb.toString());
         } catch (IOException e) {
-            LogManager.getInstance().printError("[!] 读取令牌位置YAML文件失败: " + e.getMessage());
+            LogManager.getInstance().printError("[!] 读取字段定义YAML文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }

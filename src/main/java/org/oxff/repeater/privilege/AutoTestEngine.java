@@ -9,7 +9,7 @@ import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.http.RequestResponseRecord;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.model.JudgmentResult;
-import org.oxff.repeater.privilege.model.TokenLocation;
+import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.UserSession;
 import org.oxff.repeater.UIRequestDispatcher;
 
@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
  * 工作流程：
  * 1. ScopeManager 在代理中拦截匹配的请求
  * 2. 调用 submitRequest() 提交给 AutoTestEngine
- * 3. AutoTestEngine 检查去重、遍历用户会话替换令牌并发送
+ * 3. AutoTestEngine 检查去重、遍历用户会话替换字段并发送
  * 4. 结果通过 RepeaterManagerUI 回传到请求管理Tab
  */
 public class AutoTestEngine {
@@ -127,37 +127,37 @@ public class AutoTestEngine {
                     UserSession session = enabledSessions.get(i);
                     boolean isFirst = (i == 0);
 
-                    // 根据会话关联的方案过滤令牌位置
-                    List<TokenLocation> locations = sessionManager.getTokenLocationsByScheme(session.getSchemeId());
+                    // 根据会话关联的方案过滤字段位置
+                    List<FieldDefinition> locations = sessionManager.getFieldDefinitionsByScheme(session.getSchemeId());
 
-                    // 令牌位置为空时的警告：配置错误，将使用原始请求令牌发送
+                    // 字段位置为空时的警告：配置错误，将使用原始请求字段发送
                     if (locations.isEmpty()) {
                         LogManager.getInstance().printError(String.format(
-                                "[!] 自动化测试: 用户 '%s' (schemeId=%s) 没有关联的令牌位置，"
-                                + "将使用原始请求令牌发送，可能导致误判！",
+                                "[!] 自动化测试: 用户 '%s' (schemeId=%s) 没有关联的字段位置，"
+                                + "将使用原始请求字段发送，可能导致误判！",
                                 session.getName(), session.getSchemeId()));
                     } else {
-                        int configuredCount = session.getTokenValues().size();
+                        int configuredCount = session.getFieldValues().size();
                         if (configuredCount == 0) {
                             LogManager.getInstance().printError(String.format(
-                                    "[!] 令牌替换: 用户 '%s' → %d 个令牌位置 / 0 个已配置值！"
-                                    + "所有令牌将被从请求中删除，可能导致 401 认证失败！",
+                                    "[!] 字段替换: 用户 '%s' → %d 个字段位置 / 0 个已配置值！"
+                                    + "所有字段将被从请求中删除，可能导致 401 认证失败！",
                                     session.getName(), locations.size()));
                         } else {
-                            java.util.Set<Integer> valueIds = session.getTokenValues().keySet();
+                            java.util.Set<Integer> valueIds = session.getFieldValues().keySet();
                             java.util.Set<Integer> locationIds = new java.util.HashSet<>();
-                            for (TokenLocation loc : locations) {
+                            for (FieldDefinition loc : locations) {
                                 locationIds.add(loc.getId());
                             }
                             long matchCount = valueIds.stream().filter(locationIds::contains).count();
                             if (matchCount == 0) {
                                 LogManager.getInstance().printError(String.format(
-                                        "[!] 令牌替换: 用户 '%s' → 令牌值ID(%s)与位置ID(%s)完全不匹配！"
-                                        + "请检查令牌方案与用户配置是否对应",
+                                        "[!] 字段替换: 用户 '%s' → 字段值ID(%s)与位置ID(%s)完全不匹配！"
+                                        + "请检查字段方案与用户配置是否对应",
                                         session.getName(), valueIds, locationIds));
                             } else {
                                 LogManager.getInstance().printOutput(String.format(
-                                        "[*] 令牌替换: 用户 '%s' → %d 个令牌位置 / %d 个已配置值 (匹配%d个)",
+                                        "[*] 字段替换: 用户 '%s' → %d 个字段位置 / %d 个已配置值 (匹配%d个)",
                                         session.getName(), locations.size(), configuredCount, matchCount));
                             }
                         }
@@ -214,7 +214,7 @@ public class AutoTestEngine {
                     }
 
                     try {
-                        byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
+                        byte[] modifiedRequest = FieldReplacementEngine.replaceFields(
                                 requestBytes, locations, session);
 
                         // 检测 HTTP/2 协议版本，确保重放时保持与原始请求相同的协议
@@ -270,7 +270,7 @@ public class AutoTestEngine {
                                         holder.statusCode, responseHeaders, responseBodyOnly,
                                         baselineResponse, baselineStatusCode, baselineContentType, threshold,
                                         holder.durationMs,
-                                        session.getTokenValues().values().stream().allMatch(v -> v == null || v.isEmpty()));
+                                        session.getFieldValues().values().stream().allMatch(v -> v == null || v.isEmpty()));
                                 judgment = outcome.result.name();
                                 similarity = outcome.similarity;
                                 judgmentColor = outcome.color;

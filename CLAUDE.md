@@ -48,10 +48,10 @@ Key components:
 - **AutoTestEngine.java**: Automated privilege escalation testing from proxy-intercepted scope-matched traffic
 - **ReplayEngine.java**: Handles request replay logic for privilege testing
 - **JudgmentEngine.java**: Evaluates responses using three-tier logic: invalid baseline→ERROR → active rule group match → fallback similarity judgment (v2.30.0 rule group refactor)
-- **TokenReplacementEngine.java**: Manages token substitution in requests across user sessions, supports empty-value removal semantics
+- **FieldReplacementEngine.java**: Manages token substitution in requests across user sessions, supports empty-value removal semantics
 - **RuleCondition.java**: Rule condition model (target + method + expression + AND/OR/NOT operator + negate flag)
-- **TokenScheme.java**: Token scheme model bridging token locations and user sessions
-- **GlobalTokenSchemeManager.java**: Singleton managing global token scheme CRUD with YAML persistence (v2.21.0)
+- **Scheme.java**: Scheme model bridging fields and user sessions
+- **GlobalSchemeManager.java**: Singleton managing global scheme CRUD with YAML persistence (v2.21.0)
 - **DedupConfigManager.java**: Multi-config priority-chain deduplication manager (6 strategies × 3 keep policies, v2.20.0)
 - **ApiDedupEngine.java**: Stateless API dedup key extraction engine
 - **FetchRequestParser.java**: Chrome DevTools "Copy as fetch" format parser (v2.26.0)
@@ -62,7 +62,7 @@ Key components:
 - **ReportGenerator.java**: Abstract base class for report generation with PdfReportGenerator (Apache PDFBox), HtmlReportGenerator, and MarkdownReportGenerator (FreeMarker templates) implementations
 - **ReportExporter.java**: Unified report export dispatcher (PDF/HTML/Markdown)
 - **BodyRenderer.java / BinaryContentRenderer.java**: Request/response body rendering including binary content support
-- **GlobalTokenLocationManager.java**: Singleton managing global token locations shared across sessions
+- **GlobalFieldDefinitionManager.java**: Singleton managing global fields shared across sessions
 - **UserSessionYamlIO.java**: YAML serialization for user session import/export
 - **FileChooserHelper.java**: Unified file chooser utility for consistent file selection dialogs
 
@@ -81,7 +81,7 @@ Key components:
 11. **Proxy Debugging**: Configurable HTTP proxy for request debugging
 12. **Layout Switching**: Horizontal/vertical/request-only/response-only layout modes
 13. **API Extraction**: Configurable rule engine supporting 4 extraction sources (URL_PATH, URL_QUERY, HEADER, BODY) × 4 methods (REGEX, SUBSTR, JSON_PATH, XPATH), with global rules (YAML) and project-level rules (SQLite)
-14. **Privilege Escalation Testing**: Automated testing framework with token scheme management, single-active rule group judgment (AND/OR/NOT conditions), configurable dedup, one-click anonymous user creation, and session parsing from clipboard (including Chrome DevTools fetch format)
+14. **Privilege Escalation Testing**: Automated testing framework with scheme management, single-active rule group judgment (AND/OR/NOT conditions), configurable dedup, one-click anonymous user creation, and session parsing from clipboard (including Chrome DevTools fetch format)
 15. **Message Comparison**: String and byte-level diff comparison between request/response pairs with syntax highlighting (RSyntaxTextArea), synchronized scrolling (SynchronizedScrollPanel), diff navigation (DiffNavigator), and in-line character-level diff highlighting via DiffEngine/DiffPane
 16. **Report Generation**: Export privilege test results as PDF (Apache PDFBox with embedded Chinese fonts), HTML or Markdown (FreeMarker templates) reports with embedded request/response bodies, cURL commands, and Postman code snippets; includes binary content rendering for non-text responses
 17. **Batch Operations**: Multi-select support in history and request panels; batch replay, batch privilege testing, and batch deletion of selected entries
@@ -176,7 +176,7 @@ src/main/java/
     │   ├── AutoTestEngine.java         # Automated testing from proxy traffic
     │   ├── ReplayEngine.java           # Request replay logic
     │   ├── JudgmentEngine.java         # Response evaluation engine
-    │   ├── TokenReplacementEngine.java # Token substitution in requests
+    │   ├── FieldReplacementEngine.java # Field substitution in requests
     │   ├── LevenshteinCalculator.java  # String similarity calculation
     │   ├── SessionManager.java         # User session lifecycle manager
     │   ├── JudgmentRuleManager.java    # Judgment rule lifecycle manager
@@ -184,12 +184,12 @@ src/main/java/
     │   ├── JudgmentRuleYamlIO.java     # YAML serialization for judgment rules
     │   ├── model/                      # Privilege test models
     │   │   ├── UserSession.java        # User session (credentials/tokens, schemeId)
-    │   │   ├── TokenScheme.java         # Token scheme model (v2.21.0)
+    │   │   ├── Scheme.java         # Scheme model (v2.21.0)
     │   │   ├── JudgmentRule.java       # Escalation detection rule group (v2.30.0 refactor)
     │   │   ├── RuleCondition.java       # Rule condition (target + method + expression + AND/OR/NOT)
     │   │   ├── JudgmentResult.java     # Test result (PENDING/ESCALATED/NOT_ESCALATED/ERROR)
-    │   │   ├── TokenLocation.java      # Token location in request
-    │   │   ├── TokenLocationType.java  # Enum: HEADER, JSON_BODY, XML_BODY, FORM_FIELD, MULTIPART_FIELD, URL_PARAM
+    │   │   ├── FieldDefinition.java      # Field definition in request
+    │   │   ├── FieldType.java  # Enum: HEADER, JSON_BODY, XML_BODY, FORM_FIELD, MULTIPART_FIELD, URL_PARAM
     │   │   ├── RuleTarget.java         # Enum: STATUS_CODE, RESPONSE_HEADER, RESPONSE_BODY, RESPONSE_TIME, SIMILARITY
     │   │   ├── RuleMethod.java         # Enum: REGEX, CONTAINS, EQUALS, GREATER_THAN, LESS_THAN, NUMERIC_EQUALS, NOT_CONTAINS, NOT_EQUALS, LENGTH_DIFF
     │   │   ├── ScopeEntry.java         # Scope configuration
@@ -214,8 +214,8 @@ src/main/java/
     │   │   ├── PostmanSnippetBuilder.java # Postman code snippet builder
     │   │   └── FreeMarkerConfig.java    # FreeMarker configuration
     │   ├── UserSessionYamlIO.java       # User session YAML import/export
-    │   ├── TokenLocationYamlIO.java     # Token location YAML import/export
-    │   └── GlobalTokenLocationManager.java # Global token location manager
+    │   ├── FieldDefinitionYamlIO.java     # Field definition YAML import/export
+    │   └── GlobalFieldDefinitionManager.java # Global field manager
     ├── service/                        # Background services
     │   ├── AutoSaveService.java        # Scheduled database checkpoint
     │   ├── GarbageCollectorService.java # Zero-ref pool cleanup (10min interval)
@@ -267,11 +267,11 @@ src/main/java/
     │       ├── ScopeConfigTab.java     # Scope configuration tab
     │       ├── UserSessionTableModel.java # Session table model
     │       ├── JudgmentRuleTableModel.java # Judgment rule table model
-    │       ├── TokenLocationTableModel.java # Token location table model
+    │       ├── FieldDefinitionTableModel.java # Field definition table model
     │       ├── UserSessionEditDialog.java # User session editor dialog
     │       ├── JudgmentRuleEditDialog.java # Judgment rule editor dialog
-    │       ├── TokenLocationEditDialog.java # Token location editor dialog
-    │       └── TokenValueCellRenderer.java # Token value cell renderer
+    │       ├── FieldDefinitionEditDialog.java # Field definition editor dialog
+    │       └── FieldValueCellRenderer.java # Field value cell renderer
     ├── RequestDispatchHandler.java     # Central request dispatch handler
     └── utils/
         ├── TextLineNumber.java         # Line number utility for text components
@@ -337,9 +337,9 @@ Two main tables + four pool tables + GC queue + API extraction rules:
 **Feature tables**:
 - `api_extraction_rules`: Project-level API extraction rules (source, method, expression, priority, enabled)
 - `user_sessions`: Privilege testing user sessions (credentials, scheme_id, replay config fields)
-- `token_schemes`: Token scheme definitions (name, description, enabled, persist_to_global)
-- `scheme_token_locations`: Scheme-to-token-location associations
-- `token_locations`: Token location definitions (type, expression, enabled, persist_to_global)
+- `schemes`: Scheme definitions (name, description, enabled, persist_to_global)
+- `scheme_field_definitions`: Scheme-to-token-location associations
+- `field_definitions`: Field definition definitions (type, expression, enabled, persist_to_global)
 - `judgment_rules`: Privilege escalation judgment rule groups (name, enabled, is_active, colors)
 - `judgment_rule_conditions`: Rule conditions within groups (target, method, expression, negate, operator, sort_order)
 - `scopes`: Request scope patterns for automated privilege testing
@@ -360,7 +360,7 @@ SQLite is used with a custom connection pool (BlockingQueue + JDK Proxy for tran
 | SQLite JDBC | 3.42.0.0 | Local data persistence |
 | HikariCP | 5.0.1 | Declared but not actively used (custom pool instead) |
 | Gson | 2.10.1 | JSON serialization (ERM manifest, Postman export) |
-| SnakeYAML | 2.2 | YAML serialization (API extraction rules, judgment rules, user sessions, token locations) |
+| SnakeYAML | 2.2 | YAML serialization (API extraction rules, judgment rules, user sessions, fields) |
 | Apache Commons IO | 2.11.0 | File I/O utilities |
 | Apache Commons Lang | 3.12.0 | String/object utilities |
 | Apache PDFBox | 3.0.1 | Native PDF report generation with embedded Chinese fonts |

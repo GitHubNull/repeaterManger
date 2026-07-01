@@ -9,7 +9,7 @@ import org.oxff.repeater.http.HttpRequestHelper;
 import org.oxff.repeater.http.RequestManager;
 import org.oxff.repeater.http.RequestResponseRecord;
 import org.oxff.repeater.privilege.model.JudgmentResult;
-import org.oxff.repeater.privilege.model.TokenLocation;
+import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import javax.swing.SwingUtilities;
@@ -23,7 +23,7 @@ import java.util.concurrent.Executors;
 
 /**
  * 重放引擎（单例）
- * 核心职责：接收原始请求，遍历已启用的用户会话，替换令牌后发送，收集结果
+ * 核心职责：接收原始请求，遍历已启用的用户会话，替换字段后发送，收集结果
  *
  * 结果通过回调通知UI，在请求管理Tab的HistoryPanel中展示
  */
@@ -148,40 +148,40 @@ public class ReplayEngine {
                 // 有存储基线时：所有会话都是测试对象，不做"首个=基准"假设
                 boolean useAsBaselineFallback = (!hasStoredBaseline && isFirst);
 
-                // 根据会话关联的方案过滤令牌位置
-                List<TokenLocation> locations = sessionManager.getTokenLocationsByScheme(session.getSchemeId());
+                // 根据会话关联的方案过滤字段位置
+                List<FieldDefinition> locations = sessionManager.getFieldDefinitionsByScheme(session.getSchemeId());
 
-                // 令牌位置为空时的警告：配置错误，将使用原始请求令牌发送
+                // 字段位置为空时的警告：配置错误，将使用原始请求字段发送
                 if (locations.isEmpty()) {
                     LogManager.getInstance().printError(String.format(
-                            "[!] 权限测试: 用户 '%s' (schemeId=%s) 没有关联的令牌位置，"
-                            + "将使用原始请求令牌发送，可能导致误判！",
+                            "[!] 权限测试: 用户 '%s' (schemeId=%s) 没有关联的字段位置，"
+                            + "将使用原始请求字段发送，可能导致误判！",
                             session.getName(), session.getSchemeId()));
                 } else {
-                    // 诊断：显示该会话的令牌配置概况，并检测配置缺失
-                    int configuredCount = session.getTokenValues().size();
+                    // 诊断：显示该会话的字段配置概况，并检测配置缺失
+                    int configuredCount = session.getFieldValues().size();
                     if (configuredCount == 0) {
-                        // 令牌位置存在但用户未配置任何令牌值 → 所有令牌将被删除，请求将缺少认证信息
+                        // 字段位置存在但用户未配置任何字段值 → 所有字段将被删除，请求将缺少认证信息
                         LogManager.getInstance().printError(String.format(
-                                "[!] 令牌替换: 用户 '%s' → %d 个令牌位置 / 0 个已配置值！"
-                                + "所有令牌将被从请求中删除，可能导致 401 认证失败！",
+                                "[!] 字段替换: 用户 '%s' → %d 个字段位置 / 0 个已配置值！"
+                                + "所有字段将被从请求中删除，可能导致 401 认证失败！",
                                 session.getName(), locations.size()));
                     } else {
-                        // 检查令牌值ID是否与令牌位置ID匹配
-                        java.util.Set<Integer> valueIds = session.getTokenValues().keySet();
+                        // 检查字段值ID是否与字段位置ID匹配
+                        java.util.Set<Integer> valueIds = session.getFieldValues().keySet();
                         java.util.Set<Integer> locationIds = new java.util.HashSet<>();
-                        for (TokenLocation loc : locations) {
+                        for (FieldDefinition loc : locations) {
                             locationIds.add(loc.getId());
                         }
                         long matchCount = valueIds.stream().filter(locationIds::contains).count();
                         if (matchCount == 0) {
                             LogManager.getInstance().printError(String.format(
-                                    "[!] 令牌替换: 用户 '%s' → 令牌值ID(%s)与位置ID(%s)完全不匹配！"
-                                    + "请检查令牌方案与用户配置是否对应",
+                                    "[!] 字段替换: 用户 '%s' → 字段值ID(%s)与位置ID(%s)完全不匹配！"
+                                    + "请检查字段方案与用户配置是否对应",
                                     session.getName(), valueIds, locationIds));
                         } else {
                             LogManager.getInstance().printOutput(String.format(
-                                    "[*] 令牌替换: 用户 '%s' → %d 个令牌位置 / %d 个已配置值 (匹配%d个)",
+                                    "[*] 字段替换: 用户 '%s' → %d 个字段位置 / %d 个已配置值 (匹配%d个)",
                                     session.getName(), locations.size(), configuredCount, matchCount));
                         }
                     }
@@ -229,8 +229,8 @@ public class ReplayEngine {
                 }
 
                 try {
-                    // 替换令牌（使用方案过滤后的令牌位置）
-                    byte[] modifiedRequest = TokenReplacementEngine.replaceTokens(
+                    // 替换字段（使用方案过滤后的字段位置）
+                    byte[] modifiedRequest = FieldReplacementEngine.replaceFields(
                             originalRequest, locations, session);
 
                     // 带重试的同步发送请求（在后台线程中）
@@ -287,14 +287,14 @@ public class ReplayEngine {
                                     "[判决] 当前响应体前200字: %s",
                                     truncateForLog(responseBodyOnly, 200)));
 
-                            // 判断令牌是否全部为空（游客/未登录场景）
-                            boolean allTokensEmpty = session.getTokenValues().values().stream()
+                            // 判断字段是否全部为空（游客/未登录场景）
+                            boolean allFieldsEmpty = session.getFieldValues().values().stream()
                                     .allMatch(v -> v == null || v.isEmpty());
 
                             JudgmentEngine.JudgmentOutcome outcome = JudgmentEngine.judge(
                                     holder.statusCode, responseHeaders, responseBodyOnly,
                                     baselineResponse, baselineStatusCode, baselineContentType, threshold,
-                                    holder.durationMs, allTokensEmpty);
+                                    holder.durationMs, allFieldsEmpty);
 
                             judgment = outcome.result.name();
                             similarity = outcome.similarity;

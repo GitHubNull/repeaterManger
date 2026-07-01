@@ -15,7 +15,7 @@ import java.sql.Statement;
 public class SchemaMigrator {
 
     /** 当前支持的最高 Schema 版本 */
-    public static final int LATEST_VERSION = 13;
+    public static final int LATEST_VERSION = 14;
 
     /**
      * 执行所有必要的数据库迁移
@@ -77,6 +77,11 @@ public class SchemaMigrator {
         // v12→v13 迁移：judgment_rules → judgment_rule_groups + judgment_rule_conditions 双表
         if (currentVersion < 13) {
             migrateV12ToV13(conn);
+        }
+
+        // v13→v14 迁移：token_locations→field_definitions, token_schemes→schemes 等表重命名
+        if (currentVersion < 14) {
+            migrateV13ToV14(conn);
         }
     }
 
@@ -799,6 +804,23 @@ public class SchemaMigrator {
             ps.executeUpdate();
         }
         return 1;
+    }
+
+    /**
+     * v13→v14 迁移：token_locations→field_definitions, token_schemes→schemes 等表重命名
+     * <p>
+     * 当前版本假定所有表已按新结构存在，仅更新 schema 版本号。
+     */
+    private static void migrateV13ToV14(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            LogManager.getInstance().printOutput("[*] 开始v13→v14迁移...");
+
+            // 更新 schema 版本
+            stmt.execute("UPDATE schema_meta SET value = '14' WHERE key = 'schema_version'");
+            stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '14')");
+
+            LogManager.getInstance().printOutput("[+] v13→v14 迁移完成");
+        }
     }
 
     /** null 安全替代 */
