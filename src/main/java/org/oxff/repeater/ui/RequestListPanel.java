@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +41,7 @@ public class RequestListPanel extends JPanel {
     private final Map<Integer, byte[]> requestDataMap = new ConcurrentHashMap<>();
     private final Map<Integer, Color> requestColors = new HashMap<>();
     private final Map<Integer, String> requestComments = new HashMap<>();
+    private final Map<Integer, String> requestJudgmentMap = new ConcurrentHashMap<>();
 
     // 回调函数
     private RequestSelectedCallback requestSelectedCallback;
@@ -65,6 +67,9 @@ public class RequestListPanel extends JPanel {
     private final JTextField advancedSearchField = new JTextField(20);
     private final JComboBox<String> advancedMatchModeCombo = new JComboBox<>(new String[]{"关键词", "正则"});
     private final JCheckBox advancedCaseSensitiveCb = new JCheckBox("大小写敏感");
+
+    // 判决结果过滤组件
+    private final JComboBox<String> judgmentFilterCombo = new JComboBox<>(new String[]{"全部", "越权", "安全", "错误"});
 
     /**
      * 请求选中回调接口
@@ -208,10 +213,13 @@ public class RequestListPanel extends JPanel {
         simpleSearchPanel.add(simpleSearchField);
         simpleSearchPanel.add(simpleMatchModeCombo);
         simpleSearchPanel.add(simpleCaseSensitiveCb);
+        simpleSearchPanel.add(new JLabel("判决:"));
+        simpleSearchPanel.add(judgmentFilterCombo);
         JButton clearBtn = new JButton("清除");
         clearBtn.addActionListener(e -> {
             simpleSearchField.setText("");
             advancedSearchField.setText("");
+            judgmentFilterCombo.setSelectedIndex(0);
             applyFilter();
         });
         simpleSearchPanel.add(clearBtn);
@@ -294,11 +302,15 @@ public class RequestListPanel extends JPanel {
         urlScopeCb.addActionListener(scopeListener);
         headerScopeCb.addActionListener(scopeListener);
         bodyScopeCb.addActionListener(scopeListener);
+
+        // 判决结果过滤切换
+        judgmentFilterCombo.addActionListener(e -> applyFilter());
     }
 
     /**
      * 应用搜索过滤器
-     * 根据当前搜索控件的状态构建 SearchConfig 和 RequestSearchFilter
+     * 根据当前搜索控件的状态构建 SearchConfig 和 RequestSearchFilter，
+     * 并与判决过滤下拉框组合成复合过滤器
      */
     private void applyFilter() {
         // 判断使用简单搜索还是高级搜索
@@ -328,16 +340,54 @@ public class RequestListPanel extends JPanel {
             scope = EnumSet.of(SearchConfig.SearchScope.URL);
         }
 
-        // 搜索文本为空时，清除过滤器
-        if (searchText.isEmpty()) {
-            tableRowSorter.setRowFilter(null);
-            return;
+        // 构建文本搜索过滤器（可为 null）
+        RowFilter<DefaultTableModel, Integer> textFilter = null;
+        if (!searchText.isEmpty()) {
+            SearchConfig config = new SearchConfig(scope, searchText, isRegex, caseSensitive);
+            textFilter = new RequestSearchFilter(requestDataMap, config);
         }
 
-        // 构建搜索配置和过滤器
-        SearchConfig config = new SearchConfig(scope, searchText, isRegex, caseSensitive);
-        RequestSearchFilter filter = new RequestSearchFilter(requestDataMap, config);
-        tableRowSorter.setRowFilter(filter);
+        // 构建判决过滤器（可为 null）
+        RowFilter<DefaultTableModel, Integer> judgmentFilter = createJudgmentFilter();
+
+        // 组合过滤器
+        if (textFilter == null && judgmentFilter == null) {
+            tableRowSorter.setRowFilter(null);
+        } else if (textFilter == null) {
+            tableRowSorter.setRowFilter(judgmentFilter);
+        } else if (judgmentFilter == null) {
+            tableRowSorter.setRowFilter(textFilter);
+        } else {
+            tableRowSorter.setRowFilter(RowFilter.andFilter(List.of(textFilter, judgmentFilter)));
+        }
+    }
+
+    /**
+     * 根据判决过滤下拉框选择创建 RowFilter
+     * @return 判决过滤器，选择"全部"时返回 null
+     */
+    private RowFilter<DefaultTableModel, Integer> createJudgmentFilter() {
+        String selected = (String) judgmentFilterCombo.getSelectedItem();
+        if (selected == null || "全部".equals(selected)) {
+            return null;
+        }
+
+        final String targetJudgment;
+        switch (selected) {
+            case "越权": targetJudgment = "ESCALATED"; break;
+            case "安全": targetJudgment = "NOT_ESCALATED"; break;
+            case "错误": targetJudgment = "ERROR"; break;
+            default: return null;
+        }
+
+        return new RowFilter<DefaultTableModel, Integer>() {
+            @Override
+            public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
+                int requestId = (Integer) entry.getValue(0);
+                String judgment = requestJudgmentMap.get(requestId);
+                return targetJudgment.equalsIgnoreCase(judgment);
+            }
+        };
     }
 
     /**
@@ -453,6 +503,24 @@ public class RequestListPanel extends JPanel {
      */
     public Map<Integer, Color> getRequestColors() {
         return requestColors;
+    }
+
+    /**
+     * 设置请求的判决结果
+     * @param requestId 请求 ID
+     * @param judgment  判决结果（PENDING/ESCALATED/NOT_ESCALATED/ERROR）
+     */
+    public void setRequestJudgment(int requestId, String judgment) {
+        requestJudgmentMap.put(requestId, judgment);
+    }
+
+    /**
+     * 获取请求的判决结果
+     * @param requestId 请求 ID
+     * @return 判决结果，未设置时返回 null
+     */
+    public String getRequestJudgment(int requestId) {
+        return requestJudgmentMap.get(requestId);
     }
 
     /**

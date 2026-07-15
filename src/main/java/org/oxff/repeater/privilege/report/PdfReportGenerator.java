@@ -91,8 +91,12 @@ public class PdfReportGenerator extends ReportGenerator {
             // Session Breakdown
             buildSessionBreakdown(writer, data.getSessionBreakdown());
 
+            // Interface endpoint lists
+            buildEndpointList(writer, "越权接口列表", data.getEscalatedEndpoints());
+            buildEndpointList(writer, "安全接口列表", data.getSafeEndpoints());
+
             // Endpoints
-            writer.drawTitle("端点发现详情", 14);
+            writer.drawTitle("报文详情", 14);
             for (ReportData.EndpointSection endpoint : data.getEndpoints()) {
                 buildEndpoint(writer, endpoint);
             }
@@ -206,6 +210,25 @@ public class PdfReportGenerator extends ReportGenerator {
             });
         }
         writer.drawTable(headers, rows, widths);
+        writer.drawLine();
+    }
+
+    /**
+     * 渲染接口列表（越权/安全）
+     * @param writer PDF 写入器
+     * @param title  列表标题
+     * @param endpoints 接口请求行列表，为空或 null 时跳过渲染
+     */
+    private void buildEndpointList(PdfReportWriter writer, String title,
+                                    List<ReportData.EndpointRequestLine> endpoints) throws Exception {
+        if (endpoints == null || endpoints.isEmpty()) return;
+
+        writer.drawTitle(title, 14);
+        int index = 1;
+        for (ReportData.EndpointRequestLine ep : endpoints) {
+            writer.drawText(index + ". " + ep.getRequestLine(), 10, MARGIN + 10);
+            index++;
+        }
         writer.drawLine();
     }
 

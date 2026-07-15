@@ -27,6 +27,9 @@ public class HtmlReportGenerator extends ReportGenerator {
             model.put("pluginVersion", data.getPluginVersion());
             model.put("summary", data.getSummary());
             model.put("sessionBreakdown", data.getSessionBreakdown());
+            model.put("escalatedEndpoints", data.getEscalatedEndpoints());
+            model.put("errorEndpoints", data.getErrorEndpoints());
+            model.put("safeEndpoints", data.getSafeEndpoints());
             model.put("endpoints", data.getEndpoints());
 
             StringWriter writer = new StringWriter();

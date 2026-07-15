@@ -14,11 +14,14 @@ public class ReportData {
 
     private String title = "越权测试报告";
     private Date generatedAt = new Date();
-    private String pluginVersion = "2.23.0";
+    private String pluginVersion = "2.33.0";
 
     private ReportSummary summary;
     private List<EndpointSection> endpoints = new ArrayList<>();
     private List<SessionBreakdown> sessionBreakdown = new ArrayList<>();
+    private List<EndpointRequestLine> escalatedEndpoints = new ArrayList<>();
+    private List<EndpointRequestLine> errorEndpoints = new ArrayList<>();
+    private List<EndpointRequestLine> safeEndpoints = new ArrayList<>();
 
     public String getTitle() {
         return title;
@@ -66,6 +69,30 @@ public class ReportData {
 
     public void setSessionBreakdown(List<SessionBreakdown> sessionBreakdown) {
         this.sessionBreakdown = sessionBreakdown;
+    }
+
+    public List<EndpointRequestLine> getEscalatedEndpoints() {
+        return escalatedEndpoints;
+    }
+
+    public void setEscalatedEndpoints(List<EndpointRequestLine> escalatedEndpoints) {
+        this.escalatedEndpoints = escalatedEndpoints;
+    }
+
+    public List<EndpointRequestLine> getErrorEndpoints() {
+        return errorEndpoints;
+    }
+
+    public void setErrorEndpoints(List<EndpointRequestLine> errorEndpoints) {
+        this.errorEndpoints = errorEndpoints;
+    }
+
+    public List<EndpointRequestLine> getSafeEndpoints() {
+        return safeEndpoints;
+    }
+
+    public void setSafeEndpoints(List<EndpointRequestLine> safeEndpoints) {
+        this.safeEndpoints = safeEndpoints;
     }
 
     /**
@@ -455,6 +482,29 @@ public class ReportData {
 
         public int getTotalTests() {
             return escalatedCount + safeCount + errorCount;
+        }
+    }
+
+    /**
+     * 接口请求行信息
+     * 用于越权接口列表、报错(存疑)接口列表、安全接口列表中的条目展示
+     */
+    public static class EndpointRequestLine {
+        private String requestLine;
+
+        public EndpointRequestLine() {
+        }
+
+        public EndpointRequestLine(String requestLine) {
+            this.requestLine = requestLine;
+        }
+
+        public String getRequestLine() {
+            return requestLine;
+        }
+
+        public void setRequestLine(String requestLine) {
+            this.requestLine = requestLine;
         }
     }
 }

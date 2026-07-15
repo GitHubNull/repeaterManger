@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.33.0] - 2026-07-15
+
+### Added
+- 报告新增越权/安全/报错(存疑)三类接口分类列表，按判决结果归类展示请求行（`METHOD API HTTP/version`），支持 HTML/Markdown/PDF 三种格式渲染
+- 报告原始响应获取优先从 `requests` 表读取完整 HTTP 响应（含状态行+响应头+响应体），替代原有仅从历史记录获取的受限路径
+- 请求列表面板新增判决结果过滤下拉框（全部/越权/安全/错误），支持与文本搜索组合为复合过滤器
+
+### Changed
+- 报告"端点发现详情"标题改为"报文详情"，模板同步更新
+
+### Fixed
+- 修复 Maven 构建时间戳固定为 UTC 的问题：引入 `build-helper-maven-plugin` 生成本地时区（Asia/Shanghai）时间戳，替代 `maven.build.timestamp`
+
 ## [2.32.4] - 2026-07-15
 
 ### Fixed

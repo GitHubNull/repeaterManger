@@ -86,5 +86,10 @@
   .multipart-part pre { border-radius: 0 0 4px 4px; margin: 0; }
   .multipart-binary-part { background: #fff8e1; border-color: #ffb74d; }
   .multipart-binary-part .part-header { background: #fff3e0; color: #e65100; }
+  .endpoint-list ol { padding-left: 28px; }
+  .endpoint-list li { padding: 4px 0; font-family: 'Courier New', Consolas, monospace; font-size: 13px; }
+  .escalated-item { color: #d32f2f; font-weight: 600; }
+  .error-item { color: #f57c00; font-weight: 600; }
+  .safe-item { color: #2e7d32; font-weight: 600; }
   @media print { body { background: white; padding: 0; } .card { box-shadow: none; border: 1px solid #ddd; } }
 </style>

@@ -41,8 +41,32 @@
 </table>
 </#if>
 
+<#-- Escalated Endpoints List -->
+<#if escalatedEndpoints?? && escalatedEndpoints?size gt 0>
+<h2>越权接口列表</h2>
+<div class="endpoint-list escalated-list">
+  <ol>
+    <#list escalatedEndpoints as ep>
+    <li class="escalated-item">${ep.requestLine}</li>
+    </#list>
+  </ol>
+</div>
+</#if>
+
+<#-- Safe Endpoints List -->
+<#if safeEndpoints?? && safeEndpoints?size gt 0>
+<h2>安全接口列表</h2>
+<div class="endpoint-list safe-list">
+  <ol>
+    <#list safeEndpoints as ep>
+    <li class="safe-item">${ep.requestLine}</li>
+    </#list>
+  </ol>
+</div>
+</#if>
+
 <#-- Findings by Endpoint -->
-<h2>端点发现详情</h2>
+<h2>报文详情</h2>
 <#list endpoints as ep>
 <div class="endpoint-section">
   <div class="endpoint-header">

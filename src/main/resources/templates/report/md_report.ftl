@@ -23,7 +23,27 @@
 </#list>
 
 </#if>
-## 端点发现详情
+
+<#-- Escalated Endpoints List -->
+<#if escalatedEndpoints?? && escalatedEndpoints?size gt 0>
+## 越权接口列表
+
+<#list escalatedEndpoints as ep>
+1. `${ep.requestLine}`
+</#list>
+
+</#if>
+
+<#-- Safe Endpoints List -->
+<#if safeEndpoints?? && safeEndpoints?size gt 0>
+## 安全接口列表
+
+<#list safeEndpoints as ep>
+1. `${ep.requestLine}`
+</#list>
+
+</#if>
+## 报文详情
 
 <#list endpoints as ep>
 ### api_${ep.endpointIndex?string("00")} ${ep.method} ${ep.url}

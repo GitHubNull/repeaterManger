@@ -90,16 +90,25 @@ public abstract class ReportGenerator {
                         byte[] originalRequestData = (byte[]) originalRequest.get("request_data");
                         RequestResponseRecord orinRecord = new RequestResponseRecord();
                         orinRecord.setRequestData(originalRequestData);
-                        // 使用独立的基准响应数据（v2.18+），回退到完整响应兼容旧数据
-                        byte[] baselineRespData = baselineRecord.getBaselineResponseData();
-                        if (baselineRespData != null && baselineRespData.length > 0) {
-                            orinRecord.setResponseData(baselineRespData);
+                        // 优先从 requests 表获取完整的原始 HTTP 响应（含状态行+响应头+响应体）
+                        byte[] fullOriginalResponse = requestDAO.getOriginalResponseData(requestId);
+                        if (fullOriginalResponse != null && fullOriginalResponse.length > 0) {
+                            orinRecord.setResponseData(fullOriginalResponse);
+                            orinRecord.setStatusCode(requestDAO.getOriginalResponseStatusCode(requestId));
+                            orinRecord.setResponseLength(fullOriginalResponse.length);
+                            orinRecord.setResponseTime(baselineRecord.getResponseTime());
                         } else {
-                            orinRecord.setResponseData(baselineRecord.getResponseData());
+                            // 回退兼容：使用历史记录中的响应数据（旧版本数据）
+                            byte[] baselineRespData = baselineRecord.getBaselineResponseData();
+                            if (baselineRespData != null && baselineRespData.length > 0) {
+                                orinRecord.setResponseData(baselineRespData);
+                            } else {
+                                orinRecord.setResponseData(baselineRecord.getResponseData());
+                            }
+                            orinRecord.setStatusCode(baselineRecord.getStatusCode());
+                            orinRecord.setResponseLength(baselineRecord.getResponseLength());
+                            orinRecord.setResponseTime(baselineRecord.getResponseTime());
                         }
-                        orinRecord.setStatusCode(baselineRecord.getStatusCode());
-                        orinRecord.setResponseLength(baselineRecord.getResponseLength());
-                        orinRecord.setResponseTime(baselineRecord.getResponseTime());
                         orinRecord.setMethod((String) originalRequest.get("method"));
                         orinRecord.setProtocol((String) originalRequest.get("protocol"));
                         orinRecord.setDomain((String) originalRequest.get("domain"));
@@ -220,7 +229,47 @@ public abstract class ReportGenerator {
         data.setEndpoints(endpointSections);
         data.setSessionBreakdown(new ArrayList<>(sessionMap.values()));
 
-        // ===== 阶段 D：预渲染 body 内容 =====
+        // ===== 阶段 D：收集三类接口请求行列表 =====
+        java.util.Set<String> escalatedSet = new java.util.LinkedHashSet<>();
+        java.util.Set<String> errorSet = new java.util.LinkedHashSet<>();
+        java.util.Set<String> safeSet = new java.util.LinkedHashSet<>();
+
+        for (ReportData.EndpointSection section : endpointSections) {
+            for (ReportData.SessionFinding f : section.getUserSessions()) {
+                if (f.isBaseline()) continue;
+                String judgment = f.getJudgment();
+                String requestLine = buildRequestLine(f.getRecord());
+                if (requestLine == null || requestLine.isEmpty()) continue;
+
+                if ("ESCALATED".equalsIgnoreCase(judgment)) {
+                    escalatedSet.add(requestLine);
+                } else if ("NOT_ESCALATED".equalsIgnoreCase(judgment)) {
+                    safeSet.add(requestLine);
+                } else {
+                    errorSet.add(requestLine);
+                }
+            }
+        }
+
+        List<ReportData.EndpointRequestLine> escalatedList = new ArrayList<>();
+        for (String rl : escalatedSet) {
+            escalatedList.add(new ReportData.EndpointRequestLine(rl));
+        }
+        data.setEscalatedEndpoints(escalatedList);
+
+        List<ReportData.EndpointRequestLine> errorList = new ArrayList<>();
+        for (String rl : errorSet) {
+            errorList.add(new ReportData.EndpointRequestLine(rl));
+        }
+        data.setErrorEndpoints(errorList);
+
+        List<ReportData.EndpointRequestLine> safeList = new ArrayList<>();
+        for (String rl : safeSet) {
+            safeList.add(new ReportData.EndpointRequestLine(rl));
+        }
+        data.setSafeEndpoints(safeList);
+
+        // ===== 阶段 E：预渲染 body 内容 =====
         for (ReportData.EndpointSection section : endpointSections) {
             // 预渲染 baseline body
             if (section.getBaselineData() != null) {
@@ -262,6 +311,53 @@ public abstract class ReportGenerator {
      * 获取文件扩展名
      */
     public abstract String getFileExtension();
+
+    /**
+     * 构建请求行，格式为 "METHOD API HTTP/version"
+     * API 优先使用 record.getApi()（支持 JSON-RPC 等 body 中隐藏真实接口的场景），
+     * 为空时回退到 record.getPath()
+     */
+    private String buildRequestLine(RequestResponseRecord record) {
+        if (record == null) return null;
+
+        String method = record.getMethod();
+        String api = record.getApi();
+        if (api == null || api.isEmpty()) {
+            api = record.getPath();
+        }
+        if (api == null || api.isEmpty()) {
+            return null;
+        }
+
+        String httpVersion = extractHttpVersion(record.getRequestData());
+        return method + " " + api + " " + httpVersion;
+    }
+
+    /**
+     * 从原始请求字节中提取 HTTP 版本
+     * 解析请求首行（如 "GET /path HTTP/1.1"），返回 "HTTP/1.1"
+     */
+    private String extractHttpVersion(byte[] requestData) {
+        if (requestData == null || requestData.length == 0) {
+            return "HTTP/1.1"; // 默认值
+        }
+        String text = new String(requestData, java.nio.charset.StandardCharsets.UTF_8);
+        int firstLineEnd = text.indexOf("\r\n");
+        if (firstLineEnd < 0) {
+            firstLineEnd = text.indexOf("\n");
+        }
+        String firstLine = firstLineEnd > 0 ? text.substring(0, firstLineEnd) : text;
+
+        // 从请求行末尾提取 HTTP 版本（如 "HTTP/1.1" 或 "HTTP/2"）
+        int lastSpace = firstLine.lastIndexOf(' ');
+        if (lastSpace > 0 && lastSpace < firstLine.length() - 1) {
+            String version = firstLine.substring(lastSpace + 1).trim();
+            if (version.startsWith("HTTP/")) {
+                return version;
+            }
+        }
+        return "HTTP/1.1";
+    }
 
     /**
      * 从注释提取规则名
