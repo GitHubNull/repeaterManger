@@ -328,6 +328,17 @@ public class ReportData {
             this.similarity = similarity;
         }
 
+        /**
+         * 获取相似度的展示文本，对哨兵值 -1 做语义化处理。
+         * @return 正常值返回 "X.XX"，未计算值返回 "N/A"
+         */
+        public String getSimilarityDisplay() {
+            if (similarity < 0) {
+                return "N/A";
+            }
+            return String.format("%.2f", similarity);
+        }
+
         public String getMatchedRuleName() {
             return matchedRuleName;
         }

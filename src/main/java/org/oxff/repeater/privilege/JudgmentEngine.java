@@ -76,18 +76,9 @@ public class JudgmentEngine {
         boolean currentBodyEmpty = isBodyEmpty(responseBody);
 
         if (baselineBodyEmpty || currentBodyEmpty) {
-            // 当用户配置了活跃规则组且其中有 RESPONSE_BODY 条件时，仍走规则匹配流程
+            // 当用户配置了活跃规则组且其中有 body 依赖条件（RESPONSE_BODY/SIMILARITY/LENGTH_DIFF）时，仍走规则匹配流程
             JudgmentRule activeRule = ruleManager.getActiveRule();
-            boolean hasBodyRule = false;
-            if (activeRule != null && activeRule.isEnabled() && activeRule.isValid()) {
-                for (RuleCondition cond : activeRule.getEffectiveConditions()) {
-                    if (cond.getTarget() == RuleTarget.RESPONSE_BODY) {
-                        hasBodyRule = true;
-                        break;
-                    }
-                }
-            }
-            if (!hasBodyRule) {
+            if (!hasBodyDependentCondition(activeRule)) {
                 LogManager.getInstance().judgmentDebug(String.format(
                         "[判决] 进入空Body判决: 基线body空=%b(%d字节)/测试body空=%b(%d字节), 基线状态码=%d, 测试状态码=%d",
                         baselineBodyEmpty, baselineResponse != null ? baselineResponse.length : -1,
@@ -453,6 +444,34 @@ public class JudgmentEngine {
      */
     private static boolean isBodyEmpty(byte[] body) {
         return body == null || body.length == 0;
+    }
+
+    /**
+     * 检查规则组是否包含依赖 body 内容的条件。
+     * 空 body 场景下，这些条件无法正确评估，应走空 Body 专用判决逻辑。
+     *
+     * @param rule 待检查的判决规则（可为 null）
+     * @return true 如果规则中包含 RESPONSE_BODY/SIMILARITY 目标 或 LENGTH_DIFF 方法
+     */
+    private static boolean hasBodyDependentCondition(JudgmentRule rule) {
+        if (rule == null || !rule.isEnabled() || !rule.isValid()) {
+            return false;
+        }
+        for (RuleCondition cond : rule.getEffectiveConditions()) {
+            if (!cond.isValid()) {
+                continue;
+            }
+            // 目标维度：直接操作 body 或依赖 body 计算的值
+            if (cond.getTarget() == RuleTarget.RESPONSE_BODY
+                    || cond.getTarget() == RuleTarget.SIMILARITY) {
+                return true;
+            }
+            // 方法维度：依赖 body 字节长度比较
+            if (cond.getMethod() == RuleMethod.LENGTH_DIFF) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

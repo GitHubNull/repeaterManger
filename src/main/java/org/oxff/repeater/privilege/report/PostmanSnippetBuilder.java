@@ -89,7 +89,8 @@ public class PostmanSnippetBuilder {
             if (record.getJudgment() != null) {
                 desc.append("- Judgment: ").append(record.getJudgment()).append("\n");
             }
-            desc.append("- Similarity: ").append(String.format("%.2f", record.getSimilarity())).append("\n");
+            double sim = record.getSimilarity();
+            desc.append("- Similarity: ").append(sim >= 0 ? String.format("%.2f", sim) : "N/A").append("\n");
             desc.append("- Timestamp: ").append(DATE_FORMAT.format(record.getTimestamp())).append("\n");
             request.addProperty("description", desc.toString());
 

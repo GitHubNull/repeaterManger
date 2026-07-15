@@ -287,7 +287,7 @@ public class PdfReportGenerator extends ReportGenerator {
 
             // 元数据
             StringBuilder meta = new StringBuilder();
-            meta.append("相似度: ").append(String.format("%.2f", session.getSimilarity()));
+            meta.append("相似度: ").append(session.getSimilarityDisplay());
             RequestResponseRecord rec = session.getRecord();
             meta.append("  |  HTTP ").append(rec.getStatusCode());
             meta.append("  |  ").append(rec.getResponseLength()).append(" 字节");

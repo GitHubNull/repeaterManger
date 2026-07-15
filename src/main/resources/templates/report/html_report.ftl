@@ -87,7 +87,7 @@
       <#if us.matchedRuleName??>
       <div>规则: <strong>${us.matchedRuleName}</strong></div>
       </#if>
-      <div class="meta-info">相似度: ${us.similarity?string["0.00"]}</div>
+      <div class="meta-info">相似度: ${us.similarityDisplay}</div>
 
       <#-- Request -->
       <div class="section-title">请求</div>

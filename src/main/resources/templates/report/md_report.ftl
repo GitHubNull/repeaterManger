@@ -55,7 +55,7 @@ ${ep.baselineData.responseMd}
 <#if us.matchedRuleName??>
 - **规则**: ${us.matchedRuleName}
 </#if>
-- **相似度**: ${us.similarity?string["0.00"]}
+- **相似度**: ${us.similarityDisplay}
 - **状态**: HTTP ${us.record.statusCode} | ${us.record.responseLength} bytes | ${us.record.responseTime}ms
 
 ##### 请求
