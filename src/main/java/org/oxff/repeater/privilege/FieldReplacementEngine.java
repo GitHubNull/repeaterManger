@@ -44,7 +44,7 @@ public class FieldReplacementEngine {
 
     private static final DocumentBuilderFactory DOC_BUILDER_FACTORY = createDocumentBuilderFactory();
     private static final XPathFactory XPATH_FACTORY = XPathFactory.newInstance();
-    private static final TransformerFactory TRANSFORMER_FACTORY = TransformerFactory.newInstance();
+    private static volatile TransformerFactory transformerFactory;
 
     /**
      * 创建并配置安全的 DocumentBuilderFactory
@@ -55,18 +55,70 @@ public class FieldReplacementEngine {
     private static DocumentBuilderFactory createDocumentBuilderFactory() {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            // 禁止 DTD 声明
             factory.setFeature(
                     "http://apache.org/xml/features/disallow-doctype-decl", true);
+            // 禁止外部通用实体
             factory.setFeature(
                     "http://xml.org/sax/features/external-general-entities", false);
+            // 禁止外部参数实体
             factory.setFeature(
                     "http://xml.org/sax/features/external-parameter-entities", false);
+            // 禁止加载外部 DTD
+            factory.setFeature(
+                    "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            // 禁用 XInclude
+            factory.setXIncludeAware(false);
+            // 不展开实体引用
+            factory.setExpandEntityReferences(false);
             return factory;
         } catch (Exception e) {
             LogManager.getInstance().printError(
                     "[!] XML安全配置失败，XML Body替换功能将不可用: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 获取安全的 TransformerFactory 实例（懒加载 + 双重检查锁）
+     * 设置安全属性以防止 XXE 攻击
+     */
+    private static TransformerFactory getSecureTransformerFactory() {
+        if (transformerFactory == null) {
+            synchronized (FieldReplacementEngine.class) {
+                if (transformerFactory == null) {
+                    transformerFactory = TransformerFactory.newInstance();
+                    try {
+                        transformerFactory.setAttribute(
+                                javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+                        transformerFactory.setAttribute(
+                                javax.xml.XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+                    } catch (IllegalArgumentException e) {
+                        LogManager.getInstance().printError(
+                                "[!] TransformerFactory 安全属性设置不支持: " + e.getMessage());
+                    }
+                }
+            }
+        }
+        return transformerFactory;
+    }
+
+    /**
+     * 判断 Content-Type 是否为二进制类型
+     * 二进制类型的请求体不应进行 UTF-8 字符串解码和字段替换
+     */
+    private static boolean isBinaryContentType(String contentType) {
+        if (contentType == null) return false;
+        String ct = contentType.toLowerCase();
+        return ct.contains("image/")
+                || ct.contains("audio/")
+                || ct.contains("video/")
+                || ct.contains("application/octet-stream")
+                || ct.contains("application/pdf")
+                || ct.contains("application/zip")
+                || ct.contains("application/gzip")
+                || ct.contains("application/x-tar")
+                || ct.contains("application/x-rar-compressed");
     }
 
     /**
@@ -152,8 +204,13 @@ public class FieldReplacementEngine {
             }
         }
 
-        // 替换Body中的字段值
+        // 替换Body中的字段值（二进制内容类型跳过 body 替换，避免 UTF-8 解码损坏）
         if (!bodyStr.isEmpty() && !bodyFields.isEmpty()) {
+            if (isBinaryContentType(contentType)) {
+                LogManager.getInstance().printOutput(
+                        "[*] 请求体为二进制内容(Content-Type=" + contentType
+                                + ")，跳过body字段替换，仅处理Header/URL");
+            } else {
             for (FieldDefinition field : bodyFields) {
                 String value = session.getFieldValue(field.getId());
                 // null表示该字段未配置值（如未授权用户），视为空字符串以删除对应字段
@@ -208,6 +265,7 @@ public class FieldReplacementEngine {
                     LogManager.getInstance().printError("[!] Body字段替换失败 (type=" + field.getType() + ", expression=" + field.getExpression() + "): " + e.getMessage());
                 }
             }
+            } // end of isBinaryContentType else block
         }
 
         // 诊断：字段值缺失汇总 — 警告用户哪些字段未配置值
@@ -425,7 +483,7 @@ public class FieldReplacementEngine {
             }
 
             // 序列化回字符串
-            Transformer transformer = TRANSFORMER_FACTORY.newTransformer();
+            Transformer transformer = getSecureTransformerFactory().newTransformer();
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             StringWriter writer = new StringWriter();
             transformer.transform(new DOMSource(doc), new StreamResult(writer));

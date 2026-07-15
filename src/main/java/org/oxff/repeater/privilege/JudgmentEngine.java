@@ -89,16 +89,14 @@ public class JudgmentEngine {
             }
         }
 
-        // 计算相似度（使用内容感知的混合算法）
+        // 计算相似度（使用字节数组版本，二进制内容直接按字节长度比较）
         double similarity = -1;
         if (baselineResponse != null && responseBody != null) {
-            String respStr = new String(responseBody, StandardCharsets.UTF_8);
-            String baseStr = new String(baselineResponse, StandardCharsets.UTF_8);
             // 优先使用基线 Content-Type；若不可用则回退到测试用户 Content-Type
             String effectiveContentType = baselineContentType != null
                     ? baselineContentType
                     : extractContentType(responseHeaders);
-            similarity = SimilarityEngine.similarity(respStr, baseStr, effectiveContentType);
+            similarity = SimilarityEngine.similarity(responseBody, baselineResponse, effectiveContentType);
         }
 
         LogManager.getInstance().judgmentDebug(String.format(
@@ -117,7 +115,9 @@ public class JudgmentEngine {
         }
 
         // 无活跃规则组时：回退到第3层兜底
-        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allFieldsEmpty);
+        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allFieldsEmpty,
+                responseBody != null ? responseBody.length : 0,
+                baselineResponse != null ? baselineResponse.length : 0);
     }
 
     /**
@@ -151,37 +151,49 @@ public class JudgmentEngine {
                     note, similarity, rule.getName());
         }
 
-        // 活跃规则组未命中 → 尝试默认相似度规则组作为安全网兜底
-        LogManager.getInstance().judgmentDebug(String.format(
-                "[判决] 规则组未命中: '%s' → 尝试默认相似度规则组作为安全网", rule.getName()));
-
-        JudgmentRule defaultRule = JudgmentRuleManager.getInstance().getDefaultSimilarityRule();
-        if (defaultRule != null && defaultRule != rule
-                && defaultRule.isEnabled() && defaultRule.isValid()) {
+        // 活跃规则组未命中 → 检查是否因相似度不足被活跃规则组明确拒绝
+        // 若活跃规则组包含 SIMILARITY GREATER_THAN 条件且实际相似度低于其阈值，
+        // 则活跃规则组已明确表达了"相似度不足=不越权"的意图，不应让默认规则组用更低阈值覆盖
+        Double activeSimThreshold = extractMinSimilarityThreshold(rule);
+        if (activeSimThreshold != null && similarity >= 0 && similarity < activeSimThreshold) {
             LogManager.getInstance().judgmentDebug(String.format(
-                    "[判决] 默认相似度规则组评估: name='%s'", defaultRule.getName()));
+                    "[判决] 活跃规则组已因低相似度(%.4f < %.4f)拒绝 '%s'，跳过默认规则检查以避免阈值覆盖",
+                    similarity, activeSimThreshold, rule.getName()));
+        } else {
+            // 尝试默认相似度规则组作为安全网兜底（仅在活跃规则组未因低相似度拒绝时）
+            LogManager.getInstance().judgmentDebug(String.format(
+                    "[判决] 规则组未命中: '%s' → 尝试默认相似度规则组作为安全网", rule.getName()));
 
-            List<RuleCondition> defaultConditions = defaultRule.getEffectiveConditions();
-            boolean defaultAllMatched = evaluateConditions(defaultConditions, statusCode,
-                    responseHeaders, bodyStr, similarity, responseTimeMs,
-                    responseBody, baselineResponse);
-
-            if (defaultAllMatched) {
+            JudgmentRule defaultRule = JudgmentRuleManager.getInstance().getDefaultSimilarityRule();
+            if (defaultRule != null && defaultRule != rule
+                    && defaultRule.isEnabled() && defaultRule.isValid()) {
                 LogManager.getInstance().judgmentDebug(String.format(
-                        "[判决] 默认规则组命中: '%s' → ESCALATED", defaultRule.getName()));
-                String defaultNote = defaultRule.getSuccessNote();
-                if (defaultNote == null || defaultNote.isEmpty()) {
-                    defaultNote = "默认规则匹配: " + defaultRule.getName();
-                }
-                return new JudgmentOutcome(JudgmentResult.ESCALATED, defaultRule.getSuccessColor(),
-                        defaultNote, similarity, defaultRule.getName());
-            }
+                        "[判决] 默认相似度规则组评估: name='%s'", defaultRule.getName()));
 
-            LogManager.getInstance().judgmentDebug(String.format(
-                    "[判决] 默认规则组未命中: '%s' → 回退默认判决", defaultRule.getName()));
+                List<RuleCondition> defaultConditions = defaultRule.getEffectiveConditions();
+                boolean defaultAllMatched = evaluateConditions(defaultConditions, statusCode,
+                        responseHeaders, bodyStr, similarity, responseTimeMs,
+                        responseBody, baselineResponse);
+
+                if (defaultAllMatched) {
+                    LogManager.getInstance().judgmentDebug(String.format(
+                            "[判决] 默认规则组命中: '%s' → ESCALATED", defaultRule.getName()));
+                    String defaultNote = defaultRule.getSuccessNote();
+                    if (defaultNote == null || defaultNote.isEmpty()) {
+                        defaultNote = "默认规则匹配: " + defaultRule.getName();
+                    }
+                    return new JudgmentOutcome(JudgmentResult.ESCALATED, defaultRule.getSuccessColor(),
+                            defaultNote, similarity, defaultRule.getName());
+                }
+
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 默认规则组未命中: '%s' → 回退默认判决", defaultRule.getName()));
+            }
         }
 
-        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allFieldsEmpty);
+        return judgeDefault(statusCode, baselineStatusCode, similarity, similarityThreshold, allFieldsEmpty,
+                responseBody != null ? responseBody.length : 0,
+                baselineResponse != null ? baselineResponse.length : 0);
     }
 
     /**
@@ -192,11 +204,15 @@ public class JudgmentEngine {
      * - 相似度 < 阈值 && 状态码显著差异(2xx vs 401/403) && allFieldsEmpty → NOT_ESCALATED（未登录被正确拒绝）
      * - 相似度 < 阈值 && 状态码显著差异(2xx vs 401/403) && !allFieldsEmpty → PENDING（疑似字段配置错误）
      * - 0 <= 相似度 < 阈值 && 状态码无明显差异 → NOT_ESCALATED（响应差异显著但非权限相关）
-     * - 相似度 < 0（无法计算）→ 回退到状态码检查，状态码不同 → PENDING
+     * - 相似度 < 0（无法计算）→ 回退到状态码+体长联合检查
+     *
+     * @param currentBodyLen  当前测试用户响应体长度
+     * @param baselineBodyLen 基准用户响应体长度
      */
     private static JudgmentOutcome judgeDefault(int statusCode, int baselineStatusCode,
                                                  double similarity, double similarityThreshold,
-                                                 boolean allFieldsEmpty) {
+                                                 boolean allFieldsEmpty,
+                                                 int currentBodyLen, int baselineBodyLen) {
         // 能够计算相似度时，以相似度为主要判决依据
         if (similarity >= 0) {
             if (similarity >= similarityThreshold) {
@@ -253,7 +269,7 @@ public class JudgmentEngine {
                     similarity, null);
         }
 
-        // 无法计算相似度时，回退到状态码检查
+        // 无法计算相似度时，回退到增强状态码+体长联合检查
         if (statusCode != baselineStatusCode) {
             LogManager.getInstance().judgmentDebug(String.format(
                     "[判决] 默认判决: similarity<0, statusCode=%d != baselineStatusCode=%d → PENDING", statusCode, baselineStatusCode));
@@ -262,8 +278,22 @@ public class JudgmentEngine {
                     similarity, null);
         }
 
+        // 状态码相同但体长差异显著（相似度无法计算时的辅助判断）
+        if (currentBodyLen > 0 && baselineBodyLen > 0) {
+            double lenRatio = (double) Math.min(currentBodyLen, baselineBodyLen)
+                    / Math.max(currentBodyLen, baselineBodyLen);
+            if (lenRatio < 0.5) {
+                LogManager.getInstance().judgmentDebug(String.format(
+                        "[判决] 默认判决: similarity<0, 状态码相同, 但体长差异显著(%.1f%%) → PENDING",
+                        lenRatio * 100));
+                return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
+                        String.format("无法计算相似度, 体长差异显著(%.1f%%), 需人工确认", lenRatio * 100),
+                        similarity, null);
+            }
+        }
+
         LogManager.getInstance().judgmentDebug("[判决] 默认判决: similarity<0, 状态码相同, 无法计算 → PENDING");
-        // 无法计算相似度且状态码相同 → 挂起，需人工确认
+        // 无法计算相似度且状态码相同，体长相近 → 挂起，需人工确认
         return new JudgmentOutcome(JudgmentResult.PENDING, Color.YELLOW,
                 "无法计算相似度", similarity, null);
     }
@@ -297,8 +327,19 @@ public class JudgmentEngine {
         boolean hasAnyValidCondition = false;
 
         for (RuleCondition cond : conditions) {
-            if (!cond.isValid()) {
-                LogManager.getInstance().judgmentDebug("[判决]   条件无效,跳过");
+            // 防御性检查：target 或 method 为 null 表示数据损坏，fail-safe 视为不匹配
+            if (cond.getTarget() == null || cond.getMethod() == null) {
+                LogManager.getInstance().judgmentDebug(
+                        "[判决]   条件target或method为null(数据损坏) → 视为不匹配, 最终结果=false");
+                return false;
+            }
+            // expression 为空表示条件未配置完成，跳过
+            if (cond.getExpression() == null || cond.getExpression().trim().isEmpty()) {
+                LogManager.getInstance().judgmentDebug("[判决]   条件表达式为空,跳过");
+                continue;
+            }
+            if (!cond.isEnabled()) {
+                LogManager.getInstance().judgmentDebug("[判决]   条件已禁用,跳过");
                 continue;
             }
 
@@ -444,6 +485,36 @@ public class JudgmentEngine {
      */
     private static boolean isBodyEmpty(byte[] body) {
         return body == null || body.length == 0;
+    }
+
+    /**
+     * 从规则组中提取 SIMILARITY GREATER_THAN 条件的最小阈值。
+     * <p>
+     * 用于防止默认规则组用更低阈值覆盖活跃规则组的判决意图。
+     * 当活跃规则组因低相似度拒绝后，若默认规则组阈值更低，不应让它"救回"。
+     *
+     * @param rule 判决规则组（可为 null）
+     * @return 最小相似度阈值，无 SIMILARITY GREATER_THAN 条件时返回 null
+     */
+    private static Double extractMinSimilarityThreshold(JudgmentRule rule) {
+        if (rule == null) return null;
+        Double minThreshold = null;
+        for (RuleCondition cond : rule.getEffectiveConditions()) {
+            if (!cond.isValid()) continue;
+            if (cond.getTarget() == RuleTarget.SIMILARITY
+                    && cond.getMethod() == RuleMethod.GREATER_THAN
+                    && !cond.isNegate()) {
+                try {
+                    double t = Double.parseDouble(cond.getExpression().trim());
+                    if (minThreshold == null || t < minThreshold) {
+                        minThreshold = t;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // 表达式不是有效数值，忽略
+                }
+            }
+        }
+        return minThreshold;
     }
 
     /**

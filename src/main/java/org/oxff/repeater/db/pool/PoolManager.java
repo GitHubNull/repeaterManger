@@ -25,6 +25,12 @@ public class PoolManager {
     // 头部缓存：hash → 头部字节数据
     private final ConcurrentHashMap<String, byte[]> headerCache = new ConcurrentHashMap<>();
 
+    // 池类型常量，用于存在性缓存键前缀
+    private static final String POOL_TYPE_STRING = "string";
+    private static final String POOL_TYPE_HEADER = "header";
+    private static final String POOL_TYPE_BODY = "body";
+    private static final String POOL_TYPE_FILE = "file";
+
     /** existenceCache 的最大条目数（覆盖所有池类型） */
     private static final int MAX_CACHE_SIZE = 2000;
     /** stringCache 的最大条目数 */
@@ -55,15 +61,16 @@ public class PoolManager {
         }
 
         String hash = hasher.hashString(value);
+        String cacheKey = buildCacheKey(POOL_TYPE_STRING, hash);
 
         // 检查缓存
-        if (existenceCache.containsKey("string:" + hash)) {
+        if (existenceCache.containsKey(cacheKey)) {
             // 已存在，仅增加 ref_count
             if (incrementRefCount(conn, "string_pool", hash)) {
                 return hash;
             }
             // 缓存过期（条目已被 GC 回收），清除缓存并继续执行完整 INSERT
-            existenceCache.remove("string:" + hash);
+            existenceCache.remove(cacheKey);
         }
 
         // INSERT OR INCREMENT
@@ -75,7 +82,7 @@ public class PoolManager {
             pstmt.executeUpdate();
         }
 
-        existenceCache.put("string:" + hash, true);
+        existenceCache.put(cacheKey, true);
         trimExistenceCacheIfNeeded();
         stringCache.put(hash, value);
         trimStringCacheIfNeeded();
@@ -144,14 +151,15 @@ public class PoolManager {
         }
 
         String hash = hasher.hashBytes(headerData);
+        String cacheKey = buildCacheKey(POOL_TYPE_HEADER, hash);
 
         // 检查缓存
-        if (existenceCache.containsKey("header:" + hash)) {
+        if (existenceCache.containsKey(cacheKey)) {
             if (incrementRefCount(conn, "header_pool", hash)) {
                 return hash;
             }
             // 缓存过期（条目已被 GC 回收），清除缓存并继续执行完整 INSERT
-            existenceCache.remove("header:" + hash);
+            existenceCache.remove(cacheKey);
         }
 
         String sql = "INSERT INTO header_pool (hash, data, size, ref_count) VALUES (?, ?, ?, 1) " +
@@ -163,7 +171,7 @@ public class PoolManager {
             pstmt.executeUpdate();
         }
 
-        existenceCache.put("header:" + hash, true);
+        existenceCache.put(cacheKey, true);
         trimExistenceCacheIfNeeded();
         headerCache.put(hash, headerData);
         trimHeaderCacheIfNeeded();
@@ -269,12 +277,13 @@ public class PoolManager {
     // ========== 内部方法 ==========
 
     private void ensureBodyInline(Connection conn, String hash, byte[] body) throws SQLException {
-        if (existenceCache.containsKey("body:" + hash)) {
+        String cacheKey = buildCacheKey(POOL_TYPE_BODY, hash);
+        if (existenceCache.containsKey(cacheKey)) {
             if (incrementRefCount(conn, "body_pool", hash)) {
                 return;
             }
             // 缓存过期（条目已被 GC 回收），清除缓存并继续执行完整 INSERT
-            existenceCache.remove("body:" + hash);
+            existenceCache.remove(cacheKey);
         }
 
         String sql = "INSERT INTO body_pool (hash, data, size, ref_count, is_binary) VALUES (?, ?, ?, 1, 0) " +
@@ -286,7 +295,7 @@ public class PoolManager {
             pstmt.executeUpdate();
         }
 
-        existenceCache.put("body:" + hash, true);
+        existenceCache.put(cacheKey, true);
         trimExistenceCacheIfNeeded();
     }
 
@@ -295,13 +304,14 @@ public class PoolManager {
      * @return 实际存储路由（FILE 成功，INLINE 表示文件写入失败已回退）
      */
     private BodyStorageRoute ensureBodyFile(Connection conn, String hash, byte[] body) throws SQLException {
+        String cacheKey = buildCacheKey(POOL_TYPE_FILE, hash);
         // 先检查缓存，避免冗余文件写入（BUG-008）
-        if (existenceCache.containsKey("file:" + hash)) {
+        if (existenceCache.containsKey(cacheKey)) {
             if (incrementRefCount(conn, "file_pool", hash)) {
                 return BodyStorageRoute.FILE;
             }
             // 缓存过期（条目已被 GC 回收），清除缓存并继续
-            existenceCache.remove("file:" + hash);
+            existenceCache.remove(cacheKey);
         }
 
         // 写入文件
@@ -322,7 +332,7 @@ public class PoolManager {
             pstmt.executeUpdate();
         }
 
-        existenceCache.put("file:" + hash, true);
+        existenceCache.put(cacheKey, true);
         trimExistenceCacheIfNeeded();
         return BodyStorageRoute.FILE;
     }
@@ -374,7 +384,7 @@ public class PoolManager {
         }
 
         // 更新存在性缓存
-        existenceCache.remove(poolType + ":" + hash);
+        existenceCache.remove(buildCacheKey(poolType, hash));
     }
 
     /**
@@ -408,6 +418,16 @@ public class PoolManager {
         if (existenceCache.size() > MAX_CACHE_SIZE) {
             evictCache(existenceCache, (int) (MAX_CACHE_SIZE * CACHE_EVICT_RATIO));
         }
+    }
+
+    /**
+     * 构建存在性缓存键
+     * @param poolType 池类型（string/header/body/file）
+     * @param hash     哈希值
+     * @return 格式为 "poolType:hash" 的缓存键
+     */
+    private static String buildCacheKey(String poolType, String hash) {
+        return poolType + ":" + hash;
     }
 
     /**

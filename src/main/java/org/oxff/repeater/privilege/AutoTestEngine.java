@@ -114,6 +114,35 @@ public class AutoTestEngine {
             boolean baselineValid = false;
             String baselineContentType = null;
 
+            // ===== 加载存储的基线响应（来自 benchmark 报文表 requests 表）=====
+            boolean hasStoredBaseline = false;
+            try {
+                RequestDAO requestDAO = new RequestDAO();
+                byte[] storedBaseline = requestDAO.getOriginalResponseData(requestId);
+                if (storedBaseline != null && storedBaseline.length > 0) {
+                    byte[] storedBody = HttpMessageParser.extractResponseBody(storedBaseline);
+                    int storedStatus = requestDAO.getOriginalResponseStatusCode(requestId);
+                    if (storedBody != null && storedBody.length > 0 && storedStatus > 0) {
+                        baselineResponse = storedBody;
+                        baselineStatusCode = storedStatus;
+                        String storedHeaders = HttpMessageParser.extractResponseHeaders(storedBaseline);
+                        baselineContentType = JudgmentEngine.extractContentType(storedHeaders);
+                        baselineValid = true;
+                        hasStoredBaseline = true;
+                        LogManager.getInstance().printOutput(String.format(
+                                "[*] 自动化测试：使用存储基线响应: requestId=%d, status=%d, bodyLen=%d",
+                                requestId, baselineStatusCode, baselineResponse.length));
+                    }
+                }
+            } catch (Exception e) {
+                LogManager.getInstance().printError("[!] 自动化测试：加载存储基线响应失败: " + e.getMessage());
+            }
+
+            if (!hasStoredBaseline) {
+                LogManager.getInstance().printOutput(
+                        "[*] 自动化测试：无存储基线响应，回退兼容模式：首个已启用会话响应作为基准");
+            }
+
             for (int i = 0; i < enabledSessions.size(); i++) {
                 UserSession session = enabledSessions.get(i);
                 boolean isFirst = (i == 0);
@@ -161,6 +190,19 @@ public class AutoTestEngine {
 
                     if (holder.response != null && holder.response.length > 0) {
                         if (isFirst) {
+                            // 无存储基线时，保存首个会话的响应到数据库作为基准
+                            if (!hasStoredBaseline) {
+                                try {
+                                    RequestDAO requestDAO = new RequestDAO();
+                                    requestDAO.saveOriginalResponse(requestId, holder.response,
+                                            holder.statusCode, (int) holder.durationMs);
+                                    LogManager.getInstance().printOutput(
+                                            "[*] 自动化测试：已保存基准响应到数据库: requestId=" + requestId);
+                                } catch (Exception e) {
+                                    LogManager.getInstance().printError(
+                                            "[!] 自动化测试：保存基准响应失败: " + e.getMessage());
+                                }
+                            }
                             baselineResponse = HttpMessageParser.extractResponseBody(holder.response);
                             baselineStatusCode = holder.statusCode;
                             baselineValid = true;

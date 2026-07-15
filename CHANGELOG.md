@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.32.4] - 2026-07-15
+
+### Fixed
+- 判决引擎条件空值/禁用检查增强：表达式为空或条件已禁用时跳过评估，避免异常null表达式进入逻辑
+- 判决引擎新增规则组最小相似度阈值提取方法（`extractMinSimilarityThreshold`），防止默认规则组用更低阈值覆盖活跃规则组的判决意图
+- 相似度引擎新增字节数组版本 `similarity(byte[], byte[], String)`，二进制内容直接使用字节长度计算，修复UTF-8字符串解码导致的长度失真
+- 内容重组器对空 header 数据增加防御性处理和日志告警
+
+### Changed
+- 池管理器硬编码池类型字符串提取为静态常量（`POOL_TYPE_STRING`/`POOL_TYPE_HEADER`/`POOL_TYPE_BODY`/`POOL_TYPE_FILE`）
+- 相似度引擎二进制相似度计算方法升级为字节数组版本，旧字符串版本标记 `@Deprecated` 保留兼容
+
 ## [2.32.3] - 2026-07-01
 
 ### Fixed

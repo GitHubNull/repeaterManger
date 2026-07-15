@@ -51,7 +51,10 @@ public class ContentReconstructor {
     private byte[] reconstruct(Connection conn, String headerHash, String bodyHash, String bodyStorage) {
         try {
             byte[] headerBytes = readHeader(conn, headerHash);
-            if (headerBytes == null) {
+            if (headerBytes == null || headerBytes.length == 0) {
+                LogManager.getInstance().printError(
+                        "[!] 内容重组: 头部数据缺失(headerHash=" + headerHash
+                                + "), 重组结果将不包含HTTP头部");
                 headerBytes = new byte[0];
             }
 
