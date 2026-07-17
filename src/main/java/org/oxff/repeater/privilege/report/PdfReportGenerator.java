@@ -1,6 +1,7 @@
 package org.oxff.repeater.privilege.report;
 
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.privilege.model.TestInfoConfig;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
@@ -11,6 +12,10 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.fontbox.ttf.TrueTypeCollection;
 import org.apache.fontbox.ttf.TrueTypeFont;
 
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -32,6 +37,8 @@ public class PdfReportGenerator extends ReportGenerator {
     private static final int PDF_BODY_LIMIT = 3000;
     /** PDF 中 base64 显示的最大字符数 */
     private static final int PDF_BASE64_LIMIT = 2000;
+    /** PDF 中嵌入图片的最大宽度（像素），超出则等比缩放以控制文件体积 */
+    private static final int PDF_IMAGE_MAX_WIDTH = 1200;
 
     /** CJK 字体候选路径（按优先级排列） */
     private static final String[] CJK_FONT_PATHS = {
@@ -86,6 +93,11 @@ public class PdfReportGenerator extends ReportGenerator {
             writer.drawText("生成时间: " + DATE_FORMAT.format(data.getGeneratedAt())
                     + " | Repeater Manager v" + data.getPluginVersion(), 10);
             writer.drawLine();
+
+            // Test Info Config Section
+            if (data.getTestInfoConfig() != null && data.getTestInfoConfig().hasAnyData()) {
+                buildTestInfoSection(writer, data.getTestInfoConfig(), data.getTestInfoConfigBase64Screenshots());
+            }
 
             // User Info Section
             buildUserInfoSection(writer, data.getUserInfoEntries());
@@ -199,6 +211,82 @@ public class PdfReportGenerator extends ReportGenerator {
     }
 
     /**
+     * 将 base64 图片解码、缩放至 PDF 友好尺寸（最大 PDF_IMAGE_MAX_WIDTH px），
+     * 重新编码为 PNG 字节数组。用于控制 PDF 文件体积。
+     */
+    private byte[] scaleImageForPdf(String base64) throws Exception {
+        int commaIdx = base64.indexOf(",");
+        if (commaIdx <= 0) throw new IllegalArgumentException("Invalid base64 data URI");
+        byte[] rawBytes = Base64.getDecoder().decode(base64.substring(commaIdx + 1));
+
+        BufferedImage original = ImageIO.read(new ByteArrayInputStream(rawBytes));
+        if (original == null) throw new IllegalArgumentException("Cannot decode image");
+
+        int width = original.getWidth();
+        int height = original.getHeight();
+        if (width <= PDF_IMAGE_MAX_WIDTH) return rawBytes;
+
+        double ratio = (double) PDF_IMAGE_MAX_WIDTH / width;
+        int newHeight = (int) (height * ratio);
+        Image scaled = original.getScaledInstance(PDF_IMAGE_MAX_WIDTH, newHeight, Image.SCALE_SMOOTH);
+        BufferedImage result = new BufferedImage(PDF_IMAGE_MAX_WIDTH, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = result.createGraphics();
+        g2d.drawImage(scaled, 0, 0, null);
+        g2d.dispose();
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(result, "png", baos);
+        return baos.toByteArray();
+    }
+
+    /**
+     * 渲染测试信息配置 section
+     */
+    private void buildTestInfoSection(PdfReportWriter writer, TestInfoConfig config,
+                                       List<String> base64Screenshots) throws Exception {
+        writer.drawTitle("测试信息配置", 14);
+
+        if (config.getTargetName() != null && !config.getTargetName().isEmpty()) {
+            writer.drawText("目标名称: " + config.getTargetName(), 10, MARGIN + 10);
+        }
+        if (config.getTargetEntry() != null && !config.getTargetEntry().isEmpty()) {
+            writer.drawText("目标入口: " + config.getTargetEntry(), 10, MARGIN + 10);
+        }
+        if (config.getTestTimeRange() != null && !config.getTestTimeRange().isEmpty()) {
+            writer.drawText("测试时间段: " + config.getTestTimeRange(), 10, MARGIN + 10);
+        }
+        if (config.getTestPersonnel() != null && !config.getTestPersonnel().isEmpty()) {
+            writer.drawText("测试人员: " + config.getTestPersonnel(), 10, MARGIN + 10);
+        }
+
+        // 嵌入目标截图（PDF 中缩放至合适尺寸以控制体积）
+        if (base64Screenshots != null) {
+            for (String base64 : base64Screenshots) {
+                try {
+                    if (base64 != null && base64.startsWith("data:image/")) {
+                        byte[] imageBytes = scaleImageForPdf(base64);
+                        PDImageXObject pdImage = PDImageXObject.createFromByteArray(
+                                writer.getDocument(), imageBytes, "config_screenshot");
+                        float imgWidth = pdImage.getWidth();
+                        float imgHeight = pdImage.getHeight();
+                        float maxWidth = MARGIN * 10;
+                        if (imgWidth > maxWidth) {
+                            float ratio = maxWidth / imgWidth;
+                            imgHeight *= ratio;
+                            imgWidth = maxWidth;
+                        }
+                        writer.drawImage(pdImage, imgWidth, imgHeight);
+                    }
+                } catch (Exception e) {
+                    writer.drawText("[配置截图加载失败]", 9, MARGIN + 10);
+                }
+            }
+        }
+
+        writer.drawLine();
+    }
+
+    /**
      * 渲染用户信息 section（角色/用户名/匿名/截图）
      */
     private void buildUserInfoSection(PdfReportWriter writer,
@@ -215,27 +303,23 @@ public class PdfReportGenerator extends ReportGenerator {
             writer.drawText("会话: " + entry.getSessionName() + "  |  角色: " + roleText + "  |  用户名: " + displayName +
                     (entry.isAnonymous() ? "  [匿名]" : ""), 10, MARGIN + 10);
 
-            // 嵌入截图
+            // 嵌入截图（PDF 中缩放至合适尺寸以控制体积）
             if (entry.getScreenshotsBase64() != null) {
                 for (String base64 : entry.getScreenshotsBase64()) {
                     try {
                         if (base64 != null && base64.startsWith("data:image/")) {
-                            int commaIdx = base64.indexOf(",");
-                            if (commaIdx > 0) {
-                                byte[] imageBytes = Base64.getDecoder().decode(base64.substring(commaIdx + 1));
-                                PDImageXObject pdImage = PDImageXObject.createFromByteArray(
-                                        writer.getDocument(), imageBytes, "screenshot");
-                                // 缩放至适合页面宽度
-                                float imgWidth = pdImage.getWidth();
-                                float imgHeight = pdImage.getHeight();
-                                float maxWidth = MARGIN * 10; // 约 500pt
-                                if (imgWidth > maxWidth) {
-                                    float ratio = maxWidth / imgWidth;
-                                    imgHeight *= ratio;
-                                    imgWidth = maxWidth;
-                                }
-                                writer.drawImage(pdImage, imgWidth, imgHeight);
+                            byte[] imageBytes = scaleImageForPdf(base64);
+                            PDImageXObject pdImage = PDImageXObject.createFromByteArray(
+                                    writer.getDocument(), imageBytes, "screenshot");
+                            float imgWidth = pdImage.getWidth();
+                            float imgHeight = pdImage.getHeight();
+                            float maxWidth = MARGIN * 10;
+                            if (imgWidth > maxWidth) {
+                                float ratio = maxWidth / imgWidth;
+                                imgHeight *= ratio;
+                                imgWidth = maxWidth;
                             }
+                            writer.drawImage(pdImage, imgWidth, imgHeight);
                         }
                     } catch (Exception e) {
                         writer.drawText("[截图加载失败]", 9, MARGIN + 10);

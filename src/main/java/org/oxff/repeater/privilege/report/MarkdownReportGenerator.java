@@ -32,6 +32,11 @@ public class MarkdownReportGenerator extends ReportGenerator {
             model.put("safeEndpoints", data.getSafeEndpoints());
             model.put("endpoints", data.getEndpoints());
             model.put("userInfoEntries", data.getUserInfoEntries());
+            // 测试信息配置
+            if (data.getTestInfoConfig() != null) {
+                model.put("testInfoConfig", data.getTestInfoConfig());
+                model.put("testInfoConfigScreenshots", data.getTestInfoConfigBase64Screenshots());
+            }
 
             StringWriter writer = new StringWriter();
             FreeMarkerConfig.getInstance().getMdTemplate("md_report.ftl").process(model, writer);

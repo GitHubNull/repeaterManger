@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.34.0] - 2026-07-17
+
+### Added
+- 新增测试信息配置功能（`TestInfoConfig` 模型/DAO/UI面板），支持配置测试目标元信息（目标名称、入口、截图、时间段、人员），填写后随报告导出
+- 新增数据库迁移 V15→V16（创建 test_info_config 表）、V16→V17
+
+### Changed
+- HTML/Markdown/PDF 报告生成器均支持嵌入测试信息配置（目标名称、入口、截图、时间段、人员）
+- 报告模板（FTL/JS）适配测试信息配置数据字段，HTML 报告支持截图文件引用
+- `SessionManager` 新增 `TestInfoConfig` 缓存 CRUD 方法（`getTestInfoConfig`/`saveTestInfoConfig`/`deleteTestInfoConfig`）
+- `ScreenshotEncoder` 抽取为独立工具类，解耦 I/O 与报告生成职责
+
 ## [2.33.1] - 2026-07-17
 
 ### Fixed

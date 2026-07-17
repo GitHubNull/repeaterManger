@@ -139,6 +139,18 @@ public class HtmlReportGenerator extends ReportGenerator {
         }
         jsData.put("userInfoEntries", userInfoJs);
 
+        // 测试信息配置（不含 base64，但有 screenshotFilenames）
+        if (data.getTestInfoConfig() != null && data.getTestInfoConfig().hasAnyData()) {
+            Map<String, Object> configJs = new LinkedHashMap<>();
+            configJs.put("targetName", data.getTestInfoConfig().getTargetName());
+            configJs.put("targetEntry", data.getTestInfoConfig().getTargetEntry());
+            configJs.put("testTimeRange", data.getTestInfoConfig().getTestTimeRange());
+            configJs.put("testPersonnel", data.getTestInfoConfig().getTestPersonnel());
+            configJs.put("screenshotFilenames", data.getTestInfoConfigScreenshotFilenames() != null
+                    ? data.getTestInfoConfigScreenshotFilenames() : new ArrayList<>());
+            jsData.put("testInfoConfig", configJs);
+        }
+
         String json = GSON.toJson(jsData);
         String jsContent = "var REPORT_DATA = " + json + ";";
 
@@ -160,10 +172,16 @@ public class HtmlReportGenerator extends ReportGenerator {
                 break;
             }
         }
+        // 也检查测试信息配置截图
+        if (!hasScreenshots && data.getTestInfoConfigBase64Screenshots() != null
+                && !data.getTestInfoConfigBase64Screenshots().isEmpty()) {
+            hasScreenshots = true;
+        }
         if (!hasScreenshots) return;
 
         screenshotsDir.mkdirs();
 
+        // 写入用户信息截图
         for (ReportData.UserInfoEntry entry : data.getUserInfoEntries()) {
             List<String> base64List = entry.getScreenshotsBase64();
             List<String> filenameList = entry.getScreenshotFilenames();
@@ -174,7 +192,26 @@ public class HtmlReportGenerator extends ReportGenerator {
                 String filename = filenameList.get(i);
                 if (base64 == null || !base64.startsWith("data:image/")) continue;
 
-                // 去掉 data:image/png;base64, 前缀
+                int commaIdx = base64.indexOf(",");
+                if (commaIdx < 0) continue;
+                byte[] imageBytes = Base64.getDecoder().decode(base64.substring(commaIdx + 1));
+
+                File outFile = new File(screenshotsDir, filename);
+                try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                    fos.write(imageBytes);
+                }
+            }
+        }
+
+        // 写入测试信息配置截图
+        List<String> configBase64List = data.getTestInfoConfigBase64Screenshots();
+        List<String> configFilenameList = data.getTestInfoConfigScreenshotFilenames();
+        if (configBase64List != null && configFilenameList != null) {
+            for (int i = 0; i < configBase64List.size() && i < configFilenameList.size(); i++) {
+                String base64 = configBase64List.get(i);
+                String filename = configFilenameList.get(i);
+                if (base64 == null || !base64.startsWith("data:image/")) continue;
+
                 int commaIdx = base64.indexOf(",");
                 if (commaIdx < 0) continue;
                 byte[] imageBytes = Base64.getDecoder().decode(base64.substring(commaIdx + 1));
@@ -215,6 +252,11 @@ public class HtmlReportGenerator extends ReportGenerator {
         model.put("errorEndpoints", data.getErrorEndpoints());
         model.put("safeEndpoints", data.getSafeEndpoints());
         model.put("endpoints", data.getEndpoints());
+        // 测试信息配置（供单文件内联模式使用）
+        if (data.getTestInfoConfig() != null) {
+            model.put("testInfoConfig", data.getTestInfoConfig());
+            model.put("testInfoConfigScreenshots", data.getTestInfoConfigBase64Screenshots());
+        }
         return model;
     }
 }

@@ -6,6 +6,7 @@ import org.oxff.repeater.http.RequestResponseRecord;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.ScreenshotEncoder;
 import org.oxff.repeater.privilege.SessionManager;
+import org.oxff.repeater.privilege.model.TestInfoConfig;
 import org.oxff.repeater.privilege.model.UserInfo;
 import org.oxff.repeater.privilege.model.UserSession;
 
@@ -342,6 +343,37 @@ public abstract class ReportGenerator {
             userInfoEntries.add(entry);
         }
         data.setUserInfoEntries(userInfoEntries);
+
+        // ===== 阶段 G：收集测试信息配置 =====
+        TestInfoConfig config = sm.getTestInfoConfig();
+        if (config != null && config.hasAnyData()) {
+            // 处理截图 base64 编码
+            List<String> encodedScreenshots = new ArrayList<>();
+            List<String> screenshotFilenames = new ArrayList<>();
+            if (config.getTargetScreenshots() != null) {
+                for (String path : config.getTargetScreenshots()) {
+                    try {
+                        String base64Uri = ScreenshotEncoder.encode(path);
+                        encodedScreenshots.add(base64Uri);
+                        // 提取文件名
+                        java.io.File screenshotFile = new java.io.File(path);
+                        screenshotFilenames.add(screenshotFile.getName());
+                    } catch (IOException e) {
+                        LogManager.getInstance().printOutput("[*] 处理配置截图文件失败: " + path + " - " + e.getMessage());
+                    }
+                }
+            }
+            // 创建副本以避免修改缓存中的原始对象
+            TestInfoConfig configCopy = new TestInfoConfig(
+                    config.getTargetName(), config.getTargetEntry(),
+                    config.getTargetScreenshots(),
+                    config.getTestTimeRange(), config.getTestPersonnel());
+            configCopy.setId(config.getId());
+            data.setTestInfoConfig(configCopy);
+            // 分别保存 base64 编码数据和文件名，供不同报告格式使用
+            data.setTestInfoConfigBase64Screenshots(encodedScreenshots);
+            data.setTestInfoConfigScreenshotFilenames(screenshotFilenames);
+        }
 
         return data;
     }

@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v16 — 新增 user_info 和 user_info_screenshots 表）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '16')");
+        // 初始化元数据（当前最新版本）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '" + SchemaMigrator.LATEST_VERSION + "')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // ===== 池表 =====
@@ -138,7 +138,10 @@ public class SchemaInitializer {
         // ===== v7 Scope表 =====
         createV7ScopeTables(stmt);
 
-        LogManager.getInstance().printOutput("[+] v16 Schema 初始化完成");
+        // ===== v17 测试信息配置表 =====
+        createV17TestInfoTables(stmt);
+
+        LogManager.getInstance().printOutput("[+] v17 Schema 初始化完成");
     }
 
     /**
@@ -380,5 +383,35 @@ public class SchemaInitializer {
 
         // v7 新增索引
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_scope_entries_enabled ON scope_entries(enabled)");
+    }
+
+    /**
+     * 创建 v17 测试信息配置相关表（目标元信息 + 截图）
+     */
+    private static void createV17TestInfoTables(Statement stmt) throws SQLException {
+        // 测试信息配置主表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS test_info_config (" +
+            "id INTEGER PRIMARY KEY, " +
+            "target_name TEXT DEFAULT '', " +
+            "target_entry TEXT DEFAULT '', " +
+            "test_time_range TEXT DEFAULT '', " +
+            "test_personnel TEXT DEFAULT '', " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+            ")"
+        );
+
+        // 测试信息截图表
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS test_info_screenshots (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "config_id INTEGER NOT NULL, " +
+            "file_path TEXT NOT NULL, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "FOREIGN KEY (config_id) REFERENCES test_info_config(id) ON DELETE CASCADE" +
+            ")"
+        );
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_test_info_shots_config ON test_info_screenshots(config_id)");
     }
 }

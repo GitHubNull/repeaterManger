@@ -45,6 +45,10 @@ public class PrivilegeTestPanel extends JPanel {
         DedupConfigTab dedupConfigTab = new DedupConfigTab();
         innerTabbedPane.addTab("去重配置", dedupConfigTab);
 
+        // 测试信息配置子Tab
+        TestInfoConfigTab testInfoConfigTab = new TestInfoConfigTab();
+        innerTabbedPane.addTab("测试信息配置", testInfoConfigTab);
+
         // 报告导出子Tab
         JPanel reportExportPanel = createReportExportPanel();
         innerTabbedPane.addTab("报告导出", reportExportPanel);

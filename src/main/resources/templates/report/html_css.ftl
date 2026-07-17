@@ -104,12 +104,31 @@
   .screenshot-gallery { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .screenshot-thumb { width: 100px; height: 75px; object-fit: cover; border-radius: 4px; border: 1px solid #e0e0e0; cursor: pointer; transition: transform 0.2s; }
   .screenshot-thumb:hover { transform: scale(1.05); border-color: #1a237e; }
+  
+  /* 测试信息配置 */
+  .test-info-config { background: white; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; }
+  .test-info-table { width: auto; min-width: 400px; box-shadow: none; margin-bottom: 8px; }
+  .test-info-table td { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; }
+  .test-info-table .test-info-label { font-weight: 600; color: #555; white-space: nowrap; width: 100px; }
 
   /* 灯箱 */
   .lightbox-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-  .lightbox-image { max-width: 90%; max-height: 90%; object-fit: contain; }
-  .lightbox-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 36px; font-weight: bold; cursor: pointer; }
-  .lightbox-close:hover { color: #ccc; }
+
+  .lightbox-container { width: 85vw; height: 85vh; display: flex; flex-direction: column; background: #1a1a2e; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+
+  .lightbox-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #16213e; border-bottom: 1px solid #0f3460; flex-shrink: 0; }
+
+  .lightbox-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #e0e0e0; font-size: 18px; width: 36px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s; line-height: 1; }
+  .lightbox-btn:hover { background: rgba(255,255,255,0.25); }
+
+  .lightbox-close-btn { margin-left: auto; font-size: 22px; font-weight: bold; }
+  .lightbox-close-btn:hover { background: rgba(220,50,50,0.5); border-color: #d32f2f; }
+
+  .lightbox-zoom-level { color: #ccc; font-size: 13px; min-width: 48px; text-align: center; font-family: monospace; }
+
+  .lightbox-img-wrap { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: default; position: relative; }
+
+  .lightbox-image { max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: none; user-select: none; -webkit-user-drag: none; }
 
   /* 排序指示器 */
   th.sort-asc::after { content: ' \25B2'; font-size: 10px; }

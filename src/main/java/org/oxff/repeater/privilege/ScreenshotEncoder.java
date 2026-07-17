@@ -17,8 +17,8 @@ import java.util.Base64;
  */
 public final class ScreenshotEncoder {
 
-    /** 默认最大宽度（像素），超出则等比缩放 */
-    public static final int DEFAULT_MAX_WIDTH = 800;
+    /** 默认最大宽度（像素），Integer.MAX_VALUE 表示不缩放，保留原始分辨率 */
+    public static final int DEFAULT_MAX_WIDTH = Integer.MAX_VALUE;
 
     private ScreenshotEncoder() {
         // 工具类，禁止实例化

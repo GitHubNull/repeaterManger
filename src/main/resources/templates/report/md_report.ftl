@@ -2,6 +2,37 @@
 
 > 生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}
 
+<#-- Test Info Config -->
+<#if testInfoConfig?? && testInfoConfig.hasAnyData()>
+## 测试信息配置
+
+| 字段 | 值 |
+|------|-----|
+<#if testInfoConfig.targetName?? && testInfoConfig.targetName != "">
+| 目标名称 | ${testInfoConfig.targetName} |
+</#if>
+<#if testInfoConfig.targetEntry?? && testInfoConfig.targetEntry != "">
+| 目标入口 | ${testInfoConfig.targetEntry} |
+</#if>
+<#if testInfoConfig.testTimeRange?? && testInfoConfig.testTimeRange != "">
+| 测试时间段 | ${testInfoConfig.testTimeRange} |
+</#if>
+<#if testInfoConfig.testPersonnel?? && testInfoConfig.testPersonnel != "">
+| 测试人员 | ${testInfoConfig.testPersonnel} |
+</#if>
+
+<#if testInfoConfigScreenshots?? && testInfoConfigScreenshots?size gt 0>
+**测试目标截图:**
+
+<#list testInfoConfigScreenshots as img>
+- ![](${img})
+</#list>
+</#if>
+
+---
+
+</#if>
+
 <#-- User Info -->
 <#if userInfoEntries?? && userInfoEntries?size gt 0>
 ## 用户信息

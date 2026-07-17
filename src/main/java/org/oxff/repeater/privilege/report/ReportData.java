@@ -1,6 +1,7 @@
 package org.oxff.repeater.privilege.report;
 
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.privilege.model.TestInfoConfig;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -23,6 +24,11 @@ public class ReportData {
     private List<EndpointRequestLine> errorEndpoints = new ArrayList<>();
     private List<EndpointRequestLine> safeEndpoints = new ArrayList<>();
     private List<UserInfoEntry> userInfoEntries = new ArrayList<>();
+    private TestInfoConfig testInfoConfig;
+    /** 测试信息配置截图的 Base64 编码数据列表（用于 PDF/MD 嵌入） */
+    private List<String> testInfoConfigBase64Screenshots;
+    /** 测试信息配置截图的文件名列表（用于 HTML 文件引用） */
+    private List<String> testInfoConfigScreenshotFilenames;
 
     public String getTitle() {
         return title;
@@ -102,6 +108,30 @@ public class ReportData {
 
     public void setUserInfoEntries(List<UserInfoEntry> userInfoEntries) {
         this.userInfoEntries = userInfoEntries;
+    }
+
+    public TestInfoConfig getTestInfoConfig() {
+        return testInfoConfig;
+    }
+
+    public void setTestInfoConfig(TestInfoConfig testInfoConfig) {
+        this.testInfoConfig = testInfoConfig;
+    }
+
+    public List<String> getTestInfoConfigBase64Screenshots() {
+        return testInfoConfigBase64Screenshots;
+    }
+
+    public void setTestInfoConfigBase64Screenshots(List<String> testInfoConfigBase64Screenshots) {
+        this.testInfoConfigBase64Screenshots = testInfoConfigBase64Screenshots;
+    }
+
+    public List<String> getTestInfoConfigScreenshotFilenames() {
+        return testInfoConfigScreenshotFilenames;
+    }
+
+    public void setTestInfoConfigScreenshotFilenames(List<String> testInfoConfigScreenshotFilenames) {
+        this.testInfoConfigScreenshotFilenames = testInfoConfigScreenshotFilenames;
     }
 
     /**

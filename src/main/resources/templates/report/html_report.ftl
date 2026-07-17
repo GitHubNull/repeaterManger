@@ -18,6 +18,38 @@
   <p class="meta">生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}</p>
 </div>
 
+<#-- Test Info Config Section -->
+<#if inlineMode?? && inlineMode>
+<#if testInfoConfig?? && testInfoConfig.hasAnyData()>
+<h2>测试信息配置</h2>
+<div class="test-info-config">
+  <table class="test-info-table">
+    <#if testInfoConfig.targetName?? && testInfoConfig.targetName != "">
+    <tr><td class="test-info-label">目标名称</td><td>${testInfoConfig.targetName}</td></tr>
+    </#if>
+    <#if testInfoConfig.targetEntry?? && testInfoConfig.targetEntry != "">
+    <tr><td class="test-info-label">目标入口</td><td><a href="${testInfoConfig.targetEntry?replace('"', '&quot;')}" target="_blank" rel="noopener noreferrer">${testInfoConfig.targetEntry}</a></td></tr>
+    </#if>
+    <#if testInfoConfig.testTimeRange?? && testInfoConfig.testTimeRange != "">
+    <tr><td class="test-info-label">测试时间段</td><td>${testInfoConfig.testTimeRange}</td></tr>
+    </#if>
+    <#if testInfoConfig.testPersonnel?? && testInfoConfig.testPersonnel != "">
+    <tr><td class="test-info-label">测试人员</td><td>${testInfoConfig.testPersonnel}</td></tr>
+    </#if>
+  </table>
+  <#if testInfoConfigScreenshots?? && testInfoConfigScreenshots?size gt 0>
+  <div class="screenshot-gallery">
+    <#list testInfoConfigScreenshots as img>
+    <img src="${img}" class="screenshot-thumb" onclick="openLightbox(this.src)" alt="测试目标截图" loading="lazy">
+    </#list>
+  </div>
+  </#if>
+</div>
+</#if>
+<#else>
+<div id="test-info-section"></div>
+</#if>
+
 <#-- User Info Section -->
 <#if inlineMode?? && inlineMode>
 <#if userInfoEntries?? && userInfoEntries?size gt 0>

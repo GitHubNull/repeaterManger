@@ -2,11 +2,13 @@ package org.oxff.repeater.privilege;
 
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.dao.SessionDAO;
+import org.oxff.repeater.privilege.dao.TestInfoConfigDAO;
 import org.oxff.repeater.privilege.dao.UserInfoDAO;
 import org.oxff.repeater.privilege.model.ReplayConfig;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.FieldType;
 import org.oxff.repeater.privilege.model.Scheme;
+import org.oxff.repeater.privilege.model.TestInfoConfig;
 import org.oxff.repeater.privilege.model.UserInfo;
 import org.oxff.repeater.privilege.model.UserSession;
 
@@ -26,6 +28,7 @@ public class SessionManager {
 
     private final SessionDAO sessionDAO;
     private final UserInfoDAO userInfoDAO;
+    private final TestInfoConfigDAO testInfoConfigDAO;
 
     /** 缓存的字段列表 */
     private List<FieldDefinition> cachedFields;
@@ -42,12 +45,16 @@ public class SessionManager {
     /** 缓存的用户信息（sessionId → UserInfo） */
     private Map<Integer, UserInfo> cachedUserInfo;
 
+    /** 缓存的测试信息配置 */
+    private TestInfoConfig cachedTestInfoConfig;
+
     /** 全局重放配置 */
     private final ReplayConfig replayConfig;
 
     private SessionManager() {
         this.sessionDAO = new SessionDAO();
         this.userInfoDAO = new UserInfoDAO();
+        this.testInfoConfigDAO = new TestInfoConfigDAO();
         this.cachedFields = new ArrayList<>();
         this.cachedSchemes = new ArrayList<>();
         this.cachedUserSessions = new ArrayList<>();
@@ -584,6 +591,40 @@ public class SessionManager {
         boolean result = userInfoDAO.save(info);
         if (result) {
             cachedUserInfo.put(info.getSessionId(), info);
+        }
+        return result;
+    }
+
+    // ==================== TestInfoConfig 操作 ====================
+
+    /**
+     * 获取测试信息配置（从缓存获取，若未加载则从数据库加载）
+     */
+    public TestInfoConfig getTestInfoConfig() {
+        if (cachedTestInfoConfig == null) {
+            cachedTestInfoConfig = testInfoConfigDAO.load();
+        }
+        return cachedTestInfoConfig;
+    }
+
+    /**
+     * 保存测试信息配置（写入数据库并更新缓存）
+     */
+    public boolean saveTestInfoConfig(TestInfoConfig config) {
+        boolean result = testInfoConfigDAO.save(config);
+        if (result) {
+            cachedTestInfoConfig = config;
+        }
+        return result;
+    }
+
+    /**
+     * 删除测试信息配置
+     */
+    public boolean deleteTestInfoConfig() {
+        boolean result = testInfoConfigDAO.delete();
+        if (result) {
+            cachedTestInfoConfig = null;
         }
         return result;
     }
