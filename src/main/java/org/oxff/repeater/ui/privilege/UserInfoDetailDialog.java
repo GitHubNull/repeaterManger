@@ -129,39 +129,42 @@ public class UserInfoDetailDialog extends JDialog {
     }
 
     /**
-     * 全屏查看截图
+     * 全屏查看截图 — 以原图尺寸显示在可滚动画布中
      */
     private void showFullscreenImage(String imagePath, String title) {
         try {
             ImageIcon icon = new ImageIcon(imagePath);
-            JDialog fullscreenDialog = new JDialog(this, title, true);
+            JDialog fullscreenDialog = new JDialog(this, title, false);
             fullscreenDialog.setUndecorated(false);
 
             JLabel imageLabel = new JLabel(icon);
             JScrollPane scrollPane = new JScrollPane(imageLabel);
+            scrollPane.getVerticalScrollBar().setUnitIncrement(20);
+            scrollPane.getHorizontalScrollBar().setUnitIncrement(20);
 
-            // 限制最大尺寸为屏幕的90%
+            // 弹窗占屏幕 90% 宽高，图片原始尺寸在内部可滚动
             Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-            int maxWidth = (int) (screenSize.width * 0.9);
-            int maxHeight = (int) (screenSize.height * 0.9);
-
-            int imgWidth = icon.getIconWidth();
-            int imgHeight = icon.getIconHeight();
-            if (imgWidth > maxWidth || imgHeight > maxHeight) {
-                double scale = Math.min((double) maxWidth / imgWidth, (double) maxHeight / imgHeight);
-                Image scaled = icon.getImage().getScaledInstance(
-                        (int) (imgWidth * scale), (int) (imgHeight * scale), Image.SCALE_SMOOTH);
-                imageLabel.setIcon(new ImageIcon(scaled));
-            }
+            int dialogWidth = (int) (screenSize.width * 0.9);
+            int dialogHeight = (int) (screenSize.height * 0.9);
 
             fullscreenDialog.add(scrollPane);
-            fullscreenDialog.setSize(Math.min(imgWidth + 20, maxWidth), Math.min(imgHeight + 40, maxHeight));
+            fullscreenDialog.setSize(dialogWidth, dialogHeight);
             fullscreenDialog.setLocationRelativeTo(this);
 
             // ESC 关闭
             KeyStroke escapeKey = KeyStroke.getKeyStroke("ESCAPE");
             fullscreenDialog.getRootPane().registerKeyboardAction(
                     e -> fullscreenDialog.dispose(), escapeKey, JComponent.WHEN_IN_FOCUSED_WINDOW);
+
+            // 双击图片关闭
+            imageLabel.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        fullscreenDialog.dispose();
+                    }
+                }
+            });
 
             fullscreenDialog.setVisible(true);
         } catch (Exception e) {

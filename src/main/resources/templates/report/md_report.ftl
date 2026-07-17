@@ -7,13 +7,13 @@
 ## 用户信息
 
 <#list userInfoEntries as entry>
-### ${entry.sessionName} <#if entry.isAnonymous>[匿名用户]</#if>
+### ${entry.sessionName} <#if entry.anonymous>[匿名用户]</#if>
 
 | 字段 | 值 |
 |------|-----|
 | 角色 | <#if entry.role??>${entry.role}<#else>-</#if> |
-| 用户名 | <#if entry.username??>${entry.username}<#elseif entry.isAnonymous>匿名用户<#else>${entry.sessionName}</#if> |
-| 匿名 | <#if entry.isAnonymous>是<#else>否</#if> |
+| 用户名 | <#if entry.username??>${entry.username}<#elseif entry.anonymous>匿名用户<#else>${entry.sessionName}</#if> |
+| 匿名 | <#if entry.anonymous>是<#else>否</#if> |
 | 截图数量 | ${entry.screenshotFilenames?size} |
 
 <#if entry.screenshotsBase64?? && entry.screenshotsBase64?size gt 0>

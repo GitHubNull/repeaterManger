@@ -589,13 +589,15 @@ public class SessionManager {
     }
 
     /**
-     * 删除指定会话的用户信息
+     * 删除指定会话的用户信息。
+     *
+     * @param sessionId 会话ID
+     * @return true 表示成功删除，false 表示未找到或出错
      */
     public boolean deleteUserInfo(int sessionId) {
-        boolean result = userInfoDAO.deleteBySessionId(sessionId);
-        if (result) {
-            cachedUserInfo.remove(sessionId);
-        }
-        return result;
+        int affected = userInfoDAO.deleteBySessionId(sessionId);
+        // 无论是否找到记录，都清理缓存，确保一致性
+        cachedUserInfo.remove(sessionId);
+        return affected > 0;
     }
 }

@@ -115,18 +115,22 @@ public class UserInfoDAO {
     }
 
     /**
-     * 根据会话ID删除用户信息（级联删除截图）
+     * 根据会话ID删除用户信息（级联删除截图）。
+     *
+     * @param sessionId 会话ID
+     * @return 实际删除的行数（0 表示没有匹配记录，1 表示成功删除），
+     *         异常时返回 -1
      */
-    public boolean deleteBySessionId(int sessionId) {
+    public int deleteBySessionId(int sessionId) {
         String sql = "DELETE FROM user_info WHERE session_id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, sessionId);
-            return pstmt.executeUpdate() > 0;
+            return pstmt.executeUpdate();
         } catch (SQLException e) {
             LogManager.getInstance().printError("[!] 删除用户信息失败: " + e.getMessage());
+            return -1;
         }
-        return false;
     }
 
     /**

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.33.1] - 2026-07-17
+
+### Fixed
+- 修复 `UserInfoDAO.deleteBySessionId()` 返回类型 `boolean`→`int`，调用方 `SessionManager.deleteUserInfo()` 适配并始终清理缓存，保证缓存一致性
+- 修复 Markdown 报告模板中 `isAnonymous` → `anonymous` 属性名，与 JavaBean 布尔属性命名规范一致
+
+### Changed
+- 重构截图编码逻辑：从 `ReportGenerator` 抽取为独立的 `ScreenshotEncoder` 工具类（读取→缩放→base64 编码），解耦 I/O 与报告生成职责
+- 优化 `UserInfoDetailDialog` 全屏截图查看：改为非模态对话框、原始尺寸滚动画布、双击关闭、滚动步长优化
+- `ReportGenerator.collectData()` 新增 `SessionManager.refreshCache()` 显式刷新，确保报告使用最新用户信息数据
+- 清理 `HtmlReportGenerator`/`ReportContainerReader`/`ReportContainerWriter` 中未使用的 import
+
 ## [2.33.0] - 2026-07-15
 
 ### Added

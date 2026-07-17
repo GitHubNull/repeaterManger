@@ -4,18 +4,12 @@ import org.oxff.repeater.db.RequestDAO;
 import org.oxff.repeater.db.history.HistoryReadDAO;
 import org.oxff.repeater.http.RequestResponseRecord;
 import org.oxff.repeater.logging.LogManager;
+import org.oxff.repeater.privilege.ScreenshotEncoder;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.UserInfo;
 import org.oxff.repeater.privilege.model.UserSession;
 
-import javax.imageio.ImageIO;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.*;
 
 /**
@@ -35,6 +29,9 @@ public abstract class ReportGenerator {
      * 四阶段：端点分组 → 构建 EndpointSection → 计数修正 → 预渲染 body
      */
     public ReportData collectData() {
+        // 显式刷新 SessionManager 缓存，确保报告使用最新的用户信息数据
+        SessionManager.getInstance().refreshCache();
+
         ReportData data = new ReportData();
 
         // 获取所有越权测试结果
@@ -328,26 +325,12 @@ public abstract class ReportGenerator {
             if (userInfo.getScreenshotPaths() != null) {
                 for (String path : userInfo.getScreenshotPaths()) {
                     try {
-                        File screenshotFile = new File(path);
-                        if (!screenshotFile.exists()) {
-                            LogManager.getInstance().printOutput("[*] 截图文件不存在，跳过: " + path);
-                            continue;
-                        }
-                        // 读取并缩放图片
-                        BufferedImage original = ImageIO.read(screenshotFile);
-                        if (original == null) {
-                            LogManager.getInstance().printOutput("[*] 无法读取截图文件，跳过: " + path);
-                            continue;
-                        }
-                        // 缩放至最大宽度 800px
-                        BufferedImage scaled = scaleImageMaxWidth(original, 800);
-                        // 编码为 PNG base64 data URI
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        ImageIO.write(scaled, "png", baos);
-                        String base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
-                        base64List.add("data:image/png;base64," + base64);
+                        // 使用 ScreenshotEncoder 统一处理：读取→缩放→base64编码
+                        String base64Uri = ScreenshotEncoder.encode(path);
+                        base64List.add(base64Uri);
 
                         // 提取文件名
+                        java.io.File screenshotFile = new java.io.File(path);
                         String filename = screenshotFile.getName();
                         filenameList.add(filename);
                     } catch (IOException e) {
@@ -431,24 +414,5 @@ public abstract class ReportGenerator {
             return m.group(1);
         }
         return null;
-    }
-
-    /**
-     * 将图片缩放至指定最大宽度，保持宽高比
-     */
-    private BufferedImage scaleImageMaxWidth(BufferedImage original, int maxWidth) {
-        int width = original.getWidth();
-        int height = original.getHeight();
-        if (width <= maxWidth) {
-            return original;
-        }
-        double ratio = (double) maxWidth / width;
-        int newHeight = (int) (height * ratio);
-        Image scaled = original.getScaledInstance(maxWidth, newHeight, Image.SCALE_SMOOTH);
-        BufferedImage result = new BufferedImage(maxWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = result.createGraphics();
-        g2d.drawImage(scaled, 0, 0, null);
-        g2d.dispose();
-        return result;
     }
 }
