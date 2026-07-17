@@ -1,14 +1,20 @@
 package org.oxff.repeater.privilege.report;
 
 import org.oxff.repeater.io.ErmCryptoHelper;
+import org.oxff.repeater.logging.LogManager;
 import java.awt.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * .ermr 容器格式写入器
@@ -138,6 +144,49 @@ public class ReportContainerWriter {
             if (password != null) {
                 ErmCryptoHelper.clearPassword(password);
             }
+        }
+    }
+
+    /**
+     * 将目录打包为 ZIP，再写入 .ermr 容器
+     * 用于多文件 HTML 报告的加密导出
+     *
+     * @param outputFile 输出 .ermr 文件
+     * @param reportDir  报告目录（将被 ZIP 打包）
+     * @param mode       输出模式
+     * @param parent     父组件 (用于密码对话框)
+     * @return true=成功, false=用户取消或失败
+     */
+    public boolean write(File outputFile, File reportDir, EncryptionMode mode, Component parent) {
+        try {
+            // ZIP 打包整个目录
+            ByteArrayOutputStream zipBaos = new ByteArrayOutputStream();
+            try (ZipOutputStream zos = new ZipOutputStream(zipBaos)) {
+                java.nio.file.Path dirPath = reportDir.toPath();
+                Files.walk(dirPath)
+                        .filter(p -> !Files.isDirectory(p))
+                        .forEach(p -> {
+                            try {
+                                String entryName = dirPath.relativize(p).toString().replace("\\", "/");
+                                zos.putNextEntry(new ZipEntry(entryName));
+                                Files.copy(p, zos);
+                                zos.closeEntry();
+                            } catch (IOException e) {
+                                LogManager.getInstance().printError("[!] ZIP打包文件失败: " + p + " - " + e.getMessage());
+                            }
+                        });
+            }
+
+            byte[] zipBytes = zipBaos.toByteArray();
+            String zipFilename = reportDir.getName() + ".zip";
+
+            // 委托给字节模式写入
+            return write(outputFile, zipBytes, zipFilename, mode, parent);
+        } catch (Exception e) {
+            if (outputFile.exists()) {
+                outputFile.delete();
+            }
+            throw new RuntimeException("Failed to write .ermr container from directory: " + e.getMessage(), e);
         }
     }
 

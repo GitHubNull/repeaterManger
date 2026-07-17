@@ -6,6 +6,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import org.apache.fontbox.ttf.TrueTypeCollection;
 import org.apache.fontbox.ttf.TrueTypeFont;
@@ -15,6 +16,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -84,6 +86,9 @@ public class PdfReportGenerator extends ReportGenerator {
             writer.drawText("生成时间: " + DATE_FORMAT.format(data.getGeneratedAt())
                     + " | Repeater Manager v" + data.getPluginVersion(), 10);
             writer.drawLine();
+
+            // User Info Section
+            buildUserInfoSection(writer, data.getUserInfoEntries());
 
             // Summary
             buildSummary(writer, data.getSummary());
@@ -191,6 +196,54 @@ public class PdfReportGenerator extends ReportGenerator {
         rows.add(new String[]{"唯一端点", String.valueOf(s.getEndpointsTested())});
         writer.drawTable(headers, rows, widths);
         writer.drawLine();
+    }
+
+    /**
+     * 渲染用户信息 section（角色/用户名/匿名/截图）
+     */
+    private void buildUserInfoSection(PdfReportWriter writer,
+                                       List<ReportData.UserInfoEntry> entries) throws Exception {
+        if (entries == null || entries.isEmpty()) return;
+
+        writer.drawTitle("用户信息", 14);
+        for (ReportData.UserInfoEntry entry : entries) {
+            String displayName = entry.isAnonymous() ? "匿名用户" :
+                    (entry.getUsername() != null && !entry.getUsername().isEmpty() ? entry.getUsername() : entry.getSessionName());
+            String roleText = entry.getRole() != null && !entry.getRole().isEmpty() ? entry.getRole() :
+                    (entry.isAnonymous() ? "匿名" : "-");
+
+            writer.drawText("会话: " + entry.getSessionName() + "  |  角色: " + roleText + "  |  用户名: " + displayName +
+                    (entry.isAnonymous() ? "  [匿名]" : ""), 10, MARGIN + 10);
+
+            // 嵌入截图
+            if (entry.getScreenshotsBase64() != null) {
+                for (String base64 : entry.getScreenshotsBase64()) {
+                    try {
+                        if (base64 != null && base64.startsWith("data:image/")) {
+                            int commaIdx = base64.indexOf(",");
+                            if (commaIdx > 0) {
+                                byte[] imageBytes = Base64.getDecoder().decode(base64.substring(commaIdx + 1));
+                                PDImageXObject pdImage = PDImageXObject.createFromByteArray(
+                                        writer.getDocument(), imageBytes, "screenshot");
+                                // 缩放至适合页面宽度
+                                float imgWidth = pdImage.getWidth();
+                                float imgHeight = pdImage.getHeight();
+                                float maxWidth = MARGIN * 10; // 约 500pt
+                                if (imgWidth > maxWidth) {
+                                    float ratio = maxWidth / imgWidth;
+                                    imgHeight *= ratio;
+                                    imgWidth = maxWidth;
+                                }
+                                writer.drawImage(pdImage, imgWidth, imgHeight);
+                            }
+                        }
+                    } catch (Exception e) {
+                        writer.drawText("[截图加载失败]", 9, MARGIN + 10);
+                    }
+                }
+            }
+            writer.drawLine();
+        }
     }
 
     private void buildSessionBreakdown(PdfReportWriter writer,

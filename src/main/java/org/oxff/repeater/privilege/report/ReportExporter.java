@@ -2,12 +2,17 @@ package org.oxff.repeater.privilege.report;
 
 import org.oxff.repeater.config.SessionDirectory;
 import org.oxff.repeater.logging.LogManager;
+import org.oxff.repeater.utils.FileChooserHelper;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 
 /**
  * 报告导出 UI 入口
@@ -52,40 +57,67 @@ public class ReportExporter {
         // 预生成统一时间戳，确保外部文件名和容器内部文件名一致
         final String exportTimestamp = SessionDirectory.generateTimestamp();
 
-        // 文件保存对话框
-        boolean useContainer = encryptionMode != ReportContainerWriter.EncryptionMode.PLAIN;
+        final boolean isHtml = "html".equals(format);
+        final boolean useContainer = encryptionMode != ReportContainerWriter.EncryptionMode.PLAIN;
+
+        File selectedFile;
         String outputExt = useContainer ? "ermr" : ext;
-        String defaultFilename = "privilege_test_report_" + exportTimestamp + "." + outputExt;
 
-        javax.swing.filechooser.FileNameExtensionFilter saveFilter;
-        if (useContainer) {
-            saveFilter = new javax.swing.filechooser.FileNameExtensionFilter(
-                    "ERM Report (*.ermr)", "ermr");
+        if (isHtml && !useContainer) {
+            // HTML 明文模式：选择目录
+            String dirName = "privilege_test_report_" + exportTimestamp;
+            javax.swing.filechooser.FileNameExtensionFilter dummyFilter =
+                    new javax.swing.filechooser.FileNameExtensionFilter("文件夹", "___dummy___");
+            selectedFile = FileChooserHelper.showSaveDialog(
+                    FileChooserHelper.OP_REPORT_EXPORT, "选择导出目录", parent,
+                    new File(dirName), dummyFilter);
         } else {
-            saveFilter = new javax.swing.filechooser.FileNameExtensionFilter(
-                    format.toUpperCase() + " Report (*." + ext + ")", ext);
+            // 单文件模式（PDF/MD/加密HTML）
+            String defaultFilename = "privilege_test_report_" + exportTimestamp + "." + outputExt;
+            javax.swing.filechooser.FileNameExtensionFilter saveFilter;
+            if (useContainer) {
+                saveFilter = new javax.swing.filechooser.FileNameExtensionFilter(
+                        "ERM Report (*.ermr)", "ermr");
+            } else {
+                saveFilter = new javax.swing.filechooser.FileNameExtensionFilter(
+                        format.toUpperCase() + " Report (*." + ext + ")", ext);
+            }
+            selectedFile = FileChooserHelper.showSaveDialog(
+                    FileChooserHelper.OP_REPORT_EXPORT, "导出越权测试报告", parent,
+                    new File(defaultFilename), saveFilter);
         }
-
-        File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_REPORT_EXPORT, "导出越权测试报告", parent,
-                new File(defaultFilename), saveFilter);
 
         if (selectedFile == null) {
             return;
         }
 
         File outputFile = selectedFile;
-        if (!outputFile.getName().contains(".")) {
-            outputFile = new File(outputFile.getAbsolutePath() + "." + outputExt);
-        }
 
         // 覆盖确认
-        if (outputFile.exists()) {
-            int overwrite = JOptionPane.showConfirmDialog(parent,
-                    "文件已存在，是否覆盖？\n" + outputFile.getAbsolutePath(),
-                    "确认覆盖", JOptionPane.YES_NO_OPTION);
-            if (overwrite != JOptionPane.YES_OPTION) {
-                return;
+        if (isHtml && !useContainer) {
+            // HTML 多文件模式：检查目标目录是否非空
+            if (outputFile.exists() && outputFile.isDirectory()) {
+                File[] existingFiles = outputFile.listFiles(f -> !f.isHidden());
+                if (existingFiles != null && existingFiles.length > 0) {
+                    int overwrite = JOptionPane.showConfirmDialog(parent,
+                            "目标目录已存在且非空，继续导出将覆盖其中的同名文件。\n"
+                                    + outputFile.getAbsolutePath() + "\n\n是否继续？",
+                            "确认覆盖", JOptionPane.YES_NO_OPTION,
+                            JOptionPane.WARNING_MESSAGE);
+                    if (overwrite != JOptionPane.YES_OPTION) {
+                        return;
+                    }
+                }
+            }
+        } else {
+            // 单文件模式：检查文件是否已存在
+            if (outputFile.exists()) {
+                int overwrite = JOptionPane.showConfirmDialog(parent,
+                        "文件已存在，是否覆盖？\n" + outputFile.getAbsolutePath(),
+                        "确认覆盖", JOptionPane.YES_NO_OPTION);
+                if (overwrite != JOptionPane.YES_OPTION) {
+                    return;
+                }
             }
         }
 
@@ -115,6 +147,8 @@ public class ReportExporter {
         progressDialog.setSize(300, 100);
         progressDialog.setLocationRelativeTo(parent);
 
+        final String fExt = ext;
+        final String fTimestamp = exportTimestamp;
         new Thread(() -> {
             try {
                 SwingUtilities.invokeLater(() -> progressDialog.setVisible(true));
@@ -122,43 +156,84 @@ public class ReportExporter {
                 LogManager.getInstance().printOutput("[*] 开始生成越权测试报告...");
                 ReportData data = finalGenerator.collectData();
 
-                // 生成报告内容为 byte[]
-                byte[] reportBytes;
-                if ("pdf".equals(format)) {
-                    reportBytes = ((PdfReportGenerator) finalGenerator).generateToBytes(data);
-                } else {
-                    String content = finalGenerator.generate(data);
-                    reportBytes = content.getBytes(StandardCharsets.UTF_8);
-                }
+                if (isHtml && !useContainer) {
+                    // HTML 多文件明文模式：写入目录
+                    File reportDir = finalFile;
+                    if (!reportDir.exists()) {
+                        reportDir.mkdirs();
+                    }
+                    ((HtmlReportGenerator) finalGenerator).generateToDirectory(data, reportDir);
 
-                // 根据加密模式输出
-                if (useContainer) {
-                    String originalFilename = "privilege_test_report_" + exportTimestamp + "." + ext;
-                    ReportContainerWriter containerWriter = new ReportContainerWriter();
-                    boolean success = containerWriter.write(finalFile, reportBytes, originalFilename,
-                            encryptionMode, parent);
-                    if (!success) {
-                        // 用户取消密码输入
+                    SwingUtilities.invokeLater(() -> {
+                        progressDialog.dispose();
+                        JOptionPane.showMessageDialog(parent,
+                                "报告导出成功！\n" + reportDir.getAbsolutePath(),
+                                "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                    LogManager.getInstance().printOutput("[+] HTML 多文件报告导出成功: " + reportDir.getAbsolutePath());
+                } else if (isHtml && useContainer) {
+                    // HTML 多文件加密模式：先生成到临时目录，再 ZIP 打包加密
+                    File tempDir = new File(System.getProperty("java.io.tmpdir"),
+                            "erm_report_" + fTimestamp);
+                    if (tempDir.exists()) {
+                        deleteRecursively(tempDir.toPath());
+                    }
+                    tempDir.mkdirs();
+                    try {
+                        ((HtmlReportGenerator) finalGenerator).generateToDirectory(data, tempDir);
+
+                        ReportContainerWriter containerWriter = new ReportContainerWriter();
+                        boolean success = containerWriter.write(finalFile, tempDir,
+                                encryptionMode, parent);
+                        if (!success) {
+                            SwingUtilities.invokeLater(() -> progressDialog.dispose());
+                            return;
+                        }
+
                         SwingUtilities.invokeLater(() -> {
                             progressDialog.dispose();
+                            JOptionPane.showMessageDialog(parent,
+                                    "报告导出成功！\n" + finalFile.getAbsolutePath() + " (" + encryptionMode + ")",
+                                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
                         });
-                        return;
+                        LogManager.getInstance().printOutput("[+] 加密 HTML 多文件报告导出成功: " + finalFile.getAbsolutePath());
+                    } finally {
+                        deleteRecursively(tempDir.toPath());
                     }
                 } else {
-                    // 明文模式: 直接写文件
-                    try (FileOutputStream fos = new FileOutputStream(finalFile)) {
-                        fos.write(reportBytes);
+                    // 单文件模式（PDF/MD）
+                    byte[] reportBytes;
+                    if ("pdf".equals(fExt)) {
+                        reportBytes = ((PdfReportGenerator) finalGenerator).generateToBytes(data);
+                    } else {
+                        String content = finalGenerator.generate(data);
+                        reportBytes = content.getBytes(StandardCharsets.UTF_8);
                     }
-                }
 
-                SwingUtilities.invokeLater(() -> {
-                    progressDialog.dispose();
-                    String modeDesc = useContainer ? " (" + encryptionMode + ")" : " (明文)";
-                    JOptionPane.showMessageDialog(parent,
-                            "报告导出成功！\n" + finalFile.getAbsolutePath() + modeDesc,
-                            "导出成功", JOptionPane.INFORMATION_MESSAGE);
-                });
-                LogManager.getInstance().printOutput("[+] 越权测试报告导出成功: " + finalFile.getAbsolutePath());
+                    if (useContainer) {
+                        String originalFilename = "privilege_test_report_" + fTimestamp + "." + fExt;
+                        ReportContainerWriter containerWriter = new ReportContainerWriter();
+                        boolean success = containerWriter.write(finalFile, reportBytes, originalFilename,
+                                encryptionMode, parent);
+                        if (!success) {
+                            SwingUtilities.invokeLater(() -> progressDialog.dispose());
+                            return;
+                        }
+                    } else {
+                        try (FileOutputStream fos = new FileOutputStream(finalFile)) {
+                            fos.write(reportBytes);
+                        }
+                    }
+
+                    SwingUtilities.invokeLater(() -> {
+                        progressDialog.dispose();
+                        String modeDesc = useContainer ? " (" + encryptionMode + ")" : " (明文)";
+                        JOptionPane.showMessageDialog(parent,
+                                "报告导出成功！\n" + finalFile.getAbsolutePath() + modeDesc,
+                                "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                    LogManager.getInstance().printOutput("[+] 越权测试报告导出成功: " + finalFile.getAbsolutePath());
+                }
             } catch (Exception e) {
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
@@ -169,6 +244,22 @@ public class ReportExporter {
                 LogManager.getInstance().printError("[!] 越权测试报告导出失败: " + e.getMessage());
             }
         }).start();
+    }
+
+    private void deleteRecursively(Path path) {
+        try {
+            if (Files.exists(path)) {
+                Files.walk(path)
+                        .sorted(Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try { Files.delete(p); } catch (IOException e) {
+                                LogManager.getInstance().debug("[*] 临时文件删除失败: " + p + " - " + e.getMessage());
+                            }
+                        });
+            }
+        } catch (IOException e) {
+            LogManager.getInstance().debug("[*] 临时目录清理失败: " + path + " - " + e.getMessage());
+        }
     }
 
     /**

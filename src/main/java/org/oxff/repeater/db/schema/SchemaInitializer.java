@@ -38,8 +38,8 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 初始化元数据（v15 — 与下方 DDL 中 history 表包含 baseline_response_data 列保持一致）
-        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '15')");
+        // 初始化元数据（v16 — 新增 user_info 和 user_info_screenshots 表）
+        stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '16')");
         stmt.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('clean_shutdown', '1')");
 
         // ===== 池表 =====
@@ -138,7 +138,7 @@ public class SchemaInitializer {
         // ===== v7 Scope表 =====
         createV7ScopeTables(stmt);
 
-        LogManager.getInstance().printOutput("[+] v15 Schema 初始化完成");
+        LogManager.getInstance().printOutput("[+] v16 Schema 初始化完成");
     }
 
     /**
@@ -286,6 +286,30 @@ public class SchemaInitializer {
             "FOREIGN KEY (field_id) REFERENCES field_definitions(id) ON DELETE CASCADE, " +
             "FOREIGN KEY (user_session_id) REFERENCES user_sessions(id) ON DELETE CASCADE, " +
             "UNIQUE (field_id, user_session_id)" +
+            ")"
+        );
+
+        // 用户信息表（v16 新增）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS user_info (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "session_id INTEGER NOT NULL UNIQUE, " +
+            "role TEXT DEFAULT '', " +
+            "username TEXT DEFAULT '', " +
+            "is_anonymous INTEGER NOT NULL DEFAULT 0, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "FOREIGN KEY (session_id) REFERENCES user_sessions(id) ON DELETE CASCADE" +
+            ")"
+        );
+
+        // 用户信息截图表（v16 新增）
+        stmt.execute(
+            "CREATE TABLE IF NOT EXISTS user_info_screenshots (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "user_info_id INTEGER NOT NULL, " +
+            "file_path TEXT NOT NULL, " +
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "FOREIGN KEY (user_info_id) REFERENCES user_info(id) ON DELETE CASCADE" +
             ")"
         );
 

@@ -5,6 +5,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,16 @@ class PdfReportWriter {
 
     void finish() throws Exception {
         if (cs != null) cs.close();
+    }
+
+    PDDocument getDocument() {
+        return document;
+    }
+
+    void drawImage(PDImageXObject image, float width, float height) throws Exception {
+        ensureSpace(height + 10);
+        cs.drawImage(image, margin, y - height, width, height);
+        y -= height + 10;
     }
 
     void drawTitle(String text, float fontSize) throws Exception {

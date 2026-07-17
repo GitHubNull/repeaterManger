@@ -8,8 +8,13 @@ import java.awt.Component;
 import java.awt.Frame;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.zip.CRC32;
 import java.util.zip.Inflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * .ermr 容器读取/解密器
@@ -407,7 +412,50 @@ public class ReportContainerReader {
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
 
-                    // 5. 保存对话框
+                    // 检测是否为 ZIP 打包的多文件报告
+                    boolean isZip = result.originalFilename != null &&
+                            result.originalFilename.toLowerCase().endsWith(".zip");
+
+                    if (isZip) {
+                        // 目录选择器（用于 ZIP 解压）
+                        JFileChooser dirChooser = new JFileChooser();
+                        dirChooser.setDialogTitle("选择解压目录");
+                        dirChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                        dirChooser.setAcceptAllFileFilterUsed(false);
+                        if (dirChooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
+                            return;
+                        }
+                        File extractDir = dirChooser.getSelectedFile();
+
+                        try {
+                            // 解压 ZIP 到选中目录
+                            try (ZipInputStream zis = new ZipInputStream(
+                                    new ByteArrayInputStream(result.content))) {
+                                ZipEntry entry;
+                                while ((entry = zis.getNextEntry()) != null) {
+                                    File outFile = new File(extractDir, entry.getName());
+                                    if (entry.isDirectory()) {
+                                        outFile.mkdirs();
+                                    } else {
+                                        outFile.getParentFile().mkdirs();
+                                        Files.copy(zis, outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                                    }
+                                    zis.closeEntry();
+                                }
+                            }
+                            JOptionPane.showMessageDialog(parent,
+                                    "报告解密成功！\n" + extractDir.getAbsolutePath(),
+                                    "解密成功", JOptionPane.INFORMATION_MESSAGE);
+                            success[0] = true;
+                        } catch (IOException ex) {
+                            JOptionPane.showMessageDialog(parent,
+                                    "解压失败: " + ex.getMessage(),
+                                    "错误", JOptionPane.ERROR_MESSAGE);
+                        }
+                        return;
+                    }
+
+                    // 5. 普通单文件：保存对话框
                     File outputFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
                             org.oxff.repeater.utils.FileChooserHelper.OP_REPORT_SAVE, "保存解密报告", parent,
                             new File(result.originalFilename));

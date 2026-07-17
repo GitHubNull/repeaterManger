@@ -91,5 +91,29 @@
   .escalated-item { color: #d32f2f; font-weight: 600; }
   .error-item { color: #f57c00; font-weight: 600; }
   .safe-item { color: #2e7d32; font-weight: 600; }
+
+  /* 用户信息卡片 */
+  .user-info-cards { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .user-info-card { background: white; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 260px; }
+  .user-info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; }
+  .user-session-name { font-weight: 700; color: #1a237e; font-size: 15px; }
+  .badge.anonymous { background: #78909C; }
+  .user-info-fields { margin-bottom: 10px; }
+  .info-field { padding: 3px 0; font-size: 13px; }
+  .field-label { color: #666; margin-right: 8px; font-weight: 600; }
+  .screenshot-gallery { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .screenshot-thumb { width: 100px; height: 75px; object-fit: cover; border-radius: 4px; border: 1px solid #e0e0e0; cursor: pointer; transition: transform 0.2s; }
+  .screenshot-thumb:hover { transform: scale(1.05); border-color: #1a237e; }
+
+  /* 灯箱 */
+  .lightbox-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+  .lightbox-image { max-width: 90%; max-height: 90%; object-fit: contain; }
+  .lightbox-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 36px; font-weight: bold; cursor: pointer; }
+  .lightbox-close:hover { color: #ccc; }
+
+  /* 排序指示器 */
+  th.sort-asc::after { content: ' \25B2'; font-size: 10px; }
+  th.sort-desc::after { content: ' \25BC'; font-size: 10px; }
+
   @media print { body { background: white; padding: 0; } .card { box-shadow: none; border: 1px solid #ddd; } }
 </style>

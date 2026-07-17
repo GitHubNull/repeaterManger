@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
+<#if inlineMode?? && inlineMode>
 <#include "html_css.ftl">
+<#else>
+<link rel="stylesheet" href="style.css">
+</#if>
 </head>
 <body>
 
@@ -13,6 +17,36 @@
   <h1>${title}</h1>
   <p class="meta">生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}</p>
 </div>
+
+<#-- User Info Section -->
+<#if inlineMode?? && inlineMode>
+<#if userInfoEntries?? && userInfoEntries?size gt 0>
+<h2>用户信息</h2>
+<div class="user-info-cards">
+<#list userInfoEntries as entry>
+<div class="user-info-card">
+  <div class="user-info-header">
+    <span class="user-session-name">${entry.sessionName}</span>
+    <#if entry.isAnonymous><span class="badge anonymous">匿名</span></#if>
+  </div>
+  <div class="user-info-fields">
+    <div class="info-field"><span class="field-label">角色:</span><span><#if entry.role?? && entry.role != "">${entry.role}<#elseif entry.isAnonymous>匿名<#else>-</#if></span></div>
+    <div class="info-field"><span class="field-label">用户名:</span><span><#if entry.username?? && entry.username != "">${entry.username}<#elseif entry.isAnonymous>匿名用户<#else>${entry.sessionName}</#if></span></div>
+  </div>
+  <#if entry.screenshotFilenames?? && entry.screenshotFilenames?size gt 0>
+  <div class="screenshot-gallery">
+    <#list entry.screenshotFilenames as fn>
+    <span class="screenshot-thumb-placeholder">[截图: ${fn}]</span>
+    </#list>
+  </div>
+  </#if>
+</div>
+</#list>
+</div>
+</#if>
+<#else>
+<div id="user-info-section"></div>
+</#if>
 
 <#-- Summary -->
 <h2>摘要</h2>
@@ -27,7 +61,7 @@
 <#-- Session Breakdown -->
 <#if sessionBreakdown?? && sessionBreakdown?size gt 0>
 <h2>会话分布</h2>
-<table>
+<table id="session-table">
   <tr><th>会话</th><th>越权</th><th>安全</th><th>错误</th><th>总计</th></tr>
   <#list sessionBreakdown as sb>
   <tr>
@@ -134,5 +168,9 @@
 </div>
 </#list>
 
+<#if !(inlineMode?? && inlineMode)>
+<script src="data.js"></script>
+<script src="controller.js"></script>
+</#if>
 </body>
 </html>

@@ -3,12 +3,15 @@ package org.oxff.repeater.ui.privilege;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.Scheme;
+import org.oxff.repeater.privilege.model.UserInfo;
 import org.oxff.repeater.privilege.model.UserSession;
 import org.oxff.repeater.utils.ScrollPaneWheelForwarder;
 import org.oxff.repeater.utils.TextLineNumber;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -54,6 +57,22 @@ public class UserSessionEditDialog extends JDialog {
 
     /** 当前会话已有的字段值（编辑模式） */
     private Map<Integer, String> existingFieldValues = new LinkedHashMap<>();
+
+    // ========== 用户信息（可选） ==========
+    /** 用户信息折叠切换按钮 */
+    private JButton userInfoToggleBtn;
+    /** 用户信息内容面板 */
+    private JPanel userInfoPanel;
+    /** 用户信息面板是否可见 */
+    private boolean userInfoExpanded = false;
+    /** 用户是否与用户信息区域有过交互（展开过即为true，永不回退） */
+    private boolean userInfoTouched = false;
+
+    private JTextField roleField;
+    private JTextField usernameField;
+    private JCheckBox anonymousCheckbox;
+    private DefaultListModel<String> screenshotListModel;
+    private JList<String> screenshotList;
 
     public UserSessionEditDialog(Frame owner, String title, UserSession existing) {
         super(owner, title, true);
@@ -137,6 +156,24 @@ public class UserSessionEditDialog extends JDialog {
         gbc.gridwidth = 1;
         gbc.weighty = 0;
 
+        // ========== 用户信息可折叠区域 ==========
+        // 折叠切换按钮
+        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 2;
+        gbc.insets = new Insets(8, 10, 2, 10);
+        userInfoToggleBtn = new JButton("展开用户信息（可选）");
+        userInfoToggleBtn.addActionListener(e -> toggleUserInfoPanel());
+        mainPanel.add(userInfoToggleBtn, gbc);
+
+        // 用户信息内容面板
+        gbc.gridy = 7;
+        gbc.insets = new Insets(2, 10, 5, 10);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        userInfoPanel = createUserInfoPanel();
+        userInfoPanel.setVisible(false);
+        mainPanel.add(userInfoPanel, gbc);
+
+        gbc.gridwidth = 1;
+
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton okBtn = new JButton("确定");
@@ -174,6 +211,11 @@ public class UserSessionEditDialog extends JDialog {
             // 保存现有字段值
             Map<Integer, String> existingVals = existing.getFieldValues();
             existingFieldValues = existingVals != null ? new LinkedHashMap<>(existingVals) : new LinkedHashMap<>();
+            // 加载已有用户信息
+            UserInfo existingUserInfo = sm.getUserInfo(existing.getId());
+            if (existingUserInfo != null) {
+                loadUserInfo(existingUserInfo);
+            }
             // 方案选择（最后执行，因为会触发 refreshFieldValuesPanel() 使用 outerScrollPane）
             if (existing.getSchemeId() != null) {
                 for (Scheme scheme : schemes) {
@@ -186,6 +228,171 @@ public class UserSessionEditDialog extends JDialog {
         } else {
             // 初始化字段值区域（仅新建模式需要，编辑模式已在 setSelectedItem 触发）
             refreshFieldValuesPanel();
+        }
+    }
+
+    /**
+     * 创建用户信息内容面板
+     */
+    private JPanel createUserInfoPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createTitledBorder("用户信息"));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(3, 5, 3, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        // 角色
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
+        panel.add(new JLabel("角色:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1.0;
+        roleField = new JTextField(15);
+        panel.add(roleField, gbc);
+
+        // 用户名
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
+        panel.add(new JLabel("用户名:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 1.0;
+        usernameField = new JTextField(15);
+        panel.add(usernameField, gbc);
+
+        // 匿名复选框
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        anonymousCheckbox = new JCheckBox("匿名用户（勾选后角色和用户名留空）");
+        anonymousCheckbox.addActionListener(e -> {
+            boolean anon = anonymousCheckbox.isSelected();
+            roleField.setEnabled(!anon);
+            usernameField.setEnabled(!anon);
+        });
+        panel.add(anonymousCheckbox, gbc);
+
+        // 截图管理
+        gbc.gridy = 3;
+        gbc.insets = new Insets(8, 5, 3, 5);
+        panel.add(new JLabel("权限截图:"), gbc);
+
+        screenshotListModel = new DefaultListModel<>();
+        screenshotList = new JList<>(screenshotListModel);
+        screenshotList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane screenshotScroll = new JScrollPane(screenshotList);
+        screenshotScroll.setPreferredSize(new Dimension(300, 80));
+        gbc.gridy = 4;
+        gbc.insets = new Insets(3, 5, 3, 5);
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weighty = 0.3;
+        panel.add(screenshotScroll, gbc);
+        gbc.weighty = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        // 截图按钮
+        JPanel screenshotBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        JButton addScreenshotBtn = new JButton("添加");
+        addScreenshotBtn.addActionListener(e -> addScreenshot());
+        JButton removeScreenshotBtn = new JButton("移除");
+        removeScreenshotBtn.addActionListener(e -> removeScreenshot());
+        screenshotBtnPanel.add(addScreenshotBtn);
+        screenshotBtnPanel.add(removeScreenshotBtn);
+        gbc.gridy = 5;
+        gbc.insets = new Insets(0, 5, 3, 5);
+        panel.add(screenshotBtnPanel, gbc);
+
+        return panel;
+    }
+
+    /**
+     * 折叠/展开用户信息面板
+     */
+    private void toggleUserInfoPanel() {
+        userInfoExpanded = !userInfoExpanded;
+        if (userInfoExpanded) {
+            userInfoTouched = true; // 展开过就标记为已交互
+        }
+        userInfoPanel.setVisible(userInfoExpanded);
+        userInfoToggleBtn.setText(userInfoExpanded ? "收起用户信息（可选）" : "展开用户信息（可选）");
+        // 调整对话框高度
+        if (userInfoExpanded) {
+            setSize(getWidth(), 700);
+        } else {
+            setSize(getWidth(), 600);
+        }
+        revalidate();
+        repaint();
+    }
+
+    /**
+     * 添加截图文件
+     */
+    private void addScreenshot() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter("图片文件 (*.png, *.jpg)", "png", "jpg"));
+        chooser.setMultiSelectionEnabled(true);
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            for (File file : chooser.getSelectedFiles()) {
+                screenshotListModel.addElement(file.getAbsolutePath());
+            }
+        }
+    }
+
+    /**
+     * 移除选中的截图
+     */
+    private void removeScreenshot() {
+        int selectedIndex = screenshotList.getSelectedIndex();
+        if (selectedIndex >= 0) {
+            screenshotListModel.remove(selectedIndex);
+        }
+    }
+
+    /**
+     * 从已有 UserInfo 加载数据到表单
+     */
+    private void loadUserInfo(UserInfo info) {
+        roleField.setText(info.getRole() != null ? info.getRole() : "");
+        usernameField.setText(info.getUsername() != null ? info.getUsername() : "");
+        anonymousCheckbox.setSelected(info.isAnonymous());
+        roleField.setEnabled(!info.isAnonymous());
+        usernameField.setEnabled(!info.isAnonymous());
+        // 加载截图路径（只显示文件名）
+        if (info.getScreenshotPaths() != null) {
+            for (String path : info.getScreenshotPaths()) {
+                screenshotListModel.addElement(path);
+            }
+        }
+        // 匿名用户默认展开用户信息区域
+        if (info.isAnonymous() && !userInfoExpanded) {
+            toggleUserInfoPanel();
+        }
+    }
+
+    /**
+     * 从表单收集用户信息
+     * @param sessionId 关联的会话ID
+     */
+    public UserInfo getUserInfo(int sessionId) {
+        List<String> paths = new ArrayList<>();
+        for (int i = 0; i < screenshotListModel.size(); i++) {
+            paths.add(screenshotListModel.get(i));
+        }
+        return new UserInfo(sessionId, roleField.getText().trim(), usernameField.getText().trim(),
+                anonymousCheckbox.isSelected(), paths);
+    }
+
+    /**
+     * 用户是否与用户信息区域有过交互（展开过即视为有保存意图）
+     * 使用 userInfoTouched 而非 userInfoExpanded，避免用户展开→填数据→收起后数据丢失
+     */
+    public boolean isUserInfoExpanded() {
+        return userInfoTouched;
+    }
+
+    /**
+     * 匿名用户预填：展开区域并勾选匿名
+     */
+    public void prepareForAnonymous() {
+        anonymousCheckbox.setSelected(true);
+        roleField.setEnabled(false);
+        usernameField.setEnabled(false);
+        if (!userInfoExpanded) {
+            toggleUserInfoPanel();
         }
     }
 

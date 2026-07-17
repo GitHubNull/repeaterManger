@@ -22,6 +22,7 @@ public class ReportData {
     private List<EndpointRequestLine> escalatedEndpoints = new ArrayList<>();
     private List<EndpointRequestLine> errorEndpoints = new ArrayList<>();
     private List<EndpointRequestLine> safeEndpoints = new ArrayList<>();
+    private List<UserInfoEntry> userInfoEntries = new ArrayList<>();
 
     public String getTitle() {
         return title;
@@ -93,6 +94,14 @@ public class ReportData {
 
     public void setSafeEndpoints(List<EndpointRequestLine> safeEndpoints) {
         this.safeEndpoints = safeEndpoints;
+    }
+
+    public List<UserInfoEntry> getUserInfoEntries() {
+        return userInfoEntries;
+    }
+
+    public void setUserInfoEntries(List<UserInfoEntry> userInfoEntries) {
+        this.userInfoEntries = userInfoEntries;
     }
 
     /**
@@ -505,6 +514,83 @@ public class ReportData {
 
         public void setRequestLine(String requestLine) {
             this.requestLine = requestLine;
+        }
+    }
+
+    /**
+     * 用户信息条目（报告头部展示）
+     */
+    public static class UserInfoEntry {
+        private String sessionName;
+        private String role;
+        private String username;
+        private boolean isAnonymous;
+        /** Base64 编码的截图数据 URI 列表（用于 PDF/MD 嵌入），与 screenshotFilenames 一一对应 */
+        private List<String> screenshotsBase64;
+        /** 截图文件名列表（用于 HTML 文件引用），与 screenshotsBase64 一一对应 */
+        private List<String> screenshotFilenames;
+
+        public UserInfoEntry() {
+            this.screenshotsBase64 = new ArrayList<>();
+            this.screenshotFilenames = new ArrayList<>();
+        }
+
+        public String getSessionName() {
+            return sessionName;
+        }
+
+        public void setSessionName(String sessionName) {
+            this.sessionName = sessionName;
+        }
+
+        public String getRole() {
+            return role;
+        }
+
+        public void setRole(String role) {
+            this.role = role;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public boolean isAnonymous() {
+            return isAnonymous;
+        }
+
+        public void setAnonymous(boolean anonymous) {
+            isAnonymous = anonymous;
+        }
+
+        public List<String> getScreenshotsBase64() {
+            return screenshotsBase64;
+        }
+
+        public List<String> getScreenshotFilenames() {
+            return screenshotFilenames;
+        }
+
+        /**
+         * 同时设置截图 base64 数据和文件名，确保两者一一对应
+         * @throws IllegalArgumentException 如果两个列表大小不一致
+         */
+        public void setScreenshots(List<String> base64List, List<String> filenameList) {
+            if (base64List == null || filenameList == null) {
+                this.screenshotsBase64 = base64List != null ? base64List : new ArrayList<>();
+                this.screenshotFilenames = filenameList != null ? filenameList : new ArrayList<>();
+                return;
+            }
+            if (base64List.size() != filenameList.size()) {
+                throw new IllegalArgumentException(
+                    "截图base64列表和文件名列表大小不一致: " + base64List.size() + " vs " + filenameList.size());
+            }
+            this.screenshotsBase64 = base64List;
+            this.screenshotFilenames = filenameList;
         }
     }
 }

@@ -2,13 +2,16 @@ package org.oxff.repeater.privilege;
 
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.dao.SessionDAO;
+import org.oxff.repeater.privilege.dao.UserInfoDAO;
 import org.oxff.repeater.privilege.model.ReplayConfig;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.FieldType;
 import org.oxff.repeater.privilege.model.Scheme;
+import org.oxff.repeater.privilege.model.UserInfo;
 import org.oxff.repeater.privilege.model.UserSession;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +25,7 @@ public class SessionManager {
     private static SessionManager instance;
 
     private final SessionDAO sessionDAO;
+    private final UserInfoDAO userInfoDAO;
 
     /** 缓存的字段列表 */
     private List<FieldDefinition> cachedFields;
@@ -35,15 +39,20 @@ public class SessionManager {
     /** 缓存的已启用用户会话列表 */
     private List<UserSession> cachedEnabledSessions;
 
+    /** 缓存的用户信息（sessionId → UserInfo） */
+    private Map<Integer, UserInfo> cachedUserInfo;
+
     /** 全局重放配置 */
     private final ReplayConfig replayConfig;
 
     private SessionManager() {
         this.sessionDAO = new SessionDAO();
+        this.userInfoDAO = new UserInfoDAO();
         this.cachedFields = new ArrayList<>();
         this.cachedSchemes = new ArrayList<>();
         this.cachedUserSessions = new ArrayList<>();
         this.cachedEnabledSessions = new ArrayList<>();
+        this.cachedUserInfo = new HashMap<>();
         this.replayConfig = new ReplayConfig();
     }
 
@@ -65,10 +74,16 @@ public class SessionManager {
         cachedSchemes = sessionDAO.getAllSchemes();
         cachedUserSessions = sessionDAO.getAllUserSessions();
         cachedEnabledSessions = sessionDAO.getEnabledUserSessions();
+        // 同步刷新用户信息缓存
+        cachedUserInfo.clear();
+        for (UserInfo info : userInfoDAO.getAll()) {
+            cachedUserInfo.put(info.getSessionId(), info);
+        }
         LogManager.getInstance().printOutput("[+] 会话缓存已刷新: " + cachedFields.size() +
                 "个字段, " + cachedSchemes.size() + "个方案, " +
                 cachedUserSessions.size() + "个用户会话, " +
-                cachedEnabledSessions.size() + "个已启用");
+                cachedEnabledSessions.size() + "个已启用, " +
+                cachedUserInfo.size() + "条用户信息");
     }
 
     // ==================== FieldDefinition 操作 ====================
@@ -549,5 +564,38 @@ public class SessionManager {
 
     public void setReplayDelay(int replayDelay) {
         replayConfig.setReplayDelay(replayDelay);
+    }
+
+    // ==================== UserInfo 操作 ====================
+
+    /**
+     * 获取指定会话的用户信息（从缓存获取）
+     * <p><b>注意：返回的是缓存中的对象引用，禁止修改返回对象的字段。</b>
+     * 如需修改，请使用 {@link #saveUserInfo(UserInfo)} 写入新数据。</p>
+     */
+    public UserInfo getUserInfo(int sessionId) {
+        return cachedUserInfo.get(sessionId);
+    }
+
+    /**
+     * 保存用户信息（写入数据库并更新缓存）
+     */
+    public boolean saveUserInfo(UserInfo info) {
+        boolean result = userInfoDAO.save(info);
+        if (result) {
+            cachedUserInfo.put(info.getSessionId(), info);
+        }
+        return result;
+    }
+
+    /**
+     * 删除指定会话的用户信息
+     */
+    public boolean deleteUserInfo(int sessionId) {
+        boolean result = userInfoDAO.deleteBySessionId(sessionId);
+        if (result) {
+            cachedUserInfo.remove(sessionId);
+        }
+        return result;
     }
 }
