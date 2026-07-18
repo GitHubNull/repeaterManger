@@ -14,7 +14,7 @@
 
 Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. Compared to the native Repeater, it provides more powerful features, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, API rule extraction, automated privilege escalation testing, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
-> **Current Version**: v2.31.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
+> **Current Version**: v2.34.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
 
 ## Core Features
 
@@ -385,8 +385,8 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/repeater-manager-2.31.0.jar`
-- Timestamped release version: `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.34.0.jar`
+- Timestamped release version: `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 

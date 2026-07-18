@@ -118,7 +118,7 @@ public class UsageTutorialPanel extends JPanel {
     }
 
     private void loadContent() {
-        String resourcePath = String.format("/doc/usage_%s_%s.md",
+        String resourcePath = String.format("/doc/tutorials/usage_%s_%s.md",
                 currentDocType == DocType.QUICK ? "quick" : "detailed",
                 currentLanguage == Language.ZH ? "zh" : "en");
 

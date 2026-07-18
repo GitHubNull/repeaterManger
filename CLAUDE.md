@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, API extraction, privilege escalation testing, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
 
-- **Version**: 2.31.0
+- **Version**: 2.34.0
 - **Java**: 17 (source/target compatibility)
 - **Build**: Maven
 - **License**: Apache License 2.0
@@ -99,8 +99,8 @@ mvn clean package
 ```
 
 The build process creates two JAR files:
-- Development version: `target/repeater-manager-2.31.0.jar`
-- Timestamped release: `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.34.0.jar`
+- Timestamped release: `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar`
 
 ## Source Code Organization
 
@@ -409,7 +409,7 @@ Data is persisted in session directories under `~/.burp/` (timestamp-named), eac
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/release.yml`):
-- **Trigger**: Push `v*` tags (e.g., `v2.31.0`) or manual dispatch
+- **Trigger**: Push `v*` tags (e.g., `v2.34.0`) or manual dispatch
 - **Build**: JDK 17 + Maven on Ubuntu
 - **Release**: Auto-creates GitHub Release with JAR attachment
-- **Prerelease**: Tags with `-` suffix (e.g., `v2.31.0-beta`) are marked as prerelease
+- **Prerelease**: Tags with `-` suffix (e.g., `v2.34.0-beta`) are marked as prerelease

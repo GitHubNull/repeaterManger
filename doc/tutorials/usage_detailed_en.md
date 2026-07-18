@@ -423,7 +423,7 @@ Key capabilities:
 
 ### 11.2 Scheme Management
 
-**Concept**: A token scheme is a named group of fields, serving as an intermediate layer between fields and user sessions. Different schemes correspond to different security testing targets (e.g., testing only Bearer authentication, testing only Cookie authentication, etc.).
+**Concept**: A scheme is a named group of fields, serving as an intermediate layer between field definitions and user sessions. Different schemes correspond to different security testing targets (e.g., testing only Bearer authentication, testing only Cookie authentication, etc.).
 
 **Scheme Operations**:
 - **Create**: Define a scheme name, description, and select associated fields
@@ -444,14 +444,14 @@ Key capabilities:
 **Configuration Examples**:
 | Scheme Name | Field Definitions | Use Case |
 |-------------|----------------|----------|
-| Bearer Auth | Authorization Header only | Testing JWT/Bearer token replacement |
+| Bearer Auth | Authorization Header only | Testing JWT/Bearer field replacement |
 | Cookie Session | Cookie: JSESSIONID | Testing session cookie hijacking |
-| Hybrid Auth | Authorization Header + CSRF Token | Testing APIs requiring multiple auth factors |
+| Hybrid Auth | Authorization Header + CSRF field | Testing APIs requiring multiple auth factors |
 | API Key | URL Param: api_key | Testing API key leakage scenarios |
 
 ### 11.3 Field Definition Configuration
 
-Configure where tokens are located in the request. The plugin supports **6 field types**:
+Configure where authentication fields are located in the request. The plugin supports **6 field types**:
 
 | Location Type | Description | Expression Example |
 |---------------|-------------|-------------------|
@@ -465,7 +465,7 @@ Configure where tokens are located in the request. The plugin supports **6 field
 **Additional Features**:
 - **Persist to Global**: Save location to `~/.burp/repeater_manager/field_definitions.yaml` for cross-project sharing
 - **Enable/Disable**: Temporarily disable a location without deleting it
-- **Expression Support**: JSON_BODY and XML_BODY types support JSONPath/XPath expressions for extracting tokens from complex nested structures
+- **Expression Support**: JSON_BODY and XML_BODY types support JSONPath/XPath expressions for extracting field values from complex nested structures
 
 ### 11.4 Judgment Rule Group Configuration
 
@@ -535,7 +535,7 @@ Each case below corresponds to one rule group. Groups marked with `[NOT]` demons
 - **Note**: If no redirect to login page, the resource may be accessible without auth
 
 **Case 8 (NEW): Anonymous User Unauthorized Access**
-- **Scenario**: Anonymous user (all tokens empty) accessing authenticated endpoints
+- **Scenario**: Anonymous user (all field values empty) accessing authenticated endpoints
 - **Conditions**: `STATUS_CODE EQUALS 200` AND `RESPONSE_BODY NOT_CONTAINS "please login"` (via NOT operator)
 - **Note**: Server should return 401/403 or page with "please login" message; if 200 is returned directly, an unauthorized access vulnerability exists
 
@@ -564,8 +564,8 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 **Workflow**:
 1. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
 2. Click the **"Add Anonymous User"** button
-3. The system performs intelligent token scheme matching:
-   - **Priority 1**: Reuse an existing user's token scheme (if any user already has a scheme)
+3. The system performs intelligent scheme matching (v2.31.0):
+   - **Priority 1**: Reuse an existing user's scheme (if any user already has a scheme)
    - **Priority 2**: Auto-match the single enabled scheme
    - **Priority 3**: Show a selection dialog when multiple schemes exist
 
@@ -630,7 +630,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 3. Click the **"Parse from Clipboard"** button
 4. The plugin auto-detects clipboard format and converts it to raw HTTP
 5. Automatically extracts field values and location information
-6. Select the target token scheme (a selection dialog appears if no matching scheme exists)
+6. Select the target scheme (a selection dialog appears if no matching scheme exists)
 7. Confirm to create or update the user session
 
 > Chrome fetch format support includes single/double quotes, escape sequences, nested objects, and other complex JS syntax parsing.
@@ -640,7 +640,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 1. After completing the above configuration, set an **active rule group** in the privilege testing panel (check the "Active" column for the target rule group)
 2. Enable the **"Auto-testing"** switch
 3. The plugin intercepts scope-matched proxy traffic
-4. Automatically replaces tokens and replays requests (anonymous user's empty field values trigger "removal" operations)
+4. Automatically replaces field values and replays requests (anonymous user's empty field values trigger "removal" operations)
 5. Evaluates privilege escalation risk based on the active rule group (all conditions AND-matched → ESCALATED; any condition fails → fallback to similarity judgment)
 6. View results in the **"Privilege Test"** panel:
    - **Red**: Potential privilege escalation, requires manual confirmation
@@ -656,7 +656,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 
 ### 12.1 Feature Overview
 
-The message comparison module provides diff comparison capabilities for request/response pairs, supporting comparison of original requests with token-replaced requests and their corresponding responses in privilege testing scenarios. It also supports comparing any two history records for the same request.
+The message comparison module provides diff comparison capabilities for request/response pairs, supporting comparison of original requests with field-replaced requests and their corresponding responses in privilege testing scenarios. It also supports comparing any two history records for the same request.
 
 ### 12.2 Starting a Comparison
 
@@ -770,7 +770,7 @@ The report export module uses the Template Method design pattern to export privi
 > Report templates use the `JudgmentResult.toDisplayName()` method to uniformly convert enum values to Chinese display names, ensuring raw enum strings like `"ESCALATED"` never appear in reports.
 
 **Per-Endpoint Details** (each tested API endpoint includes):
-- Original request/response and token-replaced request/response details
+- Original request/response and field-replaced request/response details
 - Matched **rule group name** (`matchedRuleName`): When judgment is triggered by a rule group, the report explicitly displays the matched rule group name for traceability
 - Similarity score (`similarity`): Percentage of similarity between original and replaced responses
 - HTTP status code, response length, response time

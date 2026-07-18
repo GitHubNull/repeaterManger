@@ -6,10 +6,11 @@
 
 **Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理、API 规则提取和自动化越权测试功能。项目使用 Java 17 编写，基于 Montoya SDK（`burp.api.montoya.*`），采用 MVC 架构。
 
-- **版本**: 2.31.0
+- **版本**: 2.34.0
 - **Java 版本**: 17（source/target 兼容）
 - **构建工具**: Maven
 - **许可证**: Apache License 2.0
+- **测试靶场**: `oversteplab/`（Git 子模块，越权测试靶场 OverstepLab）
 
 ## 架构概览
 
@@ -127,6 +128,14 @@
 - 用户会话通过 `schemeId` 一对一关联方案
 - 匿名用户创建时智能匹配方案（v2.31.0）
 
+### 匿名用户智能方案匹配（v2.31.0）
+
+匿名用户（所有字段值为空）创建时自动寻找合适方案：
+- **优先级 1**：复用已有用户的方案（如果已有用户关联了方案）
+- **优先级 2**：自动匹配唯一启用的方案
+- **优先级 3**：多方案时弹出 `SelectSchemeDialog` 供用户手动选择
+- 空字段值的"移除"语义：HEADER 删除 / JSON_BODY 移除属性 / XML_BODY 移除节点 / FORM_FIELD 移除字段 / URL_PARAM 移除参数
+
 ### 去重配置系统（v2.20.0）
 
 - `DedupConfigManager` 管理多配置优先级链式匹配
@@ -200,8 +209,8 @@ mvn clean package
 ```
 
 构建产物：
-- `target/repeater-manager-2.31.0.jar` — 开发版本
-- `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-2.34.0.jar` — 开发版本
+- `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 
@@ -284,7 +293,14 @@ schema_meta (key, value)
 
 项目使用 GitHub Actions（`.github/workflows/release.yml`）：
 
-- **触发条件**: 推送 `v*` 格式标签（如 `v2.31.0`）或手动触发
+- **触发条件**: 推送 `v*` 格式标签（如 `v2.34.0`）或手动触发
 - **构建**: JDK 17 + Maven
 - **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
-- **预发布**: 标签包含 `-` 后缀（如 `v2.31.0-beta`）时标记为预发布
+- **预发布**: 标签包含 `-` 后缀（如 `v2.34.0-beta`）时标记为预发布
+
+## 开发文档
+
+详细的开发指南请参考 [doc/development/](doc/development/) 目录：
+- [基础级](doc/development/basic-level.md) — 环境搭建、项目结构、编码约定
+- [中级](doc/development/intermediate-level.md) — Pool 去重、连接池、Schema 迁移、ERM 格式
+- [高级](doc/development/advanced-level.md) — Montoya SDK 集成、越权测试引擎、报告生成、报文比对

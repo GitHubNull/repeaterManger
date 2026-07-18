@@ -14,7 +14,7 @@
 
 Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请求重放管理插件。相比原生 Repeater，它提供了更强大的功能，包括请求的分类管理、响应历史自动记录与比对、SQLite 本地持久化、内容去重存储、多条件高级搜索、API 规则提取、自动化越权测试、多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。本插件特别适合安全测试人员和渗透测试专家使用，可有效提高 HTTP/HTTPS 请求测试的效率和组织性。
 
-> **当前版本**: v2.31.0 | **最低要求**: Burp Suite Professional 2024+ (Montoya 扩展 API) + Java 17+
+> **当前版本**: v2.34.0 | **最低要求**: Burp Suite Professional 2024+ (Montoya 扩展 API) + Java 17+
 
 ## 核心功能
 
@@ -154,7 +154,22 @@ Repeater Manager
 - **越权测试**：配置多用户会话和判断规则，自动检测水平/垂直越权漏洞
 
 详细使用说明请参考：
-- [快速入门教程](doc/usage_quick_zh.md)
+- [快速入门教程](doc/tutorials/usage_quick_zh.md)
+- [详细使用教程](doc/tutorials/usage_detailed_zh.md)
+
+## 越权测试靶场
+
+本项目包含一个独立的越权测试靶场子模块 [OverstepLab](https://github.com/GitHubNull/OverstepLab)，用于插件的功能测试和越权检测能力验证。
+
+```bash
+# 克隆时同时获取子模块
+git clone --recurse-submodules https://github.com/GitHubNull/repeaterManger.git
+
+# 或手动初始化
+git submodule update --init --recursive
+```
+
+靶场位于 `oversteplab/` 目录，详细使用方式请参考子模块自身的 README。
 
 ## 技术架构
 
@@ -388,8 +403,8 @@ mvn clean package
 ```
 
 构建产物：
-- 开发版本: `target/repeater-manager-2.31.0.jar`
-- 带时间戳发布版本: `target/releases/repeater-manager-2.31.0-YYYYMMDD-HHMMSS.jar`
+- 开发版本: `target/repeater-manager-2.34.0.jar`
+- 带时间戳发布版本: `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar`
 
 ## 使用场景
 
@@ -400,6 +415,7 @@ mvn clean package
 5. **安全评估**：整理大型应用的 API 集合，系统化进行安全测试
 6. **团队协作**：通过 ERM 存档和全局 YAML 规则实现团队间的数据与规则共享
 7. **渗透测试记录**：记录渗透测试过程中的关键请求，便于编写报告
+8. **靶场演练**：配合 `oversteplab` 越权测试靶场，在安全环境中验证和演示越权检测能力
 
 ## 数据持久化说明
 
@@ -458,6 +474,8 @@ mvn clean package
 2. 新功能需附带说明
 3. 使用 Montoya SDK API（不使用 legacy Burp Extender API）
 4. 提交前运行 `mvn clean package` 确保构建成功
+
+详细开发指南请参考 **[开发文档](doc/development/index.md)**，按难度分为基础级、中级和高级。
 
 ## 许可证
 

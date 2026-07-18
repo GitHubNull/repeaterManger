@@ -110,8 +110,8 @@
                 <directory>src/main/resources</directory>
             </resource>
             <resource>
-                <directory>doc</directory>
-                <targetPath>doc</targetPath>
+                <directory>doc/tutorials</directory>
+                <targetPath>doc/tutorials</targetPath>
                 <includes>
                     <include>*.md</include>
                 </includes>
