@@ -22,6 +22,9 @@ public class TestInfoConfigTab extends JPanel {
     private JTextField testPersonnelField;
     private DefaultListModel<String> screenshotListModel;
     private JList<String> screenshotList;
+    private JCheckBox useDefaultTitleCheckBox;
+    private JTextField reportTitleField;
+    private JTextField reportSubtitleField;
 
     /** 保存防抖标志，防止快速双击触发并发保存 */
     private volatile boolean saving = false;
@@ -88,6 +91,38 @@ public class TestInfoConfigTab extends JPanel {
         testPersonnelField.setToolTipText("参与测试的人员信息，如：张三、李四");
         formPanel.add(testPersonnelField, gbc);
 
+        // 报告标题（带复选框切换默认/自定义）
+        row++;
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
+        formPanel.add(new JLabel("报告标题:"), gbc);
+        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        useDefaultTitleCheckBox = new JCheckBox("使用默认标题", true);
+        useDefaultTitleCheckBox.setToolTipText("取消勾选后可输入自定义报告标题");
+        reportTitleField = new JTextField(40);
+        reportTitleField.setText("越权测试报告");
+        reportTitleField.setToolTipText("自定义报告标题（取消「使用默认标题」后可编辑）");
+        reportTitleField.setEnabled(false);
+        useDefaultTitleCheckBox.addActionListener(e -> {
+            boolean useDefault = useDefaultTitleCheckBox.isSelected();
+            reportTitleField.setEnabled(!useDefault);
+            if (useDefault) {
+                reportTitleField.setText("越权测试报告");
+            }
+        });
+        titlePanel.add(useDefaultTitleCheckBox);
+        titlePanel.add(reportTitleField);
+        formPanel.add(titlePanel, gbc);
+
+        // 报告副标题
+        row++;
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
+        formPanel.add(new JLabel("报告副标题:"), gbc);
+        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
+        reportSubtitleField = new JTextField(40);
+        reportSubtitleField.setToolTipText("可选副标题，报告中将显示在主标题下方");
+        formPanel.add(reportSubtitleField, gbc);
+
         // 测试目标截图
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 2;
@@ -148,6 +183,18 @@ public class TestInfoConfigTab extends JPanel {
         testTimeRangeField.setText(config.getTestTimeRange());
         testPersonnelField.setText(config.getTestPersonnel());
 
+        // 报告标题
+        useDefaultTitleCheckBox.setSelected(config.isUseDefaultTitle());
+        if (config.isUseDefaultTitle()) {
+            reportTitleField.setText("越权测试报告");
+            reportTitleField.setEnabled(false);
+        } else {
+            reportTitleField.setText(config.getReportTitle());
+            reportTitleField.setEnabled(true);
+        }
+        // 报告副标题
+        reportSubtitleField.setText(config.getReportSubtitle());
+
         screenshotListModel.clear();
         if (config.getTargetScreenshots() != null) {
             for (String path : config.getTargetScreenshots()) {
@@ -175,6 +222,9 @@ public class TestInfoConfigTab extends JPanel {
         config.setTargetEntry(targetEntryField.getText().trim());
         config.setTestTimeRange(testTimeRangeField.getText().trim());
         config.setTestPersonnel(testPersonnelField.getText().trim());
+        config.setUseDefaultTitle(useDefaultTitleCheckBox.isSelected());
+        config.setReportTitle(reportTitleField.getText().trim());
+        config.setReportSubtitle(reportSubtitleField.getText().trim());
 
         List<String> screenshots = new ArrayList<>();
         List<String> missingFiles = new ArrayList<>();
@@ -220,6 +270,10 @@ public class TestInfoConfigTab extends JPanel {
         targetEntryField.setText("");
         testTimeRangeField.setText("");
         testPersonnelField.setText("");
+        useDefaultTitleCheckBox.setSelected(true);
+        reportTitleField.setText("越权测试报告");
+        reportTitleField.setEnabled(false);
+        reportSubtitleField.setText("");
         screenshotListModel.clear();
         JOptionPane.showMessageDialog(this, "配置已清空", "提示", JOptionPane.INFORMATION_MESSAGE);
     }

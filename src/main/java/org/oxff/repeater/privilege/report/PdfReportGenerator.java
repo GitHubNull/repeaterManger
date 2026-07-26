@@ -90,6 +90,10 @@ public class PdfReportGenerator extends ReportGenerator {
 
             // Title
             writer.drawTitle(data.getTitle(), 20);
+            // Subtitle (optional)
+            if (data.getSubtitle() != null && !data.getSubtitle().isEmpty()) {
+                writer.drawText(data.getSubtitle(), 12, MARGIN + 5);
+            }
             writer.drawText("生成时间: " + DATE_FORMAT.format(data.getGeneratedAt())
                     + " | Repeater Manager v" + data.getPluginVersion(), 10);
             writer.drawLine();

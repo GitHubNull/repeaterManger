@@ -367,12 +367,22 @@ public abstract class ReportGenerator {
             TestInfoConfig configCopy = new TestInfoConfig(
                     config.getTargetName(), config.getTargetEntry(),
                     config.getTargetScreenshots(),
-                    config.getTestTimeRange(), config.getTestPersonnel());
+                    config.getTestTimeRange(), config.getTestPersonnel(),
+                    config.getReportTitle(), config.isUseDefaultTitle(), config.getReportSubtitle());
             configCopy.setId(config.getId());
             data.setTestInfoConfig(configCopy);
             // 分别保存 base64 编码数据和文件名，供不同报告格式使用
             data.setTestInfoConfigBase64Screenshots(encodedScreenshots);
             data.setTestInfoConfigScreenshotFilenames(screenshotFilenames);
+
+            // 应用自定义标题：若未使用默认标题且自定义标题非空，覆盖默认标题
+            if (!config.isUseDefaultTitle() && config.getReportTitle() != null && !config.getReportTitle().isEmpty()) {
+                data.setTitle(config.getReportTitle());
+            }
+            // 应用副标题
+            if (config.getReportSubtitle() != null && !config.getReportSubtitle().isEmpty()) {
+                data.setSubtitle(config.getReportSubtitle());
+            }
         }
 
         return data;

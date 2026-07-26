@@ -14,6 +14,7 @@ import java.util.List;
 public class ReportData {
 
     private String title = "越权测试报告";
+    private String subtitle;
     private Date generatedAt = new Date();
     private String pluginVersion = "2.33.1";
 
@@ -36,6 +37,14 @@ public class ReportData {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getSubtitle() {
+        return subtitle;
+    }
+
+    public void setSubtitle(String subtitle) {
+        this.subtitle = subtitle;
     }
 
     public Date getGeneratedAt() {

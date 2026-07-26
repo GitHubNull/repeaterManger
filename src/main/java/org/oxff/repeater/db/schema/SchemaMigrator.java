@@ -18,12 +18,13 @@ import java.util.List;
  *   <li>{@link MigrationsV12ToV15} — v11→v12, v12→v13, v13→v14, v14→v15</li>
  *   <li>{@link MigrationsV15ToV16} — v15→v16</li>
  *   <li>{@link MigrationsV16ToV17} — v16→v17</li>
+ *   <li>{@link MigrationsV17ToV18} — v17→v18</li>
  * </ul>
  */
 public class SchemaMigrator {
 
     /** 当前支持的最高 Schema 版本 */
-    public static final int LATEST_VERSION = 17;
+    public static final int LATEST_VERSION = 18;
 
     /**
      * 执行所有必要的数据库迁移
@@ -37,6 +38,7 @@ public class SchemaMigrator {
         allSteps.addAll(MigrationsV12ToV15.getSteps());
         allSteps.addAll(MigrationsV15ToV16.getSteps());
         allSteps.addAll(MigrationsV16ToV17.getSteps());
+        allSteps.addAll(MigrationsV17ToV18.getSteps());
 
         for (MigrationStep step : allSteps) {
             if (currentVersion < step.toVersion()) {

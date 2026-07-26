@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.35.0] - 2026-07-26
+
+### Added
+- 报告自定义标题/副标题功能：`TestInfoConfig` 新增 `reportTitle`/`useDefaultTitle`/`reportSubtitle` 字段，支持用户自定义报告标题（默认"越权测试报告"）和副标题
+- 测试信息配置面板新增标题编辑区：包含「使用默认标题」复选框和自定义标题/副标题输入框，复用既有保存/加载/清空逻辑
+- 数据库迁移 V17→V18：`test_info_config` 表新增 `report_title`/`use_default_title`/`report_subtitle` 列
+
+### Changed
+- 报告生成器（HTML/Markdown/PDF）适配自定义标题/副标题：`ReportGenerator.collectData()` 根据 `useDefaultTitle` 决定是否覆盖默认标题
+- 报告模板（`html_report.ftl`/`md_report.ftl`/`html_css.ftl`）新增副标题条件渲染，HTML 模板添加 `.report-subtitle` CSS 样式
+
 ## [2.34.0] - 2026-07-17
 
 ### Added

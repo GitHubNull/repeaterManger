@@ -15,6 +15,9 @@
 <#-- Header -->
 <div class="header">
   <h1>${title}</h1>
+  <#if subtitle?? && subtitle != "">
+  <h2 class="report-subtitle">${subtitle}</h2>
+  </#if>
   <p class="meta">生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}</p>
 </div>
 

@@ -115,6 +115,7 @@ public class HtmlReportGenerator extends ReportGenerator {
         jsData.put("title", data.getTitle());
         jsData.put("generatedAt", DATE_FORMAT.format(data.getGeneratedAt()));
         jsData.put("pluginVersion", data.getPluginVersion());
+        jsData.put("subtitle", data.getSubtitle());
 
         // 摘要
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -246,6 +247,7 @@ public class HtmlReportGenerator extends ReportGenerator {
         model.put("title", data.getTitle());
         model.put("generatedAt", DATE_FORMAT.format(data.getGeneratedAt()));
         model.put("pluginVersion", data.getPluginVersion());
+        model.put("subtitle", data.getSubtitle());
         model.put("summary", data.getSummary());
         model.put("sessionBreakdown", data.getSessionBreakdown());
         model.put("escalatedEndpoints", data.getEscalatedEndpoints());

@@ -25,6 +25,7 @@ public class MarkdownReportGenerator extends ReportGenerator {
             model.put("title", data.getTitle());
             model.put("generatedAt", DATE_FORMAT.format(data.getGeneratedAt()));
             model.put("pluginVersion", data.getPluginVersion());
+            model.put("subtitle", data.getSubtitle());
             model.put("summary", data.getSummary());
             model.put("sessionBreakdown", data.getSessionBreakdown());
             model.put("escalatedEndpoints", data.getEscalatedEndpoints());

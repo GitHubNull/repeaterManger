@@ -22,7 +22,8 @@ public class TestInfoConfigDAO {
      * 加载配置（始终返回一条记录，不存在时返回空对象）
      */
     public TestInfoConfig load() {
-        String sql = "SELECT id, target_name, target_entry, test_time_range, test_personnel, created_at, updated_at "
+        String sql = "SELECT id, target_name, target_entry, test_time_range, test_personnel, "
+                + "report_title, use_default_title, report_subtitle, created_at, updated_at "
                 + "FROM test_info_config WHERE id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -35,6 +36,9 @@ public class TestInfoConfigDAO {
                     config.setTargetEntry(rs.getString("target_entry"));
                     config.setTestTimeRange(rs.getString("test_time_range"));
                     config.setTestPersonnel(rs.getString("test_personnel"));
+                    config.setReportTitle(rs.getString("report_title"));
+                    config.setUseDefaultTitle(rs.getInt("use_default_title") != 0);
+                    config.setReportSubtitle(rs.getString("report_subtitle"));
                     config.setCreatedAt(rs.getLong("created_at"));
                     config.setUpdatedAt(rs.getLong("updated_at"));
                     config.setTargetScreenshots(loadScreenshots(conn, config.getId()));
@@ -56,13 +60,17 @@ public class TestInfoConfigDAO {
             try {
                 // INSERT OR REPLACE（created_at 由 Java 端提供毫秒时间戳，避免 SQLite TEXT 默认值类型不匹配）
                 long now = System.currentTimeMillis();
-                String upsertSql = "INSERT INTO test_info_config (id, target_name, target_entry, test_time_range, test_personnel, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                String upsertSql = "INSERT INTO test_info_config (id, target_name, target_entry, test_time_range, test_personnel, "
+                        + "report_title, use_default_title, report_subtitle, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                         + "ON CONFLICT(id) DO UPDATE SET "
                         + "target_name = excluded.target_name, "
                         + "target_entry = excluded.target_entry, "
                         + "test_time_range = excluded.test_time_range, "
                         + "test_personnel = excluded.test_personnel, "
+                        + "report_title = excluded.report_title, "
+                        + "use_default_title = excluded.use_default_title, "
+                        + "report_subtitle = excluded.report_subtitle, "
                         + "updated_at = excluded.updated_at";
                 try (PreparedStatement pstmt = conn.prepareStatement(upsertSql)) {
                     pstmt.setInt(1, CONFIG_ID);
@@ -70,8 +78,11 @@ public class TestInfoConfigDAO {
                     pstmt.setString(3, config.getTargetEntry());
                     pstmt.setString(4, config.getTestTimeRange());
                     pstmt.setString(5, config.getTestPersonnel());
-                    pstmt.setLong(6, now);
-                    pstmt.setLong(7, now);
+                    pstmt.setString(6, config.getReportTitle());
+                    pstmt.setInt(7, config.isUseDefaultTitle() ? 1 : 0);
+                    pstmt.setString(8, config.getReportSubtitle());
+                    pstmt.setLong(9, now);
+                    pstmt.setLong(10, now);
                     pstmt.executeUpdate();
                 }
 

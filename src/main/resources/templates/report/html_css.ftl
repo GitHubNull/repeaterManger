@@ -6,6 +6,7 @@
     padding: 20px; background: #f5f5f5; }
   .header { background: #1a237e; color: white; padding: 30px; border-radius: 8px; margin-bottom: 24px; }
   .header h1 { font-size: 24px; margin-bottom: 8px; }
+  .header .report-subtitle { color: rgba(255,255,255,0.85); font-size: 16px; border-bottom: none; margin: 0 0 8px 0; padding-bottom: 0; }
   .header .meta { font-size: 13px; opacity: 0.85; }
   h2 { font-size: 20px; margin: 28px 0 16px; color: #1a237e; border-bottom: 2px solid #1a237e; padding-bottom: 8px; }
   h3 { font-size: 16px; margin: 16px 0 10px; color: #283593; }

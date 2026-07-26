@@ -397,6 +397,9 @@ public class SchemaInitializer {
             "target_entry TEXT DEFAULT '', " +
             "test_time_range TEXT DEFAULT '', " +
             "test_personnel TEXT DEFAULT '', " +
+            "report_title TEXT DEFAULT '', " +
+            "use_default_title INTEGER DEFAULT 1, " +
+            "report_subtitle TEXT DEFAULT '', " +
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
             "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
             ")"

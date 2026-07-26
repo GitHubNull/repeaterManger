@@ -1,5 +1,9 @@
 # ${title}
 
+<#if subtitle?? && subtitle != "">
+## ${subtitle}
+
+</#if>
 > 生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}
 
 <#-- Test Info Config -->
