@@ -70,7 +70,9 @@ public class SchemeTab extends JPanel {
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
                     int row = schemeTable.rowAtPoint(e.getPoint());
-                    if (row >= 0) editScheme();
+                    if (row >= 0) {
+                        SwingUtilities.invokeLater(() -> editScheme());
+                    }
                 }
             }
             @Override
@@ -143,7 +145,7 @@ public class SchemeTab extends JPanel {
 
     private void addScheme() {
         SchemeEditDialog dialog = new SchemeEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加方案", null);
+                SwingUtilities.getWindowAncestor(this), "添加方案", null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().addScheme(
@@ -162,7 +164,7 @@ public class SchemeTab extends JPanel {
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
         Scheme selected = schemeModel.getScheme(modelRow);
         SchemeEditDialog dialog = new SchemeEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑方案", selected);
+                SwingUtilities.getWindowAncestor(this), "编辑方案", selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager sm = SessionManager.getInstance();

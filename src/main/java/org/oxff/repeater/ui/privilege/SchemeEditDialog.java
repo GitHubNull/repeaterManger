@@ -7,6 +7,7 @@ import org.oxff.repeater.privilege.model.Scheme;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import java.awt.*;
+import java.awt.Dialog;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -36,11 +37,12 @@ public class SchemeEditDialog extends JDialog {
     /** 已选的字段定义ID集合 */
     private final Set<Integer> selectedFieldIds = new HashSet<>();
 
-    public SchemeEditDialog(Frame owner, String title, Scheme existing) {
-        super(owner, title, true);
+    public SchemeEditDialog(Window owner, String title, Scheme existing) {
+        super(owner, title, Dialog.ModalityType.APPLICATION_MODAL);
         setSize(1052, 684);
         setLocationRelativeTo(owner);
         setResizable(true);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         JPanel mainPanel = new JPanel(new BorderLayout(0, 5));
 
