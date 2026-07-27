@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.35.1] - 2026-07-27
+
+### Fixed
+- 修复 `SchemeEditDialog` 构造函数：参数类型从 `Frame` 改为 `Window`，使用 `Dialog.ModalityType.APPLICATION_MODAL` 替代布尔模态，添加 `DISPOSE_ON_CLOSE` 防止窗口资源泄漏
+- 修复 `SchemeTab` 双击编辑方案：使用 `SwingUtilities.invokeLater()` 保护 EDT 线程安全，移除 `(Frame)` 强制类型转换避免 `ClassCastException`
+
 ## [2.35.0] - 2026-07-26
 
 ### Added
