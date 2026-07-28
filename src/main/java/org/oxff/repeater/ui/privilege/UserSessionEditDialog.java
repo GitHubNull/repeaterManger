@@ -512,7 +512,12 @@ public class UserSessionEditDialog extends JDialog {
         return confirmed;
     }
 
-    public String getName() {
+    /**
+     * 返回名称输入框的文本。
+     * 注意：不能命名为 getName()，那会覆盖 {@link java.awt.Component#getName()}，
+     * 干扰 AWT 内部对组件名的使用，属与 isEnabled() 同类的方法名遮蔽隐患。
+     */
+    public String getSessionName() {
         return nameField.getText().trim();
     }
 

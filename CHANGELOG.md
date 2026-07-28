@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.35.3] - 2026-07-28
+
+### Fixed
+- 清理 `UserSessionEditDialog.getName()` 对 `java.awt.Component.getName()` 的方法名遮蔽隐患（与 2.35.2 的 `isEnabled()` 同类）：重命名为 `getSessionName()` 并同步更新 `UserSessionTab` 内全部调用方，避免干扰 AWT 内部对组件名的使用
+
 ## [2.35.2] - 2026-07-28
 
 ### Fixed
