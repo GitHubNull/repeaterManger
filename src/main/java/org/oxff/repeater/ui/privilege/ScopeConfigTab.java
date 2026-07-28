@@ -167,7 +167,7 @@ public class ScopeConfigTab extends JPanel {
             ScopeEntry entry = new ScopeEntry();
             entry.setName(dialog.getEntryName());
             entry.setUrlPattern(dialog.getUrlPattern());
-            entry.setEnabled(dialog.isEnabled());
+            entry.setEnabled(dialog.isEntryEnabled());
             entry.setDescription(dialog.getDescription());
             ScopeManager.getInstance().addEntry(entry);
             refreshData();
@@ -187,7 +187,7 @@ public class ScopeConfigTab extends JPanel {
         if (dialog.isConfirmed()) {
             selected.setName(dialog.getEntryName());
             selected.setUrlPattern(dialog.getUrlPattern());
-            selected.setEnabled(dialog.isEnabled());
+            selected.setEnabled(dialog.isEntryEnabled());
             selected.setDescription(dialog.getDescription());
             ScopeManager.getInstance().updateEntry(selected);
             refreshData();
@@ -345,7 +345,7 @@ public class ScopeConfigTab extends JPanel {
         public boolean isConfirmed() { return confirmed; }
         public String getEntryName() { return nameField.getText().trim(); }
         public String getUrlPattern() { return urlPatternField.getText().trim(); }
-        public boolean isEnabled() { return enabledCheckbox.isSelected(); }
+        public boolean isEntryEnabled() { return enabledCheckbox.isSelected(); }
         public String getDescription() { return descriptionField.getText().trim(); }
     }
 }

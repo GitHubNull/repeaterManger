@@ -192,7 +192,7 @@ public class UserSessionTab extends JPanel {
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager sm = SessionManager.getInstance();
-            int id = sm.addUserSession(dialog.getName(), dialog.getColorHex(), dialog.isEnabled(),
+            int id = sm.addUserSession(dialog.getName(), dialog.getColorHex(), dialog.isSessionEnabled(),
                     dialog.getSchemeId());
             if (id > 0) {
                 sm.saveFieldValues(id, dialog.getFieldValues());
@@ -340,7 +340,7 @@ public class UserSessionTab extends JPanel {
             try {
                 SessionManager sm = SessionManager.getInstance();
                 boolean updated = sm.updateUserSession(selected.getId(), dialog.getName(), dialog.getColorHex(),
-                        dialog.isEnabled(), dialog.getSchemeId());
+                        dialog.isSessionEnabled(), dialog.getSchemeId());
                 if (!updated) {
                     JOptionPane.showMessageDialog(this,
                             "更新用户会话失败，请检查日志", "错误", JOptionPane.ERROR_MESSAGE);

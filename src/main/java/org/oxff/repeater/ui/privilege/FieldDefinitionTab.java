@@ -186,7 +186,7 @@ public class FieldDefinitionTab extends JPanel {
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().addFieldDefinition(
                     dialog.getFieldType(), dialog.getExpression(), dialog.getDescription(),
-                    dialog.isPersistToGlobal(), dialog.isEnabled());
+                    dialog.isPersistToGlobal(), dialog.isFieldEnabled());
             refreshData();
         }
     }
@@ -205,7 +205,7 @@ public class FieldDefinitionTab extends JPanel {
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().updateFieldDefinition(
                     selected.getId(), dialog.getFieldType(), dialog.getExpression(), dialog.getDescription(),
-                    dialog.isPersistToGlobal(), dialog.isEnabled());
+                    dialog.isPersistToGlobal(), dialog.isFieldEnabled());
             refreshData();
         }
     }

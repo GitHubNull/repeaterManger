@@ -150,7 +150,7 @@ public class SchemeTab extends JPanel {
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().addScheme(
                     dialog.getSchemeName(), dialog.getDescription(),
-                    dialog.isEnabled(), dialog.isPersistToGlobal(), dialog.getSelectedFieldIds());
+                    dialog.isSchemeEnabled(), dialog.isPersistToGlobal(), dialog.getSelectedFieldIds());
             refreshData();
         }
     }
@@ -169,7 +169,7 @@ public class SchemeTab extends JPanel {
         if (dialog.isConfirmed()) {
             SessionManager sm = SessionManager.getInstance();
             sm.updateScheme(selected.getId(), dialog.getSchemeName(), dialog.getDescription(),
-                    dialog.isEnabled(), dialog.isPersistToGlobal());
+                    dialog.isSchemeEnabled(), dialog.isPersistToGlobal());
             sm.saveSchemeFields(selected.getId(), dialog.getSelectedFieldIds());
             refreshData();
         }
@@ -205,7 +205,7 @@ public class SchemeTab extends JPanel {
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
         Scheme selected = schemeModel.getScheme(modelRow);
         SessionManager.getInstance().updateScheme(
-                selected.getId(), selected.getName(), selected.getDescription(), selected.isPersistToGlobal(), !selected.isEnabled());
+                selected.getId(), selected.getName(), selected.getDescription(), !selected.isEnabled(), selected.isPersistToGlobal());
         refreshData();
     }
 

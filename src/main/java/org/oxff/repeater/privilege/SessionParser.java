@@ -121,7 +121,7 @@ public class SessionParser {
                 if (dialog.isConfirmed()) {
                     String sessionName = dialog.getSessionName();
                     String colorHex = dialog.getColorHex();
-                    boolean enabled = dialog.isEnabled();
+                    boolean enabled = dialog.isSessionEnabled();
                     Integer schemeId = dialog.getSelectedSchemeId();
 
                     int sessionId;

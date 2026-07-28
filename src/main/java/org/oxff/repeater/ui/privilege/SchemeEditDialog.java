@@ -261,7 +261,12 @@ public class SchemeEditDialog extends JDialog {
         return descriptionArea.getText().trim();
     }
 
-    public boolean isEnabled() {
+    /**
+     * 返回“启用此方案”复选框的勾选状态。
+     * 注意：不能命名为 isEnabled()，那会覆盖 {@link java.awt.Component#isEnabled()}，
+     * 导致方案未启用时整个对话框被 AWT 焦点系统判定为禁用容器、内部组件无法获得焦点、模态弹窗卡死。
+     */
+    public boolean isSchemeEnabled() {
         return enabledCheckbox.isSelected();
     }
 

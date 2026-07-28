@@ -193,7 +193,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 // 用户确认，创建或更新会话
                 String sessionName = dialog.getSessionName();
                 String colorHex = dialog.getColorHex();
-                boolean enabled = dialog.isEnabled();
+                boolean enabled = dialog.isSessionEnabled();
                 Integer schemeId = dialog.getSelectedSchemeId();
 
                 int sessionId;

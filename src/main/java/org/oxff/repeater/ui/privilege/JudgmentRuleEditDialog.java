@@ -454,7 +454,12 @@ public class JudgmentRuleEditDialog extends JDialog {
         return nameField.getText().trim();
     }
 
-    public boolean isEnabled() {
+    /**
+     * 返回“启用”复选框的勾选状态。
+     * 注意：不能命名为 isEnabled()，那会覆盖 {@link java.awt.Component#isEnabled()}，
+     * 导致未启用时整个对话框被 AWT 焦点系统判定为禁用容器、内部组件无法获得焦点、模态弹窗卡死。
+     */
+    public boolean isRuleEnabled() {
         return enabledCheckbox.isSelected();
     }
 
@@ -496,7 +501,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         JudgmentRule rule = new JudgmentRule();
         rule.setName(getRuleName());
         rule.setConditions(getConditions());
-        rule.setEnabled(isEnabled());
+        rule.setEnabled(isRuleEnabled());
         rule.setSuccessColor(getSuccessColor());
         rule.setFailureColor(getFailureColor());
         rule.setSuccessNote(getSuccessNote());

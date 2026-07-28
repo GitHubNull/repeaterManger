@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.35.2] - 2026-07-28
+
+### Fixed
+- 修复越权测试各编辑弹窗在编辑「未启用」项目时弹出后无法关闭、Burp 卡死的问题：根因是六个 `JDialog` 子类（`SchemeEditDialog`、`FieldDefinitionEditDialog`、`UserSessionEditDialog`、`ParseSessionFromClipboardDialog`、`JudgmentRuleEditDialog`、`ScopeConfigTab.ScopeEditDialog`）均将「启用」复选框取值方法命名为 `isEnabled()`，意外覆盖了 `java.awt.Component.isEnabled()`。当复选框未勾选时，整个对话框被 AWT 焦点系统（`Component.canContainFocusOwner()` 对重量级容器要求 `isEnabled()==true`）判定为禁用容器，内部所有组件无法获得焦点，模态弹窗永远卡死。将这些方法分别重命名为 `isSchemeEnabled()`/`isFieldEnabled()`/`isSessionEnabled()`/`isRuleEnabled()`/`isEntryEnabled()` 并同步更新全部调用方
+- 修复 `SchemeTab.toggleSchemeEnabled()` 调用 `updateScheme()` 时 `enabled` 与 `persistToGlobal` 参数顺序颠倒的问题
+
 ## [2.35.1] - 2026-07-27
 
 ### Fixed
