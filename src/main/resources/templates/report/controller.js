@@ -7,6 +7,9 @@
 
     var currentSort = { column: 0, asc: true };
 
+    // 灯箱截图分组存储：key=组ID, value=图片URL数组
+    window._lightboxGroups = {};
+
     /**
      * 构建测试信息配置区域
      */
@@ -40,11 +43,15 @@
 
         // 截图
         if (config.screenshotFilenames && config.screenshotFilenames.length > 0) {
+            var groupId = 'testInfoConfig';
+            window._lightboxGroups[groupId] = [];
             html += '<div class="screenshot-gallery">';
             config.screenshotFilenames.forEach(function(filename) {
-                html += '<img src="screenshots/' + encodeURIComponent(filename) + '" ';
-                html += 'class="screenshot-thumb" onclick="openLightbox(this.src)" ';
-                html += 'alt="' + escapeHtml(filename) + '" loading="lazy">';
+                var imgSrc = 'screenshots/' + encodeURIComponent(filename);
+                window._lightboxGroups[groupId].push(imgSrc);
+                html += '<img src="' + imgSrc + '" ';
+                html += 'class="screenshot-thumb" onclick="openLightbox(this.src, \'' + groupId + '\')" ';
+                html += 'alt="' + escapeHtml(filename) + '" loading="lazy" data-group="' + groupId + '">';
             });
             html += '</div>';
         }
@@ -83,11 +90,15 @@
 
             // 截图
             if (entry.screenshotFilenames && entry.screenshotFilenames.length > 0) {
+                var groupId = 'userInfo_' + entry.sessionName;
+                window._lightboxGroups[groupId] = [];
                 html += '<div class="screenshot-gallery">';
                 entry.screenshotFilenames.forEach(function(filename) {
-                    html += '<img src="screenshots/' + encodeURIComponent(filename) + '" ';
-                    html += 'class="screenshot-thumb" onclick="openLightbox(this.src)" ';
-                    html += 'alt="' + escapeHtml(filename) + '" loading="lazy">';
+                    var imgSrc = 'screenshots/' + encodeURIComponent(filename);
+                    window._lightboxGroups[groupId].push(imgSrc);
+                    html += '<img src="' + imgSrc + '" ';
+                    html += 'class="screenshot-thumb" onclick="openLightbox(this.src, \'' + groupId + '\')" ';
+                    html += 'alt="' + escapeHtml(filename) + '" loading="lazy" data-group="' + groupId + '">';
                 });
                 html += '</div>';
             }
@@ -99,9 +110,11 @@
     }
 
     /**
-     * 打开截图灯箱（支持缩放与拖拽）
+     * 打开截图灯箱（支持缩放、拖拽、轮播、键盘快捷键）
+     * @param {string} src - 图片URL
+     * @param {string} [groupId] - 截图分组ID，提供时启用轮播模式
      */
-    window.openLightbox = function(src) {
+    window.openLightbox = function(src, groupId) {
         var scale = 1;
         var minScale = 0.2;
         var maxScale = 5;
@@ -112,6 +125,19 @@
         var dragStartY = 0;
         var dragTranslateStartX = 0;
         var dragTranslateStartY = 0;
+
+        // 轮播状态
+        var images = [];
+        var currentIndex = 0;
+        if (groupId && window._lightboxGroups[groupId] && window._lightboxGroups[groupId].length > 1) {
+            images = window._lightboxGroups[groupId];
+            currentIndex = images.indexOf(src);
+            if (currentIndex < 0) currentIndex = 0;
+        } else {
+            images = [src];
+            currentIndex = 0;
+        }
+        var isCarousel = images.length > 1;
 
         // 遮罩层
         var overlay = document.createElement('div');
@@ -144,6 +170,14 @@
         resetBtn.textContent = '\u21BA';
         resetBtn.title = '重置';
 
+        // 图片计数（仅轮播模式显示）
+        var counter = null;
+        if (isCarousel) {
+            counter = document.createElement('span');
+            counter.className = 'lightbox-counter';
+            counter.textContent = '第' + (currentIndex + 1) + '张，共' + images.length + '张';
+        }
+
         var closeBtn = document.createElement('button');
         closeBtn.className = 'lightbox-btn lightbox-close-btn';
         closeBtn.textContent = '\u00D7';
@@ -153,18 +187,44 @@
         toolbar.appendChild(zoomLevel);
         toolbar.appendChild(zoomInBtn);
         toolbar.appendChild(resetBtn);
+        if (counter) toolbar.appendChild(counter);
         toolbar.appendChild(closeBtn);
 
         // 图片容器（支持拖拽）
         var imgWrap = document.createElement('div');
         imgWrap.className = 'lightbox-img-wrap';
 
+        // 加载指示器
+        var loading = document.createElement('div');
+        loading.className = 'lightbox-loading';
+        loading.style.display = 'none';
+
         var img = document.createElement('img');
         img.src = src;
         img.className = 'lightbox-image';
         img.draggable = false;
 
+        imgWrap.appendChild(loading);
         imgWrap.appendChild(img);
+
+        // 左右导航箭头（仅轮播模式）
+        var prevBtn = null;
+        var nextBtn = null;
+        if (isCarousel) {
+            prevBtn = document.createElement('button');
+            prevBtn.className = 'lightbox-nav-btn lightbox-nav-prev';
+            prevBtn.innerHTML = '\u2039';
+            prevBtn.title = '上一张 (\u2190)';
+
+            nextBtn = document.createElement('button');
+            nextBtn.className = 'lightbox-nav-btn lightbox-nav-next';
+            nextBtn.innerHTML = '\u203A';
+            nextBtn.title = '下一张 (\u2192)';
+
+            container.appendChild(prevBtn);
+            container.appendChild(nextBtn);
+        }
+
         container.appendChild(toolbar);
         container.appendChild(imgWrap);
         overlay.appendChild(container);
@@ -191,6 +251,34 @@
             applyTransform();
         }
 
+        // 重置缩放和平移
+        function resetTransform() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            applyTransform();
+            imgWrap.style.cursor = 'default';
+        }
+
+        // 切换图片
+        function showImage(index) {
+            if (index < 0) index = images.length - 1;
+            if (index >= images.length) index = 0;
+            currentIndex = index;
+            resetTransform();
+            loading.style.display = 'flex';
+            img.style.opacity = '0';
+            img.src = images[currentIndex];
+            if (counter) {
+                counter.textContent = '第' + (currentIndex + 1) + '张，共' + images.length + '张';
+            }
+        }
+
+        img.onload = function() {
+            loading.style.display = 'none';
+            img.style.opacity = '1';
+        };
+
         // 缩放按钮
         zoomInBtn.onclick = function(e) {
             e.stopPropagation();
@@ -206,11 +294,16 @@
 
         resetBtn.onclick = function(e) {
             e.stopPropagation();
-            scale = 1;
-            translateX = 0;
-            translateY = 0;
-            applyTransform();
+            resetTransform();
         };
+
+        // 导航按钮
+        if (prevBtn) {
+            prevBtn.onclick = function(e) { e.stopPropagation(); showImage(currentIndex - 1); };
+        }
+        if (nextBtn) {
+            nextBtn.onclick = function(e) { e.stopPropagation(); showImage(currentIndex + 1); };
+        }
 
         // 鼠标滚轮缩放
         imgWrap.addEventListener('wheel', function(e) {
@@ -278,6 +371,12 @@
         function onKeyDown(e) {
             switch (e.key) {
                 case 'Escape': close(); break;
+                case 'ArrowLeft':
+                    if (isCarousel) { e.preventDefault(); showImage(currentIndex - 1); }
+                    break;
+                case 'ArrowRight':
+                    if (isCarousel) { e.preventDefault(); showImage(currentIndex + 1); }
+                    break;
                 case '+': case '=':
                     var rect = imgWrap.getBoundingClientRect();
                     setScale(scale * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -287,9 +386,7 @@
                     setScale(scale / 1.2, rect2.left + rect2.width / 2, rect2.top + rect2.height / 2);
                     break;
                 case '0':
-                    scale = 1; translateX = 0; translateY = 0;
-                    applyTransform();
-                    imgWrap.style.cursor = 'default';
+                    resetTransform();
                     break;
             }
         }

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.36.0] - 2026-08-10
+
+### Added
+- HTML 报告图片查看功能全面升级：实现图片灯箱轮播（同组多张截图时显示左右导航箭头，支持循环切换）、键盘快捷键支持（`ArrowLeft`/`ArrowRight` 切换相邻图片）、灯箱内图片计数显示（"第X张，共Y张"）、图片加载状态指示器（切换图片时显示旋转动画）
+- 灯箱截图分组机制：测试信息配置截图与各用户信息截图按组独立轮播（`window._lightboxGroups` 分组存储），互不混排
+
+### Fixed
+- 修复单文件内联模式 HTML 报告点击截图时 `openLightbox` 未定义的问题：此前单文件模式仅内联 CSS，`controller.js` 只在多文件分离模式下加载，导致单文件报告截图点击无响应。现单文件模式在模板尾部内联完整灯箱脚本（不依赖 `REPORT_DATA`），并新增 `collectLightboxGroups()` 自动收集截图分组
+
+### Changed
+- `openLightbox(src)` 保持向后兼容：未提供分组 ID 时退化为单图查看（无轮播/计数/导航箭头），缩放、拖拽、ESC 关闭、点击遮罩关闭等既有功能全部保留
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.36.0
+
 ## [2.35.4] - 2026-08-10
 
 ### Fixed

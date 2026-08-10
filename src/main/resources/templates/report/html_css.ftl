@@ -131,6 +131,20 @@
 
   .lightbox-image { max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center center; transition: none; user-select: none; -webkit-user-drag: none; }
 
+  /* 灯箱导航箭头 */
+  .lightbox-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #e0e0e0; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, border-color 0.2s; z-index: 10; line-height: 1; padding: 0; }
+  .lightbox-nav-btn:hover { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.5); }
+  .lightbox-nav-prev { left: 12px; }
+  .lightbox-nav-next { right: 12px; }
+
+  /* 灯箱图片计数 */
+  .lightbox-counter { color: #ccc; font-size: 13px; margin-left: 10px; font-family: monospace; white-space: nowrap; }
+
+  /* 灯箱加载状态 */
+  .lightbox-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #aaa; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 5; }
+  .lightbox-loading::after { content: ''; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.15); border-top-color: rgba(255,255,255,0.6); border-radius: 50%; animation: lightbox-spin 0.8s linear infinite; }
+  @keyframes lightbox-spin { to { transform: rotate(360deg); } }
+
   /* 排序指示器 */
   th.sort-asc::after { content: ' \25B2'; font-size: 10px; }
   th.sort-desc::after { content: ' \25BC'; font-size: 10px; }

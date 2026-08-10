@@ -44,7 +44,7 @@
   <#if testInfoConfigScreenshots?? && testInfoConfigScreenshots?size gt 0>
   <div class="screenshot-gallery">
     <#list testInfoConfigScreenshots as img>
-    <img src="${img}" class="screenshot-thumb" onclick="openLightbox(this.src)" alt="测试目标截图" loading="lazy">
+    <img src="${img}" class="screenshot-thumb" onclick="openLightbox(this.src, 'testInfoConfig')" alt="测试目标截图" loading="lazy" data-group="testInfoConfig">
     </#list>
   </div>
   </#if>
@@ -207,6 +207,315 @@
 <div id="error-list-section"></div>
 <div id="safe-list-section"></div>
 <div id="endpoints-section"></div>
+</#if>
+
+<#if inlineMode?? && inlineMode>
+<#-- 单文件模式：内联灯箱脚本（不依赖 REPORT_DATA） -->
+<script>
+(function() {
+    'use strict';
+    var currentSort = { column: 0, asc: true };
+
+    window._lightboxGroups = {};
+
+    // 收集页面中所有带 data-group 的截图，按组归类
+    function collectLightboxGroups() {
+        var thumbs = document.querySelectorAll('.screenshot-thumb[data-group]');
+        thumbs.forEach(function(thumb) {
+            var group = thumb.getAttribute('data-group');
+            if (!window._lightboxGroups[group]) {
+                window._lightboxGroups[group] = [];
+            }
+            window._lightboxGroups[group].push(thumb.src);
+        });
+    }
+
+    window.openLightbox = function(src, groupId) {
+        var scale = 1;
+        var minScale = 0.2;
+        var maxScale = 5;
+        var translateX = 0;
+        var translateY = 0;
+        var isDragging = false;
+        var dragStartX = 0;
+        var dragStartY = 0;
+        var dragTranslateStartX = 0;
+        var dragTranslateStartY = 0;
+
+        // 轮播状态
+        var images = [];
+        var currentIndex = 0;
+        if (groupId && window._lightboxGroups[groupId] && window._lightboxGroups[groupId].length > 1) {
+            images = window._lightboxGroups[groupId];
+            currentIndex = images.indexOf(src);
+            if (currentIndex < 0) currentIndex = 0;
+        } else {
+            images = [src];
+            currentIndex = 0;
+        }
+        var isCarousel = images.length > 1;
+
+        // 遮罩层
+        var overlay = document.createElement('div');
+        overlay.className = 'lightbox-overlay';
+
+        // 容器（85vw x 85vh）
+        var container = document.createElement('div');
+        container.className = 'lightbox-container';
+
+        // 工具栏
+        var toolbar = document.createElement('div');
+        toolbar.className = 'lightbox-toolbar';
+
+        var zoomOutBtn = document.createElement('button');
+        zoomOutBtn.className = 'lightbox-btn';
+        zoomOutBtn.textContent = '\u2212';
+        zoomOutBtn.title = '缩小';
+
+        var zoomLevel = document.createElement('span');
+        zoomLevel.className = 'lightbox-zoom-level';
+        zoomLevel.textContent = '100%';
+
+        var zoomInBtn = document.createElement('button');
+        zoomInBtn.className = 'lightbox-btn';
+        zoomInBtn.textContent = '+';
+        zoomInBtn.title = '放大';
+
+        var resetBtn = document.createElement('button');
+        resetBtn.className = 'lightbox-btn';
+        resetBtn.textContent = '\u21BA';
+        resetBtn.title = '重置';
+
+        // 图片计数（仅轮播模式显示）
+        var counter = null;
+        if (isCarousel) {
+            counter = document.createElement('span');
+            counter.className = 'lightbox-counter';
+            counter.textContent = '第' + (currentIndex + 1) + '张，共' + images.length + '张';
+        }
+
+        var closeBtn = document.createElement('button');
+        closeBtn.className = 'lightbox-btn lightbox-close-btn';
+        closeBtn.textContent = '\u00D7';
+        closeBtn.title = '关闭 (Esc)';
+
+        toolbar.appendChild(zoomOutBtn);
+        toolbar.appendChild(zoomLevel);
+        toolbar.appendChild(zoomInBtn);
+        toolbar.appendChild(resetBtn);
+        if (counter) toolbar.appendChild(counter);
+        toolbar.appendChild(closeBtn);
+
+        // 图片容器（支持拖拽）
+        var imgWrap = document.createElement('div');
+        imgWrap.className = 'lightbox-img-wrap';
+
+        // 加载指示器
+        var loading = document.createElement('div');
+        loading.className = 'lightbox-loading';
+        loading.style.display = 'none';
+
+        var img = document.createElement('img');
+        img.src = src;
+        img.className = 'lightbox-image';
+        img.draggable = false;
+
+        imgWrap.appendChild(loading);
+        imgWrap.appendChild(img);
+
+        // 左右导航箭头（仅轮播模式）
+        var prevBtn = null;
+        var nextBtn = null;
+        if (isCarousel) {
+            prevBtn = document.createElement('button');
+            prevBtn.className = 'lightbox-nav-btn lightbox-nav-prev';
+            prevBtn.innerHTML = '\u2039';
+            prevBtn.title = '上一张 (\u2190)';
+
+            nextBtn = document.createElement('button');
+            nextBtn.className = 'lightbox-nav-btn lightbox-nav-next';
+            nextBtn.innerHTML = '\u203A';
+            nextBtn.title = '下一张 (\u2192)';
+
+            container.appendChild(prevBtn);
+            container.appendChild(nextBtn);
+        }
+
+        container.appendChild(toolbar);
+        container.appendChild(imgWrap);
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        // 应用缩放与平移
+        function applyTransform() {
+            img.style.transform = 'translate(' + translateX + 'px, ' + translateY + 'px) scale(' + scale + ')';
+            zoomLevel.textContent = Math.round(scale * 100) + '%';
+        }
+
+        // 设置缩放
+        function setScale(newScale, centerX, centerY) {
+            var oldScale = scale;
+            scale = Math.max(minScale, Math.min(maxScale, newScale));
+            if (scale === oldScale) return;
+            if (centerX !== undefined && centerY !== undefined) {
+                var ratio = scale / oldScale;
+                translateX = centerX - ratio * (centerX - translateX);
+                translateY = centerY - ratio * (centerY - translateY);
+            }
+            applyTransform();
+        }
+
+        // 重置缩放和平移
+        function resetTransform() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            applyTransform();
+            imgWrap.style.cursor = 'default';
+        }
+
+        // 切换图片
+        function showImage(index) {
+            if (index < 0) index = images.length - 1;
+            if (index >= images.length) index = 0;
+            currentIndex = index;
+            resetTransform();
+            loading.style.display = 'flex';
+            img.style.opacity = '0';
+            img.src = images[currentIndex];
+            if (counter) {
+                counter.textContent = '第' + (currentIndex + 1) + '张，共' + images.length + '张';
+            }
+        }
+
+        img.onload = function() {
+            loading.style.display = 'none';
+            img.style.opacity = '1';
+        };
+
+        // 缩放按钮
+        zoomInBtn.onclick = function(e) {
+            e.stopPropagation();
+            var rect = imgWrap.getBoundingClientRect();
+            setScale(scale * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        };
+
+        zoomOutBtn.onclick = function(e) {
+            e.stopPropagation();
+            var rect = imgWrap.getBoundingClientRect();
+            setScale(scale / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        };
+
+        resetBtn.onclick = function(e) {
+            e.stopPropagation();
+            resetTransform();
+        };
+
+        // 导航按钮
+        if (prevBtn) {
+            prevBtn.onclick = function(e) { e.stopPropagation(); showImage(currentIndex - 1); };
+        }
+        if (nextBtn) {
+            nextBtn.onclick = function(e) { e.stopPropagation(); showImage(currentIndex + 1); };
+        }
+
+        // 鼠标滚轮缩放
+        imgWrap.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            var rect = imgWrap.getBoundingClientRect();
+            var mouseX = e.clientX - rect.left;
+            var mouseY = e.clientY - rect.top;
+            var delta = e.deltaY > 0 ? 0.9 : 1.1;
+            setScale(scale * delta, mouseX, mouseY);
+        }, { passive: false });
+
+        // 鼠标拖拽平移
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            translateX = dragTranslateStartX + (e.clientX - dragStartX);
+            translateY = dragTranslateStartY + (e.clientY - dragStartY);
+            applyTransform();
+        }
+
+        function onMouseUp() {
+            if (isDragging) {
+                isDragging = false;
+                imgWrap.style.cursor = scale > 1 ? 'grab' : 'default';
+            }
+        }
+
+        imgWrap.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragTranslateStartX = translateX;
+            dragTranslateStartY = translateY;
+            imgWrap.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
+        // 光标样式随缩放变化
+        var origSetScale = setScale;
+        setScale = function(newScale, cx, cy) {
+            origSetScale(newScale, cx, cy);
+            imgWrap.style.cursor = scale > 1 ? 'grab' : 'default';
+        };
+
+        // 关闭函数
+        function close() {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        // 关闭按钮
+        closeBtn.onclick = function(e) { e.stopPropagation(); close(); };
+
+        // 点击遮罩关闭
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) close();
+        });
+
+        // 键盘快捷键
+        function onKeyDown(e) {
+            switch (e.key) {
+                case 'Escape': close(); break;
+                case 'ArrowLeft':
+                    if (isCarousel) { e.preventDefault(); showImage(currentIndex - 1); }
+                    break;
+                case 'ArrowRight':
+                    if (isCarousel) { e.preventDefault(); showImage(currentIndex + 1); }
+                    break;
+                case '+': case '=':
+                    var rect = imgWrap.getBoundingClientRect();
+                    setScale(scale * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                    break;
+                case '-':
+                    var rect2 = imgWrap.getBoundingClientRect();
+                    setScale(scale / 1.2, rect2.left + rect2.width / 2, rect2.top + rect2.height / 2);
+                    break;
+                case '0':
+                    resetTransform();
+                    break;
+            }
+        }
+        document.addEventListener('keydown', onKeyDown);
+
+        // 初始应用
+        applyTransform();
+    };
+
+    // DOM 就绪后收集截图分组
+    document.addEventListener('DOMContentLoaded', function() {
+        collectLightboxGroups();
+    });
+})();
+</script>
 </#if>
 
 <#if !(inlineMode?? && inlineMode)>
