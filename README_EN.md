@@ -1,6 +1,10 @@
 # Repeater Manager - Burp Suite Repeater Manager Plugin
 
 <p align="center">
+  <img src="./doc/assets/readme-header-banner-en.svg" alt="Repeater Manager — Burp Suite Replay &amp; Privilege Testing Plugin" width="100%">
+</p>
+
+<p align="center">
   <strong>Advanced HTTP request replay management and privilege escalation testing plugin for Burp Suite, designed for security testers</strong>
 </p>
 
@@ -14,7 +18,7 @@
 
 Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. Compared to the native Repeater, it provides more powerful features, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, API rule extraction, automated privilege escalation testing, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
-> **Current Version**: v2.34.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
+> **Current Version**: v2.41.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
 
 ## Core Features
 
@@ -28,11 +32,14 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Column Display Control | Customizable table columns for better information density and readability |
 | API Rule Extraction | Configurable API extraction rule engine, supporting 4 extraction sources × 4 extraction methods, auto-extracting API paths from irregular requests |
 | Privilege Testing | Automated privilege escalation vulnerability testing framework with user session token replacement and response comparison |
+| User Info Management | End-to-end UserInfo management (role/username/anonymous flag/privilege proof screenshots), exported with reports |
 | Scheme Management | Multi-scheme field management with scheme-session association and global persistence |
-| Rule Group Judgment | Single active rule group + AND/OR/NOT multi-condition judgment, replacing legacy priority iteration mode |
+| Rule Group Judgment | Single active rule group + AND/OR mixed-logic multi-condition judgment, replacing legacy priority iteration mode |
+| Judgment Rule Persistence | Rules support cross-session persistence flag, stored in global YAML, auto-restored on plugin startup |
 | Anonymous User Creation | One-click guest user creation with all empty field values, intelligent scheme matching |
 | Dedup Configuration | Priority-chain API deduplication with 6 strategies and 3 keep policies |
 | Session Parsing | Auto-parse user sessions from clipboard, supporting Chrome DevTools fetch format |
+| Test Info Configuration | Configure test target metadata (name/entry/screenshots/time range/personnel/custom report title), exported with reports |
 | Data Import/Export | Support ERM encrypted archives (AES-256-CBC + HMAC-SHA256), Postman Collection v2.1, and more formats |
 | Auto-save | Periodic synchronization of in-memory data to disk, preventing data loss |
 | Garbage Collection | Background automatic cleanup of zero-reference pool data, reclaiming storage space (10min interval), toolbar toggle for auto/manual mode |
@@ -40,8 +47,9 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Proxy Debugging | Support HTTP proxy configuration for request debugging |
 | Layout Switching | Request/Response panel supports horizontal/vertical/request-only/response-only layouts |
 | Message Comparison | String- and byte-level diff comparison for request/response pairs with syntax highlighting, synchronized scrolling, and diff navigation |
-| Report Generation | Export privilege test results as PDF/HTML/Markdown reports with embedded request/response details and cURL/Postman code snippets |
+| Report Generation | Export privilege test results as PDF/HTML/Markdown reports with embedded request/response details, cURL/Postman code snippets, user info screenshots, image lightbox carousel, and privilege test case references |
 | Batch Operations | Multi-select support in history panel; batch replay, batch privilege testing, batch delete |
+| Clear Messages | One-click clearing of all baseline requests and replay history in request list panel, with linked database cleanup |
 
 ## Feature Architecture
 
@@ -70,18 +78,21 @@ Repeater Manager
 │   └── Project Rules (SQLite independent storage)
 ├── Privilege Testing Module
 │   ├── Multi-user Session Management
+│   ├── User Info Management (UserInfo: role/username/anonymous flag/privilege proof screenshots)
 │   ├── Scheme Management (scheme-field-session 3-tier architecture)
 │   ├── Field Configuration (Header/Cookie/Body/URL Param)
 │   ├── Automated Field Replacement Engine
-│   ├── Judgment Rule Group Configuration (single active rule set + AND/OR/NOT multi-condition)
+│   ├── Judgment Rule Group Configuration (single active rule set + AND/OR mixed-logic multi-condition)
+│   ├── Judgment Rule Cross-session Persistence (global YAML, auto-restore on startup)
 │   ├── One-click Anonymous User Creation
 │   ├── Dedup Configuration (6 strategies × 3 keep policies priority-chain matching)
 │   ├── Session Parsing (raw HTTP / Chrome fetch format)
 │   ├── Automated Testing Engine (intercept proxy traffic → replay → judge)
+│   ├── Test Info Configuration (target/entry/screenshots/time range/personnel/custom report title)
 │   ├── Result Display with Color Coding
-│   └── Report Generation (New)
+│   └── Report Generation
 │       ├── PDF Report (Apache PDFBox)
-│       ├── HTML Report (FreeMarker template)
+│       ├── HTML Report (FreeMarker template, image lightbox carousel + privilege test case references)
 │       └── Markdown Report (FreeMarker template)
 ├── Data Persistence
 │   ├── SQLite Storage (custom connection pool)
@@ -173,7 +184,8 @@ For detailed usage instructions, please refer to:
 - **Frontend**: Java Swing + RSyntaxTextArea syntax highlighting component (v3.3.3)
 - **Data Storage**: SQLite (JDBC v3.42.0.0) + custom connection pool (BlockingQueue + JDK Proxy)
 - **Serialization**: Gson (v2.10.1) + SnakeYAML (v2.2)
-- **Utilities**: Apache Commons IO (v2.11.0) + Commons Lang3 (v3.12.0)
+- **Report Generation**: Apache PDFBox (v3.0.1) + FreeMarker (v2.3.33)
+- **Documentation Rendering**: CommonMark (v0.22.0) — usage tutorial Markdown-to-HTML
 - **Core Patterns**: MVC architecture, Singleton pattern, connection pool proxy pattern, Pool deduplication pattern, rule engine pattern
 
 ## Project Structure
@@ -362,11 +374,8 @@ src/main/java/
 | Montoya API | 2025.12 | `net.portswigger.burp.extensions:montoya-api` | Modern Burp Suite extension interface (provided scope) |
 | RSyntaxTextArea | 3.3.3 | `com.fifesoft:rsyntaxtextarea` | Syntax highlighting editor component |
 | SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` | SQLite JDBC driver |
-| HikariCP | 5.0.1 | `com.zaxxer:HikariCP` | Connection pool (declared, custom pool used instead) |
 | Gson | 2.10.1 | `com.google.code.gson:gson` | JSON serialization/deserialization |
 | SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML serialization (API extraction, judgment rules, user sessions, field definitions) |
-| Commons IO | 2.11.0 | `commons-io:commons-io` | Apache file I/O utilities |
-| Commons Lang3 | 3.12.0 | `org.apache.commons:commons-lang3` | Apache common utilities |
 | Apache PDFBox | 3.0.1 | `org.apache.pdfbox:pdfbox` | Native PDF report generation with embedded Chinese fonts |
 | FreeMarker | 2.3.33 | `org.freemarker:freemarker` | Template engine for HTML/Markdown report rendering |
 | CommonMark | 0.22.0 | `org.commonmark:commonmark` | Markdown-to-HTML rendering for usage tutorial |
@@ -385,8 +394,8 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/repeater-manager-2.34.0.jar`
-- Timestamped release version: `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.41.0.jar`
+- Timestamped release version: `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 
@@ -414,7 +423,8 @@ Build artifacts:
 ~/.burp/
 ├── repeater_manager_config.properties     # Plugin configuration file
 ├── repeater_manager/
-│   └── api_extraction_rules.yaml          # Global API extraction rules (cross-session shared)
+│   ├── api_extraction_rules.yaml          # Global API extraction rules (cross-session shared)
+│   └── judgment_rules.yaml                # Global judgment rules (cross-session persistence)
 └── session_20240101_120000/               # Session directory (timestamp-named)
     ├── repeater_manager.sqlite3           # SQLite database file
     ├── blobs/                             # External body data directory

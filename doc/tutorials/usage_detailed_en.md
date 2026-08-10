@@ -169,7 +169,8 @@ The dropdown menu at the top-right offers four layout modes:
 
 ### 4.5 Clearing Content
 
-Click the **"Clear"** button to clear the current request and response content.
+- **"Reset" button**: Clears the current request editor and response viewer content (formerly the "Clear" button, renamed "Reset" in v2.41.0)
+- **"Clear Messages" button** (request list panel, added in v2.41.0): One-click clearing of all messages in the request list, with linked clearing of scheduled tasks, history records, and request/response panels. Ideal for quickly cleaning up the workspace after batch testing
 
 ---
 
@@ -332,7 +333,9 @@ Log files are stored in the `logs/` subdirectory of the session directory, suppo
 ~/.burp/
 ├── repeater_manager_config.properties     # Plugin configuration file
 ├── repeater_manager/
-│   └── api_extraction_rules.yaml          # Global API extraction rules (cross-session)
+│   ├── api_extraction_rules.yaml          # Global API extraction rules (cross-session)
+│   ├── judgment_rules.yaml                # Global judgment rules (cross-session persistence, v2.37.0)
+│   └── dedup_configs.yaml                 # Global dedup configs (cross-session)
 └── session_20240101_120000/               # Session directory (timestamp-named)
     ├── repeater_manager.sqlite3           # SQLite database file
     ├── blobs/                             # External body data directory
@@ -473,9 +476,9 @@ Configure where authentication fields are located in the request. The plugin sup
 
 The judgment system has been refactored from "multi-condition AND/OR combination" to **"Rule Group + Single Active Rule Set"**:
 
-- **Rule Group**: A named collection of conditions combined with **AND** logic — all conditions within a group must be satisfied simultaneously for the group to match
+- **Rule Group**: A named collection of conditions combined with **AND/OR mixed logic** (v2.37.0+) — all AND conditions must be satisfied, and if any OR condition exists, at least one of them must match for the group to hit
 - **Single Active Rule Set**: Only **one** rule group is "active" at any given time; the judgment engine evaluates only the active group
-- **Fallback**: When no active rule group exists or the active group doesn't match → fallback to default similarity judgment (`SIMILARITY >= 0.90`)
+- **Fallback**: When no active rule group exists or the active group doesn't match → fallback chain: default similarity rule group (`SIMILARITY > 0.90`) → global-threshold similarity judgment (default 0.70); if the active group rejected due to low similarity, its own minimum threshold is used first
 
 **Condition Operators**:
 
@@ -547,13 +550,16 @@ Each case below corresponds to one rule group. Groups marked with `[NOT]` demons
 - **No Active Group**: When no active rule group exists, judgment falls back to default similarity (`SIMILARITY >= 0.90`)
 - **Quick Switching**: Switch between rule groups (e.g., "strict detection" vs "lenient detection") for different testing scenarios
 
-#### 11.4.3 Rule Reuse
+#### 11.4.3 Rule Reuse and Cross-Session Persistence
 
 - Rule groups can be set as **global rules** (`global=true`) for cross-project sharing
 - Support **YAML export/import** for cross-session reuse and team sharing (auto-dedup on import)
-- Recommended practice: Build a collection of rule groups for typical privilege escalation scenarios, then import directly for similar targets
+- **Cross-session persistence** (v2.37.0): Check the **"Persist"** column for a rule group in the judgment rules table; the group is then synced by `GlobalJudgmentRuleManager` to the global file `~/.burp/repeater_manager/judgment_rules.yaml`. On the next plugin startup, all persisted rule groups are automatically restored — no reconfiguration needed
+- Recommended practice: Build a collection of rule groups for typical privilege escalation scenarios, mark them as persisted, and reuse them directly for similar targets
 
-### 11.9 Request Scope Configuration
+> **"Global" vs "Persist"**: `global=true` means the rule group is shared across projects (stored in the session database with a global flag); "Persist" means the rule group is written to the global YAML file and auto-restored across sessions. The two can be checked independently; persisted rule groups are usually also global.
+
+### 11.5 Request Scope Configuration
 
 Specify URL patterns to test. Only requests matching the scope will be intercepted and tested.
 
@@ -635,7 +641,50 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 
 > Chrome fetch format support includes single/double quotes, escape sequences, nested objects, and other complex JS syntax parsing.
 
-### 11.10 Execute Test
+### 11.9 User Info Management (UserInfo)
+
+**Feature Overview** (v2.34.0): Maintain a complete user info profile (role, username, anonymous flag, privilege proof screenshots) for each user session, exported together with test reports — solving the problem of "reports lacking traceable test subject identity".
+
+**UserInfo Data Model**:
+
+| Field | Description |
+|-------|-------------|
+| `role` | User role (e.g., "Admin", "Regular User", "Guest"), displayed in reports |
+| `username` | Username / account identifier |
+| `isAnonymous` | Anonymous flag, auto-set to true for anonymous users |
+| `screenshotPaths` | List of privilege proof screenshot file paths (e.g., login state, permission pages) |
+| `createdAt` | Creation timestamp |
+
+**Configuration Workflow**:
+1. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
+2. Select a target user session and open the **User Info Detail Dialog** (`UserInfoDetailDialog`)
+3. Fill in role and username; anonymous users get a UserInfo auto-created with `isAnonymous=true`
+4. Click **"Upload Screenshot"** to add privilege proof screenshots (multiple supported, e.g., login success page, profile page)
+5. After saving, the UserInfo is persisted by `UserInfoDAO` to the `user_info` table in the session database, and cached by `SessionManager` for fast access
+
+**Report Integration**: When exporting reports, each session's UserInfo (role/username/screenshots) is automatically embedded; screenshots are **Base64-encoded** (`ScreenshotEncoder`) and viewable via the image lightbox in HTML reports.
+
+### 11.10 Test Info Configuration (TestInfoConfig)
+
+**Feature Overview** (v2.34.0, enhanced in v2.35.x): Configure metadata for the current test (report title, subtitle, target, entry, time range, personnel, etc.), automatically embedded into the report header on export — giving the report the complete context required for formal delivery.
+
+**Configuration Entry**: The **"Test Info Configuration"** button in the privilege testing panel.
+
+**Configurable Items**:
+
+| Item | Description |
+|------|-------------|
+| Report Title | Custom main title; default title used when `useDefaultTitle=true` |
+| Report Subtitle | Custom subtitle (e.g., test round, version number) |
+| Test Target | Name/address of the system under test |
+| Test Entry | Entry URL or functional module |
+| Test Screenshots | Test-related screenshots (exported with the report) |
+| Test Time Range | Start/end time, conveniently selected via the **Date-Time Range Picker Dialog** (`DateTimeRangePickerDialog`, v2.38.0) |
+| Test Personnel | Test executor / team |
+
+**Persistence**: Configuration is stored by `TestInfoConfigDAO` in the `test_info_config` table of the session database, remaining valid within the session.
+
+### 11.11 Execute Test
 
 1. After completing the above configuration, set an **active rule group** in the privilege testing panel (check the "Active" column for the target rule group)
 2. Enable the **"Auto-testing"** switch
@@ -778,6 +827,21 @@ The report export module uses the Template Method design pattern to export privi
 **Reproduction Commands**:
 - **cURL Commands**: Equivalent cURL commands for each test (generated by `CurlBuilder`)
 - **Postman Snippets**: Postman code snippets for each test (generated by `PostmanSnippetBuilder`), importable directly into Postman for reproduction
+
+**Test Info Embedding** (v2.34.0): The report header automatically embeds the report title/subtitle, test target, entry, time range, and personnel configured in "Test Info Configuration", giving the report the complete context required for formal delivery.
+
+**User Info & Screenshots** (v2.34.0): Each user session's UserInfo (role/username/anonymous flag) and privilege proof screenshots are exported with the report; screenshots are Base64-embedded for tracing test subject identity.
+
+**Image Lightbox Carousel** (HTML report, v2.36.x):
+- Click any screenshot in the report to open a large lightbox view
+- **Grouped carousel**: Multiple screenshots of the same test item are grouped, with prev/next navigation within the group
+- **Keyboard shortcuts**: ←/→ to switch images, Esc to close the lightbox
+- **Counter**: Shows "N / M" position indicator
+- **Loading indicator**: Shows a loading animation while large images load
+
+**Privilege Test Case Reference** (HTML report, v2.39.0): The report embeds a `test_cases.html` reference page providing **TC-UA (Unauthorized Access) / TC-VP (Vertical Privilege) / TC-HP (Horizontal Privilege)** — 9 standard test cases in 3 categories, for comparing test results against standard cases.
+
+**Multi-file Mode Data Separation** (HTML report): Reports use a `data.js` (test data) + `controller.js` (rendering logic) separated architecture for smoother loading of large reports.
 
 ### 14.5 Content Rendering
 

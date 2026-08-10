@@ -107,6 +107,10 @@ Click the **"Layout"** dropdown in the top-right corner to choose your preferred
 - Report content includes: Test summary, session statistics, per-endpoint details, cURL/Postman code snippets
 - Judgment results shown in Chinese: ⚠ Escalated (越权) / ✔ Safe (安全) / ✗ Error (错误), matched rule group name also displayed
 - Request/response bodies are auto-rendered (text highlighting, binary hex conversion)
+- **Test info embedding**: Report header auto-embeds title/target/time range/personnel from Test Info Configuration
+- **User info & screenshots**: Each session's UserInfo (role/username) and privilege proof screenshots exported with the report
+- **Image lightbox carousel** (HTML): Click a screenshot to open a large view, with grouped carousel, ←/→ keyboard navigation, and counter
+- **Privilege test case reference** (HTML): Embedded TC-UA/TC-VP/TC-HP categories with 9 standard test cases
 
 ---
 
@@ -168,13 +172,17 @@ Automated privilege escalation vulnerability detection:
    - **Fields**: Configure where authentication fields are in the request (HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM, 6 types total)
    - **Schemes**: Create a named group of field locations (e.g., "Bearer Auth" with Authorization Header only), associate schemes with user sessions
    - **User Sessions**: Add auth field values for users with different privilege levels; one-click **"Add Anonymous User"** (all field values empty, simulating unauthenticated state)
-   - **Judgment Rule Groups**: Create rule groups (conditions within a group are AND-combined), set one as the **active rule group** (globally unique), supports AND/OR/NOT operators
+   - **User Info (UserInfo)**: Configure role/username/privilege proof screenshots per session, exported with reports (auto-created for anonymous users)
+   - **Judgment Rule Groups**: Create rule groups (conditions support AND/OR mixed logic; first row has no connector), set one as the **active rule group** (globally unique); check **"Persist"** to save rule groups to the global `judgment_rules.yaml`, auto-restored on startup
+   - **Test Info Configuration**: Set report title/subtitle, target/entry/time range (date-time range picker)/personnel, exported with reports
    - **Request Scope**: Specify URL patterns to test
 2. Enable auto-testing; the plugin intercepts scope-matched proxy traffic
 3. Auto-replaces field values and replays requests (empty fields for anonymous users perform "removal" operations), judges risk based on the active rule group
 4. View results in the **"Privilege Test"** panel (color coded: red = potential escalation, green = safe)
 
 > Three-layer judgment flow: Invalid baseline → Error; Active rule group match → Escalated/Safe; No active rule group → Similarity fallback (≥0.90 → Escalated). Supports session parsing from clipboard (raw HTTP / Chrome fetch format).
+
+> The **"Clear Messages"** button in the request list panel clears all messages and linked scheduler/history/request-response panels; the **"Reset"** button only clears the current request/response editors.
 
 ---
 

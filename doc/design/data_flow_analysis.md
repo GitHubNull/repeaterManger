@@ -1,6 +1,6 @@
 # Repeater Manager Burp Suite 插件 — 完整数据流分析
 
-> 版本：v2.22.x | 生成日期：2026-06-21
+> 版本：v2.41.0 | 生成日期：2026-08-10
 
 本文档详细分析了 Repeater Manager 插件在不同业务操作中的完整数据流向，涵盖 MVC 架构、连接池、异步处理、Pool 去重、Montoya SDK 集成等技术原理，并使用 Mermaid 图表展示数据流。
 
@@ -32,7 +32,7 @@ graph TB
     end
 
     subgraph Entry["扩展入口"]
-        BE["BurpExtender"]
+        RME["RepeaterManagerExtension"]
         MAH["MontoyaApiHolder"]
         PM["PopMenu"]
     end
@@ -64,11 +64,19 @@ graph TB
 
     subgraph Privilege["越权测试子系统"]
         RE["ReplayEngine"]
-        TRE["FieldReplacementEngine"]
+        FRE["FieldReplacementEngine"]
         JE["JudgmentEngine"]
+        JRM["JudgmentRuleManager<br/>(活跃规则组)"]
+        GJM["GlobalJudgmentRuleManager<br/>(YAML持久化)"]
         SE["SimilarityEngine"]
         SM["SessionManager"]
         ATE["AutoTestEngine"]
+        DCM["DedupConfigManager"]
+        GFDM["GlobalFieldDefinitionManager"]
+        GSM["GlobalSchemeManager"]
+        UDAO["UserInfoDAO"]
+        TDAO["TestInfoConfigDAO"]
+        SEC["ScreenshotEncoder"]
     end
 
     subgraph APIExtract["API提取子系统"]
@@ -89,11 +97,11 @@ graph TB
         ASS["AutoSaveService"]
     end
 
-    API --> BE
-    BE --> MAH
-    BE --> RMUI
-    BE --> PM
-    PM --> BE
+    API --> RME
+    RME --> MAH
+    RME --> RMUI
+    RME --> PM
+    PM --> RME
     RMUI --> RDH
     RDH --> RM
     RDH --> RE
@@ -107,10 +115,14 @@ graph TB
     DAO_R --> PM_M
     DAO_R --> AEE
     DAO_R --> DBM
-    RE --> TRE
+    RE --> FRE
     RE --> JE
     RE --> RM
     JE --> SE
+    JE --> JRM
+    JRM --> GJM
+    SM --> UDAO
+    SM --> TDAO
     DP --> EAW
     DP --> EAR
     DP --> PE
@@ -124,14 +136,16 @@ graph TB
 graph LR
     A["MontoyaApi.initialize()"] --> B["MontoyaApiHolder.setApi()"]
     B --> C["LogManager.initialize()"]
-    C --> D["DatabaseManager.initialize()"]
-    D --> E["SchemaInitializer + SchemaMigrator"]
-    E --> F["GC + AutoSave 启动"]
-    F --> G["GlobalRuleManager.loadRules()"]
-    G --> H["GlobalFieldDefinitionManager.loadLocations()"]
-    H --> I["RepeaterManagerUI 构造"]
-    I --> J["registerSuiteTab"]
-    J --> K["registerContextMenuItemsProvider"]
+    C --> D["DatabaseManager.initialize()<br/>(会话目录 + Schema v19 迁移)"]
+    D --> E["GC + AutoSave 启动"]
+    E --> F["GlobalRuleManager.loadRules()<br/>API提取规则 YAML"]
+    F --> G["GlobalFieldDefinitionManager.loadFields()<br/>field_definitions.yaml"]
+    G --> H["SessionManager.loadGlobalSchemes()<br/>schemes.yaml"]
+    H --> I["GlobalJudgmentRuleManager.loadRules()<br/>+ JudgmentRuleManager.loadGlobalRules()<br/>judgment_rules.yaml 恢复到新会话库"]
+    I --> J["DedupConfigManager.loadGlobalConfigs()<br/>dedup_configs.yaml"]
+    J --> K["RepeaterManagerUI 构造"]
+    K --> L["registerSuiteTab"]
+    L --> M["registerContextMenuItemsProvider"]
 ```
 
 ---
@@ -146,7 +160,7 @@ graph LR
 sequenceDiagram
     participant User as 用户
     participant PM as PopMenu
-    participant BE as BurpExtender
+    participant RME as RepeaterManagerExtension
     participant RMUI as RepeaterManagerUI
     participant RLP as RequestListPanel
     participant RDH as RequestDispatchHandler
@@ -155,8 +169,8 @@ sequenceDiagram
     participant DBM as DatabaseManager
 
     User->>PM: 右键"发送到 Repeater Manager"
-    PM->>BE: setRepeaterUIRequest(requestResponse)
-    BE->>RMUI: setRequest(requestResponse)
+    PM->>RME: setRepeaterUIRequest(requestResponse)
+    RME->>RMUI: setRequest(requestResponse)
     RMUI->>RMUI: 解析 URL/Method/Protocol/Domain/Path/Query
     RMUI->>DAO: saveRequest(protocol, domain, path, query, method, requestBytes)
     DAO->>Pool: ensureString(domain) → domainHash
@@ -261,6 +275,41 @@ graph TB
     D3 --> C4 --> C2 --> C3
     D4 --> B5
 ```
+
+### 2.4 清空报文数据流（v2.41.0）
+
+请求列表搜索栏提供"清空报文"按钮，一键清空全部基准报文及相关数据。清空操作通过 `ClearAllCallback` 实现四步联动，同时清理 UI 内存数据与数据库记录。
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant RLP as RequestListPanel
+    participant DAO as RequestDAO
+    participant HUD as HistoryUpdateDAO
+    participant CB as ClearAllCallback
+    participant RDH as RequestDispatchHandler
+    participant HP as HistoryPanel
+    participant RQP as BurpRequestPanel
+    participant RSP as BurpResponsePanel
+
+    User->>RLP: 点击"清空报文"按钮
+    RLP->>RLP: clearAllWithConfirm() 确认对话框
+    RLP->>RLP: performClearAll()
+    RLP->>RLP: clearAllRequests() 清空表格与内存映射<br/>(requestDataMap/colors/comments/judgments)
+    RLP->>DAO: clearAllRequests() → DELETE FROM requests
+    RLP->>HUD: clearAllHistory() → DELETE FROM history
+    RLP->>CB: onClearAll()
+    CB->>RDH: getRequestHistoryMap().clear()
+    CB->>RDH: setCurrentRequestId(-1) / setCurrentHttpService(null)
+    CB->>HP: clearAllHistory() 清空历史表格
+    CB->>RQP: setRequest(new byte[0]) 清空请求编辑面板
+    CB->>RSP: clear() 清空响应面板
+```
+
+**清空联动要点**：
+- 清空请求列表后，通过 `ClearAllCallback.onClearAll()` 通知上层联动清理：调度处理器历史映射、当前选中请求、历史面板、请求/响应编辑面板
+- 数据库层同时清理 `requests` 与 `history` 两张表，确保重启后不会恢复已清空数据
+- 确认对话框明确提示影响范围（基准报文、重放历史、ID 计数、颜色/注释/判决映射、数据库记录），操作不可恢复
 
 ---
 
@@ -390,6 +439,8 @@ graph TB
         B2["FieldDefinition<br/>字段定义"]
         B3["Scheme<br/>方案(绑定会话)"]
         B4["ReplayConfig<br/>超时/重试/延迟/阈值"]
+        B5["UserInfo<br/>用户信息(角色/用户名/匿名/截图)"]
+        B6["TestInfoConfig<br/>测试信息(目标/入口/时间段/人员)"]
     end
 
     subgraph 去重["批量去重"]
@@ -404,17 +455,19 @@ graph TB
         D4["MontoyaApi.http()"]
     end
 
-    subgraph 判断["判决引擎"]
+    subgraph 判断["判决引擎(三层)"]
         E1["JudgmentEngine"]
         E2["SimilarityEngine"]
-        E3["JudgmentRule"]
+        E3["JudgmentRuleManager<br/>活跃规则组"]
         E4["ESCALATED / NOT_ESCALATED / ERROR"]
+        E5["规则组条件 AND/OR 混合<br/>兜底相似度 >= 0.90"]
     end
 
     subgraph 存储["持久化"]
         F1["RequestDAO.markAsPrivilegeTest()"]
         F2["HistoryWriteDAO.saveHistory()"]
         F3["Pool去重存储"]
+        F4["GlobalJudgmentRuleManager<br/>持久化规则 → judgment_rules.yaml"]
     end
 
     A1 --> C2 --> D1
@@ -426,8 +479,12 @@ graph TB
     D1 --> D2 --> D3 --> D4
     D4 --> E1 --> E2 --> E4
     E1 --> E3
+    E3 --> E5
+    E3 --> F4
     D1 --> F1 --> F2 --> F3
     B4 --> D3
+    B5 --> E1
+    B6 --> D1
 ```
 
 ### 4.2 单条越权测试流程
@@ -442,6 +499,7 @@ sequenceDiagram
     participant TRE as FieldReplacementEngine
     participant RM as RequestManager
     participant JE as JudgmentEngine
+    participant JRM as JudgmentRuleManager
     participant SE as SimilarityEngine
     participant HP as HistoryPanel
 
@@ -468,9 +526,13 @@ sequenceDiagram
         RE->>RE: isFirst? → 保存baselineResponse
         alt isFirst == false
             RE->>JE: judge(statusCode, headers, responseBody, baseline, ...)
+            JE->>JE: 基准响应无效? → 直接返回 ERROR
+            JE->>JRM: 获取活跃规则组 (is_active=1, 全局唯一)
+            JRM-->>JE: 规则组 + 条件列表 (AND/OR 混合, 按 sort_order)
             JE->>SE: similarity(respBody, baselineBody, contentType)
             SE-->>JE: similarity值
-            JE-->>RE: JudgmentOutcome
+            JE->>JE: 依次判决组内条件; 无命中 → 兜底相似度 >= 0.90
+            JE-->>RE: JudgmentOutcome (ESCALATED / NOT_ESCALATED / ERROR)
         end
 
         RE-->>RDH: callback.onReplayComplete(record, isFirst)
@@ -497,13 +559,13 @@ sequenceDiagram
 graph TB
     subgraph Input["输入"]
         A1["原始请求字节数组"]
-        A2["FieldDefinition列表<br/>HEADER / JSON_BODY / XML_BODY<br/>FORM_FIELD / MULTIPART_FIELD"]
+        A2["FieldDefinition列表<br/>HEADER / JSON_BODY / XML_BODY<br/>FORM_FIELD / MULTIPART_FIELD / URL_PARAM"]
         A3["UserSession.fieldValues<br/>fieldId → value映射"]
     end
 
     subgraph Process["FieldReplacementEngine处理"]
         B1["ContentSplitter: 分离Header和Body"]
-        B2["Header字段替换<br/>replaceHeader(expression, value)"]
+        B2["Header/URL参数替换<br/>replaceHeader / replaceUrlParam"]
         B3["Body字段路由"]
         B4["JSON: replaceJsonBody()"]
         B5["XML: replaceXmlBody()"]
@@ -529,6 +591,7 @@ graph TB
 
 **字段替换类型路由**：
 - **Header替换**：匹配 `expression`（如 `Cookie`、`Authorization`），替换整个值
+- **URL_PARAM**：替换请求行/Header 中的 URL 查询参数（`replaceUrlParam`）
 - **JSON_BODY**：仅在 Content-Type 包含 `application/json` 时生效
 - **XML_BODY**：仅在 Content-Type 包含 `xml` 时生效
 - **FORM_FIELD**：仅在 Content-Type 包含 `x-www-form-urlencoded` 时生效
@@ -572,7 +635,8 @@ sequenceDiagram
     participant TRE as FieldReplacementEngine
     participant RM as RequestManager
     participant JE as JudgmentEngine
-    participant BE as BurpExtender
+    participant JRM as JudgmentRuleManager
+    participant RME as RepeaterManagerExtension
     participant RMUI as RepeaterManagerUI
 
     Proxy->>Scope: 匹配Scope规则?
@@ -591,14 +655,90 @@ sequenceDiagram
             ATE->>ATE: judgment = NOT_ESCALATED
         else 非基准用户
             ATE->>JE: judge(...)
+            JE->>JRM: 获取活跃规则组 (is_active=1)
+            JRM-->>JE: 规则组 + 条件列表 (AND/OR 混合)
+            JE->>JE: 基准无效→ERROR; 条件判决; 兜底相似度 >= 0.90
             JE-->>ATE: JudgmentOutcome
         end
 
-        ATE->>BE: addPrivilegeTestRecord(record)
-        BE->>RMUI: addPrivilegeTestHistoryRecord(record)
+        ATE->>RME: addPrivilegeTestRecord(record)
+        RME->>RMUI: addPrivilegeTestHistoryRecord(record)
         RMUI->>RMUI: 持久化到DB + 更新UI
     end
 ```
+
+### 4.6 用户信息（UserInfo）数据流（v2.34.0）
+
+用户信息与被测用户会话（UserSession）一对一关联，用于在报告中标注不同测试身份的角色、用户名及权限证明截图。匿名用户（isAnonymous=true）在会话创建时自动生成并绑定默认角色，无需手动配置。
+
+```mermaid
+sequenceDiagram
+    participant SM as SessionManager
+    participant UDAO as UserInfoDAO
+    participant DB as SQLite DB<br/>(user_info / user_info_screenshots)
+    participant RMUI as RepeaterManagerUI
+    participant UIDD as UserInfoDetailDialog
+    participant SE as ScreenshotEncoder
+    participant EXP as ReportExporter
+
+    SM->>SM: 创建会话 → 匿名用户? 自动生成 UserInfo<br/>(role默认, isAnonymous=true)
+    SM->>UDAO: save(userInfo) INSERT OR REPLACE
+    UDAO->>DB: INSERT INTO user_info (session_id, role, username, is_anonymous)
+    UDAO->>DB: 同步截图: DELETE + INSERT INTO user_info_screenshots
+    UDAO-->>SM: 保存结果
+    SM->>SM: 更新缓存 cachedUserInfo(sessionId → UserInfo)
+    RMUI->>SM: getCachedUserInfo(sessionId)
+    SM->>UDAO: getBySessionId(sessionId) 未命中时回源
+    UDAO-->>SM: UserInfo (含 screenshotPaths)
+    SM-->>RMUI: UserInfo
+    RMUI->>UIDD: 展示角色/用户名/匿名标记/截图列表
+    UIDD-->>RMUI: 查看/修改用户信息
+    RMUI->>UDAO: save(userInfo) 再次持久化
+    EXP->>SM: getUserInfoForReport(sessionId)
+    EXP->>SE: encode(screenshotPaths) → Base64 data URI
+    SE-->>EXP: Base64 截图
+    EXP->>EXP: 报告嵌入用户信息 + 截图 (HTML/PDF/ERMR)
+```
+
+**用户信息关键点**：
+- **自动创建**：匿名用户会话创建时自动生成 UserInfo 并绑定默认角色，避免手动维护
+- **缓存**：`SessionManager` 以 `sessionId → UserInfo` 缓存，首次访问未命中时通过 `UserInfoDAO.getBySessionId()` 回源
+- **截图持久化**：截图路径存于 `user_info_screenshots` 表，与用户信息级联删除（ON DELETE CASCADE）
+- **报告嵌入**：导出报告时由 `ScreenshotEncoder` 将截图转为 Base64 data URI 嵌入报告，PDF/HTML/ERMR 均支持
+
+### 4.7 判决规则持久化数据流（v2.37.0）
+
+数据库采用会话目录模式（每次插件启动创建新的时间戳会话目录），旧会话数据库中的规则不会自动可见。规则组可标记为"持久化"（global=true），由 `GlobalJudgmentRuleManager` 保存到全局 YAML 文件，插件启动时自动恢复到新会话数据库，实现跨会话保留。
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant DG as JudgmentRuleEditDialog
+    participant GRM as GlobalJudgmentRuleManager
+    participant YAML as judgment_rules.yaml<br/>(~/.burp/repeater_manager/)
+    participant DB as SQLite DB<br/>(judgment_rule_groups / judgment_rule_conditions)
+    participant JRM as JudgmentRuleManager
+    participant JE as JudgmentEngine
+
+    User->>DG: 编辑规则组/条件并勾选"持久化"
+    DG->>DB: 保存规则组 + 条件 (含 global 标记)
+    DG->>GRM: syncFromRules(全部规则)
+    GRM->>GRM: 过滤 global=true 的规则
+    GRM->>YAML: 重建写入 judgment_rules.yaml
+    YAML-->>GRM: 写入结果
+    GRM-->>DG: 持久化完成
+
+    Note over JRM: 插件下次启动
+    JRM->>GRM: loadRules() 读取 YAML 到内存
+    JRM->>DB: loadGlobalRules() 恢复到新会话数据库<br/>(INSERT 规则组 + 条件)
+    JRM->>JRM: 恢复活跃规则组标记 (is_active=1)
+    JE->>JRM: getActiveGroup() → 使用恢复后的规则组判决
+```
+
+**持久化关键点**：
+- **触发时机**：规则组/条件的增删改后，`GlobalJudgmentRuleManager.syncFromRules()` 以当前数据库为准重建 YAML（仅保留 global=true 的规则，自动处理改名/删除/取消持久化）
+- **启动恢复**：插件启动时 `JudgmentRuleManager.loadGlobalRules()` 将 YAML 中的规则恢复到新会话数据库，并恢复单活跃规则组标记
+- **存储路径**：`~/.burp/repeater_manager/judgment_rules.yaml`（与字段定义/方案/API 规则的全局持久化模式一致）
 
 ---
 
@@ -1045,7 +1185,7 @@ graph TB
 
     subgraph Bridge["桥接层"]
         B1["MontoyaApiHolder<br/>静态持有MontoyaApi"]
-        B2["BurpExtender<br/>实现BurpExtension"]
+        B2["RepeaterManagerExtension<br/>实现BurpExtension"]
         B3["PopMenu<br/>实现ContextMenuItemsProvider"]
     end
 
@@ -1082,8 +1222,8 @@ graph TB
 ```mermaid
 graph TB
     subgraph Core["核心业务表"]
-        R["requests<br/>id | protocol | domain_hash | path_hash | query_hash |<br/>method | api_hash | is_privilege_test |<br/>req_header_hash | req_body_hash | req_body_storage |<br/>resp_header_hash | resp_body_hash | resp_body_storage |<br/>resp_status_code | resp_length | resp_time"]
-        H["history<br/>id | request_id(FK) | method | protocol |<br/>domain_hash | path_hash | query_hash | status_code |<br/>req_header_hash | req_body_hash | req_body_storage |<br/>resp_header_hash | resp_body_hash | resp_body_storage |<br/>api_hash | user_session_name | judgment | similarity"]
+        R["requests<br/>id | protocol | domain_hash | path_hash | query_hash |<br/>method | api_hash | is_privilege_test | comment | color |<br/>req_header_hash | req_body_hash | req_body_storage |<br/>resp_header_hash | resp_body_hash | resp_body_storage |<br/>resp_status_code | resp_length | resp_time"]
+        H["history<br/>id | request_id(FK) | method | protocol |<br/>domain_hash | path_hash | query_hash | status_code |<br/>req_header_hash | req_body_hash | req_body_storage |<br/>resp_header_hash | resp_body_hash | resp_body_storage |<br/>api_hash | user_session_name | judgment | similarity |<br/>baseline_response_data"]
     end
 
     subgraph Pools["去重Pool表"]
@@ -1098,21 +1238,24 @@ graph TB
     end
 
     subgraph Privilege["越权测试相关表"]
-        TL["field_definitions<br/>id | type | expression | enabled"]
-        TS["schemes<br/>id | name | enabled"]
-        US["user_sessions<br/>id | name | color | scheme_id(FK)"]
-        TV["field_values<br/>id | session_id(FK) | field_id(FK) | value"]
-        RC["replay_config<br/>similarity_threshold | timeout | retry"]
-        SCOPE["scope_rules<br/>id | host_pattern | path_pattern | auto_test"]
-        JR["judgment_rules<br/>id | target | method | expression | priority"]
+        FD["field_definitions<br/>id | type | expression | description |<br/>persist_to_global | enabled"]
+        SC["schemes<br/>id | name | description |<br/>persist_to_global | enabled"]
+        SF["scheme_fields<br/>id | scheme_id(FK) | field_id(FK)<br/>UNIQUE(scheme_id, field_id)"]
+        US["user_sessions<br/>id | name | color | enabled | scheme_id(FK) |<br/>request_timeout | max_concurrent | retry_count |<br/>retry_delay | replay_delay"]
+        FV["field_values<br/>id | field_id(FK) | user_session_id(FK) | value"]
+        UI["user_info<br/>id | session_id(FK,UNIQUE) | role |<br/>username | is_anonymous"]
+        UIS["user_info_screenshots<br/>id | user_info_id(FK) | file_path"]
+        JRG["judgment_rule_groups<br/>id | name | is_active | enabled | global |<br/>success_color | failure_color"]
+        JRC["judgment_rule_conditions<br/>id | group_id(FK) | target | method |<br/>expression | operator(AND/OR) | sort_order"]
+        SCOPE["scope_entries<br/>id | name | url_pattern | enabled"]
     end
 
     subgraph API["API提取规则表"]
-        AER["api_extraction_rules<br/>id | source | method | expression | priority"]
+        AER["api_extraction_rules<br/>id | source | method | expression |<br/>enabled | priority | global"]
     end
 
     subgraph Meta["元数据"]
-        SM["schema_meta<br/>key(PK) | value<br/>schema_version=11"]
+        SM["schema_meta<br/>key(PK) | value<br/>schema_version=19"]
     end
 
     R --> SP
@@ -1124,9 +1267,14 @@ graph TB
     H --> BP
     H --> FP
     H --> R
-    US --> TS
-    TV --> US
-    TV --> TL
+    US --> SC
+    SF --> SC
+    SF --> FD
+    FV --> US
+    FV --> FD
+    UI --> US
+    UIS --> UI
+    JRC --> JRG
     SP --> GCQ
     HP --> GCQ
     BP --> GCQ
@@ -1146,8 +1294,9 @@ graph LR
     subgraph GlobalDir["全局配置 ~/.burp/repeater_manager/"]
         Y1["api_extraction_rules.yaml"]
         Y2["field_definitions.yaml"]
-        Y3["dedup_configs.yaml"]
-        Y4["judgment_rules.yaml"]
+        Y3["schemes.yaml"]
+        Y4["dedup_configs.yaml"]
+        Y5["judgment_rules.yaml"]
     end
 
     DB --> B
@@ -1159,42 +1308,51 @@ graph LR
 
 | 类名 | 文件路径 | 职责 | 关键技术 |
 |------|----------|------|----------|
-| BurpExtender | `burp/BurpExtender.java` | 扩展入口，初始化所有组件 | Montoya BurpExtension |
-| MontoyaApiHolder | `oxff/top/api/MontoyaApiHolder.java` | MontoyaApi静态持有者 | 静态桥接模式 |
-| RepeaterManagerUI | `oxff/top/RepeaterManagerUI.java` | 主UI容器，协调所有面板 | Swing JSplitPane/JTabbedPane |
-| RequestDispatchHandler | `oxff/top/RequestDispatchHandler.java` | 请求调度核心，普通/越权模式路由 | volatile状态 + EDT竞态修复 |
-| RequestManager | `oxff/top/http/RequestManager.java` | 异步HTTP请求发送 | CachedThreadPool + Montoya API |
-| HistoryRecordingService | `oxff/top/service/HistoryRecordingService.java` | 异步队列化历史保存 | LinkedBlockingQueue + SingleThreadExecutor |
-| DatabaseManager | `oxff/top/db/DatabaseManager.java` | SQLite连接池管理 | ArrayBlockingQueue + JDK Proxy |
-| PoolManager | `oxff/top/db/pool/PoolManager.java` | SHA-256去重存储 | INSERT-OR-INCREMENT + ConcurrentHashMap缓存 |
-| ContentSplitter | `oxff/top/db/pool/ContentSplitter.java` | HTTP报文头部/体分离 | 字节级拆分 |
-| ContentReconstructor | `oxff/top/db/pool/ContentReconstructor.java` | 从Pool重建完整报文 | hash→data反向查询 |
-| ContentHasher | `oxff/top/db/pool/ContentHasher.java` | SHA-256哈希计算 + 存储路由决策 | SHA-256 + 64KB阈值 + 二进制检测 |
-| BodyStorageRoute | `oxff/top/db/pool/BodyStorageRoute.java` | Body存储路由(inline/file) | 大小阈值判断(64KB) + 二进制检测 |
-| FileStorageManager | `oxff/top/db/pool/FileStorageManager.java` | blobs/目录文件读写 | SHA-256哈希命名 |
-| GarbageCollectorService | `oxff/top/service/GarbageCollectorService.java` | 定期清理零引用数据 | ScheduledExecutorService + gc_queue |
-| AutoSaveService | `oxff/top/service/AutoSaveService.java` | 定时数据库检查点 | ScheduledExecutorService |
-| ReplayEngine | `oxff/top/privilege/ReplayEngine.java` | 越权测试重放引擎 | 多会话遍历 + 同步发送 + 重试 |
-| FieldReplacementEngine | `oxff/top/privilege/FieldReplacementEngine.java` | 请求字段替换 | Header/JSON/XML/Form/Multipart路由 |
-| JudgmentEngine | `oxff/top/privilege/JudgmentEngine.java` | 响应越权判决 | 规则优先匹配 + 相似度回退 |
-| SimilarityEngine | `oxff/top/privilege/SimilarityEngine.java` | 内容感知相似度 | JSON/XML/Jaccard/Binary路由 |
-| AutoTestEngine | `oxff/top/privilege/AutoTestEngine.java` | 代理拦截自动测试 | Scope匹配 + API去重 |
-| SessionManager | `oxff/top/privilege/SessionManager.java` | 会话/字段/方案缓存 | DAO + 缓存列表 |
-| ApiExtractionEngine | `oxff/top/api/ApiExtractionEngine.java` | API标识提取 | 4源×4方法 + First-Match-Wins |
-| ApiRuleManager | `oxff/top/api/ApiRuleManager.java` | 项目级API规则管理 | SQLite持久化 |
-| GlobalRuleManager | `oxff/top/api/GlobalRuleManager.java` | 全局API规则管理 | YAML文件 + 负数ID |
-| ApiRuleYamlIO | `oxff/top/api/ApiRuleYamlIO.java` | YAML规则序列化 | SnakeYAML |
-| PopMenu | `oxff/top/controller/PopMenu.java` | 右键菜单提供者 | ContextMenuItemsProvider |
-| RequestDAO | `oxff/top/db/RequestDAO.java` | 请求数据访问 | Pool去重适配 |
-| HistoryWriteDAO | `oxff/top/db/history/HistoryWriteDAO.java` | 历史记录写入 | Pool去重适配 |
-| HistoryReadDAO | `oxff/top/db/history/HistoryReadDAO.java` | 历史记录读取 | ContentReconstructor重建 |
-| ErmArchiveWriter | `oxff/top/io/ErmArchiveWriter.java` | ERM存档导出 | 自定义二进制 + AES-256-CBC |
-| ErmArchiveReader | `oxff/top/io/ErmArchiveReader.java` | ERM存档导入 | 魔数验证 + 解密恢复 |
-| ErmCryptoHelper | `oxff/top/io/ErmCryptoHelper.java` | ERM加密/解密 | PBKDF2 + AES-256-CBC + HMAC-SHA256 |
-| PostmanExporter | `oxff/top/io/PostmanExporter.java` | Postman导出 | Collection v2.1 JSON |
-| PostmanImporter | `oxff/top/io/PostmanImporter.java` | Postman导入 | Collection v2.1 JSON解析 |
-| FormatDetector | `oxff/top/io/FormatDetector.java` | 文件格式检测 | 魔数 + JSON结构识别 |
-| DataExporter | `oxff/top/io/DataExporter.java` | 统一导出调度 | ERM + Postman路由 |
-| DataImporter | `oxff/top/io/DataImporter.java` | 统一导入调度 | 智能格式检测 |
-| SchemaInitializer | `oxff/top/db/schema/SchemaInitializer.java` | 数据库Schema创建 | v11完整表结构 |
-| SchemaMigrator | `oxff/top/db/schema/SchemaMigrator.java` | Schema版本迁移 | 逐步升级策略 |
+| RepeaterManagerExtension | `org/oxff/repeater/RepeaterManagerExtension.java` | 扩展入口，初始化所有组件 | Montoya BurpExtension |
+| MontoyaApiHolder | `org/oxff/repeater/api/MontoyaApiHolder.java` | MontoyaApi静态持有者 | 静态桥接模式 |
+| RepeaterManagerUI | `org/oxff/repeater/RepeaterManagerUI.java` | 主UI容器，协调所有面板 | Swing JSplitPane/JTabbedPane |
+| RequestDispatchHandler | `org/oxff/repeater/RequestDispatchHandler.java` | 请求调度核心，普通/越权模式路由 | volatile状态 + EDT竞态修复 |
+| RequestManager | `org/oxff/repeater/http/RequestManager.java` | 异步HTTP请求发送 | CachedThreadPool + Montoya API |
+| HistoryRecordingService | `org/oxff/repeater/service/HistoryRecordingService.java` | 异步队列化历史保存 | LinkedBlockingQueue + SingleThreadExecutor |
+| DatabaseManager | `org/oxff/repeater/db/DatabaseManager.java` | SQLite连接池管理 | ArrayBlockingQueue + JDK Proxy |
+| PoolManager | `org/oxff/repeater/db/pool/PoolManager.java` | SHA-256去重存储 | INSERT-OR-INCREMENT + ConcurrentHashMap缓存 |
+| ContentSplitter | `org/oxff/repeater/db/pool/ContentSplitter.java` | HTTP报文头部/体分离 | 字节级拆分 |
+| ContentReconstructor | `org/oxff/repeater/db/pool/ContentReconstructor.java` | 从Pool重建完整报文 | hash→data反向查询 |
+| ContentHasher | `org/oxff/repeater/db/pool/ContentHasher.java` | SHA-256哈希计算 + 存储路由决策 | SHA-256 + 64KB阈值 + 二进制检测 |
+| BodyStorageRoute | `org/oxff/repeater/db/pool/BodyStorageRoute.java` | Body存储路由(inline/file) | 大小阈值判断(64KB) + 二进制检测 |
+| FileStorageManager | `org/oxff/repeater/db/pool/FileStorageManager.java` | blobs/目录文件读写 | SHA-256哈希命名 |
+| GarbageCollectorService | `org/oxff/repeater/service/GarbageCollectorService.java` | 定期清理零引用数据 | ScheduledExecutorService + gc_queue |
+| AutoSaveService | `org/oxff/repeater/service/AutoSaveService.java` | 定时数据库检查点 | ScheduledExecutorService |
+| ReplayEngine | `org/oxff/repeater/privilege/ReplayEngine.java` | 越权测试重放引擎 | 多会话遍历 + 同步发送 + 重试 |
+| FieldReplacementEngine | `org/oxff/repeater/privilege/FieldReplacementEngine.java` | 请求字段替换 | Header/JSON/XML/Form/Multipart/URL参数路由 |
+| JudgmentEngine | `org/oxff/repeater/privilege/JudgmentEngine.java` | 响应越权判决 | 三层判决: 基准无效→ERROR→活跃规则组→兜底相似度0.90 |
+| JudgmentRuleManager | `org/oxff/repeater/privilege/JudgmentRuleManager.java` | 规则组/条件管理与判决查询 | 单活跃规则组 + 启动恢复全局规则 |
+| GlobalJudgmentRuleManager | `org/oxff/repeater/privilege/GlobalJudgmentRuleManager.java` | 全局判决规则持久化 | judgment_rules.yaml 重建写入 |
+| JudgmentRuleGroupDAO | `org/oxff/repeater/privilege/dao/JudgmentRuleGroupDAO.java` | 规则组/条件CRUD | 组表 + 条件表(operator 列) |
+| UserInfoDAO | `org/oxff/repeater/privilege/dao/UserInfoDAO.java` | 用户信息CRUD | user_info + 截图级联 |
+| TestInfoConfigDAO | `org/oxff/repeater/privilege/dao/TestInfoConfigDAO.java` | 测试信息配置CRUD | 单行配置 + 截图 |
+| ScreenshotEncoder | `org/oxff/repeater/privilege/ScreenshotEncoder.java` | 截图转Base64 | data URI 嵌入报告 |
+| SimilarityEngine | `org/oxff/repeater/privilege/SimilarityEngine.java` | 内容感知相似度 | JSON/XML/Jaccard/Binary路由 |
+| AutoTestEngine | `org/oxff/repeater/privilege/AutoTestEngine.java` | 代理拦截自动测试 | Scope匹配 + API去重 |
+| SessionManager | `org/oxff/repeater/privilege/SessionManager.java` | 会话/字段/方案/用户信息缓存 | DAO + 缓存列表 |
+| ApiExtractionEngine | `org/oxff/repeater/api/ApiExtractionEngine.java` | API标识提取 | 4源×4方法 + First-Match-Wins |
+| ApiRuleManager | `org/oxff/repeater/api/ApiRuleManager.java` | 项目级API规则管理 | SQLite持久化 |
+| GlobalRuleManager | `org/oxff/repeater/api/GlobalRuleManager.java` | 全局API规则管理 | YAML文件 + 负数ID |
+| ApiRuleYamlIO | `org/oxff/repeater/api/ApiRuleYamlIO.java` | YAML规则序列化 | SnakeYAML |
+| PopMenu | `org/oxff/repeater/controller/PopMenu.java` | 右键菜单提供者 | ContextMenuItemsProvider |
+| RequestDAO | `org/oxff/repeater/db/RequestDAO.java` | 请求数据访问 | Pool去重适配 |
+| HistoryWriteDAO | `org/oxff/repeater/db/history/HistoryWriteDAO.java` | 历史记录写入 | Pool去重适配 |
+| HistoryReadDAO | `org/oxff/repeater/db/history/HistoryReadDAO.java` | 历史记录读取 | ContentReconstructor重建 |
+| RequestListPanel | `org/oxff/repeater/ui/RequestListPanel.java` | 请求列表 + 清空报文 | ClearAllCallback 内部接口联动 |
+| UserInfoDetailDialog | `org/oxff/repeater/ui/privilege/UserInfoDetailDialog.java` | 用户信息详情/截图查看 | Swing 对话框 |
+| DateTimeRangePickerDialog | `org/oxff/repeater/ui/privilege/DateTimeRangePickerDialog.java` | 测试时间段选择 | 日期时间范围选择 |
+| ErmArchiveWriter | `org/oxff/repeater/io/ErmArchiveWriter.java` | ERM存档导出 | 自定义二进制 + AES-256-CBC |
+| ErmArchiveReader | `org/oxff/repeater/io/ErmArchiveReader.java` | ERM存档导入 | 魔数验证 + 解密恢复 |
+| ErmCryptoHelper | `org/oxff/repeater/io/ErmCryptoHelper.java` | ERM加密/解密 | PBKDF2 + AES-256-CBC + HMAC-SHA256 |
+| PostmanExporter | `org/oxff/repeater/io/PostmanExporter.java` | Postman导出 | Collection v2.1 JSON |
+| PostmanImporter | `org/oxff/repeater/io/PostmanImporter.java` | Postman导入 | Collection v2.1 JSON解析 |
+| FormatDetector | `org/oxff/repeater/io/FormatDetector.java` | 文件格式检测 | 魔数 + JSON结构识别 |
+| DataExporter | `org/oxff/repeater/io/DataExporter.java` | 统一导出调度 | ERM + Postman路由 |
+| DataImporter | `org/oxff/repeater/io/DataImporter.java` | 统一导入调度 | 智能格式检测 |
+| SchemaInitializer | `org/oxff/repeater/db/schema/SchemaInitializer.java` | 数据库Schema创建 | v19完整表结构 |
+| SchemaMigrator | `org/oxff/repeater/db/schema/SchemaMigrator.java` | Schema版本迁移 | 逐步升级策略 |

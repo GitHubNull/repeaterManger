@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.42.0] - 2026-08-10
+
+### Added
+- 新增 README 头部横幅 SVG 素材（`doc/assets/readme-header-banner.svg` 与英文版 `readme-header-banner-en.svg`）
+- `.cursor/rules/.cursorrules` 补充项目规则：项目信息（名称/版本/描述）、技术栈（Java 17、Maven、Montoya SDK 2025.12、Swing + RSyntaxTextArea、SQLite 连接池 + SHA-256 去重、Gson/SnakeYAML、PDFBox/FreeMarker、CommonMark）、包结构约定、数据持久化路径（会话目录与全局配置目录）
+
+### Changed
+- About 面板版本号同步至 2.42.0，更新插件功能描述（新增用户信息管理、判决规则跨会话持久化、AND/OR 混合逻辑判决、测试信息配置、PDF/HTML/Markdown 正式报告导出）与依赖清单（Apache PDFBox 3.0.1、FreeMarker 2.3.33、CommonMark 0.22.0）
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.42.0
+- `JudgmentRule` 类注释更新为 v19 AND/OR 混合逻辑描述（组内条件为 AND/OR 混合集合，兜底链回退默认相似度判决）
+- 全量文档更新：README/README_EN、使用教程（快速/详细中英四篇）、开发文档（基础/进阶/中级）、分离式架构 PRD、数据流分析、宣传素材与演讲稿、待办文档
+- `.idea/misc.xml` 项目 JDK 语言级别从 JDK 1.8 升级至 JDK 17（corretto-17）
+
+### Fixed
+- About 面板 GitHub 仓库 URL 修正为 `https://github.com/GitHubNull/repeaterManger`（原 URL 仓库名大小写与拼写错误）
+
 ## [2.41.0] - 2026-08-10
 
 ### Added

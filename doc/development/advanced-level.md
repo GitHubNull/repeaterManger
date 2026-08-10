@@ -114,8 +114,8 @@ AutoTestEngine
   │    ├── ReplayEngine 重放请求（SyncHttpSender 同步发送，带重试）
   │    └── JudgmentEngine 三方判决
   │         ├── 层1：基准响应无效？→ ERROR
-  │         ├── 层2：活跃规则组全部条件命中？→ ESCALATED/NOT_ESCALATED
-  │         └── 层3：无活跃规则组或未命中 → 相似度兜底（>= 0.90 → ESCALATED）
+  │         ├── 层2：活跃规则组评估（AND/OR 混合逻辑，条件组合命中 → ESCALATED）
+  │         └── 层3：兜底链：默认相似度规则组（SIMILARITY > 0.90）→ 全局阈值判决（默认 0.70）→ 状态码/体长联合判决
   └── 3. 去重检查（ApiDedupEngine）
 ```
 
@@ -132,13 +132,13 @@ AutoTestEngine
 | `DedupConfigManager` | 去重配置优先级链式管理 | `matchDedupConfig()` |
 | `ApiDedupEngine` | 从请求提取去重键 | `extractDedupKey()` |
 
-### 2.4 规则组判决机制（v2.30.0+）
+### 2.4 规则组判决机制（v2.30.0+ 规则组，v2.37.0+ AND/OR 混合）
 
-- **规则组（Rule Group）**：一组条件的集合，组内条件 AND 组合求值
+- **规则组（Rule Group）**：一组条件的集合，组内条件按 AND/OR 混合组合求值
 - **单活跃规则集**：全局同时只有一个规则组处于活跃状态
-- **条件运算符**：AND / OR / NOT（取反复选框）
-- **求值顺序**：按 `sort_order` 从左到右
-- **兜底机制**：无活跃规则组时使用默认相似度规则（`SIMILARITY >= 0.90`）
+- **条件运算符**：AND / OR / NOT（取反复选框）；schema v19 起 `judgment_rule_conditions` 表持久化 `operator` 列（默认 AND）
+- **求值顺序**：按 `sort_order` 从左到右；编辑对话框首行不显示连接符（固定按 AND 参与组合）
+- **兜底链**：活跃规则组未命中时依次尝试——① 默认相似度规则组（`SIMILARITY > 0.90`）作为安全网；② 全局阈值相似度判决（默认 0.70，含状态码差异语义）；③ 活跃规则组含低相似度拒绝条件时优先使用其自身最小阈值，防止默认规则组用更低阈值覆盖判决意图
 
 ### 2.5 匿名用户语义
 
@@ -246,10 +246,9 @@ ComparisonDialog (比对对话框)
 
 | 服务 | 类 | 调度方式 | 默认间隔 |
 |------|----|----------|----------|
-| 自动保存 | `AutoSaveService` | `ScheduledExecutorService` | 5 分钟 |
-| 垃圾回收 | `GarbageCollectorService` | `LogManager` 内置调度器 | 10 分钟 |
+| 自动保存 | `AutoSaveService` | 独立 `ScheduledExecutorService`（间隔可配置） | 5 分钟 |
+| 垃圾回收 | `GarbageCollectorService` | 独立 `ScheduledExecutorService`（首次延迟 2 分钟，批处理 100 条/轮） | 10 分钟 |
 | 历史录制 | `HistoryRecordingService` | 异步队列（生产者-消费者） | 实时 |
-| GC 调度器 | `LogManager` 内置 | Daemon 线程轮询 | 30 秒检查 |
 
 ### 5.2 HistoryRecordingService
 
@@ -274,11 +273,11 @@ ComparisonDialog (比对对话框)
 | 类型 | 存储路径 | 管理类 |
 |------|----------|--------|
 | API 提取规则 | `~/.burp/repeater_manager/api_extraction_rules.yaml` | `GlobalRuleManager` |
-| 判断规则组 | `~/.burp/repeater_manager/judgment_rules.yaml` | `JudgmentRuleYamlIO` |
-| 用户会话 | `~/.burp/repeater_manager/user_sessions.yaml` | `UserSessionYamlIO` |
-| 字段定义 | `~/.burp/repeater_manager/field_definitions.yaml` | `FieldDefinitionYamlIO` |
+| 判断规则组 | `~/.burp/repeater_manager/judgment_rules.yaml` | `GlobalJudgmentRuleManager`（读写经 `JudgmentRuleYamlIO`） |
+| 字段定义 | `~/.burp/repeater_manager/field_definitions.yaml` | `GlobalFieldDefinitionManager`（读写经 `FieldDefinitionYamlIO`） |
 | 方案 | `~/.burp/repeater_manager/schemes.yaml` | `GlobalSchemeManager` |
-| 去重配置 | `~/.burp/repeater_manager/dedup_configs.yaml` | `DedupConfigManager` |
+| 去重配置 | `~/.burp/repeater_manager/dedup_configs.yaml` | `DedupConfigManager`（读写经 `DedupConfigYamlIO`） |
+| 用户会话 | 仅会话级 SQLite；`user_sessions.yaml` 为手动导入/导出格式 | `UserSessionYamlIO`（工具类，无全局自动持久化） |
 
 ### 6.2 双重存储策略
 
@@ -290,10 +289,10 @@ ComparisonDialog (比对对话框)
 
 ```
 插件启动
-  ├── 加载全局 YAML 配置
-  ├── 同步到当前会话 SQLite 数据库
-  ├── 去重检查（按 type+expression 去重）
-  └── 启用标记为 persist_to_global 的配置
+  ├── 加载全局 YAML 配置（api_extraction_rules / judgment_rules / field_definitions / schemes / dedup_configs）
+  ├── 同步到当前会话 SQLite 数据库（judgment_rules 中标记"持久化"的规则自动恢复到新会话库）
+  ├── 去重检查（按 type+expression 去重，judgment_rules 条件去重另纳入 operator 维度）
+  └── 启用标记为全局（global/持久化）的配置
 ```
 
 ### 6.4 SnakeYAML 使用

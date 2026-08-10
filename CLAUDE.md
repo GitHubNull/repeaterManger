@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Repeater Manager is a Burp Suite Professional extension that provides advanced HTTP request replay capabilities with persistent storage, history tracking, API extraction, privilege escalation testing, and enhanced organization features. The plugin is designed for security testers and penetration testers to efficiently manage and organize HTTP/HTTPS requests.
 
-- **Version**: 2.34.0
+- **Version**: 2.41.0
 - **Java**: 17 (source/target compatibility)
 - **Build**: Maven
 - **License**: Apache License 2.0
@@ -64,6 +64,10 @@ Key components:
 - **BodyRenderer.java / BinaryContentRenderer.java**: Request/response body rendering including binary content support
 - **GlobalFieldDefinitionManager.java**: Singleton managing global fields shared across sessions
 - **UserSessionYamlIO.java**: YAML serialization for user session import/export
+- **UserInfoDAO.java**: User info CRUD (role/username/anonymous flag/privilege proof screenshots)
+- **TestInfoConfigDAO.java**: Test target metadata config (report title/time range/personnel)
+- **GlobalJudgmentRuleManager.java**: Cross-session judgment rule YAML persistence and restoration
+- **ScreenshotEncoder.java**: Report screenshot read/scale/base64 encoding
 - **FileChooserHelper.java**: Unified file chooser utility for consistent file selection dialogs
 
 ## Key Features
@@ -81,7 +85,7 @@ Key components:
 11. **Proxy Debugging**: Configurable HTTP proxy for request debugging
 12. **Layout Switching**: Horizontal/vertical/request-only/response-only layout modes
 13. **API Extraction**: Configurable rule engine supporting 4 extraction sources (URL_PATH, URL_QUERY, HEADER, BODY) × 4 methods (REGEX, SUBSTR, JSON_PATH, XPATH), with global rules (YAML) and project-level rules (SQLite)
-14. **Privilege Escalation Testing**: Automated testing framework with scheme management, single-active rule group judgment (AND/OR/NOT conditions), configurable dedup, one-click anonymous user creation, and session parsing from clipboard (including Chrome DevTools fetch format)
+14. **Privilege Escalation Testing**: Automated testing framework with scheme management, single-active rule group judgment (AND/OR mixed-logic conditions with cross-session persistence), configurable dedup, one-click anonymous user creation, UserInfo management (role/screenshots), test info configuration, and session parsing from clipboard (including Chrome DevTools fetch format)
 15. **Message Comparison**: String and byte-level diff comparison between request/response pairs with syntax highlighting (RSyntaxTextArea), synchronized scrolling (SynchronizedScrollPanel), diff navigation (DiffNavigator), and in-line character-level diff highlighting via DiffEngine/DiffPane
 16. **Report Generation**: Export privilege test results as PDF (Apache PDFBox with embedded Chinese fonts), HTML or Markdown (FreeMarker templates) reports with embedded request/response bodies, cURL commands, and Postman code snippets; includes binary content rendering for non-text responses
 17. **Batch Operations**: Multi-select support in history and request panels; batch replay, batch privilege testing, and batch deletion of selected entries
@@ -99,8 +103,8 @@ mvn clean package
 ```
 
 The build process creates two JAR files:
-- Development version: `target/repeater-manager-2.34.0.jar`
-- Timestamped release: `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.41.0.jar`
+- Timestamped release: `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar`
 
 ## Source Code Organization
 
@@ -337,13 +341,16 @@ Two main tables + four pool tables + GC queue + API extraction rules:
 **Feature tables**:
 - `api_extraction_rules`: Project-level API extraction rules (source, method, expression, priority, enabled)
 - `user_sessions`: Privilege testing user sessions (credentials, scheme_id, replay config fields)
+- `user_info`: User info linked to sessions (role, username, is_anonymous, screenshots) (v2.34.0)
+- `test_info_config`: Test target metadata (report_title, time range, personnel) (v2.34.0)
 - `schemes`: Scheme definitions (name, description, enabled, persist_to_global)
 - `scheme_field_definitions`: Scheme-to-token-location associations
 - `field_definitions`: Field definition definitions (type, expression, enabled, persist_to_global)
 - `judgment_rules`: Privilege escalation judgment rule groups (name, enabled, is_active, colors)
-- `judgment_rule_conditions`: Rule conditions within groups (target, method, expression, negate, operator, sort_order)
+- `judgment_rule_conditions`: Rule conditions within groups (target, method, expression, negate, operator [AND/OR], sort_order) (operator added v2.37.0, schema v19)
 - `scopes`: Request scope patterns for automated privilege testing
 - `dedup_configs`: (Global YAML: `~/.burp/repeater_manager/dedup_configs.yaml`)
+- Judgment rules global persistence: (Global YAML: `~/.burp/repeater_manager/judgment_rules.yaml`, v2.37.0)
 
 **System tables**:
 - `gc_queue`: Garbage collection queue (pool_type, hash)
@@ -358,11 +365,8 @@ SQLite is used with a custom connection pool (BlockingQueue + JDK Proxy for tran
 | Montoya API | 2025.12 | Modern Burp Suite extension interface (provided scope) |
 | RSyntaxTextArea | 3.3.3 | Syntax highlighting editor |
 | SQLite JDBC | 3.42.0.0 | Local data persistence |
-| HikariCP | 5.0.1 | Declared but not actively used (custom pool instead) |
 | Gson | 2.10.1 | JSON serialization (ERM manifest, Postman export) |
 | SnakeYAML | 2.2 | YAML serialization (API extraction rules, judgment rules, user sessions, fields) |
-| Apache Commons IO | 2.11.0 | File I/O utilities |
-| Apache Commons Lang | 3.12.0 | String/object utilities |
 | Apache PDFBox | 3.0.1 | Native PDF report generation with embedded Chinese fonts |
 | FreeMarker | 2.3.33 | Template engine for HTML/Markdown report generation |
 | CommonMark | 0.22.0 | Markdown-to-HTML rendering for usage tutorial panel |
@@ -409,7 +413,7 @@ Data is persisted in session directories under `~/.burp/` (timestamp-named), eac
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/release.yml`):
-- **Trigger**: Push `v*` tags (e.g., `v2.34.0`) or manual dispatch
+- **Trigger**: Push `v*` tags (e.g., `v2.41.0`) or manual dispatch
 - **Build**: JDK 17 + Maven on Ubuntu
 - **Release**: Auto-creates GitHub Release with JAR attachment
-- **Prerelease**: Tags with `-` suffix (e.g., `v2.34.0-beta`) are marked as prerelease
+- **Prerelease**: Tags with `-` suffix (e.g., `v2.41.0-beta`) are marked as prerelease

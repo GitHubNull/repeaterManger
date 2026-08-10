@@ -135,7 +135,7 @@ repeaterManger/
 +---------------------+
 |   Data Access Layer |  RequestDAO / HistoryDAO / PoolManager / ApiExtractionRuleDAO
 +---------------------+
-|   Data Storage      |  SQLite + File Blobs (Pool 去重) + YAML (全局规则)
+|   Data Storage      |  SQLite + File Blobs (Pool 去重) + YAML (全局配置) |
 +---------------------+
 ```
 
@@ -180,6 +180,10 @@ repeaterManger/
 - `HistoryRecordingService`
 - `ProxyConfig`
 - `GlobalRuleManager`
+- `GlobalJudgmentRuleManager`
+- `GlobalFieldDefinitionManager`
+- `GlobalSchemeManager`
+- `DedupConfigManager`
 
 ### 5.7 MontoyaApi 访问
 

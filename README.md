@@ -1,6 +1,10 @@
 # Repeater Manager - Burp Suite 请求重放管理插件
 
 <p align="center">
+  <img src="./doc/assets/readme-header-banner.svg" alt="Repeater Manager — Burp Suite 请求重放管理与越权测试插件" width="100%">
+</p>
+
+<p align="center">
   <strong>面向安全测试人员的 Burp Suite 高级请求重放管理与越权测试插件</strong>
 </p>
 
@@ -14,7 +18,7 @@
 
 Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请求重放管理插件。相比原生 Repeater，它提供了更强大的功能，包括请求的分类管理、响应历史自动记录与比对、SQLite 本地持久化、内容去重存储、多条件高级搜索、API 规则提取、自动化越权测试、多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。本插件特别适合安全测试人员和渗透测试专家使用，可有效提高 HTTP/HTTPS 请求测试的效率和组织性。
 
-> **当前版本**: v2.34.0 | **最低要求**: Burp Suite Professional 2024+ (Montoya 扩展 API) + Java 17+
+> **当前版本**: v2.41.0 | **最低要求**: Burp Suite Professional 2024+ (Montoya 扩展 API) + Java 17+
 
 ## 核心功能
 
@@ -28,11 +32,14 @@ Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请�
 | 列显示控制 | 自定义表格中显示的列，提高信息密度和可读性 |
 | API 规则提取 | 可配置的 API 提取规则引擎，支持 4 种提取源 × 4 种提取方法，自动从不规则请求中提取 API 路径 |
 | 越权测试 | 自动化越权漏洞测试框架，通过用户会话 字段替换和响应对比判断越权风险 |
+| 用户信息管理 | UserInfo 端到端管理（角色/用户名/匿名标记/权限证明截图），随报告导出 |
 | 方案管理 | 多方案管理字段组合，支持方案-会话关联和全局持久化 |
-| 规则组判决机制 | 单活跃规则组 + AND/OR/NOT 多条件组合判决，替代旧版优先级迭代模式 |
+| 规则组判决机制 | 单活跃规则组 + AND/OR 混合逻辑多条件组合判决，替代旧版优先级迭代模式 |
+| 判决规则持久化 | 规则支持跨会话持久化标记，存至全局 YAML，插件启动自动恢复 |
 | 匿名用户创建 | 一键创建所有字段值为空的访客用户，智能方案匹配 |
 | 去重配置 | 多规则优先级链式 API 去重，支持 6 种去重策略和 3 种保留策略 |
 | 会话解析 | 从剪贴板报文自动解析用户会话，支持 Chrome DevTools fetch 格式 |
+| 测试信息配置 | 配置测试目标元信息（名称/入口/截图/时间段/人员/自定义报告标题），随报告导出 |
 | 数据导入导出 | 支持 ERM 加密存档（AES-256-CBC + HMAC-SHA256）、Postman Collection v2.1 等多种格式 |
 | 自动保存 | 定时将内存中的数据同步到磁盘，防止数据丢失 |
 | 垃圾回收 | 后台自动清理零引用的池数据，回收存储空间（10分钟间隔），工具栏一键切换自动/手动模式 |
@@ -40,8 +47,9 @@ Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请�
 | 代理调试 | 支持配置 HTTP 代理用于调试请求 |
 | 布局切换 | 请求/响应面板支持左右、上下、仅请求、仅响应四种布局模式 |
 | 报文比对 | 支持请求/响应报文字符串级和字节级差异对比，语法高亮差异展示，同步滚动与差异导航 |
-| 报告生成 | 支持将越权测试结果导出为 PDF/HTML/Markdown 格式的正式报告，内嵌请求/响应详情和 cURL/Postman 代码片段 |
+| 报告生成 | 支持将越权测试结果导出为 PDF/HTML/Markdown 格式的正式报告，内嵌请求/响应详情、cURL/Postman 代码片段、用户信息截图、图片灯箱轮播与越权测试用例参考 |
 | 批量操作 | 历史面板多选支持，提供批量重放、批量越权测试、批量删除功能 |
+| 清空报文 | 请求列表面板一键清空所有基准报文与重放历史，联动清理数据库记录 |
 
 ## 功能架构
 
@@ -71,18 +79,21 @@ Repeater Manager
 │   └── 项目规则（SQLite 独立存储）
 ├── 越权测试模块
 │   ├── 多用户会话管理
+│   ├── 用户信息管理（UserInfo：角色/用户名/匿名标记/权限证明截图）
 │   ├── 方案管理（方案-字段-会话三层架构）
 │   ├── 字段配置（Header/JSON Body/XML Body/Form Field/Multipart Field/URL参数）
 │   ├── 字段自动替换引擎
-│   ├── 判断规则组配置（单活跃规则集 + AND/OR/NOT 多条件组合）
+│   ├── 判断规则组配置（单活跃规则集 + AND/OR 混合逻辑多条件组合）
+│   ├── 判决规则跨会话持久化（全局 YAML，启动自动恢复）
 │   ├── 匿名用户一键创建
 │   ├── 去重配置（6 策略 × 3 保留策略优先级链式匹配）
 │   ├── 会话解析（原始HTTP / Chrome fetch 格式）
 │   ├── 自动化检测引擎（拦截代理流量 → 重放 → 判断）
+│   ├── 测试信息配置（目标/入口/截图/时间段/人员/自定义报告标题）
 │   ├── 结果展示与颜色标记
-│   └── 报告生成（新增）
+│   └── 报告生成
 │       ├── PDF 报告 (Apache PDFBox)
-│       ├── HTML 报告 (FreeMarker 模板)
+│       ├── HTML 报告 (FreeMarker 模板，图片灯箱轮播 + 越权测试用例参考)
 │       └── Markdown 报告 (FreeMarker 模板)
 ├── 数据持久化
 │   ├── SQLite 存储（自定义连接池）
@@ -191,7 +202,8 @@ git submodule update --init --recursive
 - **前端界面**: Java Swing + RSyntaxTextArea 语法高亮组件 (v3.3.3)
 - **数据存储**: SQLite (JDBC v3.42.0.0) + 自定义连接池（BlockingQueue + JDK Proxy）
 - **序列化**: Gson (v2.10.1) + SnakeYAML (v2.2)
-- **工具库**: Apache Commons IO (v2.11.0) + Commons Lang3 (v3.12.0)
+- **报告生成**: Apache PDFBox (v3.0.1) + FreeMarker (v2.3.33)
+- **文档渲染**: CommonMark (v0.22.0) — 使用教程 Markdown 转 HTML
 - **核心模式**: MVC 架构、单例模式、连接池代理模式、Pool 去重模式、规则引擎模式
 
 ## 项目结构
@@ -293,6 +305,8 @@ src/main/java/
     │   └── dao/
     │       ├── SessionDAO.java         # 用户会话 CRUD
     │       ├── JudgmentRuleDAO.java    # 判断规则 CRUD
+    │       ├── UserInfoDAO.java        # 用户信息 CRUD（角色/截图）
+    │       ├── TestInfoConfigDAO.java  # 测试信息配置 CRUD
     │       └── ScopeDAO.java           # 范围 CRUD
     │   ├── report/                      # 报告生成子系统
     │   │   ├── ReportGenerator.java     # 报告生成器抽象基类
@@ -380,11 +394,8 @@ src/main/java/
 | Montoya API | 2025.12 | `net.portswigger.burp.extensions:montoya-api` | 现代 Burp Suite 扩展接口（provided scope） |
 | RSyntaxTextArea | 3.3.3 | `com.fifesoft:rsyntaxtextarea` | 语法高亮编辑器组件 |
 | SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` | SQLite JDBC 驱动 |
-| HikariCP | 5.0.1 | `com.zaxxer:HikariCP` | 数据库连接池（声明但未使用，项目使用自定义连接池） |
 | Gson | 2.10.1 | `com.google.code.gson:gson` | JSON 序列化/反序列化 |
 | SnakeYAML | 2.2 | `org.yaml:snakeyaml` | YAML 序列化（API 提取规则、判断规则、用户会话、字段定义） |
-| Commons IO | 2.11.0 | `commons-io:commons-io` | Apache 文件操作工具 |
-| Commons Lang3 | 3.12.0 | `org.apache.commons:commons-lang3` | Apache 通用工具类 |
 | Apache PDFBox | 3.0.1 | `org.apache.pdfbox:pdfbox` | 原生 PDF 报告生成（内嵌中文字体） |
 | FreeMarker | 2.3.33 | `org.freemarker:freemarker` | HTML/Markdown 报告模板渲染 |
 | CommonMark | 0.22.0 | `org.commonmark:commonmark` | Markdown 转 HTML（使用教程渲染） |
@@ -403,8 +414,8 @@ mvn clean package
 ```
 
 构建产物：
-- 开发版本: `target/repeater-manager-2.34.0.jar`
-- 带时间戳发布版本: `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar`
+- 开发版本: `target/repeater-manager-2.41.0.jar`
+- 带时间戳发布版本: `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar`
 
 ## 使用场景
 
@@ -433,7 +444,8 @@ mvn clean package
 ~/.burp/
 ├── repeater_manager_config.properties     # 插件配置文件
 ├── repeater_manager/
-│   └── api_extraction_rules.yaml          # 全局 API 提取规则（跨会话共享）
+│   ├── api_extraction_rules.yaml          # 全局 API 提取规则（跨会话共享）
+│   └── judgment_rules.yaml                # 全局判决规则（跨会话持久化）
 └── session_20240101_120000/               # 会话目录（时间戳命名）
     ├── repeater_manager.sqlite3           # SQLite 数据库文件
     ├── blobs/                             # 外置 Body 数据目录

@@ -67,7 +67,7 @@ HTTP 请求 → ContentSplitter
 
 ### 2.1 实现方式
 
-项目使用 `BlockingQueue<Connection>` + JDK 动态代理实现连接池，而非 HikariCP（pom.xml 声明但未使用）。
+项目使用 `BlockingQueue<Connection>` + JDK 动态代理实现连接池，而非 HikariCP（该依赖自 v2.17.0 起已从 pom.xml 移除，不引入外部连接池框架）。
 
 ```java
 // DatabaseManager.java 核心逻辑（简化示意）
@@ -90,7 +90,7 @@ Connection getConnection() {
 
 - **连接复用**：通过动态代理拦截 `close()` 调用，归还连接到池中
 - **try-with-resources 兼容**：现有代码无需修改
-- **池大小**：默认 5 个连接
+- **池大小**：默认 15 个连接（`POOL_SIZE = 15`，启动时预填充）
 - **PRAGMA 配置**：`journal_mode=DELETE`, `synchronous=NORMAL`, `foreign_keys=ON`
 - **SQLite 限制**：不支持真正的并发写入，写操作需串行化
 

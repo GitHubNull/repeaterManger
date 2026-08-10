@@ -1,5 +1,30 @@
 {
   "projectRules": {
+    "project": {
+      "name": "Repeater Manager",
+      "version": "v2.42.0",
+      "description": "Burp Suite Professional 高级 HTTP 请求重放管理与越权测试插件（Montoya SDK），提供请求管理、历史追踪、SQLite 持久化、内容去重、API 规则提取、自动化越权测试（Scheme/FieldDefinition/UserSession 三层体系 + 规则组判决 + AND/OR 混合逻辑 + 判决规则跨会话持久化）、UserInfo 用户信息管理、测试信息配置、报告生成（PDF/HTML/Markdown/ERMR）等约 24 项核心功能",
+      "techStack": {
+        "language": "Java 17",
+        "build": "Maven（maven-assembly-plugin 生成 jar-with-dependencies）",
+        "framework": "Burp Suite Montoya SDK 2025.12",
+        "ui": "Java Swing + RSyntaxTextArea 3.3.3",
+        "storage": "SQLite（JDBC 3.42.0.0）+ 自定义连接池（BlockingQueue + JDK 动态代理）+ 4 类池内容去重（SHA-256）",
+        "serialization": "Gson 2.10.1 + SnakeYAML 2.2",
+        "report": "Apache PDFBox 3.0.1 + FreeMarker 2.3.33",
+        "docs": "CommonMark 0.22.0（使用教程 Markdown 渲染）",
+        "test": "JUnit 5.10.0"
+      },
+      "packageConvention": {
+        "root": "org.oxff.repeater",
+        "entryClass": "RepeaterManagerExtension（插件入口，Montoya BurpExtension）",
+        "layout": "api（API 提取）、config、controller、db、http、io、logging、model、privilege（越权测试）、service、ui、utils"
+      },
+      "dataPersistence": {
+        "sessionDir": "~/.burp/ 下时间戳命名会话目录（repeater_manager.sqlite3 + blobs/ + logs/）",
+        "globalConfig": "~/.burp/repeater_manager/ 下 api_extraction_rules.yaml、judgment_rules.yaml、dedup_configs.yaml"
+      }
+    },
     "codeStyle": {
       "java": {
         "indentSize": 4,

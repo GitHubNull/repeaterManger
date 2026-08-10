@@ -6,7 +6,7 @@
 
 **Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理、API 规则提取和自动化越权测试功能。项目使用 Java 17 编写，基于 Montoya SDK（`burp.api.montoya.*`），采用 MVC 架构。
 
-- **版本**: 2.34.0
+- **版本**: 2.41.0
 - **Java 版本**: 17（source/target 兼容）
 - **构建工具**: Maven
 - **许可证**: Apache License 2.0
@@ -70,6 +70,10 @@
 | 身体渲染器 | `org/oxff/repeater/privilege/report/BodyRenderer.java` / `BinaryContentRenderer.java` | 请求/响应体渲染与二进制内容转换 |
 | 全局字段管理 | `org/oxff/repeater/privilege/GlobalFieldDefinitionManager.java` | 跨会话全局 字段管理 |
 | 用户会话导入导出 | `org/oxff/repeater/privilege/UserSessionYamlIO.java` | 用户会话 YAML 导入导出 |
+| 用户信息管理 | `org/oxff/repeater/privilege/dao/UserInfoDAO.java` | 用户信息 CRUD（角色/用户名/匿名标记/权限证明截图） |
+| 测试信息配置 | `org/oxff/repeater/privilege/dao/TestInfoConfigDAO.java` | 测试目标元信息配置（报告标题/时间段/人员等） |
+| 判决规则全局持久化 | `org/oxff/repeater/privilege/GlobalJudgmentRuleManager.java` | 跨会话判决规则 YAML 持久化与恢复 |
+| 截图编码 | `org/oxff/repeater/privilege/ScreenshotEncoder.java` | 报告截图读取/缩放/base64 编码 |
 | 文件选择器 | `org/oxff/repeater/utils/FileChooserHelper.java` | 统一文件选择器工具 |
 
 ## 关键设计决策
@@ -112,7 +116,7 @@
 1. 定义方案（Scheme）— 一组字段的组合
 2. 定义字段（Field Definition）— 字段在请求中的位置（6 种类型）
 3. 创建用户会话（User Session）— 关联方案，填充各位置的 字段值
-4. 配置判断规则组（Judgment Rule Group）— 设置活跃规则组（全局唯一活跃），组内条件纯 AND 组合
+4. 配置判断规则组（Judgment Rule Group）— 设置活跃规则组（全局唯一活跃），组内条件支持 AND/OR 混合逻辑组合（v2.37.0），可标记跨会话持久化
 5. 设置请求范围（Scope）— URL 匹配模式
 6. 配置去重规则（Dedup Config）— 避免同一 API 重复测试
 7. `AutoTestEngine` 拦截匹配范围的代理流量
@@ -209,8 +213,8 @@ mvn clean package
 ```
 
 构建产物：
-- `target/repeater-manager-2.34.0.jar` — 开发版本
-- `target/releases/repeater-manager-2.34.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-2.41.0.jar` — 开发版本
+- `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 
@@ -232,13 +236,16 @@ api_extraction_rules (id, name, source, method, expression, enabled, priority, p
 
 -- 越权测试表
 user_sessions (id, name, scheme_id, request_timeout, max_concurrent, retry_count, retry_delay, replay_delay, ...)
+user_info (id, session_id, role, username, is_anonymous, created_at)  -- 用户信息（v2.34.0）
+test_info_config (id, report_title, use_default_title, report_subtitle, target_name, ...)  -- 测试信息配置（v2.34.0）
 schemes (id, name, description, enabled, persist_to_global, ...)
 scheme_field_definitions (scheme_id, field_id)
 field_definitions (id, type, expression, enabled, persist_to_global, ...)
 judgment_rules (id, name, enabled, is_active, success_color, failure_color, ...)
-judgment_rule_conditions (id, group_id, target, method, expression, negate, operator, sort_order, enabled, ...)
+judgment_rule_conditions (id, group_id, target, method, expression, negate, operator, sort_order, enabled, ...)  -- operator 列支持 AND/OR（v2.37.0, schema v19）
 scopes (id, pattern, ...)
 dedup_configs (全局 YAML: ~/.burp/repeater_manager/dedup_configs.yaml)
+judgment_rules 全局持久化 (全局 YAML: ~/.burp/repeater_manager/judgment_rules.yaml, v2.37.0)
 
 -- GC 队列
 gc_queue (id, pool_type, hash, enqueued_at)
@@ -254,11 +261,8 @@ schema_meta (key, value)
 | Montoya API | 2025.12 | `net.portswigger.burp.extensions:montoya-api` (provided scope) |
 | RSyntaxTextArea | 3.3.3 | `com.fifesoft:rsyntaxtextarea` |
 | SQLite JDBC | 3.42.0.0 | `org.xerial:sqlite-jdbc` |
-| HikariCP | 5.0.1 | `com.zaxxer:HikariCP` (declared, not actively used) |
 | Gson | 2.10.1 | `com.google.code.gson:gson` |
 | SnakeYAML | 2.2 | `org.yaml:snakeyaml` |
-| Commons IO | 2.11.0 | `commons-io:commons-io` |
-| Commons Lang | 3.12.0 | `org.apache.commons:commons-lang3` |
 | Apache PDFBox | 3.0.1 | `org.apache.pdfbox:pdfbox` |
 | FreeMarker | 2.3.33 | `org.freemarker:freemarker` |
 | CommonMark | 0.22.0 | `org.commonmark:commonmark` |
@@ -293,10 +297,10 @@ schema_meta (key, value)
 
 项目使用 GitHub Actions（`.github/workflows/release.yml`）：
 
-- **触发条件**: 推送 `v*` 格式标签（如 `v2.34.0`）或手动触发
+- **触发条件**: 推送 `v*` 格式标签（如 `v2.41.0`）或手动触发
 - **构建**: JDK 17 + Maven
 - **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
-- **预发布**: 标签包含 `-` 后缀（如 `v2.34.0-beta`）时标记为预发布
+- **预发布**: 标签包含 `-` 后缀（如 `v2.41.0-beta`）时标记为预发布
 
 ## 开发文档
 

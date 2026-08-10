@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400"
+     role="img" aria-labelledby="banner-title banner-desc">
+  <title id="banner-title">Repeater Manager — Advanced Request Replay Management and Privilege Testing Plugin for Burp Suite</title>
+  <desc id="banner-desc">Dark tech-style promotional banner: on the left, a security shield with orange glow and a circular replay arrow, with HTTP request flow lines passing through the shield; on the right, the project name and subtitle. Clean and elegant overall.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="0.55" stop-color="#0F1A30"/>
+      <stop offset="1" stop-color="#14233F"/>
+    </linearGradient>
+    <radialGradient id="glowOrange" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FF6633" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FF6633" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowBlue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3B82F6" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#3B82F6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shieldStroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF8A5C"/>
+      <stop offset="1" stop-color="#FF6633"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#FFFFFF" stroke-opacity="0.04" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#FF8A5C"/>
+    </marker>
+    <style>
+      .title { font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; font-weight: 800; font-size: 64px; fill: #F8FAFC; letter-spacing: 1px; }
+      .subtitle { font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; font-weight: 400; font-size: 24px; fill: #9AA7BD; letter-spacing: 2px; }
+      .chip { font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; font-weight: 600; font-size: 15px; fill: #C9D4E5; letter-spacing: 1px; }
+      .ghost { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; fill: #3E5072; letter-spacing: 0.5px; }
+    </style>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1200" height="400" fill="url(#bg)"/>
+  <rect width="1200" height="400" fill="url(#grid)"/>
+  <circle cx="215" cy="200" r="260" fill="url(#glowOrange)"/>
+  <circle cx="1050" cy="80" r="300" fill="url(#glowBlue)"/>
+
+  <!-- 背景幽灵 HTTP 报文文本 -->
+  <g aria-hidden="true">
+    <text class="ghost" x="1150" y="66" text-anchor="end">GET /api/v1/user/profile HTTP/1.1</text>
+    <text class="ghost" x="1150" y="88" text-anchor="end">Authorization: Bearer ••••••••</text>
+    <text class="ghost" x="1150" y="110" text-anchor="end">HTTP/1.1 200 OK</text>
+    <text class="ghost" x="1150" y="352" text-anchor="end">Replay › Compare › Report</text>
+  </g>
+
+  <!-- 请求流线条（左侧进入盾牌，右侧重放输出） -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M40 148 H128" stroke="#FF8A5C" stroke-width="2" opacity="0.55" marker-end="url(#arrow)"/>
+    <path d="M20 200 H120" stroke="#FF8A5C" stroke-width="2.5" opacity="0.8" marker-end="url(#arrow)"/>
+    <path d="M52 252 H130" stroke="#FF8A5C" stroke-width="2" opacity="0.45" marker-end="url(#arrow)"/>
+    <path d="M292 168 H352" stroke="#FF8A5C" stroke-width="2" opacity="0.35" stroke-dasharray="6 7" marker-end="url(#arrow)"/>
+    <path d="M300 200 H370" stroke="#FF8A5C" stroke-width="2.5" opacity="0.5" stroke-dasharray="6 7" marker-end="url(#arrow)"/>
+    <path d="M292 232 H348" stroke="#FF8A5C" stroke-width="2" opacity="0.3" stroke-dasharray="6 7" marker-end="url(#arrow)"/>
+  </g>
+  <!-- 数据包节点 -->
+  <g fill="#FFB499">
+    <circle cx="76" cy="200" r="3.5" opacity="0.9"/>
+    <circle cx="104" cy="148" r="3" opacity="0.6"/>
+    <circle cx="92" cy="252" r="3" opacity="0.5"/>
+  </g>
+
+  <!-- 盾牌 -->
+  <g>
+    <path d="M210 102 L284 130 C284 212 264 262 210 300 C156 262 136 212 136 130 Z"
+          fill="#101B31" fill-opacity="0.85" stroke="url(#shieldStroke)" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M210 118 L270 141 C270 206 254 248 210 281 C166 248 150 206 150 141 Z"
+          fill="none" stroke="#FF8A5C" stroke-width="1.2" stroke-opacity="0.35" stroke-linejoin="round"/>
+    <!-- 重放循环箭头 -->
+    <g stroke="#FF8A5C" stroke-width="7" fill="none" stroke-linecap="round">
+      <path d="M238 176 A36 36 0 1 0 246 202"/>
+    </g>
+    <path d="M246 162 L250 188 L226 182 Z" fill="#FF8A5C"/>
+  </g>
+
+  <!-- 标题区 -->
+  <text class="title" x="404" y="192">Repeater Manager</text>
+  <rect x="408" y="212" width="72" height="5" rx="2.5" fill="#FF6633"/>
+  <text class="subtitle" x="408" y="256">Burp Suite Replay &amp; Privilege Testing Plugin</text>
+
+  <!-- 版本特性标签 -->
+  <g>
+    <rect x="408" y="286" width="96" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.05" stroke="#3E5072" stroke-width="1"/>
+    <text class="chip" x="456" y="308" text-anchor="middle">v2.41.0</text>
+    <rect x="518" y="286" width="110" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.05" stroke="#3E5072" stroke-width="1"/>
+    <text class="chip" x="573" y="308" text-anchor="middle">Java 17+</text>
+    <rect x="642" y="286" width="172" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.05" stroke="#3E5072" stroke-width="1"/>
+    <text class="chip" x="728" y="308" text-anchor="middle">Burp Suite 2024+</text>
+    <rect x="828" y="286" width="150" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.05" stroke="#3E5072" stroke-width="1"/>
+    <text class="chip" x="903" y="308" text-anchor="middle">Montoya API</text>
+  </g>
+
+  <!-- 右下角装饰节点 -->
+  <g aria-hidden="true">
+    <circle cx="1108" cy="238" r="3" fill="#FF8A5C" opacity="0.7"/>
+    <circle cx="1146" cy="270" r="2.5" fill="#7C93B8" opacity="0.6"/>
+    <circle cx="1082" cy="286" r="2.5" fill="#7C93B8" opacity="0.5"/>
+    <path d="M1108 238 L1146 270 L1082 286" fill="none" stroke="#54688C" stroke-width="1" opacity="0.45"/>
+  </g>
+
+  <!-- 底部强调线 -->
+  <rect x="0" y="396" width="1200" height="4" fill="url(#shieldStroke)" opacity="0.85"/>
+</svg>

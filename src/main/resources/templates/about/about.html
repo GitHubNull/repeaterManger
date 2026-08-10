@@ -25,7 +25,10 @@ hr { width: 300px; margin: 15px auto; }
 <p>Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请求重放管理插件。</p>
 <p>相比原生 Repeater，它提供了更强大的功能，包括请求的分类管理、响应历史自动记录与比对、
 SQLite 本地持久化、内容去重存储、多条件高级搜索、API 规则提取、自动化越权测试、
-多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。</p>
+用户信息管理（角色/权限证明截图）、判决规则跨会话持久化、AND/OR 混合逻辑判决、
+测试信息配置、多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。</p>
+<p>支持将越权测试结果导出为 PDF / HTML / Markdown 正式报告，内嵌请求/响应详情、
+cURL/Postman 代码片段、用户信息截图、图片灯箱轮播与越权测试用例参考。</p>
 <p>本插件特别适合安全测试人员和渗透测试专家使用，可有效提高 HTTP/HTTPS 请求测试的效率和组织性。</p>
 </div>
 <div class='deps'>
@@ -36,6 +39,9 @@ RSyntaxTextArea      3.3.3      - 语法高亮编辑器
 SQLite JDBC          3.42.0.0   - 本地数据持久化
 Gson                 2.10.1     - JSON 序列化
 SnakeYAML            2.2        - YAML 序列化
+Apache PDFBox        3.0.1      - 原生 PDF 报告生成
+FreeMarker           2.3.33     - HTML/Markdown 报告模板
+CommonMark           0.22.0     - 使用教程 Markdown 渲染
 </pre>
 </div>
 </body>
