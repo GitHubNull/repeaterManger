@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.39.0] - 2026-08-10
+
+### Added
+- HTML 报告新增"越权测试用例参考"文档：多文件模式生成独立 `test_cases.html` 页面（`writeTestCasesHtml` + `test_cases.ftl`）并在报告头部提供"查看越权测试用例参考"链接，单文件模式在报告页面底部内嵌用例内容；用例内容由 `test_cases_content.ftl` 片段在两种模式间复用，覆盖未授权访问（TC-UA-001~003）、垂直越权（TC-VP-001~003）、水平越权（TC-HP-001~003）共 9 个典型用例，每个用例包含测试场景、前置条件、测试步骤、预期结果与判定标准
+
+### Changed
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.39.0
+
 ## [2.38.0] - 2026-08-10
 
 ### Added

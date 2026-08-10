@@ -65,6 +65,9 @@ public class HtmlReportGenerator extends ReportGenerator {
 
         // 5. 写入 index.html（FreeMarker 渲染）
         writeIndexHtml(data, reportDir);
+
+        // 6. 写入 test_cases.html（越权测试用例文档）
+        writeTestCasesHtml(reportDir);
     }
 
     /**
@@ -314,6 +317,17 @@ public class HtmlReportGenerator extends ReportGenerator {
                     fos.write(imageBytes);
                 }
             }
+        }
+    }
+
+    /**
+     * 使用 FreeMarker 渲染 test_cases.html（越权测试用例参考文档）
+     */
+    private void writeTestCasesHtml(File reportDir) throws Exception {
+        File testCasesFile = new File(reportDir, "test_cases.html");
+        try (OutputStreamWriter osw = new OutputStreamWriter(
+                new FileOutputStream(testCasesFile), StandardCharsets.UTF_8)) {
+            FreeMarkerConfig.getInstance().getHtmlTemplate("test_cases.ftl").process(new HashMap<>(), osw);
         }
     }
 

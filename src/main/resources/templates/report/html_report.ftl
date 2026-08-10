@@ -18,7 +18,7 @@
   <#if subtitle?? && subtitle != "">
   <h2 class="report-subtitle">${subtitle}</h2>
   </#if>
-  <p class="meta">生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}</p>
+  <p class="meta">生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}<#if !(inlineMode?? && inlineMode)> | <a href="test_cases.html" target="_blank">查看越权测试用例参考</a></#if></p>
 </div>
 
 <#if inlineMode?? && inlineMode>
@@ -210,6 +210,11 @@
 </#if>
 
 <#if inlineMode?? && inlineMode>
+<#-- 单文件模式：在页面底部嵌入越权测试用例参考 -->
+<h2>越权测试用例参考</h2>
+<p style="margin-bottom:16px;color:#555;">以下为越权测试的典型用例参考，涵盖未授权访问、垂直越权和水平越权三种主要越权类型。</p>
+<#include "test_cases_content.ftl">
+
 <#-- 单文件模式：内联灯箱脚本（不依赖 REPORT_DATA） -->
 <script>
 (function() {

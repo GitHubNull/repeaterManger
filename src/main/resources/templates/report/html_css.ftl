@@ -149,5 +149,16 @@
   th.sort-asc::after { content: ' \25B2'; font-size: 10px; }
   th.sort-desc::after { content: ' \25BC'; font-size: 10px; }
 
+  /* 测试用例文档 */
+  .testcase-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .testcase-type-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: white; }
+  .testcase-type-badge.unauthorized { background: #7B1FA2; }
+  .testcase-type-badge.vertical { background: #d32f2f; }
+  .testcase-type-badge.horizontal { background: #F57C00; }
+  .testcase-field { padding: 4px 0; font-size: 13px; }
+  .testcase-field .field-label { font-weight: 600; color: #555; min-width: 80px; display: inline-block; }
+  .header a { color: #90CAF9; text-decoration: none; }
+  .header a:hover { text-decoration: underline; }
+
   @media print { body { background: white; padding: 0; } .card { box-shadow: none; border: 1px solid #ddd; } }
 </style>
