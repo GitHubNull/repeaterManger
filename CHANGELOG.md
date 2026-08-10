@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.37.0] - 2026-08-10
+
+### Added
+- 判决规则跨会话持久化：新增 `GlobalJudgmentRuleManager`，规则支持"持久化"标记（表格列或编辑框勾选），持久化规则保存至 `~/.burp/repeater_manager/judgment_rules.yaml`，插件启动时自动恢复到新会话数据库；未标记规则仍为会话级临时规则
+- 判决条件 AND/OR 混合逻辑：条件行新增逻辑运算符下拉框（AND/OR），判决引擎按"所有 AND 条件必须满足，且存在 OR 条件时任一 OR 条件满足"组合求值；数据库 schema v18→v19 迁移为 `judgment_rule_conditions` 表添加 `operator` 列（默认 AND）
+- 新增判决引擎逻辑测试 `JudgmentEngineLogicTest` 与规则持久化往返测试 `JudgmentRulePersistenceRoundTripTest`
+
+### Changed
+- `JudgmentRuleYamlIO` 导入导出新增 `global` 与 `operator` 字段：旧 YAML 缺省时 global 默认 true、operator 默认 AND，保持向后兼容
+- 条件去重比较（v19）纳入 operator 维度，仅 operator 不同的条件不再视为重复
+- 判决规则表格新增"持久化"列，可直接勾选切换规则是否跨会话保留
+- 判决逻辑说明面板更新为 AND/OR 组合求值与持久化说明
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.37.0
+
 ## [2.36.1] - 2026-08-10
 
 ### Fixed

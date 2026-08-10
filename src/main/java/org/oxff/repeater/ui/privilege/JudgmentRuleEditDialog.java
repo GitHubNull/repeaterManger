@@ -20,6 +20,7 @@ public class JudgmentRuleEditDialog extends JDialog {
 
     private JTextField nameField;
     private JCheckBox enabledCheckbox;
+    private JCheckBox globalCheckbox;
     private JButton successColorButton;
     private JButton failureColorButton;
     private JTextField successNoteField;
@@ -67,7 +68,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 条件列表标签
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 4;
-        mainPanel.add(new JLabel("判决条件（组内纯 AND，支持 NOT 取反）:"), gbc);
+        mainPanel.add(new JLabel("判决条件（支持 AND/OR 组合，NOT 取反）:"), gbc);
         gbc.gridwidth = 1;
 
         row++;
@@ -101,6 +102,17 @@ public class JudgmentRuleEditDialog extends JDialog {
         enabledCheckbox = new JCheckBox();
         enabledCheckbox.setSelected(true);
         mainPanel.add(enabledCheckbox, gbc);
+        gbc.gridwidth = 1;
+
+        row++;
+        // 持久化（跨会话保留）
+        gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
+        mainPanel.add(new JLabel("持久化:"), gbc);
+        gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
+        globalCheckbox = new JCheckBox();
+        globalCheckbox.setSelected(true); // 默认持久化
+        globalCheckbox.setToolTipText("勾选后规则跨会话保留，重启插件后自动恢复；不勾选则为临时规则，仅当前会话有效");
+        mainPanel.add(globalCheckbox, gbc);
         gbc.gridwidth = 1;
 
         row++;
@@ -179,7 +191,7 @@ public class JudgmentRuleEditDialog extends JDialog {
     // ==================== 条件行构建 ====================
 
     /**
-     * 构建一条条件行（v13：移除 operator，纯 AND）
+     * 构建一条条件行（v19：添加 operator 选择器，支持 AND/OR）
      */
     private JPanel buildConditionRow(int index, RuleCondition condition) {
         JPanel rowPanel = new JPanel(new GridBagLayout());
@@ -188,6 +200,22 @@ public class JudgmentRuleEditDialog extends JDialog {
         gc.anchor = GridBagConstraints.WEST;
         gc.fill = GridBagConstraints.NONE;
         gc.weighty = 0;
+
+        // 逻辑运算符（AND/OR）
+        JComboBox<RuleCondition.LogicalOperator> operatorCombo = new JComboBox<>(RuleCondition.LogicalOperator.values());
+        operatorCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int idx,
+                                                           boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, idx, isSelected, cellHasFocus);
+                if (value instanceof RuleCondition.LogicalOperator op) {
+                    setText(op.getDisplayName());
+                }
+                return this;
+            }
+        });
+        operatorCombo.setPrototypeDisplayValue(RuleCondition.LogicalOperator.AND);
+        operatorCombo.setToolTipText("选择此条件与前一条件的逻辑关系：AND(且) 或 OR(或)");
 
         // NOT 复选框
         JCheckBox negateCheckbox = new JCheckBox("非");
@@ -245,19 +273,24 @@ public class JudgmentRuleEditDialog extends JDialog {
 
         // === GridBagLayout 布局：固定列宽度自适应，表达式列自动填充 ===
         gc.gridx = 0; gc.weightx = 0;
-        rowPanel.add(negateCheckbox, gc);
+        rowPanel.add(operatorCombo, gc);
         gc.gridx = 1; gc.weightx = 0;
-        rowPanel.add(targetCombo, gc);
+        rowPanel.add(negateCheckbox, gc);
         gc.gridx = 2; gc.weightx = 0;
+        rowPanel.add(targetCombo, gc);
+        gc.gridx = 3; gc.weightx = 0;
         rowPanel.add(methodCombo, gc);
-        gc.gridx = 3; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.gridx = 4; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
         rowPanel.add(expressionField, gc);
         gc.fill = GridBagConstraints.NONE;
-        gc.gridx = 4; gc.weightx = 0;
+        gc.gridx = 5; gc.weightx = 0;
         rowPanel.add(deleteButton, gc);
 
         // 设置初始值
         if (condition != null) {
+            if (condition.getOperator() != null) {
+                operatorCombo.setSelectedItem(condition.getOperator());
+            }
             negateCheckbox.setSelected(condition.isNegate());
             if (condition.getTarget() != null) targetCombo.setSelectedItem(condition.getTarget());
             if (condition.getMethod() != null) methodCombo.setSelectedItem(condition.getMethod());
@@ -265,7 +298,7 @@ public class JudgmentRuleEditDialog extends JDialog {
             filterMethodsForTarget(targetCombo, methodCombo);
         }
 
-        ConditionRow row = new ConditionRow(index, rowPanel, negateCheckbox,
+        ConditionRow row = new ConditionRow(index, rowPanel, operatorCombo, negateCheckbox,
                 targetCombo, methodCombo, expressionField, deleteButton);
         conditionRows.add(row);
 
@@ -358,6 +391,7 @@ public class JudgmentRuleEditDialog extends JDialog {
     private void populateFields(JudgmentRule rule) {
         if (rule.getName() != null) nameField.setText(rule.getName());
         enabledCheckbox.setSelected(rule.isEnabled());
+        globalCheckbox.setSelected(rule.isGlobal());
         if (rule.getSuccessColor() != null) {
             successColor = rule.getSuccessColor();
             successColorButton.setBackground(successColor);
@@ -463,6 +497,13 @@ public class JudgmentRuleEditDialog extends JDialog {
         return enabledCheckbox.isSelected();
     }
 
+    /**
+     * 返回“持久化”复选框的勾选状态（是否跨会话保留）。
+     */
+    public boolean isRuleGlobal() {
+        return globalCheckbox.isSelected();
+    }
+
     public Color getSuccessColor() {
         return successColor;
     }
@@ -507,9 +548,9 @@ public class JudgmentRuleEditDialog extends JDialog {
         rule.setSuccessNote(getSuccessNote());
         rule.setFailureNote(getFailureNote());
         rule.setRemark(getRemark());
+        rule.setGlobal(isRuleGlobal());
         if (editingRule != null) {
             rule.setId(editingRule.getId());
-            rule.setGlobal(editingRule.isGlobal());
         }
         return rule;
     }

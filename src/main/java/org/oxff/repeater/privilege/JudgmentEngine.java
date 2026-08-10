@@ -15,16 +15,16 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * 判决引擎 - 无状态工具类（v13：单活跃规则集 + 三层兜底）
+ * 判决引擎 - 无状态工具类（v19：单活跃规则集 + AND/OR 混合逻辑 + 三层兜底）
  * 根据判决规则对响应进行越权判断
  *
  * 判决逻辑（三层）：
  * 1. 基准无效 → ERROR
  * 2. 空Body检测 → 专门判决（跳过规则匹配）
  * 3. 第2层：活跃规则组判决（有活跃规则组时优先）
- *    - getActiveRule() → evaluateConditions(纯AND)
- *    - 全部条件满足 → ESCALATED
- *    - 任一条件不满足或无活跃规则组 → 进入第3层兜底
+ *    - getActiveRule() → evaluateConditions(支持 AND/OR 混合)
+ *    - 条件组合满足 → ESCALATED
+ *    - 条件不满足或无活跃规则组 → 进入第3层兜底
  * 4. 第3层：兜底默认相似度判决
  *    - similarity >= threshold → ESCALATED
  *    - similarity < threshold → NOT_ESCALATED
@@ -309,10 +309,12 @@ public class JudgmentEngine {
     }
 
     /**
-     * 条件求值（v13：纯 AND 语义）
+     * 条件求值（v19：支持 AND/OR 混合逻辑）
      *
-     * 组内所有有效条件必须全部满足才算命中，任一条件不满足即短路退出。
-     * 后续版本如需引入 OR 支持，需补全 operator 持久化链路（Schema/DAO/YAML/UI）。
+     * 组内条件支持 AND/OR 组合：
+     * - AND 条件：全部满足才算命中
+     * - OR 条件：任一满足即算该组命中
+     * - 混合时：所有 AND 条件必须满足，且至少一个 OR 条件满足（如有 OR 条件）
      *
      * @param conditions       条件列表
      * @param statusCode       响应状态码
@@ -322,7 +324,7 @@ public class JudgmentEngine {
      * @param responseTimeMs   响应时间
      * @param responseBody     当前响应体
      * @param baselineResponse 基准响应体
-     * @return 全部有效条件满足时返回 true
+     * @return 条件组合满足时返回 true
      */
     private static boolean evaluateConditions(List<RuleCondition> conditions,
                                                int statusCode, String responseHeaders,
@@ -335,6 +337,9 @@ public class JudgmentEngine {
         }
 
         boolean hasAnyValidCondition = false;
+        boolean andResult = true;      // AND 条件累积结果（初始 true，任一不满足则变 false）
+        boolean hasOrCondition = false; // 是否存在 OR 条件
+        boolean orResult = false;       // OR 条件累积结果（初始 false，任一满足则变 true）
 
         for (RuleCondition cond : conditions) {
             // 防御性检查：target 或 method 为 null 表示数据损坏，fail-safe 视为不匹配
@@ -372,14 +377,23 @@ public class JudgmentEngine {
                     ? targetValue.substring(0, 200) + "...(截断)" : targetValue;
 
             LogManager.getInstance().judgmentDebug(String.format(
-                    "[判决]   target=%s, method=%s, expr='%s', value='%s' → rawMatch=%b, negate=%b(→%b)",
+                    "[判决]   target=%s, method=%s, expr='%s', value='%s' → rawMatch=%b, negate=%b(→%b), operator=%s",
                     cond.getTarget().name(), cond.getMethod().name(), cond.getExpression(),
-                    displayValue, beforeNegate, cond.isNegate(), condResult));
+                    displayValue, beforeNegate, cond.isNegate(), condResult,
+                    cond.getOperator() != null ? cond.getOperator().name() : "AND"));
 
-            // 纯 AND：任一条件不满足即短路退出
-            if (!condResult) {
-                LogManager.getInstance().judgmentDebug("[判决]   → AND短路: 条件不满足, 最终结果=false");
-                return false;
+            // 根据 operator 处理逻辑
+            if (cond.getOperator() == RuleCondition.LogicalOperator.OR) {
+                hasOrCondition = true;
+                orResult = orResult || condResult;
+                LogManager.getInstance().judgmentDebug(
+                        "[判决]   → OR累积: condResult=" + condResult + ", orResult=" + orResult);
+            } else {
+                // AND 逻辑：任一不满足即失败
+                if (!condResult) {
+                    andResult = false;
+                    LogManager.getInstance().judgmentDebug("[判决]   → AND不满足: andResult=false");
+                }
             }
         }
 
@@ -388,8 +402,12 @@ public class JudgmentEngine {
             return false;
         }
 
-        LogManager.getInstance().judgmentDebug("[判决]   → 全部条件满足, 最终结果=true");
-        return true;
+        // 最终结果：所有 AND 条件满足 且 (无 OR 条件 或 任一 OR 条件满足)
+        boolean finalResult = andResult && (!hasOrCondition || orResult);
+        LogManager.getInstance().judgmentDebug(String.format(
+                "[判决]   → 最终结果: andResult=%b, hasOrCondition=%b, orResult=%b → finalResult=%b",
+                andResult, hasOrCondition, orResult, finalResult));
+        return finalResult;
     }
 
     /**

@@ -47,8 +47,9 @@ public class JudgmentRuleYamlIO {
             ruleMap.put("success_note", rule.getSuccessNote());
             ruleMap.put("failure_note", rule.getFailureNote());
             ruleMap.put("remark", rule.getRemark());
+            ruleMap.put("global", rule.isGlobal());
 
-            // 序列化 conditions（v13：不输出 operator）
+            // 序列化 conditions（v19：输出 operator）
             List<RuleCondition> conditions = rule.getEffectiveConditions();
             if (conditions != null && !conditions.isEmpty()) {
                 List<Map<String, Object>> condList = new ArrayList<>();
@@ -58,6 +59,7 @@ public class JudgmentRuleYamlIO {
                     condMap.put("method", cond.getMethod() != null ? cond.getMethod().name() : "");
                     condMap.put("expression", cond.getExpression() != null ? cond.getExpression() : "");
                     condMap.put("negate", cond.isNegate());
+                    condMap.put("operator", cond.getOperator() != null ? cond.getOperator().name() : "AND");
                     condList.add(condMap);
                 }
                 ruleMap.put("conditions", condList);
@@ -122,6 +124,7 @@ public class JudgmentRuleYamlIO {
         String successNote = getStringValue(map, "success_note", "");
         String failureNote = getStringValue(map, "failure_note", "");
         String remark = getStringValue(map, "remark", "");
+        boolean global = getBooleanValue(map, "global", true);
 
         // 解析 conditions
         List<RuleCondition> conditions = new ArrayList<>();
@@ -138,6 +141,8 @@ public class JudgmentRuleYamlIO {
                     cond.setMethod(RuleMethod.fromString(getStringValue(condMap, "method", "REGEX")));
                     cond.setExpression(getStringValue(condMap, "expression", ""));
                     cond.setNegate(getBooleanValue(condMap, "negate", false));
+                    cond.setOperator(RuleCondition.LogicalOperator.fromString(
+                            getStringValue(condMap, "operator", "AND")));
                     if (cond.isValid()) {
                         conditions.add(cond);
                     }
@@ -156,6 +161,7 @@ public class JudgmentRuleYamlIO {
         rule.setSuccessNote(successNote);
         rule.setFailureNote(failureNote);
         rule.setRemark(remark);
+        rule.setGlobal(global);
         rule.setConditions(conditions);
 
         return rule;

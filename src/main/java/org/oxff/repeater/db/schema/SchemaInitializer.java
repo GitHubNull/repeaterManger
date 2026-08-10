@@ -334,7 +334,7 @@ public class SchemaInitializer {
             ")"
         );
 
-        // 判决规则条件表（v13：规范化条件存储，FK 关联规则组）
+        // 判决规则条件表（v13：规范化条件存储，FK 关联规则组；v19 添加 operator 列）
         stmt.execute(
             "CREATE TABLE IF NOT EXISTS judgment_rule_conditions (" +
             "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -346,6 +346,7 @@ public class SchemaInitializer {
             "sort_order INTEGER NOT NULL DEFAULT 0, " +
             "enabled INTEGER NOT NULL DEFAULT 1, " +
             "remark TEXT DEFAULT '', " +
+            "operator TEXT NOT NULL DEFAULT 'AND', " +
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
             "FOREIGN KEY (group_id) REFERENCES judgment_rule_groups(id) ON DELETE CASCADE" +
             ")"

@@ -24,7 +24,7 @@ public class JudgmentRuleConditionDAO {
      */
     public List<RuleCondition> getConditionsByGroupId(int groupId) {
         List<RuleCondition> conditions = new ArrayList<>();
-        String sql = "SELECT id, group_id, target, method, expression, negate, sort_order, enabled, remark " +
+        String sql = "SELECT id, group_id, target, method, expression, negate, sort_order, enabled, remark, operator " +
                 "FROM judgment_rule_conditions WHERE group_id = ? ORDER BY sort_order ASC, id ASC";
 
         try (Connection conn = DatabaseManager.getInstance().getConnection();
@@ -49,8 +49,8 @@ public class JudgmentRuleConditionDAO {
         if (conditions == null || conditions.isEmpty()) return 0;
 
         String sql = "INSERT INTO judgment_rule_conditions " +
-                "(group_id, target, method, expression, negate, sort_order, enabled, remark) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                "(group_id, target, method, expression, negate, sort_order, enabled, remark, operator) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         int count = 0;
         try (Connection conn = DatabaseManager.getInstance().getConnection();
@@ -66,6 +66,7 @@ public class JudgmentRuleConditionDAO {
                 pstmt.setInt(6, cond.getSortOrder() > 0 ? cond.getSortOrder() : i);
                 pstmt.setInt(7, cond.isEnabled() ? 1 : 0);
                 pstmt.setString(8, cond.getRemark() != null ? cond.getRemark() : "");
+                pstmt.setString(9, cond.getOperator() != null ? cond.getOperator().name() : "AND");
                 pstmt.addBatch();
                 count++;
             }
@@ -111,8 +112,8 @@ public class JudgmentRuleConditionDAO {
             if (conditions != null && !conditions.isEmpty()) {
                 try (PreparedStatement insStmt = conn.prepareStatement(
                         "INSERT INTO judgment_rule_conditions " +
-                        "(group_id, target, method, expression, negate, sort_order, enabled, remark) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        "(group_id, target, method, expression, negate, sort_order, enabled, remark, operator) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
 
                     for (int i = 0; i < conditions.size(); i++) {
                         RuleCondition cond = conditions.get(i);
@@ -124,6 +125,7 @@ public class JudgmentRuleConditionDAO {
                         insStmt.setInt(6, cond.getSortOrder() > 0 ? cond.getSortOrder() : i);
                         insStmt.setInt(7, cond.isEnabled() ? 1 : 0);
                         insStmt.setString(8, cond.getRemark() != null ? cond.getRemark() : "");
+                        insStmt.setString(9, cond.getOperator() != null ? cond.getOperator().name() : "AND");
                         insStmt.addBatch();
                     }
                     insStmt.executeBatch();
@@ -162,6 +164,7 @@ public class JudgmentRuleConditionDAO {
         cond.setSortOrder(rs.getInt("sort_order"));
         cond.setEnabled(rs.getInt("enabled") == 1);
         cond.setRemark(rs.getString("remark"));
+        cond.setOperator(RuleCondition.LogicalOperator.fromString(rs.getString("operator")));
         return cond;
     }
 }

@@ -77,6 +77,15 @@ public class RepeaterManagerExtension implements BurpExtension {
                 logManager.error("[!] 全局方案加载失败: " + e.getMessage());
             }
 
+            // 阶段4.6.2：加载全局判决规则（持久化规则跨会话恢复）
+            try {
+                org.oxff.repeater.privilege.GlobalJudgmentRuleManager.getInstance().loadRules();
+                org.oxff.repeater.privilege.JudgmentRuleManager.getInstance().loadGlobalRules();
+                logManager.success("[+] 全局判决规则加载完成");
+            } catch (Exception e) {
+                logManager.error("[!] 全局判决规则加载失败: " + e.getMessage());
+            }
+
             // 阶段4.7：加载全局去重配置
             try {
                 org.oxff.repeater.privilege.DedupConfigManager.getInstance().loadGlobalConfigs();

@@ -49,6 +49,7 @@ public class JudgmentRuleConfigTab extends JPanel {
         ruleTable.getColumnModel().getColumn(2).setPreferredWidth(50);   // 条件数
         ruleTable.getColumnModel().getColumn(3).setPreferredWidth(280);  // 条件摘要
         ruleTable.getColumnModel().getColumn(4).setPreferredWidth(40);   // 启用
+        ruleTable.getColumnModel().getColumn(5).setPreferredWidth(50);   // 持久化
 
         JScrollPane scrollPane = new JScrollPane(ruleTable);
         scrollPane.setPreferredSize(new Dimension(0, 200));
@@ -86,13 +87,14 @@ public class JudgmentRuleConfigTab extends JPanel {
         // ========== 说明面板 ==========
         JPanel infoPanel = new JPanel(new BorderLayout());
         infoPanel.setBorder(BorderFactory.createTitledBorder("判决逻辑说明"));
-        JTextArea infoArea = new JTextArea(3, 50);
+        JTextArea infoArea = new JTextArea(4, 50);
         infoArea.setEditable(false);
         infoArea.setLineWrap(true);
         infoArea.setText(
-            "• 每次使用一个活跃规则组（勾选\"活跃\"列切换），组内所有条件 AND 求值\n" +
-            "• 活跃规则组全部条件满足 → 标记为越权（红色），任一条件不满足 → 标记为安全（绿色）\n" +
-            "• 无活跃规则组或不匹配时，回退默认相似度判决（相似度>=阈值则判定为越权）"
+            "• 每次使用一个活跃规则组（勾选\"活跃\"列切换），组内条件按 AND/OR 组合求值\n" +
+            "• 活跃规则组条件组合满足 → 标记为越权（红色），不满足 → 标记为安全（绿色）\n" +
+            "• 无活跃规则组或不匹配时，回退默认相似度判决（相似度>=阈值则判定为越权）\n" +
+            "• 勾选\"持久化\"（表格列或编辑框）可跨会话保留，重启插件后自动恢复；不勾选则为临时规则"
         );
         infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
 

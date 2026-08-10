@@ -12,7 +12,7 @@ import java.util.List;
  */
 public class JudgmentRuleTableModel extends AbstractTableModel {
 
-    private static final String[] COLUMN_NAMES = {"活跃", "名称", "条件数", "条件摘要", "启用"};
+    private static final String[] COLUMN_NAMES = {"活跃", "名称", "条件数", "条件摘要", "启用", "持久化"};
 
     private List<JudgmentRule> rules = new ArrayList<>();
 
@@ -48,13 +48,14 @@ public class JudgmentRuleTableModel extends AbstractTableModel {
         return switch (columnIndex) {
             case 0 -> Boolean.class;   // 活跃（复选框）
             case 4 -> Boolean.class;   // 启用（复选框）
+            case 5 -> Boolean.class;   // 持久化（复选框）
             default -> String.class;
         };
     }
 
     @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
-        return columnIndex == 0 || columnIndex == 4;
+        return columnIndex == 0 || columnIndex == 4 || columnIndex == 5;
     }
 
     @Override
@@ -66,6 +67,7 @@ public class JudgmentRuleTableModel extends AbstractTableModel {
             case 2 -> rule.getEffectiveConditions().size();
             case 3 -> rule.getConditionSummary();
             case 4 -> rule.isEnabled();
+            case 5 -> rule.isGlobal();
             default -> "";
         };
     }
@@ -88,6 +90,12 @@ public class JudgmentRuleTableModel extends AbstractTableModel {
             boolean enabled = Boolean.TRUE.equals(aValue);
             JudgmentRuleManager manager = JudgmentRuleManager.getInstance();
             manager.toggleRuleEnabled(rule.getId(), enabled);
+            setData(manager.getAllRules());
+        } else if (columnIndex == 5) {
+            // 持久化列：勾选后规则跨会话保留，取消勾选则为临时规则
+            boolean global = Boolean.TRUE.equals(aValue);
+            JudgmentRuleManager manager = JudgmentRuleManager.getInstance();
+            manager.toggleRuleGlobal(rule.getId(), global);
             setData(manager.getAllRules());
         }
     }

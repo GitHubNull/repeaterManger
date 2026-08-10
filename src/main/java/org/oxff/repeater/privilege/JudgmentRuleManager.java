@@ -139,6 +139,7 @@ public class JudgmentRuleManager {
         } finally {
             batchMode = false;
             refreshCache();
+            syncGlobalRules();
         }
     }
 
@@ -157,6 +158,7 @@ public class JudgmentRuleManager {
     public void endBatch() {
         batchMode = false;
         refreshCache();
+        syncGlobalRules();
     }
 
     public boolean isBatchMode() {
@@ -182,6 +184,7 @@ public class JudgmentRuleManager {
         int id = ruleDAO.addRule(rule);
         if (id > 0 && !batchMode) {
             refreshCache();
+            syncGlobalRules();
         }
         return id;
     }
@@ -193,6 +196,7 @@ public class JudgmentRuleManager {
         boolean result = ruleDAO.updateRule(rule);
         if (result && !batchMode) {
             refreshCache();
+            syncGlobalRules();
         }
         return result;
     }
@@ -204,6 +208,7 @@ public class JudgmentRuleManager {
         boolean result = ruleDAO.deleteRule(id);
         if (result && !batchMode) {
             refreshCache();
+            syncGlobalRules();
         }
         return result;
     }
@@ -215,6 +220,16 @@ public class JudgmentRuleManager {
         JudgmentRule rule = ruleDAO.getRuleById(id);
         if (rule == null) return false;
         rule.setEnabled(enabled);
+        return updateRule(rule);
+    }
+
+    /**
+     * 切换规则持久化状态（global 字段：是否跨会话保留）
+     */
+    public boolean toggleRuleGlobal(int id, boolean global) {
+        JudgmentRule rule = ruleDAO.getRuleById(id);
+        if (rule == null) return false;
+        rule.setGlobal(global);
         return updateRule(rule);
     }
 
@@ -247,12 +262,13 @@ public class JudgmentRuleManager {
         }
         if (added > 0) {
             refreshCache();
+            syncGlobalRules();
         }
         return added;
     }
 
     /**
-     * 比较两个条件列表是否相等（用于去重，v13：忽略 operator）
+     * 比较两个条件列表是否相等（用于去重，v19：包含 operator 比较）
      */
     private static boolean conditionsEqual(List<RuleCondition> a, List<RuleCondition> b) {
         if (a == null && b == null) return true;
@@ -264,7 +280,8 @@ public class JudgmentRuleManager {
             if (ca.getTarget() != cb.getTarget()
                     || ca.getMethod() != cb.getMethod()
                     || !ca.getExpression().equals(cb.getExpression())
-                    || ca.isNegate() != cb.isNegate()) {
+                    || ca.isNegate() != cb.isNegate()
+                    || ca.getOperator() != cb.getOperator()) {
                 return false;
             }
         }
@@ -280,6 +297,64 @@ public class JudgmentRuleManager {
             ruleDAO.addRule(rule);
         }
         refreshCache();
+        syncGlobalRules();
+    }
+
+    /**
+     * 启动时从全局存储恢复持久化规则到当前会话数据库（按名称去重）
+     * <p>
+     * 数据库为会话目录模式，每次启动创建新库；标记为持久化(global=true)的规则
+     * 由 {@link GlobalJudgmentRuleManager} 保存在全局 YAML 中，此方法将其恢复。
+     */
+    public void loadGlobalRules() {
+        List<JudgmentRule> globalRules = GlobalJudgmentRuleManager.getInstance().getAllRules();
+        if (globalRules.isEmpty()) {
+            return;
+        }
+
+        // 当前会话数据库已有规则名称，用于去重
+        java.util.Set<String> existingNames = new java.util.HashSet<>();
+        for (JudgmentRule existing : ruleDAO.getAllRules()) {
+            existingNames.add(existing.getName());
+        }
+
+        int added = 0;
+        for (JudgmentRule globalRule : globalRules) {
+            if (globalRule.getName() == null || existingNames.contains(globalRule.getName())) {
+                continue;
+            }
+            boolean wantActive = globalRule.isActive();
+            globalRule.setActive(false); // 先以非活跃插入，避免多个活跃组
+            globalRule.setGlobal(true);
+            int id = ruleDAO.addRule(globalRule);
+            if (id > 0) {
+                added++;
+                existingNames.add(globalRule.getName());
+                // 恢复活跃状态（仅当当前库尚无活跃组时）
+                if (wantActive && ruleDAO.getActiveRule() == null) {
+                    ruleDAO.setActiveRule(id);
+                }
+            }
+        }
+
+        if (added > 0) {
+            LogManager.getInstance().printOutput("[+] 从全局存储恢复了 " + added + " 条持久化判决规则");
+        }
+        refreshCache();
+        // 将本会话新建的默认规则等 global 规则同步回全局存储
+        syncGlobalRules();
+    }
+
+    /**
+     * 将当前数据库中所有 global=true 的规则同步到全局YAML存储
+     * 在规则增删改后调用，保证跨会话持久化数据与数据库一致
+     */
+    private void syncGlobalRules() {
+        try {
+            GlobalJudgmentRuleManager.getInstance().syncFromRules(ruleDAO.getAllRules());
+        } catch (Exception e) {
+            LogManager.getInstance().printError("[!] 同步全局判决规则失败: " + e.getMessage());
+        }
     }
 
     /**
