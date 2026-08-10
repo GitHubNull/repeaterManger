@@ -217,6 +217,17 @@ public class JudgmentRuleEditDialog extends JDialog {
         operatorCombo.setPrototypeDisplayValue(RuleCondition.LogicalOperator.AND);
         operatorCombo.setToolTipText("选择此条件与前一条件的逻辑关系：AND(且) 或 OR(或)");
 
+        // 首行不显示 AND/OR 连接符：用 CardLayout 容器在 operator 与空白占位间切换，
+        // 容器固定为 operatorCombo 的尺寸，保证隐藏后列宽不抖动。
+        JPanel opCardPanel = new JPanel(new CardLayout());
+        Dimension opSize = operatorCombo.getPreferredSize();
+        opCardPanel.setPreferredSize(opSize);
+        opCardPanel.setMinimumSize(opSize);
+        JPanel opBlank = new JPanel();
+        opBlank.setOpaque(false);
+        opCardPanel.add(operatorCombo, ConditionRow.CARD_OPERATOR);
+        opCardPanel.add(opBlank, ConditionRow.CARD_BLANK);
+
         // NOT 复选框
         JCheckBox negateCheckbox = new JCheckBox("非");
         negateCheckbox.setToolTipText("勾选后取反当前条件的匹配结果");
@@ -273,7 +284,7 @@ public class JudgmentRuleEditDialog extends JDialog {
 
         // === GridBagLayout 布局：固定列宽度自适应，表达式列自动填充 ===
         gc.gridx = 0; gc.weightx = 0;
-        rowPanel.add(operatorCombo, gc);
+        rowPanel.add(opCardPanel, gc);
         gc.gridx = 1; gc.weightx = 0;
         rowPanel.add(negateCheckbox, gc);
         gc.gridx = 2; gc.weightx = 0;
@@ -298,9 +309,11 @@ public class JudgmentRuleEditDialog extends JDialog {
             filterMethodsForTarget(targetCombo, methodCombo);
         }
 
-        ConditionRow row = new ConditionRow(index, rowPanel, operatorCombo, negateCheckbox,
+        ConditionRow row = new ConditionRow(index, rowPanel, opCardPanel, operatorCombo, negateCheckbox,
                 targetCombo, methodCombo, expressionField, deleteButton);
         conditionRows.add(row);
+        // 根据当前行索引刷新 operator 显示（首行隐藏）
+        row.showOperator(index != 0);
 
         deleteButton.addActionListener(e -> {
             if (conditionRows.size() <= 1) {
@@ -320,6 +333,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         int index = conditionRows.size();
         JPanel row = buildConditionRow(index, condition);
         conditionsPanel.add(row);
+        refreshOperatorVisibility();
         conditionsPanel.revalidate();
         conditionsPanel.repaint();
     }
@@ -333,8 +347,21 @@ public class JudgmentRuleEditDialog extends JDialog {
         for (int i = 0; i < conditionRows.size(); i++) {
             conditionRows.get(i).rowPanel.revalidate();
         }
+        // 删除后行索引变化，需重新刷新首行 operator 隐藏状态
+        refreshOperatorVisibility();
         conditionsPanel.revalidate();
         conditionsPanel.repaint();
+    }
+
+    /**
+     * 刷新所有条件行的 AND/OR 连接符显示状态。
+     * 首行（index 0）之前没有任何条件，连接符无意义，显示空白占位；
+     * 其余行正常显示 AND/OR 下拉框。
+     */
+    private void refreshOperatorVisibility() {
+        for (int i = 0; i < conditionRows.size(); i++) {
+            conditionRows.get(i).showOperator(i != 0);
+        }
     }
 
     /**

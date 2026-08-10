@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.37.1] - 2026-08-10
+
+### Fixed
+- 修复判决条件编辑对话框首行显示无意义的 AND/OR 连接符问题：第一条条件之前没有可连接的条件，现通过 `ConditionRow.opCardPanel`（CardLayout）在 operator 下拉框与空白占位卡片间切换，首行隐藏连接符且列宽不抖动；新增/删除条件后自动刷新各行连接符显示状态
+
+### Changed
+- 同步《详细使用教程》判决条件求值顺序说明：明确编辑对话框首行不显示 AND/OR 运算符（内部取值固定按 AND 与初始值 `true` 组合，不影响结果）
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.37.1
+
 ## [2.37.0] - 2026-08-10
 
 ### Added
