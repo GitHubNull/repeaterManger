@@ -2,6 +2,10 @@ package org.oxff.repeater.ui;
 
 import org.oxff.repeater.model.RequestRecord;
 import org.oxff.repeater.logging.LogManager;
+import org.oxff.repeater.db.RequestDAO;
+import org.oxff.repeater.db.history.HistoryUpdateDAO;
+import org.oxff.repeater.api.MontoyaApiHolder;
+import burp.api.montoya.MontoyaApi;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -76,6 +80,22 @@ public class RequestListPanel extends JPanel {
      */
     public interface RequestSelectedCallback {
         void onRequestSelected(int requestId, byte[] requestData);
+    }
+
+    /**
+     * 清空操作回调接口
+     */
+    public interface ClearAllCallback {
+        void onClearAll();
+    }
+
+    private ClearAllCallback clearAllCallback;
+
+    /**
+     * 设置清空操作回调
+     */
+    public void setClearAllCallback(ClearAllCallback callback) {
+        this.clearAllCallback = callback;
     }
 
     /**
@@ -215,7 +235,8 @@ public class RequestListPanel extends JPanel {
         simpleSearchPanel.add(simpleCaseSensitiveCb);
         simpleSearchPanel.add(new JLabel("判决:"));
         simpleSearchPanel.add(judgmentFilterCombo);
-        JButton clearBtn = new JButton("清除");
+        JButton clearBtn = new JButton("重置");
+        clearBtn.setToolTipText("重置搜索条件（清空搜索框并恢复判决过滤为全部）");
         clearBtn.addActionListener(e -> {
             simpleSearchField.setText("");
             advancedSearchField.setText("");
@@ -224,6 +245,13 @@ public class RequestListPanel extends JPanel {
         });
         simpleSearchPanel.add(clearBtn);
         simpleSearchPanel.add(advancedToggleBtn);
+        // 高级搜索与右侧[清空+列显示控制]组之间留出明显间隔，避免视觉混淆
+        simpleSearchPanel.add(Box.createHorizontalStrut(24));
+        // 清空按钮 - 位于高级搜索和列显示控制之间
+        JButton clearAllBtn = new JButton("清空报文");
+        clearAllBtn.setToolTipText("清空所有基准报文及相关数据（包括重放历史）");
+        clearAllBtn.addActionListener(e -> clearAllWithConfirm());
+        simpleSearchPanel.add(clearAllBtn);
         JButton columnControlBtn = new JButton("列显示控制");
         columnControlBtn.addActionListener(e -> {
             RequestColumnControlDialog dialog = new RequestColumnControlDialog(requestTable, requestTable, tableModel);
@@ -495,7 +523,118 @@ public class RequestListPanel extends JPanel {
         requestDataMap.clear();
         requestColors.clear();
         requestComments.clear();
+        requestJudgmentMap.clear();
         nextRequestId = 1;
+    }
+
+    /**
+     * 解析对话框父窗口
+     * 优先使用Burp主窗口作为父窗口，避免对话框显示在Burp主窗口后面导致看起来"点击无反应"
+     */
+    private Component resolveDialogParent() {
+        try {
+            MontoyaApi api = MontoyaApiHolder.getApi();
+            if (api != null) {
+                Frame burpFrame = api.userInterface().swingUtils().suiteFrame();
+                if (burpFrame != null) {
+                    return burpFrame;
+                }
+            }
+        } catch (Exception e) {
+            LogManager.getInstance().printError("[!] 获取Burp主窗口失败，使用面板作为对话框父窗口: " + e.getMessage());
+        }
+        return this;
+    }
+
+    /**
+     * 清空所有请求（带确认对话框）
+     */
+    private void clearAllWithConfirm() {
+        LogManager.getInstance().printOutput("[*] 清空按钮被点击，准备弹出确认对话框...");
+
+        Component dialogParent = resolveDialogParent();
+
+        if (tableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(dialogParent,
+                "当前没有需要清空的数据",
+                "提示",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 注意：Burp的LookAndFeel禁用了JLabel的HTML渲染，HTML标签会被原样显示，
+        // 因此使用纯Swing组件构建多行提示内容
+        JPanel messagePanel = new JPanel();
+        messagePanel.setLayout(new BoxLayout(messagePanel, BoxLayout.Y_AXIS));
+        messagePanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+
+        JLabel titleLabel = new JLabel("此操作将彻底清空以下数据：");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        messagePanel.add(titleLabel);
+        messagePanel.add(Box.createVerticalStrut(8));
+
+        String[] impactItems = {
+            "• 所有基准报文（原始报文）",
+            "• 所有基准报文对应的重放历史报文",
+            "• 基准报文表格的ID计数（nextRequestId）",
+            "• 重放历史表格中的序号字段（#字段）",
+            "• 请求颜色、注释、判决结果等映射数据",
+            "• 数据库中的请求记录和历史记录"
+        };
+        for (String item : impactItems) {
+            JLabel itemLabel = new JLabel(item);
+            itemLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            messagePanel.add(itemLabel);
+            messagePanel.add(Box.createVerticalStrut(2));
+        }
+
+        messagePanel.add(Box.createVerticalStrut(8));
+        JLabel warnLabel = new JLabel("此操作不可恢复，确定要继续吗？");
+        warnLabel.setFont(warnLabel.getFont().deriveFont(Font.BOLD));
+        warnLabel.setForeground(new Color(200, 60, 60));
+        warnLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        messagePanel.add(warnLabel);
+
+        int result = JOptionPane.showConfirmDialog(
+            dialogParent,
+            messagePanel,
+            "清空确认",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
+        if (result == JOptionPane.YES_OPTION) {
+            performClearAll();
+        } else {
+            LogManager.getInstance().printOutput("[*] 用户取消清空操作");
+        }
+    }
+
+    /**
+     * 执行实际的清空操作
+     */
+    private void performClearAll() {
+        // 1. 清空UI表格和内存映射
+        clearAllRequests();
+
+        // 2. 清空数据库中的请求记录
+        RequestDAO requestDAO = new RequestDAO();
+        boolean requestsCleared = requestDAO.clearAllRequests();
+
+        // 3. 清空数据库中的历史记录
+        HistoryUpdateDAO historyUpdateDAO = new HistoryUpdateDAO();
+        boolean historyCleared = historyUpdateDAO.clearAllHistory();
+
+        // 4. 通知上层清空调度处理器数据
+        if (clearAllCallback != null) {
+            clearAllCallback.onClearAll();
+        }
+
+        if (requestsCleared && historyCleared) {
+            LogManager.getInstance().printOutput("[+] 所有数据已清空");
+        } else {
+            LogManager.getInstance().printError("[!] 部分数据清空失败，请检查日志");
+        }
     }
 
     /**

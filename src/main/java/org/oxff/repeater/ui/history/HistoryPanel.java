@@ -445,7 +445,7 @@ public class HistoryPanel extends JPanel {
         // 清空数据映射
         historyRecords.clear();
 
-        LogManager.getInstance().printOutput("[*] 已清除所有历史记录数据");
+        LogManager.getInstance().printOutput("[*] 历史记录面板已清空");
     }
 
     /**

@@ -117,6 +117,25 @@ public class RepeaterManagerUI {
         // 将 dispatchHandler 传递给 historyPanel，供右键菜单批量操作使用
         historyPanel.setDispatchHandler(dispatchHandler);
 
+        // 注册清空回调：清空调度处理器和历史面板数据
+        // 注意：必须在 dispatchHandler/historyPanel/requestPanel/responsePanel 初始化之后注册，
+        // 否则lambda引用未初始化的final字段会导致编译错误
+        requestListPanel.setClearAllCallback(() -> {
+            // 清空调度处理器中的历史映射
+            dispatchHandler.getRequestHistoryMap().clear();
+            dispatchHandler.setCurrentRequestId(-1);
+            dispatchHandler.setCurrentHttpService(null);
+
+            // 清空历史面板
+            historyPanel.clearAllHistory();
+
+            // 清空请求和响应面板
+            requestPanel.setRequest(new byte[0]);
+            responsePanel.clear();
+
+            LogManager.getInstance().printOutput("[+] 调度处理器数据已清空");
+        });
+
         // 注册模式变更监听器：同步状态栏指示
         dispatchHandler.addModeChangeListener(mode -> {
             SwingUtilities.invokeLater(() -> statusPanel.setModeIndicator(mode));

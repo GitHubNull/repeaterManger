@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.41.0] - 2026-08-10
+
+### Added
+- 请求列表面板新增"清空报文"按钮：弹出确认对话框后彻底清空所有基准报文、重放历史、请求颜色/注释/判决映射及数据库中的请求与历史记录，并通过 `ClearAllCallback` 回调联动清空调度处理器、历史面板与请求/响应面板
+- 确认对话框优先使用 Burp 主窗口作为父窗口（`resolveDialogParent`），避免对话框显示在主窗口之后导致"点击无反应"的错觉
+
+### Changed
+- 请求列表搜索栏原"清除"按钮更名为"重置"并补充工具提示，仅重置搜索条件（清空搜索框、判决过滤恢复为全部），与新增的"清空报文"按钮在视觉上通过分隔间距区分
+- 历史记录清空日志文案由"已清除所有历史记录数据"调整为"历史记录面板已清空"
+
 ## [2.40.0] - 2026-08-10
 
 ### Added
