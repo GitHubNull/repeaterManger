@@ -108,6 +108,11 @@ public class JudgmentEngine {
 
         // 第2层：活跃规则组判决
         JudgmentRule activeRule = ruleManager.getActiveRule();
+        LogManager.getInstance().judgmentDebug(String.format(
+                "[判决] 阈值来源: 全局阈值=%.2f, 活跃规则组=%s",
+                similarityThreshold,
+                activeRule != null ? activeRule.getName() : "无"));
+
         if (activeRule != null && activeRule.isEnabled() && activeRule.isValid()) {
             return judgeWithActiveRule(activeRule, statusCode, responseHeaders, responseBody,
                     baselineResponse, baselineStatusCode, similarity, similarityThreshold, responseTimeMs,
@@ -157,8 +162,13 @@ public class JudgmentEngine {
         Double activeSimThreshold = extractMinSimilarityThreshold(rule);
         if (activeSimThreshold != null && similarity >= 0 && similarity < activeSimThreshold) {
             LogManager.getInstance().judgmentDebug(String.format(
-                    "[判决] 活跃规则组已因低相似度(%.4f < %.4f)拒绝 '%s'，跳过默认规则检查以避免阈值覆盖",
+                    "[判决] 活跃规则组已因低相似度(%.4f < %.4f)拒绝 '%s'，使用活跃规则组阈值进行兜底判决",
                     similarity, activeSimThreshold, rule.getName()));
+
+            // 使用活跃规则组的阈值进行兜底判决，而不是全局阈值
+            return judgeDefault(statusCode, baselineStatusCode, similarity, activeSimThreshold, allFieldsEmpty,
+                    responseBody != null ? responseBody.length : 0,
+                    baselineResponse != null ? baselineResponse.length : 0);
         } else {
             // 尝试默认相似度规则组作为安全网兜底（仅在活跃规则组未因低相似度拒绝时）
             LogManager.getInstance().judgmentDebug(String.format(

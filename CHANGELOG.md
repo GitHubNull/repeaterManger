@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.36.1] - 2026-08-10
+
+### Fixed
+- 修复越权判决逻辑中相似度阈值被全局阈值覆盖导致的误判：当活跃规则组（如 `statusCode==200 AND similarity>0.85`）因低相似度拒绝后，兜底判决此前仍使用全局阈值（默认 0.7）而非规则组阈值（0.85），导致相似度 0.73 低于规则阈值 0.85 时仍被错误标记为越权。现活跃规则组因低相似度拒绝时，兜底判决直接使用规则组提取的最小相似度阈值
+- 增强判决日志可观测性：`judge()` 入口新增"阈值来源"调试日志，明确显示当前全局阈值与活跃规则组名称，便于排查阈值被覆盖问题
+
+### Changed
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.36.1
+
 ## [2.36.0] - 2026-08-10
 
 ### Added
