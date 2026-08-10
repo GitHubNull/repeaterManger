@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.0] - 2026-08-10
+
+### Added
+- HTML 报告"越权测试用例参考"新增"测试方法说明"区块，解释会话替换与会话移除两种测试策略的目的、方法、攻击场景对应及有效性原理
+- 未授权访问、垂直越权、水平越权三类用例各新增"测试原理说明"区块，说明各自采用会话移除/替换策略的原因，以及测试方法与真实攻击的异同
+
+### Changed
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.40.0
+
 ## [2.39.0] - 2026-08-10
 
 ### Added

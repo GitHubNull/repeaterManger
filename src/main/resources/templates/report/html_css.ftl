@@ -160,5 +160,64 @@
   .header a { color: #90CAF9; text-decoration: none; }
   .header a:hover { text-decoration: underline; }
 
+  /* 测试原理说明样式 */
+  .testcase-principle {
+    background: #f8f9fa;
+    border-left: 4px solid #1a237e;
+    padding: 16px;
+    margin-bottom: 20px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  .testcase-principle h4 {
+    color: #1a237e;
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  .testcase-principle ul {
+    margin-left: 20px;
+    margin-bottom: 12px;
+  }
+
+  .testcase-principle li {
+    margin-bottom: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* 测试方法说明样式 */
+  .test-methodology-explanation {
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .methodology-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #bbdefb;
+  }
+
+  .methodology-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .methodology-section h4 {
+    color: #1565c0;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .methodology-section p {
+    margin-bottom: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
   @media print { body { background: white; padding: 0; } .card { box-shadow: none; border: 1px solid #ddd; } }
 </style>

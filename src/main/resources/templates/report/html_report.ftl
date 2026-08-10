@@ -212,6 +212,7 @@
 <#if inlineMode?? && inlineMode>
 <#-- 单文件模式：在页面底部嵌入越权测试用例参考 -->
 <h2>越权测试用例参考</h2>
+
 <p style="margin-bottom:16px;color:#555;">以下为越权测试的典型用例参考，涵盖未授权访问、垂直越权和水平越权三种主要越权类型。</p>
 <#include "test_cases_content.ftl">
 

@@ -1,8 +1,54 @@
 <#-- 越权测试用例内容片段：供 test_cases.ftl（独立文档）和 html_report.ftl（单文件嵌入）复用 -->
 
+<#-- ========== 测试方法说明 ========== -->
+<div class="test-methodology-explanation">
+  <h3>测试方法说明</h3>
+  <p>本报告中的测试用例采用会话替换和移除策略来模拟越权攻击，具体原理如下：</p>
+
+  <div class="methodology-section">
+    <h4>1. 会话替换测试原理</h4>
+    <p><strong>目的：</strong>验证服务端是否正确实施了基于角色的权限控制</p>
+    <p><strong>方法：</strong>将高权限用户的请求中的认证信息替换为低权限用户的凭证</p>
+    <p><strong>攻击场景对应：</strong>模拟攻击者获取低权限账户后尝试访问高权限功能</p>
+    <p><strong>为什么有效：</strong>能够发现服务端仅在前端隐藏功能而未在接口层面做权限验证的缺陷</p>
+  </div>
+
+  <div class="methodology-section">
+    <h4>2. 会话移除测试原理</h4>
+    <p><strong>目的：</strong>验证服务端是否正确实施了身份认证机制</p>
+    <p><strong>方法：</strong>移除请求中的所有认证信息（Cookie、Authorization头等）</p>
+    <p><strong>攻击场景对应：</strong>模拟未认证攻击者直接访问需要认证的接口</p>
+    <p><strong>为什么有效：</strong>能够发现服务端认证机制缺失或绕过的问题</p>
+  </div>
+
+  <div class="methodology-section">
+    <h4>3. 测试方法与真实攻击的关系</h4>
+    <p><strong>相似性：</strong>都试图以低权限身份访问高权限资源</p>
+    <p><strong>差异性：</strong>测试使用系统化的用例覆盖常见场景，而真实攻击可能使用更复杂的绕过技术</p>
+    <p><strong>互补性：</strong>测试发现基础权限控制缺陷，真实攻击可能发现更复杂的逻辑漏洞</p>
+  </div>
+</div>
+
 <#-- ========== 未授权访问 ========== -->
 <h2>未授权访问（Unauthorized Access）</h2>
 <p style="margin-bottom:16px;color:#555;">未授权访问是指攻击者在没有任何有效身份凭证的情况下，直接访问需要认证的接口或资源。此类漏洞通常由于服务端缺少身份验证中间件或验证逻辑被绕过导致。</p>
+
+<div class="testcase-principle">
+  <h4>测试原理说明</h4>
+  <p><strong>为什么使用会话移除策略：</strong></p>
+  <ul>
+    <li><strong>模拟真实攻击：</strong>攻击者通常会尝试在没有任何有效凭证的情况下直接访问受保护资源</li>
+    <li><strong>验证认证机制：</strong>通过移除所有认证信息，验证服务端是否正确实施了身份验证检查</li>
+    <li><strong>发现认证缺陷：</strong>检测服务端是否存在认证绕过或认证机制缺失的问题</li>
+  </ul>
+  
+  <p><strong>与真实攻击的异同：</strong></p>
+  <ul>
+    <li><strong>相同点：</strong>都尝试在无有效凭证的情况下访问受保护资源</li>
+    <li><strong>不同点：</strong>测试使用系统化的方法移除认证信息，而真实攻击可能使用更复杂的绕过技术</li>
+    <li><strong>原因：</strong>测试目的是验证认证机制的有效性，而非完全模拟攻击者的所有可能行为</li>
+  </ul>
+</div>
 
 <div class="testcase-section">
   <div class="endpoint-header">
@@ -59,6 +105,23 @@
 <h2>垂直越权（Vertical Privilege Escalation）</h2>
 <p style="margin-bottom:16px;color:#555;">垂直越权是指低权限用户访问或操作高权限角色专属的接口或功能。此类漏洞通常由于服务端仅在前端做了权限控制，而未在服务端接口层面做角色权限校验导致。</p>
 
+<div class="testcase-principle">
+  <h4>测试原理说明</h4>
+  <p><strong>为什么使用会话替换策略：</strong></p>
+  <ul>
+    <li><strong>模拟真实攻击：</strong>攻击者通常会尝试使用低权限账户访问高权限功能</li>
+    <li><strong>验证权限控制：</strong>通过替换会话，验证服务端是否正确实施了基于角色的权限检查</li>
+    <li><strong>发现权限缺陷：</strong>检测服务端是否仅依赖前端控制而未在接口层面做权限验证</li>
+  </ul>
+  
+  <p><strong>与真实攻击的异同：</strong></p>
+  <ul>
+    <li><strong>相同点：</strong>都尝试使用低权限身份访问高权限资源</li>
+    <li><strong>不同点：</strong>测试使用预定义的测试用例，而真实攻击可能使用更复杂的绕过技术</li>
+    <li><strong>原因：</strong>测试目的是验证权限控制机制的有效性，而非完全模拟攻击者的所有可能行为</li>
+  </ul>
+</div>
+
 <div class="testcase-section">
   <div class="endpoint-header">
     <div>
@@ -114,6 +177,23 @@
 <#-- ========== 水平越权 ========== -->
 <h2>水平越权（Horizontal Privilege Escalation）</h2>
 <p style="margin-bottom:16px;color:#555;">水平越权是指同级别用户之间互相访问或操作对方的数据。此类漏洞通常由于服务端仅验证了用户身份，但未验证请求中的资源归属关系导致。</p>
+
+<div class="testcase-principle">
+  <h4>测试原理说明</h4>
+  <p><strong>为什么使用会话替换策略：</strong></p>
+  <ul>
+    <li><strong>模拟真实攻击：</strong>攻击者通常会尝试访问其他同级别用户的数据</li>
+    <li><strong>验证资源归属检查：</strong>通过替换会话，验证服务端是否正确实施了资源归属验证</li>
+    <li><strong>发现数据访问缺陷：</strong>检测服务端是否仅验证用户身份而未验证资源归属关系</li>
+  </ul>
+  
+  <p><strong>与真实攻击的异同：</strong></p>
+  <ul>
+    <li><strong>相同点：</strong>都尝试访问其他用户的数据</li>
+    <li><strong>不同点：</strong>测试使用系统化的方法替换会话，而真实攻击可能使用更复杂的参数篡改技术</li>
+    <li><strong>原因：</strong>测试目的是验证资源归属检查机制的有效性，而非完全模拟攻击者的所有可能行为</li>
+  </ul>
+</div>
 
 <div class="testcase-section">
   <div class="endpoint-header">
