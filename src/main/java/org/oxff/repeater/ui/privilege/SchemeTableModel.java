@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.Scheme;
 
 import javax.swing.table.AbstractTableModel;
@@ -57,6 +58,33 @@ public class SchemeTableModel extends AbstractTableModel {
             case 4: return scheme.isEnabled();
             default: return null;
         }
+    }
+
+    @Override
+    public boolean isCellEditable(int rowIndex, int columnIndex) {
+        return columnIndex == 3 || columnIndex == 4;
+    }
+
+    @Override
+    public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+        if (rowIndex < 0 || rowIndex >= schemes.size()) return;
+        Scheme scheme = schemes.get(rowIndex);
+        boolean newValue = Boolean.TRUE.equals(aValue);
+        if (columnIndex == 3) {
+            // 全局列
+            SessionManager.getInstance().updateScheme(
+                    scheme.getId(), scheme.getName(), scheme.getDescription(),
+                    scheme.isEnabled(), newValue);
+        } else if (columnIndex == 4) {
+            // 启用列
+            SessionManager.getInstance().updateScheme(
+                    scheme.getId(), scheme.getName(), scheme.getDescription(),
+                    newValue, scheme.isPersistToGlobal());
+        } else {
+            return;
+        }
+        // 重新拉取数据，保证模型内对象与数据库/缓存一致
+        setData(SessionManager.getInstance().getSchemes());
     }
 
     public Scheme getScheme(int rowIndex) {

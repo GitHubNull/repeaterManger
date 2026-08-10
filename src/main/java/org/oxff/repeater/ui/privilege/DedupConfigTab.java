@@ -394,6 +394,20 @@ public class DedupConfigTab extends JPanel {
         }
 
         @Override
+        public boolean isCellEditable(int rowIndex, int columnIndex) {
+            return columnIndex == 5;
+        }
+
+        @Override
+        public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+            if (columnIndex != 5 || rowIndex < 0 || rowIndex >= data.size()) return;
+            DedupConfig config = data.get(rowIndex);
+            config.setEnabled(Boolean.TRUE.equals(aValue));
+            DedupConfigManager.getInstance().updateConfig(config.getId(), config);
+            fireTableRowsUpdated(rowIndex, rowIndex);
+        }
+
+        @Override
         public Object getValueAt(int rowIndex, int columnIndex) {
             DedupConfig config = data.get(rowIndex);
             switch (columnIndex) {

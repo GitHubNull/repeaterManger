@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.38.0] - 2026-08-10
+
+### Added
+- 新增日期时间范围选择弹窗 `DateTimeRangePickerDialog`：测试信息配置的"测试时间段"字段改为只读并新增"选择时间"按钮，弹出开始/结束时间 Spinner 选择界面，支持回填已有范围、开始时间晚于结束时间校验、ESC 键取消
+- 判决条件编辑对话框条件行支持上移/下移（▲/▼按钮）调整求值顺序：首行禁用上移、末行禁用下移、条件数小于 2 时全部禁用；移动后自动刷新各行 AND/OR 连接符显示状态
+- 去重配置表格（DedupConfigTab）"启用"列支持直接勾选切换并即时持久化到数据库
+- 方案表格（SchemeTableModel）"全局"与"启用"列支持直接勾选切换并即时持久化，勾选后自动重拉数据保证模型与数据库一致
+- 字段定义表格（FieldDefinitionTableModel）"持久化到全局"与"启用"列支持直接勾选切换并即时持久化，勾选后自动重拉数据保证模型与数据库一致
+
+### Changed
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.38.0
+
 ## [2.37.1] - 2026-08-10
 
 ### Fixed

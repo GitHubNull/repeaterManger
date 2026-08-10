@@ -29,6 +29,8 @@ class ConditionRow {
     final JComboBox<RuleTarget> targetCombo;
     final JComboBox<RuleMethod> methodCombo;
     final JTextField expressionField;
+    final JButton moveUpButton;
+    final JButton moveDownButton;
 
     ConditionRow(int index, JPanel rowPanel,
                  JPanel opCardPanel,
@@ -37,6 +39,8 @@ class ConditionRow {
                  JComboBox<RuleTarget> targetCombo,
                  JComboBox<RuleMethod> methodCombo,
                  JTextField expressionField,
+                 JButton moveUpButton,
+                 JButton moveDownButton,
                  JButton deleteButton) {
         this.rowPanel = rowPanel;
         this.opCardPanel = opCardPanel;
@@ -45,6 +49,8 @@ class ConditionRow {
         this.targetCombo = targetCombo;
         this.methodCombo = methodCombo;
         this.expressionField = expressionField;
+        this.moveUpButton = moveUpButton;
+        this.moveDownButton = moveDownButton;
     }
 
     /**

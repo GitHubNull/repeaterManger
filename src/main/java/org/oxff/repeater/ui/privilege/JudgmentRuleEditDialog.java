@@ -277,6 +277,15 @@ public class JudgmentRuleEditDialog extends JDialog {
         // 表达式（自动填充剩余空间）
         JTextField expressionField = new JTextField(20);
 
+        // 上移/下移按钮
+        JButton moveUpButton = new JButton("▲");
+        moveUpButton.setToolTipText("上移此条件");
+        moveUpButton.setMargin(new Insets(0, 0, 0, 0));
+
+        JButton moveDownButton = new JButton("▼");
+        moveDownButton.setToolTipText("下移此条件");
+        moveDownButton.setMargin(new Insets(0, 0, 0, 0));
+
         // 删除按钮
         JButton deleteButton = new JButton("✕");
         deleteButton.setToolTipText("删除此条件");
@@ -295,6 +304,10 @@ public class JudgmentRuleEditDialog extends JDialog {
         rowPanel.add(expressionField, gc);
         gc.fill = GridBagConstraints.NONE;
         gc.gridx = 5; gc.weightx = 0;
+        rowPanel.add(moveUpButton, gc);
+        gc.gridx = 6; gc.weightx = 0;
+        rowPanel.add(moveDownButton, gc);
+        gc.gridx = 7; gc.weightx = 0;
         rowPanel.add(deleteButton, gc);
 
         // 设置初始值
@@ -310,10 +323,13 @@ public class JudgmentRuleEditDialog extends JDialog {
         }
 
         ConditionRow row = new ConditionRow(index, rowPanel, opCardPanel, operatorCombo, negateCheckbox,
-                targetCombo, methodCombo, expressionField, deleteButton);
+                targetCombo, methodCombo, expressionField, moveUpButton, moveDownButton, deleteButton);
         conditionRows.add(row);
         // 根据当前行索引刷新 operator 显示（首行隐藏）
         row.showOperator(index != 0);
+
+        moveUpButton.addActionListener(e -> moveConditionRow(row, -1));
+        moveDownButton.addActionListener(e -> moveConditionRow(row, 1));
 
         deleteButton.addActionListener(e -> {
             if (conditionRows.size() <= 1) {
@@ -334,6 +350,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         JPanel row = buildConditionRow(index, condition);
         conditionsPanel.add(row);
         refreshOperatorVisibility();
+        refreshMoveButtonStates();
         conditionsPanel.revalidate();
         conditionsPanel.repaint();
     }
@@ -349,8 +366,49 @@ public class JudgmentRuleEditDialog extends JDialog {
         }
         // 删除后行索引变化，需重新刷新首行 operator 隐藏状态
         refreshOperatorVisibility();
+        refreshMoveButtonStates();
         conditionsPanel.revalidate();
         conditionsPanel.repaint();
+    }
+
+    /**
+     * 上移或下移一条条件行
+     * @param row 要移动的条件行
+     * @param direction -1=上移, +1=下移
+     */
+    private void moveConditionRow(ConditionRow row, int direction) {
+        int index = conditionRows.indexOf(row);
+        if (index < 0) return;
+        int newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= conditionRows.size()) return;
+
+        // 交换列表中的位置
+        conditionRows.set(index, conditionRows.get(newIndex));
+        conditionRows.set(newIndex, row);
+
+        // 重建面板：移除全部后按新顺序重新添加
+        conditionsPanel.removeAll();
+        for (ConditionRow r : conditionRows) {
+            conditionsPanel.add(r.rowPanel);
+        }
+
+        refreshOperatorVisibility();
+        refreshMoveButtonStates();
+        conditionsPanel.revalidate();
+        conditionsPanel.repaint();
+    }
+
+    /**
+     * 刷新所有条件行的上移/下移按钮可用状态。
+     * 首行禁用上移，末行禁用下移；条件数小于2时全部禁用。
+     */
+    private void refreshMoveButtonStates() {
+        int size = conditionRows.size();
+        for (int i = 0; i < size; i++) {
+            ConditionRow r = conditionRows.get(i);
+            r.moveUpButton.setEnabled(size >= 2 && i > 0);
+            r.moveDownButton.setEnabled(size >= 2 && i < size - 1);
+        }
     }
 
     /**

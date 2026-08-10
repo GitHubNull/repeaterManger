@@ -79,8 +79,19 @@ public class TestInfoConfigTab extends JPanel {
         formPanel.add(new JLabel("测试时间段:"), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         testTimeRangeField = new JTextField(40);
-        testTimeRangeField.setToolTipText("测试执行的时间范围，如：2026-07-01 ~ 2026-07-15");
-        formPanel.add(testTimeRangeField, gbc);
+        testTimeRangeField.setEditable(false);
+        testTimeRangeField.setToolTipText("测试执行的时间范围，点击右侧按钮选择");
+        JButton pickTimeRangeBtn = new JButton("选择时间");
+        pickTimeRangeBtn.addActionListener(e -> {
+            String result = DateTimeRangePickerDialog.showDialog(this, testTimeRangeField.getText());
+            if (result != null) {
+                testTimeRangeField.setText(result);
+            }
+        });
+        JPanel timeRangePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        timeRangePanel.add(testTimeRangeField);
+        timeRangePanel.add(pickTimeRangeBtn);
+        formPanel.add(timeRangePanel, gbc);
 
         // 测试人员
         row++;

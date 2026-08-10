@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import javax.swing.table.DefaultTableModel;
 import java.util.ArrayList;
@@ -28,8 +29,8 @@ public class FieldDefinitionTableModel extends DefaultTableModel {
                         field.getType().getDisplayName(),
                         field.getExpression(),
                         field.getDescription(),
-                        field.isPersistToGlobal() ? "是" : "否",
-                        field.isEnabled() ? "是" : "否"
+                        field.isPersistToGlobal(),
+                        field.isEnabled()
                 });
             }
         }
@@ -45,11 +46,37 @@ public class FieldDefinitionTableModel extends DefaultTableModel {
 
     @Override
     public Class<?> getColumnClass(int columnIndex) {
+        if (columnIndex == 3 || columnIndex == 4) {
+            return Boolean.class;
+        }
         return String.class;
     }
 
     @Override
     public boolean isCellEditable(int row, int column) {
-        return false;
+        return column == 3 || column == 4;
+    }
+
+    @Override
+    public void setValueAt(Object aValue, int row, int column) {
+        if (row < 0 || row >= fields.size()) return;
+        FieldDefinition field = fields.get(row);
+        boolean newValue = Boolean.TRUE.equals(aValue);
+        if (column == 3) {
+            // 持久化到全局列
+            SessionManager.getInstance().updateFieldDefinition(
+                    field.getId(), field.getType(), field.getExpression(),
+                    field.getDescription(), newValue, field.isEnabled());
+        } else if (column == 4) {
+            // 启用列
+            SessionManager.getInstance().updateFieldDefinition(
+                    field.getId(), field.getType(), field.getExpression(),
+                    field.getDescription(), field.isPersistToGlobal(), newValue);
+        } else {
+            return;
+        }
+        // 重新拉取数据，保证模型内对象与数据库/缓存一致，
+        // 避免编辑对话框读取到旧的字段状态
+        setData(SessionManager.getInstance().getFieldDefinitions());
     }
 }
