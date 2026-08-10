@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.35.4] - 2026-08-10
+
+### Fixed
+- 修复 HTML 多文件报告的数据分离缺陷：`HtmlReportGenerator.writeDataJs()` 此前仅序列化基础配置，全部报文数据（请求/响应详情、cURL 命令、Postman 片段、用户会话信息等）仍由 FreeMarker 渲染进 `index.html`，导致主文件体积膨胀。现报文数据完整序列化到 `data.js`，`index.html` 仅保留模板骨架与占位容器，由 `controller.js` 读取 `REPORT_DATA` 动态渲染全部内容（摘要卡片、会话分布表、越权/报错(存疑)/安全接口列表、报文详情），恢复数据与展示分离的原始架构设计；实测 `index.html` 体积降至约 800 字节
+- 修复单文件内联模式 HTML 报告模板中 `entry.isAnonymous` 属性名错误：FreeMarker 对 JavaBean boolean is-getter 的属性名须去掉 `is` 前缀（`entry.anonymous`），原写法在报告含用户信息条目时渲染抛模板异常
+
+### Changed
+- 同步 `ReportData.pluginVersion` 硬编码版本至 2.35.4（此前滞后于 pom.xml）
+
 ## [2.35.3] - 2026-07-28
 
 ### Fixed

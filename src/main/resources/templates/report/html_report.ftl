@@ -21,8 +21,9 @@
   <p class="meta">生成时间: ${generatedAt} | Repeater Manager v${pluginVersion}</p>
 </div>
 
-<#-- Test Info Config Section -->
 <#if inlineMode?? && inlineMode>
+
+<#-- Test Info Config Section -->
 <#if testInfoConfig?? && testInfoConfig.hasAnyData()>
 <h2>测试信息配置</h2>
 <div class="test-info-config">
@@ -49,12 +50,8 @@
   </#if>
 </div>
 </#if>
-<#else>
-<div id="test-info-section"></div>
-</#if>
 
 <#-- User Info Section -->
-<#if inlineMode?? && inlineMode>
 <#if userInfoEntries?? && userInfoEntries?size gt 0>
 <h2>用户信息</h2>
 <div class="user-info-cards">
@@ -62,11 +59,11 @@
 <div class="user-info-card">
   <div class="user-info-header">
     <span class="user-session-name">${entry.sessionName}</span>
-    <#if entry.isAnonymous><span class="badge anonymous">匿名</span></#if>
+    <#if entry.anonymous><span class="badge anonymous">匿名</span></#if>
   </div>
   <div class="user-info-fields">
-    <div class="info-field"><span class="field-label">角色:</span><span><#if entry.role?? && entry.role != "">${entry.role}<#elseif entry.isAnonymous>匿名<#else>-</#if></span></div>
-    <div class="info-field"><span class="field-label">用户名:</span><span><#if entry.username?? && entry.username != "">${entry.username}<#elseif entry.isAnonymous>匿名用户<#else>${entry.sessionName}</#if></span></div>
+    <div class="info-field"><span class="field-label">角色:</span><span><#if entry.role?? && entry.role != "">${entry.role}<#elseif entry.anonymous>匿名<#else>-</#if></span></div>
+    <div class="info-field"><span class="field-label">用户名:</span><span><#if entry.username?? && entry.username != "">${entry.username}<#elseif entry.anonymous>匿名用户<#else>${entry.sessionName}</#if></span></div>
   </div>
   <#if entry.screenshotFilenames?? && entry.screenshotFilenames?size gt 0>
   <div class="screenshot-gallery">
@@ -78,9 +75,6 @@
 </div>
 </#list>
 </div>
-</#if>
-<#else>
-<div id="user-info-section"></div>
 </#if>
 
 <#-- Summary -->
@@ -202,6 +196,18 @@
   </#list>
 </div>
 </#list>
+
+<#else>
+<#-- 多文件分离模式：仅输出占位容器，全部内容由 controller.js 读取 data.js 动态渲染 -->
+<div id="test-info-section"></div>
+<div id="user-info-section"></div>
+<div id="summary-section"></div>
+<div id="session-breakdown-section"></div>
+<div id="escalated-list-section"></div>
+<div id="error-list-section"></div>
+<div id="safe-list-section"></div>
+<div id="endpoints-section"></div>
+</#if>
 
 <#if !(inlineMode?? && inlineMode)>
 <script src="data.js"></script>

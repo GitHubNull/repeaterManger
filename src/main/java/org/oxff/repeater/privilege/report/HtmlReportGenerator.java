@@ -108,6 +108,8 @@ public class HtmlReportGenerator extends ReportGenerator {
 
     /**
      * 将 ReportData 序列化为 data.js（不包含 base64 图片数据）
+     * 包含全部报告数据（摘要/会话分布/接口列表/报文详情），index.html 仅保留模板骨架，
+     * 由 controller.js 读取本数据动态渲染
      */
     private void writeDataJs(ReportData data, File reportDir) throws Exception {
         // 构建用于 JS 的数据对象（包含 userInfoEntries 但 base64 置空）
@@ -124,6 +126,8 @@ public class HtmlReportGenerator extends ReportGenerator {
             summary.put("escalatedCount", data.getSummary().getEscalatedCount());
             summary.put("safeCount", data.getSummary().getSafeCount());
             summary.put("errorCount", data.getSummary().getErrorCount());
+            summary.put("baselineCount", data.getSummary().getBaselineCount());
+            summary.put("endpointsTested", data.getSummary().getEndpointsTested());
         }
         jsData.put("summary", summary);
 
@@ -152,6 +156,61 @@ public class HtmlReportGenerator extends ReportGenerator {
             jsData.put("testInfoConfig", configJs);
         }
 
+        // 会话分布
+        List<Map<String, Object>> sessionBreakdownJs = new ArrayList<>();
+        for (ReportData.SessionBreakdown sb : data.getSessionBreakdown()) {
+            Map<String, Object> sbMap = new LinkedHashMap<>();
+            sbMap.put("sessionName", sb.getSessionName());
+            sbMap.put("escalatedCount", sb.getEscalatedCount());
+            sbMap.put("safeCount", sb.getSafeCount());
+            sbMap.put("errorCount", sb.getErrorCount());
+            sbMap.put("totalTests", sb.getTotalTests());
+            sessionBreakdownJs.add(sbMap);
+        }
+        jsData.put("sessionBreakdown", sessionBreakdownJs);
+
+        // 越权/报错(存疑)/安全接口列表
+        jsData.put("escalatedEndpoints", toRequestLines(data.getEscalatedEndpoints()));
+        jsData.put("errorEndpoints", toRequestLines(data.getErrorEndpoints()));
+        jsData.put("safeEndpoints", toRequestLines(data.getSafeEndpoints()));
+
+        // 端点报文详情（核心数据：基线报文 + 各用户会话报文）
+        List<Map<String, Object>> endpointsJs = new ArrayList<>();
+        for (ReportData.EndpointSection ep : data.getEndpoints()) {
+            Map<String, Object> epMap = new LinkedHashMap<>();
+            epMap.put("method", ep.getMethod());
+            epMap.put("url", ep.getUrl());
+            epMap.put("endpointIndex", ep.getEndpointIndex());
+            epMap.put("escalatedCount", ep.getEscalatedCount());
+            epMap.put("safeCount", ep.getSafeCount());
+            epMap.put("errorCount", ep.getErrorCount());
+            epMap.put("baselineCount", ep.getBaselineCount());
+            epMap.put("baselineData", buildBaselineJs(ep.getBaselineData()));
+
+            List<Map<String, Object>> sessionsJs = new ArrayList<>();
+            for (ReportData.SessionFinding us : ep.getUserSessions()) {
+                Map<String, Object> usMap = new LinkedHashMap<>();
+                usMap.put("sessionName", us.getSessionName());
+                usMap.put("judgment", us.getJudgment());
+                usMap.put("judgmentDisplayName", us.getJudgmentDisplayName());
+                usMap.put("similarityDisplay", us.getSimilarityDisplay());
+                usMap.put("matchedRuleName", us.getMatchedRuleName());
+                usMap.put("requestHtml", us.getRequestHtml());
+                usMap.put("responseHtml", us.getResponseHtml());
+                usMap.put("curlCommand", us.getCurlCommand());
+                usMap.put("postmanSnippet", us.getPostmanSnippet());
+                if (us.getRecord() != null) {
+                    usMap.put("statusCode", us.getRecord().getStatusCode());
+                    usMap.put("responseLength", us.getRecord().getResponseLength());
+                    usMap.put("responseTime", us.getRecord().getResponseTime());
+                }
+                sessionsJs.add(usMap);
+            }
+            epMap.put("userSessions", sessionsJs);
+            endpointsJs.add(epMap);
+        }
+        jsData.put("endpoints", endpointsJs);
+
         String json = GSON.toJson(jsData);
         String jsContent = "var REPORT_DATA = " + json + ";";
 
@@ -159,6 +218,39 @@ public class HtmlReportGenerator extends ReportGenerator {
         try (FileOutputStream fos = new FileOutputStream(dataJsFile)) {
             fos.write(jsContent.getBytes(StandardCharsets.UTF_8));
         }
+    }
+
+    /**
+     * 接口列表条目序列化为请求行字符串数组
+     */
+    private List<String> toRequestLines(List<ReportData.EndpointRequestLine> lines) {
+        List<String> result = new ArrayList<>();
+        if (lines == null) {
+            return result;
+        }
+        for (ReportData.EndpointRequestLine line : lines) {
+            result.add(line.getRequestLine());
+        }
+        return result;
+    }
+
+    /**
+     * 基线报文序列化为 JS 数据对象（仅提取渲染所需字段，不序列化 record 原始字节）
+     */
+    private Map<String, Object> buildBaselineJs(ReportData.BaselineData bd) {
+        if (bd == null) {
+            return null;
+        }
+        Map<String, Object> bdMap = new LinkedHashMap<>();
+        bdMap.put("sessionName", bd.getSessionName());
+        bdMap.put("requestHtml", bd.getRequestHtml());
+        bdMap.put("responseHtml", bd.getResponseHtml());
+        if (bd.getRecord() != null) {
+            bdMap.put("statusCode", bd.getRecord().getStatusCode());
+            bdMap.put("responseLength", bd.getRecord().getResponseLength());
+            bdMap.put("responseTime", bd.getRecord().getResponseTime());
+        }
+        return bdMap;
     }
 
     /**
@@ -227,11 +319,16 @@ public class HtmlReportGenerator extends ReportGenerator {
 
     /**
      * 使用 FreeMarker 渲染 index.html
+     * 多文件模式下仅渲染模板骨架（header + 占位容器），
+     * 全部报告数据由 data.js 提供、controller.js 动态渲染
      */
     private void writeIndexHtml(ReportData data, File reportDir) throws Exception {
-        Map<String, Object> model = buildModel(data);
-        // 添加 userInfoEntries 供模板使用
-        model.put("userInfoEntries", data.getUserInfoEntries());
+        Map<String, Object> model = new HashMap<>();
+        model.put("title", data.getTitle());
+        model.put("generatedAt", DATE_FORMAT.format(data.getGeneratedAt()));
+        model.put("pluginVersion", data.getPluginVersion());
+        model.put("subtitle", data.getSubtitle());
+        model.put("inlineMode", false);
         File indexFile = new File(reportDir, "index.html");
         try (OutputStreamWriter osw = new OutputStreamWriter(
                 new FileOutputStream(indexFile), StandardCharsets.UTF_8)) {

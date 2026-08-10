@@ -300,6 +300,158 @@
     };
 
     /**
+     * 构建摘要卡片区域
+     */
+    function buildSummarySection() {
+        var data = window.REPORT_DATA;
+        var container = document.getElementById('summary-section');
+        if (!data || !data.summary || !container) {
+            return;
+        }
+        var s = data.summary;
+        var html = '<h2>摘要</h2><div class="summary-cards">';
+        html += '<div class="card total"><div class="number">' + s.totalTests + '</div><div class="label">测试总数</div></div>';
+        html += '<div class="card escalated"><div class="number">' + s.escalatedCount + '</div><div class="label">\u26A0 越权</div></div>';
+        html += '<div class="card safe"><div class="number">' + s.safeCount + '</div><div class="label">\u2714 安全</div></div>';
+        html += '<div class="card error"><div class="number">' + s.errorCount + '</div><div class="label">\u2716 错误</div></div>';
+        html += '<div class="card" style="border-top:4px solid #1565C0"><div class="number" style="color:#1565C0">'
+            + s.baselineCount + '</div><div class="label">基线</div></div>';
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    /**
+     * 构建会话分布表（保留 id="session-table" 与 tbody 结构以兼容排序逻辑）
+     */
+    function buildSessionBreakdownSection() {
+        var data = window.REPORT_DATA;
+        var container = document.getElementById('session-breakdown-section');
+        if (!data || !data.sessionBreakdown || data.sessionBreakdown.length === 0 || !container) {
+            return;
+        }
+        var html = '<h2>会话分布</h2><table id="session-table">';
+        html += '<thead><tr><th>会话</th><th>越权</th><th>安全</th><th>错误</th><th>总计</th></tr></thead>';
+        html += '<tbody>';
+        data.sessionBreakdown.forEach(function(sb) {
+            html += '<tr>';
+            html += '<td>' + escapeHtml(sb.sessionName) + '</td>';
+            html += '<td>' + sb.escalatedCount + '</td>';
+            html += '<td>' + sb.safeCount + '</td>';
+            html += '<td>' + sb.errorCount + '</td>';
+            html += '<td>' + sb.totalTests + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    /**
+     * 构建接口请求行列表（越权/报错(存疑)/安全通用）
+     */
+    function buildEndpointListSection(containerId, title, lines, listClass, itemClass) {
+        var container = document.getElementById(containerId);
+        if (!lines || lines.length === 0 || !container) {
+            return;
+        }
+        var html = '<h2>' + title + '</h2>';
+        html += '<div class="endpoint-list ' + listClass + '"><ol>';
+        lines.forEach(function(line) {
+            html += '<li class="' + itemClass + '">' + escapeHtml(line) + '</li>';
+        });
+        html += '</ol></div>';
+        container.innerHTML = html;
+    }
+
+    /**
+     * 构建端点报文详情区域（基线报文 + 各用户会话报文）
+     */
+    function buildEndpointsSection() {
+        var data = window.REPORT_DATA;
+        var container = document.getElementById('endpoints-section');
+        if (!data || !data.endpoints || data.endpoints.length === 0 || !container) {
+            return;
+        }
+        var html = '<h2>报文详情</h2>';
+        data.endpoints.forEach(function(ep) {
+            var totalTests = ep.escalatedCount + ep.safeCount + ep.errorCount;
+            var indexText = String(ep.endpointIndex).padStart(2, '0');
+            html += '<div class="endpoint-section">';
+            html += '<div class="endpoint-header"><div>';
+            html += '<h3>api_' + indexText + ' <span class="method">' + escapeHtml(ep.method) + '</span> ' + escapeHtml(ep.url) + '</h3>';
+            html += '</div><div class="meta-info">';
+            if (ep.baselineCount > 0) {
+                html += '基线: ' + ep.baselineCount + ' | ';
+            }
+            html += '测试: ' + totalTests;
+            if (ep.escalatedCount > 0) {
+                html += ' | <span style="color:#d32f2f;font-weight:600">\u26A0 ' + ep.escalatedCount + ' 越权</span>';
+            }
+            html += ' | \u2714 ' + ep.safeCount + ' 安全';
+            html += '</div></div>';
+
+            // 基线报文块
+            if (ep.baselineData) {
+                var bd = ep.baselineData;
+                html += '<div class="session-block baseline-block">';
+                html += '<div class="session-header baseline-header">';
+                html += '<span>原始基准 HTTP 数据 — 参考对照标准</span>';
+                html += '<span class="badge baseline">基线</span>';
+                html += '</div><div class="session-content">';
+                html += '<p class="baseline-note">基准报文是参考用户的原始请求与响应，用于与各会话重放结果对比分析，判断是否存在越权。</p>';
+                html += '<div class="section-title">请求</div>';
+                html += bd.requestHtml || '';
+                html += '<div class="section-title">响应 — HTTP ' + bd.statusCode
+                    + ' (' + bd.responseLength + ' bytes, ' + bd.responseTime + 'ms)</div>';
+                html += bd.responseHtml || '';
+                html += '</div></div>';
+            }
+
+            // 用户会话报文块
+            (ep.userSessions || []).forEach(function(us) {
+                var badgeClass;
+                var badgeIcon;
+                if (us.judgment === 'ESCALATED') {
+                    badgeClass = 'escalated';
+                    badgeIcon = '\u26A0 ';
+                } else if (us.judgment === 'NOT_ESCALATED') {
+                    badgeClass = 'safe';
+                    badgeIcon = '\u2714 ';
+                } else {
+                    badgeClass = 'error';
+                    badgeIcon = '\u2716 ';
+                }
+                html += '<div class="session-block">';
+                html += '<div class="session-header">';
+                html += '<span>' + escapeHtml(us.sessionName) + ' HTTP 数据</span>';
+                html += '<span class="badge ' + badgeClass + '">' + badgeIcon + escapeHtml(us.judgmentDisplayName) + '</span>';
+                html += '</div><div class="session-content">';
+                if (us.matchedRuleName) {
+                    html += '<div>规则: <strong>' + escapeHtml(us.matchedRuleName) + '</strong></div>';
+                }
+                html += '<div class="meta-info">相似度: ' + escapeHtml(us.similarityDisplay) + '</div>';
+
+                html += '<div class="section-title">请求</div>';
+                html += us.requestHtml || '';
+
+                html += '<div class="section-title">响应 — HTTP ' + us.statusCode
+                    + ' (' + us.responseLength + ' bytes, ' + us.responseTime + 'ms)</div>';
+                html += us.responseHtml || '';
+
+                html += '<div class="section-title">复现命令 — cURL</div>';
+                html += '<pre class="curl-block">' + escapeHtml(us.curlCommand) + '</pre>';
+
+                html += '<div class="section-title">复现导入 — Postman</div>';
+                html += '<pre class="postman-block">' + escapeHtml(us.postmanSnippet) + '</pre>';
+
+                html += '</div></div>';
+            });
+
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    /**
      * 排序会话分布表
      */
     function sortSessionTable(columnIndex) {
@@ -395,8 +547,18 @@
 
     // DOM 就绪后执行
     document.addEventListener('DOMContentLoaded', function() {
+        var data = window.REPORT_DATA || {};
         buildTestInfoSection();
         buildUserInfoSection();
+        buildSummarySection();
+        buildSessionBreakdownSection();
+        buildEndpointListSection('escalated-list-section', '越权接口列表',
+            data.escalatedEndpoints, 'escalated-list', 'escalated-item');
+        buildEndpointListSection('error-list-section', '报错(存疑)接口列表',
+            data.errorEndpoints, 'error-list', 'error-item');
+        buildEndpointListSection('safe-list-section', '安全接口列表',
+            data.safeEndpoints, 'safe-list', 'safe-item');
+        buildEndpointsSection();
         bindEndpointToggle();
         bindTableSort();
     });
