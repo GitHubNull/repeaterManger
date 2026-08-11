@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.43.0] - 2026-08-11
+
+### Added
+- 全局工具栏新增语言切换开关（中文/英文），当前为占位功能（提示"功能开发中"后恢复默认中文状态）
+
+### Changed
+- 编辑区工具栏拆分为全局工具栏与请求管理工具栏：全局工具栏（顶部）包含模式切换、调试切换、自动GC、语言切换；请求管理工具栏（编辑区顶部）包含新建请求、清空、相似度计算、布局选择
+- `EditorToolBar.build()` 标记为废弃，由 `buildGlobalToolBar()` 与 `buildRequestToolBar()` 替代
+- 版本号同步至 2.43.0（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.42.0] - 2026-08-10
 
 ### Added

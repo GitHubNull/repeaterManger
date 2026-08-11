@@ -16,7 +16,7 @@ public class ReportData {
     private String title = "越权测试报告";
     private String subtitle;
     private Date generatedAt = new Date();
-    private String pluginVersion = "2.42.0";
+    private String pluginVersion = "2.43.0";
 
     private ReportSummary summary;
     private List<EndpointSection> endpoints = new ArrayList<>();

@@ -149,7 +149,12 @@ public class RepeaterManagerUI {
 
         // 创建编辑区工具栏（必须在模式变更监听器之前初始化，因为监听器引用其组件）
         editorToolBar = new EditorToolBar(requestPanel, responsePanel, statusPanel, dispatchHandler, layoutManager, mainPanel, this::createNewRequest);
-        JPanel editorControlPanel = editorToolBar.build();
+
+        // 构建全局工具栏（插件顶部）
+        JPanel globalToolBar = editorToolBar.buildGlobalToolBar();
+
+        // 构建请求管理工具栏（编辑区顶部）
+        JPanel requestToolBar = editorToolBar.buildRequestToolBar();
 
         // 注册模式变更监听器：同步切换按钮与标签状态
         dispatchHandler.addModeChangeListener(mode -> {
@@ -175,7 +180,7 @@ public class RepeaterManagerUI {
 
         // 组合编辑区和控制面板
         JPanel editorPanel = new JPanel(new BorderLayout());
-        editorPanel.add(editorControlPanel, BorderLayout.NORTH);
+        editorPanel.add(requestToolBar, BorderLayout.NORTH);
         editorPanel.add(editorSplitPane, BorderLayout.CENTER);
         editorPanel.add(statusPanel, BorderLayout.SOUTH);
 
@@ -248,6 +253,7 @@ public class RepeaterManagerUI {
         org.oxff.repeater.logging.LogManager.getInstance().setLogPanel(logPanel);
 
         // 添加到主面板
+        mainPanel.add(globalToolBar, BorderLayout.NORTH);
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
 
         // 初始化请求加载器（必须在所有面板创建之后）
