@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.43.1] - 2026-08-11
+
+### Changed
+- 编辑区"新建请求"与"清空"按钮从请求管理工具栏迁移至请求面板（`BurpRequestPanel`），由面板提供 `setOnNewRequest` / `setOnClear` 回调，解除 `EditorToolBar` 对请求/响应面板与状态面板的直接依赖（构造函数精简为仅依赖调度处理器、布局管理器与主面板）
+- 请求管理工具栏方法 `buildRequestToolBar()` 更名为 `buildMessageEditorToolBar()`，废弃的 `build()` 方法注释同步更新
+- 版本号同步至 2.43.1（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.43.0] - 2026-08-11
 
 ### Added

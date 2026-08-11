@@ -20,6 +20,10 @@ public class BurpRequestPanel extends JPanel {
     private final JButton sendButton;
     private final JSpinner timeoutSpinner;
 
+    // 回调函数
+    private Runnable onNewRequest;
+    private Runnable onClear;
+
     /**
      * 创建请求面板
      *
@@ -33,6 +37,29 @@ public class BurpRequestPanel extends JPanel {
 
         // 创建控制面板
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+
+        // 新建请求按钮
+        JButton newRequestButton = new JButton("新建请求");
+        newRequestButton.setToolTipText("创建新的空白请求");
+        newRequestButton.addActionListener(e -> {
+            if (onNewRequest != null) {
+                onNewRequest.run();
+            }
+        });
+        controlPanel.add(newRequestButton);
+
+        // 清空按钮
+        JButton clearButton = new JButton("清空");
+        clearButton.setToolTipText("清空当前请求和响应内容");
+        clearButton.addActionListener(e -> {
+            if (onClear != null) {
+                onClear.run();
+            }
+        });
+        controlPanel.add(clearButton);
+
+        // 分隔符
+        controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
         // 超时设置
         JLabel timeoutLabel = new JLabel("请求超时(秒):");
@@ -52,6 +79,20 @@ public class BurpRequestPanel extends JPanel {
 
         // 添加快捷键支持
         registerKeyboardShortcuts();
+    }
+
+    /**
+     * 设置新建请求回调
+     */
+    public void setOnNewRequest(Runnable callback) {
+        this.onNewRequest = callback;
+    }
+
+    /**
+     * 设置清空回调
+     */
+    public void setOnClear(Runnable callback) {
+        this.onClear = callback;
     }
 
     /**

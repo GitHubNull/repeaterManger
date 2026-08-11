@@ -148,13 +148,21 @@ public class RepeaterManagerUI {
         historyPanel.setOnSelectRecord(dispatchHandler::loadHistoryRecord);
 
         // 创建编辑区工具栏（必须在模式变更监听器之前初始化，因为监听器引用其组件）
-        editorToolBar = new EditorToolBar(requestPanel, responsePanel, statusPanel, dispatchHandler, layoutManager, mainPanel, this::createNewRequest);
+        editorToolBar = new EditorToolBar(dispatchHandler, layoutManager, mainPanel);
 
         // 构建全局工具栏（插件顶部）
         JPanel globalToolBar = editorToolBar.buildGlobalToolBar();
 
-        // 构建请求管理工具栏（编辑区顶部）
-        JPanel requestToolBar = editorToolBar.buildRequestToolBar();
+        // 构建报文显示编辑工具栏（编辑区顶部）
+        JPanel messageEditorToolBar = editorToolBar.buildMessageEditorToolBar();
+
+        // 设置请求面板回调
+        requestPanel.setOnNewRequest(this::createNewRequest);
+        requestPanel.setOnClear(() -> {
+            requestPanel.clear();
+            responsePanel.clear();
+            statusPanel.clear();
+        });
 
         // 注册模式变更监听器：同步切换按钮与标签状态
         dispatchHandler.addModeChangeListener(mode -> {
@@ -180,7 +188,7 @@ public class RepeaterManagerUI {
 
         // 组合编辑区和控制面板
         JPanel editorPanel = new JPanel(new BorderLayout());
-        editorPanel.add(requestToolBar, BorderLayout.NORTH);
+        editorPanel.add(messageEditorToolBar, BorderLayout.NORTH);
         editorPanel.add(editorSplitPane, BorderLayout.CENTER);
         editorPanel.add(statusPanel, BorderLayout.SOUTH);
 

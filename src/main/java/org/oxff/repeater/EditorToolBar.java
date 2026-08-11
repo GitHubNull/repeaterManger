@@ -2,8 +2,6 @@ package org.oxff.repeater;
 
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.ui.*;
-import org.oxff.repeater.ui.editor.BurpRequestPanel;
-import org.oxff.repeater.ui.editor.BurpResponsePanel;
 import org.oxff.repeater.ui.layout.LayoutManager;
 
 import javax.swing.*;
@@ -15,13 +13,9 @@ import java.awt.*;
  */
 public class EditorToolBar {
 
-    private final BurpRequestPanel requestPanel;
-    private final BurpResponsePanel responsePanel;
-    private final StatusPanel statusPanel;
     private final RequestDispatchHandler dispatchHandler;
     private final LayoutManager layoutManager;
     private final JPanel mainPanel;
-    private final Runnable onNewRequest;
 
     // 公开的UI组件引用 — 外部（RepeaterManagerUI）需要通过这些引用更新样式状态
     public final SwitchButton modeToggleButton;
@@ -37,17 +31,11 @@ public class EditorToolBar {
     public final JLabel languageZhLabel;
     public final JLabel languageEnLabel;
 
-    public EditorToolBar(BurpRequestPanel requestPanel, BurpResponsePanel responsePanel,
-                         StatusPanel statusPanel, RequestDispatchHandler dispatchHandler,
-                         LayoutManager layoutManager, JPanel mainPanel,
-                         Runnable onNewRequest) {
-        this.requestPanel = requestPanel;
-        this.responsePanel = responsePanel;
-        this.statusPanel = statusPanel;
+    public EditorToolBar(RequestDispatchHandler dispatchHandler,
+                         LayoutManager layoutManager, JPanel mainPanel) {
         this.dispatchHandler = dispatchHandler;
         this.layoutManager = layoutManager;
         this.mainPanel = mainPanel;
-        this.onNewRequest = onNewRequest;
 
         // 创建组件实例（供外部引用）
         this.modeToggleButton = new SwitchButton();
@@ -148,32 +136,18 @@ public class EditorToolBar {
     }
 
     /**
-     * 构建请求管理工具栏（编辑区顶部）
-     * 包含：新建请求、清空、相似度计算、布局选择
+     * 构建报文显示编辑工具栏（编辑区顶部）
+     * 包含：相似度计算、布局选择
      */
-    public JPanel buildRequestToolBar() {
-        JPanel requestToolBar = new JPanel(new BorderLayout());
+    public JPanel buildMessageEditorToolBar() {
+        JPanel toolBar = new JPanel(new BorderLayout());
+        toolBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Separator.foreground")),
+            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+        ));
 
-        // 左侧：新建请求、清空、相似度计算
+        // 左侧：相似度计算
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
-
-        JButton newRequestButton = new JButton("新建请求");
-        newRequestButton.setToolTipText("创建新的空白请求");
-        newRequestButton.addActionListener(e -> onNewRequest.run());
-        leftPanel.add(newRequestButton);
-
-        JButton clearButton = new JButton("清空");
-        clearButton.setToolTipText("清空当前请求和响应内容");
-        clearButton.addActionListener(e -> {
-            requestPanel.clear();
-            responsePanel.clear();
-            statusPanel.clear();
-        });
-        leftPanel.add(clearButton);
-
-        leftPanel.add(new JSeparator(SwingConstants.VERTICAL));
-
-        // 相似度计算按钮
         JButton similarityCalcBtn = new JButton("相似度计算");
         similarityCalcBtn.setToolTipText("打开相似度计算工具，比较两个HTTP报文的相似度");
         similarityCalcBtn.addActionListener(e -> {
@@ -202,18 +176,18 @@ public class EditorToolBar {
         rightPanel.add(new JLabel("布局："));
         rightPanel.add(layoutComboBox);
 
-        requestToolBar.add(leftPanel, BorderLayout.WEST);
-        requestToolBar.add(rightPanel, BorderLayout.EAST);
+        toolBar.add(leftPanel, BorderLayout.WEST);
+        toolBar.add(rightPanel, BorderLayout.EAST);
 
-        return requestToolBar;
+        return toolBar;
     }
 
     /**
      * 构建编辑区控制面板（已废弃，保留以兼容）
-     * @deprecated 使用 {@link #buildGlobalToolBar()} 和 {@link #buildRequestToolBar()} 替代
+     * @deprecated 使用 {@link #buildGlobalToolBar()} 和 {@link #buildMessageEditorToolBar()} 替代
      */
     @Deprecated
     public JPanel build() {
-        return buildRequestToolBar();
+        return buildMessageEditorToolBar();
     }
 }
