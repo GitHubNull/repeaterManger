@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.DatabaseManager;
 import org.oxff.repeater.db.RequestDAO;
@@ -42,7 +43,7 @@ public class MainUI extends JPanel {
         this.dbManager = DatabaseManager.getInstance();
         boolean dbInitialized = dbManager.initialize();
         if (!dbInitialized) {
-            LogManager.getInstance().printError("[!] 无法初始化数据库，持久化功能将不可用");
+            LogManager.getInstance().printError(I18nManager.tr("log.db.init.failed"));
         }
         
         // 创建数据访问对象
@@ -80,9 +81,19 @@ public class MainUI extends JPanel {
         
         // 创建选项卡面板，添加主界面和配置面板
         JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("请求管理", mainSplitPane);
-        tabbedPane.addTab("配置", configPanel);
-        
+        tabbedPane.addTab(I18nManager.tr("tab.request"), mainSplitPane);
+        tabbedPane.addTab(I18nManager.tr("tab.config"), configPanel);
+
+        // 注册语言变更监听：刷新选项卡标题
+        I18nManager.getInstance().addLocaleChangeListener(() -> {
+            if (tabbedPane.getTabCount() >= 2) {
+                tabbedPane.setTitleAt(0, I18nManager.tr("tab.request"));
+                tabbedPane.setTitleAt(1, I18nManager.tr("tab.config"));
+                tabbedPane.revalidate();
+                tabbedPane.repaint();
+            }
+        });
+
         // 添加到主面板
         add(tabbedPane, BorderLayout.CENTER);
         
@@ -151,7 +162,7 @@ public class MainUI extends JPanel {
         // 初始化自动保存服务（但不启动它，因为这是一个临时实例）
         this.autoSaveService = new AutoSaveService();
         
-        LogManager.getInstance().printOutput("[*] 使用 Repeater Manager 面板创建临时MainUI实例，用于数据刷新");
+        LogManager.getInstance().printOutput(I18nManager.tr("log.temp.mainui"));
     }
     
     /**
@@ -178,10 +189,10 @@ public class MainUI extends JPanel {
         
         // 启动自动保存服务
         if (dbManager != null && autoSaveService != null) {
-            LogManager.getInstance().printOutput("[*] 准备启动自动保存服务...");
+            LogManager.getInstance().printOutput(I18nManager.tr("log.autosave.starting"));
             autoSaveService.start();
         } else {
-            LogManager.getInstance().printError("[!] 无法启动自动保存服务，组件未正确初始化");
+            LogManager.getInstance().printError(I18nManager.tr("log.autosave.failed"));
         }
     }
     
@@ -216,7 +227,7 @@ public class MainUI extends JPanel {
             try {
                 // 加载请求数据
                 List<Map<String, Object>> requests = requestDAO.getAllRequests();
-                LogManager.getInstance().printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
+                LogManager.getInstance().printOutput(I18nManager.tr("log.requests.loaded", requests.size()));
                 
                 for (Map<String, Object> request : requests) {
                     // 获取数据库ID（用于保持与历史记录的关联一致性）
@@ -248,10 +259,10 @@ public class MainUI extends JPanel {
                     }
                 }
                 
-                LogManager.getInstance().printOutput("[+] 请求数据加载完成");
-                
+                LogManager.getInstance().printOutput(I18nManager.tr("log.requests.load.done"));
+
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 加载持久化数据失败: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.persist.load.failed", e.getMessage()));
             }
         }).start();
     }

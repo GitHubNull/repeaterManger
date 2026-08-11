@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.RequestDispatchHandler;
 import org.oxff.repeater.db.RequestDAO;
@@ -51,44 +52,44 @@ public class HistoryContextMenu {
         int selectedCount = historyTable.getSelectedRows().length;
 
         // 加载所选项
-        JMenuItem loadItem = new JMenuItem("加载所选项");
+        JMenuItem loadItem = new JMenuItem(I18nManager.tr("history.menu.load"));
         loadItem.addActionListener(e -> historyPanel.loadSelectedHistoryItem());
 
         // 删除所选项
         String deleteText = selectedCount > 1
-            ? String.format("删除所选项 (%d条)", selectedCount)
-            : "删除所选项";
+            ? I18nManager.tr("history.menu.delete") + I18nManager.tr("history.menu.countSuffix", selectedCount)
+            : I18nManager.tr("history.menu.delete");
         JMenuItem deleteItem = new JMenuItem(deleteText);
         deleteItem.addActionListener(e -> historyPanel.deleteSelectedRecords());
 
         // 添加控制列显示的菜单项
-        JMenuItem columnControlItem = new JMenuItem("显示/隐藏列");
+        JMenuItem columnControlItem = new JMenuItem(I18nManager.tr("history.menu.columns"));
         columnControlItem.addActionListener(e -> historyPanel.showColumnControlDialog());
 
         // 添加设置颜色菜单项
-        JMenu colorMenu = new JMenu("标记颜色");
+        JMenu colorMenu = new JMenu(I18nManager.tr("history.menu.markColor"));
 
         // 常用颜色选项
-        addColorMenuItem(colorMenu, "红色", new Color(255, 160, 160));
-        addColorMenuItem(colorMenu, "橙色", new Color(255, 200, 120));
-        addColorMenuItem(colorMenu, "黄色", new Color(255, 255, 150));
-        addColorMenuItem(colorMenu, "绿色", new Color(150, 255, 150));
-        addColorMenuItem(colorMenu, "蓝色", new Color(150, 200, 255));
-        addColorMenuItem(colorMenu, "紫色", new Color(210, 150, 255));
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.color.red"), new Color(255, 160, 160));
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.color.orange"), new Color(255, 200, 120));
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.color.yellow"), new Color(255, 255, 150));
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.color.green"), new Color(150, 255, 150));
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.color.blue"), new Color(150, 200, 255));
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.color.purple"), new Color(210, 150, 255));
         colorMenu.addSeparator();
-        addColorMenuItem(colorMenu, "自定义颜色...", null);
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.customColor"), null);
         colorMenu.addSeparator();
-        addColorMenuItem(colorMenu, "清除颜色标记", null, true);
+        addColorMenuItem(colorMenu, I18nManager.tr("history.menu.clearColor"), null, true);
 
         // 编辑备注（多选时禁用）
-        JMenuItem commentItem = new JMenuItem("编辑备注");
+        JMenuItem commentItem = new JMenuItem(I18nManager.tr("history.menu.editComment"));
         commentItem.setEnabled(selectedCount <= 1);
         commentItem.addActionListener(e -> editComment());
 
         // 批量重放（选中 >= 2 条时显示）
         JMenuItem batchReplayItem = null;
         if (selectedCount >= 2) {
-            batchReplayItem = new JMenuItem(String.format("批量重放 (%d条)", selectedCount));
+            batchReplayItem = new JMenuItem(I18nManager.tr("history.menu.batchReplay") + I18nManager.tr("history.menu.countSuffix", selectedCount));
             batchReplayItem.addActionListener(e -> batchReplaySelectedItems());
         }
 
@@ -96,8 +97,8 @@ public class HistoryContextMenu {
         JMenuItem sendToPrivilegeTestItem = null;
         if (selectedCount >= 1) {
             String privText = selectedCount > 1
-                ? String.format("发送到权限测试 (%d条)", selectedCount)
-                : "发送到权限测试";
+                ? I18nManager.tr("history.menu.sendToPrivilege") + I18nManager.tr("history.menu.countSuffix", selectedCount)
+                : I18nManager.tr("history.menu.sendToPrivilege");
             sendToPrivilegeTestItem = new JMenuItem(privText);
             sendToPrivilegeTestItem.addActionListener(e -> sendSelectedToPrivilegeTest());
         }
@@ -111,14 +112,14 @@ public class HistoryContextMenu {
                 if (modelRow >= 0 && modelRow < historyRecords.size()) {
                     RequestResponseRecord record = historyRecords.get(modelRow);
                     if (record.getUserSessionName() != null && !record.getUserSessionName().isEmpty()) {
-                        comparisonItem = new JMenuItem("比对报文");
+                        comparisonItem = new JMenuItem(I18nManager.tr("history.menu.compare"));
                         comparisonItem.addActionListener(e -> showComparisonDialog(modelRow));
                     }
                 }
             }
         }
 
-        JMenuItem clearItem = new JMenuItem("清空所有历史");
+        JMenuItem clearItem = new JMenuItem(I18nManager.tr("history.menu.clearAll"));
         clearItem.addActionListener(e -> historyPanel.clearHistoryWithConfirm());
 
         popupMenu.add(loadItem);
@@ -155,7 +156,7 @@ public class HistoryContextMenu {
 
         RequestDispatchHandler dispatchHandler = historyPanel.getDispatchHandler();
         if (dispatchHandler == null) {
-            LogManager.getInstance().printError("[!] 批量重放：调度处理器未初始化");
+            LogManager.getInstance().printError(I18nManager.tr("log.batch.replay.no.handler"));
             return;
         }
 
@@ -171,7 +172,7 @@ public class HistoryContextMenu {
 
         RequestDispatchHandler dispatchHandler = historyPanel.getDispatchHandler();
         if (dispatchHandler == null) {
-            LogManager.getInstance().printError("[!] 权限测试：调度处理器未初始化");
+            LogManager.getInstance().printError(I18nManager.tr("log.privilege.no.handler"));
             return;
         }
 
@@ -184,7 +185,7 @@ public class HistoryContextMenu {
         }
 
         if (requestIds.isEmpty()) {
-            LogManager.getInstance().printError("[!] 权限测试：选中的记录没有有效的请求ID");
+            LogManager.getInstance().printError(I18nManager.tr("log.privilege.no.request.id"));
             return;
         }
 
@@ -227,7 +228,7 @@ public class HistoryContextMenu {
                 finalColor = null;
             } else if (color == null) {
                 Color selectedColor = JColorChooser.showDialog(
-                    historyPanel, "选择标记颜色", Color.YELLOW);
+                    historyPanel, I18nManager.tr("history.menu.color.choose"), Color.YELLOW);
                 if (selectedColor == null) return;
                 finalColor = selectedColor;
             } else {
@@ -247,7 +248,7 @@ public class HistoryContextMenu {
                         try {
                             historyUpdateDAO.updateHistoryColor(record.getId(), finalColor);
                         } catch (Exception ex) {
-                            LogManager.getInstance().printError("[!] 更新历史记录颜色失败: " + ex.getMessage());
+                            LogManager.getInstance().printError(I18nManager.tr("log.history.color.failed", ex.getMessage()));
                         }
                     }
                 }
@@ -303,8 +304,8 @@ public class HistoryContextMenu {
 
             String newComment = (String) JOptionPane.showInputDialog(
                 historyPanel,
-                "请输入记录备注:",
-                "编辑备注",
+                I18nManager.tr("history.menu.comment.prompt"),
+                I18nManager.tr("history.menu.comment.title"),
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 null,
@@ -341,7 +342,7 @@ public class HistoryContextMenu {
         int requestId = sessionRecord.getRequestId();
 
         if (requestId <= 0) {
-            JOptionPane.showMessageDialog(historyPanel, "选中记录没有有效的请求ID，无法比对", "无法比对", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(historyPanel, I18nManager.tr("history.menu.compare.noId"), I18nManager.tr("history.menu.compare.cannot"), JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -358,7 +359,7 @@ public class HistoryContextMenu {
 
             if (baselineRecord == null) {
                 SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(historyPanel, "未找到原始请求记录，无法比对", "无法比对", JOptionPane.WARNING_MESSAGE));
+                    JOptionPane.showMessageDialog(historyPanel, I18nManager.tr("history.menu.compare.noBaseline"), I18nManager.tr("history.menu.compare.cannot"), JOptionPane.WARNING_MESSAGE));
                 return;
             }
 
@@ -415,7 +416,7 @@ public class HistoryContextMenu {
 
             return baseline;
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 从requests表构造基线记录失败: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("log.baseline.build.failed", e.getMessage()));
             return null;
         }
     }

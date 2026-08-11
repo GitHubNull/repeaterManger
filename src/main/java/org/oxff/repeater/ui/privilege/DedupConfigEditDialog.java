@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.model.DedupConfig;
 import org.oxff.repeater.privilege.model.DedupKeepPolicy;
 import org.oxff.repeater.privilege.model.DedupStrategy;
@@ -38,7 +39,7 @@ public class DedupConfigEditDialog extends JDialog {
 
         // 策略
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("去重策略:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("dedup.dialog.strategy")), gbc);
         strategyCombo = new JComboBox<>(DedupStrategy.values());
         strategyCombo.setRenderer(new DefaultListCellRenderer() {
             @Override
@@ -58,16 +59,16 @@ public class DedupConfigEditDialog extends JDialog {
 
         // 表达式
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("表达式:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("dedup.dialog.expression")), gbc);
         expressionField = new JTextField(20);
-        expressionField.setToolTipText("当策略为JSON/XML/表单/URL参数时，输入字段名或路径");
+        expressionField.setToolTipText(I18nManager.tr("dedup.dialog.expression.tooltip"));
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1.0;
         formPanel.add(expressionField, gbc);
         row++;
 
         // 保留策略
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("保留策略:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("dedup.dialog.keep")), gbc);
         keepPolicyCombo = new JComboBox<>(DedupKeepPolicy.values());
         keepPolicyCombo.setRenderer(new DefaultListCellRenderer() {
             @Override
@@ -86,16 +87,16 @@ public class DedupConfigEditDialog extends JDialog {
 
         // 优先级
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("优先级:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("dedup.dialog.priority")), gbc);
         prioritySpinner = new JSpinner(new SpinnerNumberModel(10, 1, 100, 1));
-        prioritySpinner.setToolTipText("数字越小优先级越高，1为最高优先级");
+        prioritySpinner.setToolTipText(I18nManager.tr("dedup.dialog.priority.tooltip"));
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1.0;
         formPanel.add(prioritySpinner, gbc);
         row++;
 
         // 启用
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("启用:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("dedup.dialog.enabled")), gbc);
         enabledCheckbox = new JCheckBox();
         enabledCheckbox.setSelected(true);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1.0;
@@ -104,10 +105,10 @@ public class DedupConfigEditDialog extends JDialog {
 
         // 存储类型
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("存储类型:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("dedup.dialog.storage")), gbc);
         JPanel storagePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        globalRadio = new JRadioButton("全局持久化", true);
-        sessionRadio = new JRadioButton("会话级（内存）");
+        globalRadio = new JRadioButton(I18nManager.tr("dedup.dialog.global"), true);
+        sessionRadio = new JRadioButton(I18nManager.tr("dedup.dialog.session"));
         ButtonGroup storageGroup = new ButtonGroup();
         storageGroup.add(globalRadio);
         storageGroup.add(sessionRadio);
@@ -119,7 +120,7 @@ public class DedupConfigEditDialog extends JDialog {
 
         // 说明标签
         gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2;
-        JLabel tipLabel = new JLabel("提示：全局持久化配置在下次加载插件时自动生效；会话级配置仅在当前会话有效");
+        JLabel tipLabel = new JLabel(I18nManager.tr("dedup.dialog.hint"));
         tipLabel.setFont(new Font("SansSerif", Font.ITALIC, 11));
         formPanel.add(tipLabel, gbc);
 
@@ -143,19 +144,20 @@ public class DedupConfigEditDialog extends JDialog {
 
         // 按钮面板
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton okButton = new JButton("确定");
+        JButton okButton = new JButton(I18nManager.tr("common.ok"));
         okButton.addActionListener(e -> {
             // 验证：需要表达式的策略不能为空
             DedupStrategy selectedStrategy = (DedupStrategy) strategyCombo.getSelectedItem();
             if (needsExpression(selectedStrategy) && expressionField.getText().trim().isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                        "当前去重策略需要填写表达式/字段名", "验证失败", JOptionPane.WARNING_MESSAGE);
+                        I18nManager.tr("dedup.dialog.expression.required"),
+                        I18nManager.tr("dedup.dialog.validate.failed"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             confirmed = true;
             dispose();
         });
-        JButton cancelButton = new JButton("取消");
+        JButton cancelButton = new JButton(I18nManager.tr("common.cancel"));
         cancelButton.addActionListener(e -> dispose());
 
         buttonPanel.add(okButton);

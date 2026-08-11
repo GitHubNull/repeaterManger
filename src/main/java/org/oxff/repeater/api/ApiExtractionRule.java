@@ -1,5 +1,7 @@
 package org.oxff.repeater.api;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 /**
  * API提取规则模型
  */
@@ -151,10 +153,10 @@ public class ApiExtractionRule {
      * 获取存储类型显示文本
      */
     public String getStorageTypeDisplay() {
-        if (persistent && global) return "项目+全局";
-        if (persistent) return "项目";
-        if (global) return "全局";
-        return "临时";
+        if (persistent && global) return I18nManager.tr("api.rule.storage.projectGlobal");
+        if (persistent) return I18nManager.tr("api.rule.storage.project");
+        if (global) return I18nManager.tr("api.rule.storage.global");
+        return I18nManager.tr("api.rule.storage.temp");
     }
 
     @Override

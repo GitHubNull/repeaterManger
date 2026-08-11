@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -68,9 +70,9 @@ public class SearchBar extends JPanel {
         setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
 
         // 搜索模式按钮
-        keywordModeButton = new JToggleButton("关键字");
+        keywordModeButton = new JToggleButton(I18nManager.tr("search.bar.keyword"));
         keywordModeButton.setSelected(true);
-        regexModeButton = new JToggleButton("正则");
+        regexModeButton = new JToggleButton(I18nManager.tr("search.bar.regex"));
         ButtonGroup searchModeGroup = new ButtonGroup();
         searchModeGroup.add(keywordModeButton);
         searchModeGroup.add(regexModeButton);
@@ -80,20 +82,20 @@ public class SearchBar extends JPanel {
 
         // 搜索输入框
         searchField = new JTextField(18);
-        searchField.setToolTipText("输入关键字或正则表达式搜索");
+        searchField.setToolTipText(I18nManager.tr("search.bar.tooltip"));
 
         // 大小写敏感
         caseSensitiveCheckbox = new JCheckBox("Aa", false);
-        caseSensitiveCheckbox.setToolTipText("区分大小写");
+        caseSensitiveCheckbox.setToolTipText(I18nManager.tr("search.bar.caseSensitive"));
         caseSensitiveCheckbox.addActionListener(e -> performSearch());
 
         // 上一个/下一个
         prevMatchButton = new JButton("▲");
-        prevMatchButton.setToolTipText("上一个匹配");
+        prevMatchButton.setToolTipText(I18nManager.tr("search.bar.prev"));
         prevMatchButton.addActionListener(e -> navigateMatch(-1));
 
         nextMatchButton = new JButton("▼");
-        nextMatchButton.setToolTipText("下一个匹配");
+        nextMatchButton.setToolTipText(I18nManager.tr("search.bar.next"));
         nextMatchButton.addActionListener(e -> navigateMatch(1));
 
         // 匹配计数
@@ -102,7 +104,7 @@ public class SearchBar extends JPanel {
 
         // 清除按钮
         clearButton = new JButton("✕");
-        clearButton.setToolTipText("清除搜索");
+        clearButton.setToolTipText(I18nManager.tr("search.bar.clear"));
         clearButton.addActionListener(e -> clearSearch());
 
         // 组装
@@ -154,6 +156,24 @@ public class SearchBar extends JPanel {
             KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
             WHEN_FOCUSED
         );
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新文本
+     */
+    private void refreshTexts() {
+        keywordModeButton.setText(I18nManager.tr("search.bar.keyword"));
+        regexModeButton.setText(I18nManager.tr("search.bar.regex"));
+        searchField.setToolTipText(I18nManager.tr("search.bar.tooltip"));
+        caseSensitiveCheckbox.setToolTipText(I18nManager.tr("search.bar.caseSensitive"));
+        prevMatchButton.setToolTipText(I18nManager.tr("search.bar.prev"));
+        nextMatchButton.setToolTipText(I18nManager.tr("search.bar.next"));
+        clearButton.setToolTipText(I18nManager.tr("search.bar.clear"));
+        revalidate();
+        repaint();
     }
 
     // ==================== 搜索核心逻辑 ====================

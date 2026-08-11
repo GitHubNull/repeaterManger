@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
@@ -35,7 +37,7 @@ public class ColumnControlDialog extends JDialog {
      * @param historyTableModel 表格模型
      */
     public ColumnControlDialog(Component parentComponent, JTable historyTable, DefaultTableModel historyTableModel) {
-        super((Frame) SwingUtilities.getWindowAncestor(parentComponent), "列显示控制", true);
+        super((Frame) SwingUtilities.getWindowAncestor(parentComponent), I18nManager.tr("column.control.title"), true);
         this.parentComponent = parentComponent;
         this.historyTable = historyTable;
         this.historyTableModel = historyTableModel;
@@ -107,9 +109,9 @@ public class ColumnControlDialog extends JDialog {
      */
     private JPanel createButtonPanel() {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okButton = new JButton("确定");
-        JButton cancelButton = new JButton("取消");
-        JButton resetButton = new JButton("重置为默认");
+        JButton okButton = new JButton(I18nManager.tr("common.ok"));
+        JButton cancelButton = new JButton(I18nManager.tr("common.cancel"));
+        JButton resetButton = new JButton(I18nManager.tr("column.control.reset"));
 
         okButton.addActionListener(e -> {
             TableColumnModel columnModel = historyTable.getColumnModel();

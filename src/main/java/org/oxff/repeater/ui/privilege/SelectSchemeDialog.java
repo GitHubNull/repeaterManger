@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.model.Scheme;
 
 import javax.swing.*;
@@ -20,7 +21,7 @@ public class SelectSchemeDialog extends JDialog {
     private final DefaultListModel<Scheme> listModel;
 
     public SelectSchemeDialog(Frame owner, List<Scheme> allSchemes, String message) {
-        super(owner, "选择方案", true);
+        super(owner, I18nManager.tr("select.scheme.title"), true);
 
         setSize(450, 350);
         setLocationRelativeTo(owner);
@@ -54,19 +55,20 @@ public class SelectSchemeDialog extends JDialog {
         }
 
         JScrollPane scrollPane = new JScrollPane(schemeList);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("可用方案"));
+        scrollPane.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("select.scheme.available")));
         mainPanel.add(scrollPane, BorderLayout.CENTER);
 
         // 底部按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okBtn = new JButton("确定");
-        JButton cancelBtn = new JButton("取消");
+        JButton okBtn = new JButton(I18nManager.tr("common.ok"));
+        JButton cancelBtn = new JButton(I18nManager.tr("common.cancel"));
 
         okBtn.addActionListener(e -> {
             selectedScheme = schemeList.getSelectedValue();
             if (selectedScheme == null) {
                 JOptionPane.showMessageDialog(this,
-                        "请选择一个方案", "提示", JOptionPane.WARNING_MESSAGE);
+                        I18nManager.tr("select.scheme.hint"),
+                        I18nManager.tr("common.hint"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             confirmed = true;
@@ -99,9 +101,12 @@ public class SelectSchemeDialog extends JDialog {
                                                       int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             if (value instanceof Scheme scheme) {
-                String status = scheme.isEnabled() ? "[已启用]" : "[未启用]";
+                String status = scheme.isEnabled()
+                        ? I18nManager.tr("select.scheme.enabled")
+                        : I18nManager.tr("select.scheme.disabled");
                 int locCount = scheme.getFieldCount();
-                setText(String.format("%s %s (%d个字段)", scheme.getName(), status, locCount));
+                setText(String.format("%s %s (%s)", scheme.getName(), status,
+                        I18nManager.tr("select.scheme.fieldCount", locCount)));
                 if (!scheme.isEnabled()) {
                     setForeground(isSelected ? list.getSelectionForeground() : Color.GRAY);
                 }

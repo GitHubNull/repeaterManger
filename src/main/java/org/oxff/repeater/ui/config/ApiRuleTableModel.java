@@ -2,6 +2,7 @@ package org.oxff.repeater.ui.config;
 
 import org.oxff.repeater.api.ApiExtractionRule;
 import org.oxff.repeater.api.ApiRuleManager;
+import org.oxff.repeater.i18n.I18nManager;
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +13,11 @@ import java.util.List;
 public class ApiRuleTableModel extends AbstractTableModel {
     private static final long serialVersionUID = 1L;
 
-    private final String[] COLUMN_NAMES = {"优先级", "名称", "来源", "方法", "表达式", "启用", "备注", "存储类型"};
+    private static final String[] COLUMN_KEYS = {
+        "api.rule.col.priority", "api.rule.col.name", "api.rule.col.source",
+        "api.rule.col.method", "api.rule.col.expression", "api.rule.col.enabled",
+        "api.rule.col.remark", "api.rule.col.storage"
+    };
     private List<ApiExtractionRule> rules = new ArrayList<>();
     private Runnable onRuleChanged;
 
@@ -42,12 +47,19 @@ public class ApiRuleTableModel extends AbstractTableModel {
 
     @Override
     public int getColumnCount() {
-        return COLUMN_NAMES.length;
+        return COLUMN_KEYS.length;
     }
 
     @Override
     public String getColumnName(int column) {
-        return COLUMN_NAMES[column];
+        return I18nManager.tr(COLUMN_KEYS[column]);
+    }
+
+    /**
+     * 语言切换时刷新表头
+     */
+    public void refreshColumnNames() {
+        fireTableStructureChanged();
     }
 
     @Override

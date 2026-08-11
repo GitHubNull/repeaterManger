@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.model.UserInfo;
 import org.oxff.repeater.privilege.model.UserSession;
 
@@ -16,7 +17,7 @@ import java.io.File;
 public class UserInfoDetailDialog extends JDialog {
 
     public UserInfoDetailDialog(Frame owner, UserSession session, UserInfo userInfo) {
-        super(owner, "用户信息 - " + session.getName(), true);
+        super(owner, I18nManager.tr("userinfo.title") + " " + session.getName(), true);
         setSize(550, 500);
         setLocationRelativeTo(owner);
         setResizable(true);
@@ -31,21 +32,24 @@ public class UserInfoDetailDialog extends JDialog {
         int row = 0;
 
         // 会话名称
-        addInfoRow(mainPanel, gbc, row++, "会话名称:", session.getName());
+        addInfoRow(mainPanel, gbc, row++, I18nManager.tr("userinfo.sessionName"), session.getName());
 
         // 角色 / 用户名 / 匿名
         if (userInfo != null) {
-            addInfoRow(mainPanel, gbc, row++, "角色:", 
-                    userInfo.getRole() != null && !userInfo.getRole().isEmpty() ? userInfo.getRole() : "（未设置）");
-            addInfoRow(mainPanel, gbc, row++, "用户名:",
-                    userInfo.getUsername() != null && !userInfo.getUsername().isEmpty() ? userInfo.getUsername() : "（未设置）");
-            addInfoRow(mainPanel, gbc, row++, "匿名:",
-                    userInfo.isAnonymous() ? "是（匿名用户）" : "否");
+            addInfoRow(mainPanel, gbc, row++, I18nManager.tr("userinfo.role"),
+                    userInfo.getRole() != null && !userInfo.getRole().isEmpty()
+                            ? userInfo.getRole() : I18nManager.tr("userinfo.notSet"));
+            addInfoRow(mainPanel, gbc, row++, I18nManager.tr("userinfo.username"),
+                    userInfo.getUsername() != null && !userInfo.getUsername().isEmpty()
+                            ? userInfo.getUsername() : I18nManager.tr("userinfo.notSet"));
+            addInfoRow(mainPanel, gbc, row++, I18nManager.tr("userinfo.anonymous"),
+                    userInfo.isAnonymous()
+                            ? I18nManager.tr("userinfo.anonymous.yes") : I18nManager.tr("userinfo.anonymous.no"));
 
             // 截图缩略图
             if (userInfo.getScreenshotPaths() != null && !userInfo.getScreenshotPaths().isEmpty()) {
                 gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 1; gbc.weightx = 0;
-                mainPanel.add(new JLabel("截图:"), gbc);
+                mainPanel.add(new JLabel(I18nManager.tr("userinfo.screenshots")), gbc);
 
                 JPanel thumbnailPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
                 for (String path : userInfo.getScreenshotPaths()) {
@@ -60,7 +64,7 @@ public class UserInfoDetailDialog extends JDialog {
                 row++;
             }
         } else {
-            JLabel noInfoLabel = new JLabel("（暂无用户信息）");
+            JLabel noInfoLabel = new JLabel(I18nManager.tr("userinfo.empty"));
             noInfoLabel.setForeground(Color.GRAY);
             gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
             mainPanel.add(noInfoLabel, gbc);
@@ -70,7 +74,7 @@ public class UserInfoDetailDialog extends JDialog {
 
         // 关闭按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton closeBtn = new JButton("关闭");
+        JButton closeBtn = new JButton(I18nManager.tr("userinfo.close"));
         closeBtn.addActionListener(e -> dispose());
         buttonPanel.add(closeBtn);
 
@@ -96,7 +100,7 @@ public class UserInfoDetailDialog extends JDialog {
         try {
             File file = new File(imagePath);
             if (!file.exists()) {
-                JLabel label = new JLabel("（文件不存在）");
+                JLabel label = new JLabel(I18nManager.tr("userinfo.fileNotExist"));
                 label.setPreferredSize(new Dimension(100, 75));
                 label.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
                 return label;
@@ -121,7 +125,7 @@ public class UserInfoDetailDialog extends JDialog {
 
             return thumbLabel;
         } catch (Exception e) {
-            JLabel label = new JLabel("（加载失败）");
+            JLabel label = new JLabel(I18nManager.tr("userinfo.loadFailed"));
             label.setPreferredSize(new Dimension(100, 75));
             label.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
             return label;
@@ -169,7 +173,8 @@ public class UserInfoDetailDialog extends JDialog {
             fullscreenDialog.setVisible(true);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                    "无法加载图片: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("userinfo.loadError", e.getMessage()),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 }

@@ -94,6 +94,14 @@ public class RepeaterManagerExtension implements BurpExtension {
                 logManager.error("[!] 全局去重配置加载失败: " + e.getMessage());
             }
 
+            // 阶段4.8：初始化国际化（加载语言偏好，必须在创建任何UI之前）
+            try {
+                org.oxff.repeater.i18n.I18nManager.getInstance().initialize();
+                logManager.info("[+] 国际化初始化完成");
+            } catch (Exception e) {
+                logManager.error("[!] 国际化初始化失败: " + e.getMessage());
+            }
+
             // 创建UI和功能组件
             RepeaterManagerUI repeaterUI = new RepeaterManagerUI(api);
 

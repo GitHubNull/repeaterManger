@@ -5,6 +5,7 @@ import org.commonmark.ext.gfm.tables.TablesExtension;
 import org.commonmark.node.Node;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
+import org.oxff.repeater.i18n.I18nManager;
 
 import javax.swing.*;
 import javax.swing.text.html.HTMLEditorKit;
@@ -19,6 +20,7 @@ import java.util.List;
  * 使用教程面板 - 支持中英文切换和快速入门/详细教程切换
  * <p>
  * 使用 CommonMark 库将 Markdown 转换为 HTML，支持 GFM 表格扩展。
+ * 面板内语言切换与全局语言切换联动。
  */
 public class UsageTutorialPanel extends JPanel {
 
@@ -63,11 +65,18 @@ public class UsageTutorialPanel extends JPanel {
     private JEditorPane editorPane;
     private JComboBox<String> languageCombo;
     private JComboBox<String> docTypeCombo;
+    private JLabel languageLabel;
+    private JLabel docTypeLabel;
 
     public UsageTutorialPanel() {
         super(new BorderLayout());
+        // 初始化文档语言与全局语言一致
+        currentLanguage = I18nManager.getInstance().isEnglish() ? Language.EN : Language.ZH;
         initUI();
         loadContent();
+
+        // 注册全局语言变更监听：同步切换文档语言
+        I18nManager.getInstance().addLocaleChangeListener(this::onGlobalLanguageChanged);
     }
 
     private void initUI() {
@@ -75,22 +84,25 @@ public class UsageTutorialPanel extends JPanel {
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         controlPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        controlPanel.add(new JLabel("语言:"));
+        languageLabel = new JLabel(I18nManager.tr("tutorial.language"));
+        controlPanel.add(languageLabel);
+        // 语言名下拉项使用固有名称，不随界面语言变化
         languageCombo = new JComboBox<>(new String[]{"中文", "English"});
+        languageCombo.setSelectedIndex(currentLanguage == Language.EN ? 1 : 0);
         languageCombo.addActionListener(e -> {
-            String selected = (String) languageCombo.getSelectedItem();
-            currentLanguage = "English".equals(selected) ? Language.EN : Language.ZH;
+            currentLanguage = languageCombo.getSelectedIndex() == 1 ? Language.EN : Language.ZH;
             loadContent();
         });
         controlPanel.add(languageCombo);
 
         controlPanel.add(Box.createHorizontalStrut(20));
 
-        controlPanel.add(new JLabel("文档:"));
-        docTypeCombo = new JComboBox<>(new String[]{"快速入门", "详细教程"});
+        docTypeLabel = new JLabel(I18nManager.tr("tutorial.doc"));
+        controlPanel.add(docTypeLabel);
+        docTypeCombo = new JComboBox<>(buildDocTypeItems());
         docTypeCombo.addActionListener(e -> {
-            String selected = (String) docTypeCombo.getSelectedItem();
-            currentDocType = "详细教程".equals(selected) ? DocType.DETAILED : DocType.QUICK;
+            // 索引1=详细教程，与显示文本解耦
+            currentDocType = docTypeCombo.getSelectedIndex() == 1 ? DocType.DETAILED : DocType.QUICK;
             loadContent();
         });
         controlPanel.add(docTypeCombo);
@@ -117,6 +129,43 @@ public class UsageTutorialPanel extends JPanel {
         add(scrollPane, BorderLayout.CENTER);
     }
 
+    /**
+     * 构建文档类型下拉项（从资源读取当前语言文本）
+     */
+    private static String[] buildDocTypeItems() {
+        return new String[]{
+            I18nManager.tr("tutorial.doc.quick"),
+            I18nManager.tr("tutorial.doc.detailed")
+        };
+    }
+
+    /**
+     * 全局语言变更时同步切换文档语言
+     */
+    private void onGlobalLanguageChanged() {
+        // 刷新面板标签文本
+        languageLabel.setText(I18nManager.tr("tutorial.language"));
+        docTypeLabel.setText(I18nManager.tr("tutorial.doc"));
+
+        // 刷新文档类型下拉项（保持选中索引）
+        int docIndex = docTypeCombo.getSelectedIndex();
+        docTypeCombo.setModel(new DefaultComboBoxModel<>(buildDocTypeItems()));
+        if (docIndex >= 0 && docIndex < docTypeCombo.getItemCount()) {
+            docTypeCombo.setSelectedIndex(docIndex);
+        }
+
+        // 同步文档语言与全局语言
+        Language targetLanguage = I18nManager.getInstance().isEnglish() ? Language.EN : Language.ZH;
+        if (currentLanguage != targetLanguage) {
+            currentLanguage = targetLanguage;
+            languageCombo.setSelectedIndex(currentLanguage == Language.EN ? 1 : 0);
+            loadContent();
+        }
+
+        revalidate();
+        repaint();
+    }
+
     private void loadContent() {
         String resourcePath = String.format("/doc/tutorials/usage_%s_%s.md",
                 currentDocType == DocType.QUICK ? "quick" : "detailed",
@@ -125,7 +174,7 @@ public class UsageTutorialPanel extends JPanel {
         try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
             if (is == null) {
                 editorPane.setText("<html><head><style>" + CSS + "</style></head><body>"
-                        + "<p>文档加载失败: " + escapeHtml(resourcePath) + "</p></body></html>");
+                        + "<p>" + I18nManager.tr("tutorial.load.failed", escapeHtml(resourcePath)) + "</p></body></html>");
                 return;
             }
             String markdown = new String(is.readAllBytes(), StandardCharsets.UTF_8);
@@ -135,7 +184,7 @@ public class UsageTutorialPanel extends JPanel {
             editorPane.setCaretPosition(0);
         } catch (IOException e) {
             editorPane.setText("<html><head><style>" + CSS + "</style></head><body>"
-                    + "<p>读取文档出错: " + escapeHtml(e.getMessage()) + "</p></body></html>");
+                    + "<p>" + I18nManager.tr("tutorial.read.error", escapeHtml(e.getMessage())) + "</p></body></html>");
         }
     }
 

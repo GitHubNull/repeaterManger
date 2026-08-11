@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.editor;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
@@ -20,6 +21,11 @@ public class BurpRequestPanel extends JPanel {
     private final JButton sendButton;
     private final JSpinner timeoutSpinner;
 
+    // 需要在语言切换时刷新的组件
+    private JButton newRequestButton;
+    private JButton clearButton;
+    private JLabel timeoutLabel;
+
     // 回调函数
     private Runnable onNewRequest;
     private Runnable onClear;
@@ -39,8 +45,8 @@ public class BurpRequestPanel extends JPanel {
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
         // 新建请求按钮
-        JButton newRequestButton = new JButton("新建请求");
-        newRequestButton.setToolTipText("创建新的空白请求");
+        newRequestButton = new JButton(I18nManager.tr("burp.request.new"));
+        newRequestButton.setToolTipText(I18nManager.tr("burp.request.new.tooltip"));
         newRequestButton.addActionListener(e -> {
             if (onNewRequest != null) {
                 onNewRequest.run();
@@ -49,8 +55,8 @@ public class BurpRequestPanel extends JPanel {
         controlPanel.add(newRequestButton);
 
         // 清空按钮
-        JButton clearButton = new JButton("清空");
-        clearButton.setToolTipText("清空当前请求和响应内容");
+        clearButton = new JButton(I18nManager.tr("burp.request.clear"));
+        clearButton.setToolTipText(I18nManager.tr("burp.request.clear.tooltip"));
         clearButton.addActionListener(e -> {
             if (onClear != null) {
                 onClear.run();
@@ -62,15 +68,15 @@ public class BurpRequestPanel extends JPanel {
         controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
         // 超时设置
-        JLabel timeoutLabel = new JLabel("请求超时(秒):");
+        timeoutLabel = new JLabel(I18nManager.tr("burp.request.timeout"));
         timeoutSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 60, 1));
         timeoutSpinner.setPreferredSize(new Dimension(60, 25));
         controlPanel.add(timeoutLabel);
         controlPanel.add(timeoutSpinner);
 
         // 发送按钮
-        sendButton = new JButton("发送请求");
-        sendButton.setToolTipText("发送请求 (Ctrl+Enter)");
+        sendButton = new JButton(I18nManager.tr("burp.request.send"));
+        sendButton.setToolTipText(I18nManager.tr("burp.request.send.tooltip"));
         controlPanel.add(sendButton);
 
         // 添加到面板
@@ -79,6 +85,24 @@ public class BurpRequestPanel extends JPanel {
 
         // 添加快捷键支持
         registerKeyboardShortcuts();
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新文本
+     */
+    private void refreshTexts() {
+        newRequestButton.setText(I18nManager.tr("burp.request.new"));
+        newRequestButton.setToolTipText(I18nManager.tr("burp.request.new.tooltip"));
+        clearButton.setText(I18nManager.tr("burp.request.clear"));
+        clearButton.setToolTipText(I18nManager.tr("burp.request.clear.tooltip"));
+        timeoutLabel.setText(I18nManager.tr("burp.request.timeout"));
+        sendButton.setText(I18nManager.tr("burp.request.send"));
+        sendButton.setToolTipText(I18nManager.tr("burp.request.send.tooltip"));
+        revalidate();
+        repaint();
     }
 
     /**
@@ -134,23 +158,23 @@ public class BurpRequestPanel extends JPanel {
      */
     public void setRequest(byte[] request) {
         if (request == null) {
-            LogManager.getInstance().printError("[!] 设置请求失败：请求为空");
+            LogManager.getInstance().printError(I18nManager.tr("burp.request.set.null"));
             return;
         }
 
         try {
             byte[] fixedRequest = validateAndFixRequest(request);
             requestEditor.setRequest(HttpRequest.httpRequest(ByteArray.byteArray(fixedRequest)));
-            LogManager.getInstance().printOutput("[*] 已加载请求数据到Burp编辑器，大小: " + request.length + " 字节");
+            LogManager.getInstance().printOutput(I18nManager.tr("burp.request.loaded", request.length));
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 设置请求到Burp编辑器失败: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("burp.request.set.failed", e.getMessage()));
 
             try {
                 String basicRequest = createBasicHttpRequest(request);
                 requestEditor.setRequest(HttpRequest.httpRequest(ByteArray.byteArray(basicRequest.getBytes())));
-                LogManager.getInstance().printOutput("[*] 已创建基本HTTP请求作为替代");
+                LogManager.getInstance().printOutput(I18nManager.tr("burp.request.basic.created"));
             } catch (Exception ex) {
-                LogManager.getInstance().printError("[!] 无法创建替代请求: " + ex.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("burp.request.basic.failed", ex.getMessage()));
             }
         }
     }
@@ -176,7 +200,7 @@ public class BurpRequestPanel extends JPanel {
             return request;
         }
 
-        LogManager.getInstance().printOutput("[*] 请求数据格式无效，尝试修复...");
+        LogManager.getInstance().printOutput(I18nManager.tr("burp.request.fixing"));
 
         if (!requestStr.contains("HTTP/1.") && !requestStr.contains("Host:")) {
             String method = "POST";
@@ -188,7 +212,7 @@ public class BurpRequestPanel extends JPanel {
             fixedRequest.append("\r\n");
             fixedRequest.append(requestStr);
 
-            LogManager.getInstance().printOutput("[+] 已添加基本HTTP头到请求数据");
+            LogManager.getInstance().printOutput(I18nManager.tr("burp.request.header.added"));
             return fixedRequest.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
         }
 
@@ -213,7 +237,7 @@ public class BurpRequestPanel extends JPanel {
             System.arraycopy(header, 0, fixed, 0, header.length);
             System.arraycopy(request, 0, fixed, header.length, request.length);
 
-            LogManager.getInstance().printOutput("[+] 已创建包含二进制数据的HTTP请求");
+            LogManager.getInstance().printOutput(I18nManager.tr("burp.request.binary.created"));
             return fixed;
         }
 
@@ -232,7 +256,7 @@ public class BurpRequestPanel extends JPanel {
         sb.append("\r\n");
 
         if (originalData != null && originalData.length > 0) {
-            sb.append("<!-- 原始数据长度: ").append(originalData.length).append(" 字节 -->\r\n");
+            sb.append(I18nManager.tr("burp.request.originalLength", originalData.length)).append("\r\n");
         }
 
         return sb.toString();

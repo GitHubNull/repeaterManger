@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.responses.HttpResponse;
@@ -15,21 +16,27 @@ import java.io.IOException;
  */
 public class ResponsePanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    
+
     // 基本组件
     private final JTextArea responseTextArea;
-    
+
     // 响应信息字段
     private JTextField statusCodeField;     // 状态码
     private JTextField contentTypeField;    // 内容类型
     private JTextField responseLengthField; // 响应长度
-    
+
+    // 需要在语言切换时刷新的组件
+    private JLabel statusCodeLabel;
+    private JLabel contentTypeLabel;
+    private JLabel responseLengthLabel;
+    private JScrollPane responseScrollPane;
+
     /**
      * 创建响应面板
      */
     public ResponsePanel() {
         super(new BorderLayout());
-        
+
         // 创建响应文本区域
         responseTextArea = new JTextArea();
         responseTextArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
@@ -37,36 +44,39 @@ public class ResponsePanel extends JPanel {
         responseTextArea.setTabSize(4);
         responseTextArea.setLineWrap(true);
         responseTextArea.setWrapStyleWord(true);
-        
+
         // 创建右键菜单
         JPopupMenu responsePopupMenu = createContextMenu();
         responseTextArea.setComponentPopupMenu(responsePopupMenu);
-        
+
         // 创建响应信息面板
         JPanel responseInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        
+
         // 初始化响应信息字段
         statusCodeField = new JTextField(4);
         statusCodeField.setEditable(false);
-        
+
         contentTypeField = new JTextField(20);
         contentTypeField.setEditable(false);
-        
+
         responseLengthField = new JTextField(8);
         responseLengthField.setEditable(false);
-        
+
         // 添加字段到面板
-        responseInfoPanel.add(new JLabel("状态码:"));
+        statusCodeLabel = new JLabel(I18nManager.tr("response.panel.status"));
+        responseInfoPanel.add(statusCodeLabel);
         responseInfoPanel.add(statusCodeField);
-        responseInfoPanel.add(new JLabel("内容类型:"));
+        contentTypeLabel = new JLabel(I18nManager.tr("response.panel.contentType"));
+        responseInfoPanel.add(contentTypeLabel);
         responseInfoPanel.add(contentTypeField);
-        responseInfoPanel.add(new JLabel("响应长度:"));
+        responseLengthLabel = new JLabel(I18nManager.tr("response.panel.length"));
+        responseInfoPanel.add(responseLengthLabel);
         responseInfoPanel.add(responseLengthField);
-        
+
         // 创建滚动面板
-        JScrollPane responseScrollPane = new JScrollPane(responseTextArea);
-        responseScrollPane.setBorder(BorderFactory.createTitledBorder("响应"));
-        
+        responseScrollPane = new JScrollPane(responseTextArea);
+        responseScrollPane.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("response.panel.title")));
+
         // 添加行号
         TextLineNumber responseLineNumber = new TextLineNumber(responseTextArea);
         responseLineNumber.setCurrentLineForeground(new Color(44, 121, 217)); // 蓝色高亮当前行
@@ -74,69 +84,88 @@ public class ResponsePanel extends JPanel {
         responseLineNumber.setBackground(new Color(245, 245, 245)); // 浅灰色背景
         responseLineNumber.setFont(new Font("Monospaced", Font.PLAIN, 12));
         responseScrollPane.setRowHeaderView(responseLineNumber);
-        
+
         // 添加到主面板
         add(responseInfoPanel, BorderLayout.NORTH);
         add(responseScrollPane, BorderLayout.CENTER);
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
     }
-    
+
+    /**
+     * 语言变更时刷新文本
+     */
+    private void refreshTexts() {
+        statusCodeLabel.setText(I18nManager.tr("response.panel.status"));
+        contentTypeLabel.setText(I18nManager.tr("response.panel.contentType"));
+        responseLengthLabel.setText(I18nManager.tr("response.panel.length"));
+        responseScrollPane.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("response.panel.title")));
+        revalidate();
+        repaint();
+    }
+
     /**
      * 创建右键菜单
      */
     private JPopupMenu createContextMenu() {
         JPopupMenu popupMenu = new JPopupMenu();
-        
-        JMenuItem copyItem = new JMenuItem("复制");
+
+        JMenuItem copyItem = new JMenuItem(I18nManager.tr("response.panel.menu.copy"));
         copyItem.addActionListener(e -> responseTextArea.copy());
-        
-        JMenuItem selectAllItem = new JMenuItem("全选");
+
+        JMenuItem selectAllItem = new JMenuItem(I18nManager.tr("response.panel.menu.selectAll"));
         selectAllItem.addActionListener(e -> responseTextArea.selectAll());
-        
-        JMenuItem clearItem = new JMenuItem("清空");
+
+        JMenuItem clearItem = new JMenuItem(I18nManager.tr("response.panel.menu.clear"));
         clearItem.addActionListener(e -> responseTextArea.setText(""));
-        
-        JMenuItem saveItem = new JMenuItem("另存为文件");
+
+        JMenuItem saveItem = new JMenuItem(I18nManager.tr("response.panel.menu.saveAs"));
         saveItem.addActionListener(e -> saveResponseToFile());
-        
+
         popupMenu.add(copyItem);
         popupMenu.addSeparator();
         popupMenu.add(selectAllItem);
         popupMenu.add(clearItem);
         popupMenu.addSeparator();
         popupMenu.add(saveItem);
-        
+
         return popupMenu;
     }
-    
+
     /**
      * 将响应内容保存到文件
      */
     private void saveResponseToFile() {
         String responseText = responseTextArea.getText();
         if (responseText == null || responseText.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "没有响应内容可保存", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                I18nManager.tr("response.panel.save.empty"),
+                I18nManager.tr("common.error"),
+                JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-            org.oxff.repeater.utils.FileChooserHelper.OP_RESPONSE_SAVE, "保存响应内容", this, null);
+            org.oxff.repeater.utils.FileChooserHelper.OP_RESPONSE_SAVE,
+            I18nManager.tr("response.panel.save.title"), this, null);
 
         if (selectedFile != null) {
             try (FileOutputStream fos = new FileOutputStream(selectedFile)) {
                 fos.write(responseText.getBytes());
                 JOptionPane.showMessageDialog(this,
-                    "文件已保存到: " + selectedFile.getAbsolutePath(),
-                    "保存成功",
+                    I18nManager.tr("response.panel.save.success", selectedFile.getAbsolutePath()),
+                    I18nManager.tr("common.success"),
                     JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this,
-                    "保存文件失败: " + ex.getMessage(),
-                    "错误",
+                    I18nManager.tr("response.panel.save.failed", ex.getMessage()),
+                    I18nManager.tr("common.error"),
                     JOptionPane.ERROR_MESSAGE);
             }
         }
     }
-    
+
     /**
      * 设置响应文本内容
      */
@@ -144,7 +173,7 @@ public class ResponsePanel extends JPanel {
         responseTextArea.setText(text);
         responseTextArea.setCaretPosition(0);
     }
-    
+
     /**
      * 设置响应内容(字节数组)
      */
@@ -155,7 +184,7 @@ public class ResponsePanel extends JPanel {
             responseTextArea.setText("");
         }
     }
-    
+
     /**
      * 清空响应内容
      */
@@ -165,37 +194,37 @@ public class ResponsePanel extends JPanel {
         contentTypeField.setText("");
         responseLengthField.setText("");
     }
-    
+
     /**
      * 获取响应文本
      */
     public String getResponseText() {
         return responseTextArea.getText();
     }
-    
+
     /**
      * 获取响应文本组件
      */
     public JTextArea getResponseTextArea() {
         return responseTextArea;
     }
-    
+
     /**
      * 设置HTTP响应
      */
     public void setResponse(byte[] response) {
         if (response == null || response.length == 0) {
-            LogManager.getInstance().printError("[!] 设置响应失败：响应为空");
+            LogManager.getInstance().printError(I18nManager.tr("response.set.empty"));
             return;
         }
-        
+
         try {
             // 先清空已有内容
             clear();
-            
+
             // 设置响应内容到文本区域
             setResponseData(response);
-            
+
             // 使用 Montoya API 分析响应信息
             HttpResponse httpResponse = HttpResponse.httpResponse(ByteArray.byteArray(response));
 
@@ -205,14 +234,14 @@ public class ResponsePanel extends JPanel {
             // 设置Content-Type
             String contentType = httpResponse.headerValue("Content-Type");
             contentTypeField.setText(contentType);
-            
+
             // 设置响应长度
             responseLengthField.setText(String.valueOf(response.length));
-            
-            LogManager.getInstance().printOutput("[+] 响应已加载: HTTP " + httpResponse.statusCode() + 
+
+            LogManager.getInstance().printOutput("[+] 响应已加载: HTTP " + httpResponse.statusCode() +
                              " (" + response.length + " 字节)");
         } catch (Exception e) {
             LogManager.getInstance().printError("[!] 设置响应时出错: " + e.getMessage());
         }
     }
-} 
+}

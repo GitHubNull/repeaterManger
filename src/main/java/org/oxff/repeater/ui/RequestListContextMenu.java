@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.RequestDAO;
 
@@ -36,31 +37,31 @@ public class RequestListContextMenu {
         int selectedCount = requestTable.getSelectedRows().length;
 
         // 标记颜色菜单
-        JMenu colorMenu = new JMenu("标记颜色");
-        addColorMenuItem(colorMenu, "红色", new Color(255, 160, 160));
-        addColorMenuItem(colorMenu, "橙色", new Color(255, 200, 120));
-        addColorMenuItem(colorMenu, "黄色", new Color(255, 255, 150));
-        addColorMenuItem(colorMenu, "绿色", new Color(150, 255, 150));
-        addColorMenuItem(colorMenu, "蓝色", new Color(150, 200, 255));
-        addColorMenuItem(colorMenu, "紫色", new Color(210, 150, 255));
+        JMenu colorMenu = new JMenu(I18nManager.tr("request.menu.markColor"));
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.color.red"), new Color(255, 160, 160));
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.color.orange"), new Color(255, 200, 120));
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.color.yellow"), new Color(255, 255, 150));
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.color.green"), new Color(150, 255, 150));
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.color.blue"), new Color(150, 200, 255));
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.color.purple"), new Color(210, 150, 255));
         colorMenu.addSeparator();
-        addColorMenuItem(colorMenu, "自定义颜色...", null);
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.customColor"), null);
         colorMenu.addSeparator();
-        addColorMenuItem(colorMenu, "清除颜色标记", null, true);
+        addColorMenuItem(colorMenu, I18nManager.tr("request.menu.clearColor"), null, true);
 
         // 编辑备注（多选时禁用）
-        JMenuItem commentItem = new JMenuItem("编辑备注");
+        JMenuItem commentItem = new JMenuItem(I18nManager.tr("request.menu.editComment"));
         commentItem.setEnabled(selectedCount <= 1);
         commentItem.addActionListener(e -> editComment());
 
         // 列显示控制
-        JMenuItem columnControlItem = new JMenuItem("列显示控制");
+        JMenuItem columnControlItem = new JMenuItem(I18nManager.tr("request.menu.columnControl"));
         columnControlItem.addActionListener(e -> showColumnControlDialog());
 
         // 删除请求
         String deleteText = selectedCount > 1
-            ? String.format("删除请求 (%d条)", selectedCount)
-            : "删除请求";
+            ? I18nManager.tr("request.menu.delete") + " (" + selectedCount + ")"
+            : I18nManager.tr("request.menu.delete");
         JMenuItem deleteItem = new JMenuItem(deleteText);
         deleteItem.addActionListener(e -> deleteSelectedRequests());
 
@@ -97,7 +98,7 @@ public class RequestListContextMenu {
                 finalColor = null;
             } else if (color == null) {
                 Color selectedColor = JColorChooser.showDialog(
-                    requestTable, "选择标记颜色", Color.YELLOW);
+                    requestTable, I18nManager.tr("common.choose.color"), Color.YELLOW);
                 if (selectedColor == null) return;
                 finalColor = selectedColor;
             } else {
@@ -164,8 +165,8 @@ public class RequestListContextMenu {
 
             String newComment = (String) JOptionPane.showInputDialog(
                 requestTable,
-                "请输入备注:",
-                "编辑备注",
+                I18nManager.tr("request.menu.editComment") + ":",
+                I18nManager.tr("request.menu.editComment"),
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 null,
@@ -210,8 +211,8 @@ public class RequestListContextMenu {
 
         int confirm = JOptionPane.showConfirmDialog(
             requestTable,
-            String.format("确认删除 %d 条请求？", selectedRows.length),
-            "删除确认",
+            I18nManager.tr("request.menu.delete.confirm", selectedRows.length),
+            I18nManager.tr("common.confirm"),
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE
         );

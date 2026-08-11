@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.model.RequestRecord;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.RequestDAO;
@@ -33,13 +34,31 @@ public class RequestListPanel extends JPanel {
 
     // 请求列表数据
     private final DefaultTableModel tableModel = new DefaultTableModel(
-        new Object[]{"ID", "API", "Method", "Protocol", "Domain", "Path", "Query", "越权测试", "Date", "备注"}, 0
+        buildColumnNames(), 0
     ) {
         @Override
         public boolean isCellEditable(int row, int column) {
             return false;
         }
     };
+
+    /**
+     * 构建表格列名（从资源读取当前语言文本）
+     */
+    private static Object[] buildColumnNames() {
+        return new Object[]{
+            I18nManager.tr("request.list.col.id"),
+            I18nManager.tr("request.list.col.api"),
+            I18nManager.tr("request.list.col.method"),
+            I18nManager.tr("request.list.col.protocol"),
+            I18nManager.tr("request.list.col.domain"),
+            I18nManager.tr("request.list.col.path"),
+            I18nManager.tr("request.list.col.query"),
+            I18nManager.tr("request.list.col.privilege"),
+            I18nManager.tr("request.list.col.date"),
+            I18nManager.tr("request.list.col.comment")
+        };
+    }
 
     private final JTable requestTable = new JTable(tableModel);
     private final Map<Integer, byte[]> requestDataMap = new ConcurrentHashMap<>();
@@ -59,21 +78,43 @@ public class RequestListPanel extends JPanel {
 
     // 简单搜索组件
     private final JTextField simpleSearchField = new JTextField(20);
-    private final JComboBox<String> simpleMatchModeCombo = new JComboBox<>(new String[]{"关键词", "正则"});
-    private final JCheckBox simpleCaseSensitiveCb = new JCheckBox("大小写敏感");
+    private final JComboBox<String> simpleMatchModeCombo = new JComboBox<>(buildMatchModeItems());
+    private final JCheckBox simpleCaseSensitiveCb = new JCheckBox(I18nManager.tr("request.list.search.caseSensitive"));
 
     // 高级搜索组件
-    private final JToggleButton advancedToggleBtn = new JToggleButton("▶ 高级搜索");
+    private final JToggleButton advancedToggleBtn = new JToggleButton(I18nManager.tr("request.list.search.advanced"));
     private final JPanel advancedContentPanel = new JPanel();
     private final JCheckBox urlScopeCb = new JCheckBox("URL", true);
     private final JCheckBox headerScopeCb = new JCheckBox("Header", false);
     private final JCheckBox bodyScopeCb = new JCheckBox("Body", false);
     private final JTextField advancedSearchField = new JTextField(20);
-    private final JComboBox<String> advancedMatchModeCombo = new JComboBox<>(new String[]{"关键词", "正则"});
-    private final JCheckBox advancedCaseSensitiveCb = new JCheckBox("大小写敏感");
+    private final JComboBox<String> advancedMatchModeCombo = new JComboBox<>(buildMatchModeItems());
+    private final JCheckBox advancedCaseSensitiveCb = new JCheckBox(I18nManager.tr("request.list.search.caseSensitive"));
 
-    // 判决结果过滤组件
-    private final JComboBox<String> judgmentFilterCombo = new JComboBox<>(new String[]{"全部", "越权", "安全", "错误"});
+    // 判决结果过滤组件（按索引映射逻辑值，与显示文本解耦）
+    private final JComboBox<String> judgmentFilterCombo = new JComboBox<>(buildJudgmentFilterItems());
+
+    /**
+     * 构建匹配模式下拉项（关键词/正则）
+     */
+    private static String[] buildMatchModeItems() {
+        return new String[]{
+            I18nManager.tr("request.list.search.keyword"),
+            I18nManager.tr("request.list.search.regex")
+        };
+    }
+
+    /**
+     * 构建判决过滤下拉项（全部/越权/安全/错误）
+     */
+    private static String[] buildJudgmentFilterItems() {
+        return new String[]{
+            I18nManager.tr("request.list.filter.all"),
+            I18nManager.tr("request.list.filter.escalated"),
+            I18nManager.tr("request.list.filter.safe"),
+            I18nManager.tr("request.list.filter.error")
+        };
+    }
 
     /**
      * 请求选中回调接口
@@ -107,7 +148,7 @@ public class RequestListPanel extends JPanel {
         // 添加带标题的边框，突出其作为越权测试基准报文表的语义
         setBorder(BorderFactory.createTitledBorder(
             BorderFactory.createEtchedBorder(),
-            "基准报文表（原始报文）"
+            I18nManager.tr("request.list.title")
         ));
 
         // 创建搜索面板
@@ -185,6 +226,54 @@ public class RequestListPanel extends JPanel {
 
         // 设置行颜色渲染器
         requestTable.setDefaultRenderer(Object.class, new RequestListTableRenderer(requestColors));
+
+        // 注册语言变更监听：刷新面板文本
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新面板文本（边框标题、表格列名、搜索组件、下拉项）
+     */
+    private void refreshTexts() {
+        // 边框标题
+        setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(),
+            I18nManager.tr("request.list.title")
+        ));
+
+        // 表格列名（重建列标识符）
+        tableModel.setColumnIdentifiers(buildColumnNames());
+        setupColumnWidths();
+
+        // 搜索组件文本
+        simpleCaseSensitiveCb.setText(I18nManager.tr("request.list.search.caseSensitive"));
+        advancedCaseSensitiveCb.setText(I18nManager.tr("request.list.search.caseSensitive"));
+
+        // 匹配模式下拉项（保持选中索引）
+        int simpleMatchIndex = simpleMatchModeCombo.getSelectedIndex();
+        simpleMatchModeCombo.setModel(new DefaultComboBoxModel<>(buildMatchModeItems()));
+        if (simpleMatchIndex >= 0 && simpleMatchIndex < simpleMatchModeCombo.getItemCount()) {
+            simpleMatchModeCombo.setSelectedIndex(simpleMatchIndex);
+        }
+        int advMatchIndex = advancedMatchModeCombo.getSelectedIndex();
+        advancedMatchModeCombo.setModel(new DefaultComboBoxModel<>(buildMatchModeItems()));
+        if (advMatchIndex >= 0 && advMatchIndex < advancedMatchModeCombo.getItemCount()) {
+            advancedMatchModeCombo.setSelectedIndex(advMatchIndex);
+        }
+
+        // 判决过滤下拉项（保持选中索引）
+        int judgmentIndex = judgmentFilterCombo.getSelectedIndex();
+        judgmentFilterCombo.setModel(new DefaultComboBoxModel<>(buildJudgmentFilterItems()));
+        if (judgmentIndex >= 0 && judgmentIndex < judgmentFilterCombo.getItemCount()) {
+            judgmentFilterCombo.setSelectedIndex(judgmentIndex);
+        }
+
+        // 高级搜索切换按钮文本
+        boolean expanded = advancedToggleBtn.isSelected();
+        advancedToggleBtn.setText(I18nManager.tr(expanded ? "api.rule.advanced.hide" : "api.rule.advanced.show"));
+
+        revalidate();
+        repaint();
     }
 
     /**
@@ -229,14 +318,14 @@ public class RequestListPanel extends JPanel {
 
         // 简单搜索栏（始终可见）
         JPanel simpleSearchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        simpleSearchPanel.add(new JLabel("搜索:"));
+        simpleSearchPanel.add(new JLabel(I18nManager.tr("common.search")));
         simpleSearchPanel.add(simpleSearchField);
         simpleSearchPanel.add(simpleMatchModeCombo);
         simpleSearchPanel.add(simpleCaseSensitiveCb);
-        simpleSearchPanel.add(new JLabel("判决:"));
+        simpleSearchPanel.add(new JLabel(I18nManager.tr("history.col.judgment") + ":"));
         simpleSearchPanel.add(judgmentFilterCombo);
-        JButton clearBtn = new JButton("重置");
-        clearBtn.setToolTipText("重置搜索条件（清空搜索框并恢复判决过滤为全部）");
+        JButton clearBtn = new JButton(I18nManager.tr("common.clear"));
+        clearBtn.setToolTipText(I18nManager.tr("request.list.reset.tooltip"));
         clearBtn.addActionListener(e -> {
             simpleSearchField.setText("");
             advancedSearchField.setText("");
@@ -248,11 +337,11 @@ public class RequestListPanel extends JPanel {
         // 高级搜索与右侧[清空+列显示控制]组之间留出明显间隔，避免视觉混淆
         simpleSearchPanel.add(Box.createHorizontalStrut(24));
         // 清空按钮 - 位于高级搜索和列显示控制之间
-        JButton clearAllBtn = new JButton("清空报文");
-        clearAllBtn.setToolTipText("清空所有基准报文及相关数据（包括重放历史）");
+        JButton clearAllBtn = new JButton(I18nManager.tr("request.list.clearAll"));
+        clearAllBtn.setToolTipText(I18nManager.tr("request.list.clearAll.tooltip"));
         clearAllBtn.addActionListener(e -> clearAllWithConfirm());
         simpleSearchPanel.add(clearAllBtn);
-        JButton columnControlBtn = new JButton("列显示控制");
+        JButton columnControlBtn = new JButton(I18nManager.tr("request.menu.columnControl"));
         columnControlBtn.addActionListener(e -> {
             RequestColumnControlDialog dialog = new RequestColumnControlDialog(requestTable, requestTable, tableModel);
             dialog.setVisible(true);
@@ -263,11 +352,11 @@ public class RequestListPanel extends JPanel {
 
         // 高级搜索内容面板（默认不可见）
         advancedContentPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        advancedContentPanel.add(new JLabel("范围:"));
+        advancedContentPanel.add(new JLabel(I18nManager.tr("request.list.scope") + ":"));
         advancedContentPanel.add(urlScopeCb);
         advancedContentPanel.add(headerScopeCb);
         advancedContentPanel.add(bodyScopeCb);
-        advancedContentPanel.add(new JLabel("内容:"));
+        advancedContentPanel.add(new JLabel(I18nManager.tr("request.list.content") + ":"));
         advancedContentPanel.add(advancedSearchField);
         advancedContentPanel.add(advancedMatchModeCombo);
         advancedContentPanel.add(advancedCaseSensitiveCb);
@@ -279,7 +368,7 @@ public class RequestListPanel extends JPanel {
         advancedToggleBtn.addActionListener(e -> {
             boolean expanded = advancedToggleBtn.isSelected();
             advancedContentPanel.setVisible(expanded);
-            advancedToggleBtn.setText(expanded ? "▼ 高级搜索" : "▶ 高级搜索");
+            advancedToggleBtn.setText(I18nManager.tr(expanded ? "api.rule.advanced.hide" : "api.rule.advanced.show"));
             searchContainer.revalidate();
             searchContainer.repaint();
             applyFilter(); // 切换时重新过滤
@@ -353,7 +442,8 @@ public class RequestListPanel extends JPanel {
         if (useAdvancedSearch) {
             // 高级搜索覆盖简单搜索
             searchText = advancedSearchField.getText().trim();
-            isRegex = "正则".equals(advancedMatchModeCombo.getSelectedItem());
+            // 索引1=正则，与显示文本解耦
+            isRegex = advancedMatchModeCombo.getSelectedIndex() == 1;
             caseSensitive = advancedCaseSensitiveCb.isSelected();
             scope = EnumSet.noneOf(SearchConfig.SearchScope.class);
             if (urlScopeCb.isSelected()) scope.add(SearchConfig.SearchScope.URL);
@@ -363,7 +453,8 @@ public class RequestListPanel extends JPanel {
         } else {
             // 简单搜索：默认搜索 URL 列
             searchText = simpleSearchField.getText().trim();
-            isRegex = "正则".equals(simpleMatchModeCombo.getSelectedItem());
+            // 索引1=正则，与显示文本解耦
+            isRegex = simpleMatchModeCombo.getSelectedIndex() == 1;
             caseSensitive = simpleCaseSensitiveCb.isSelected();
             scope = EnumSet.of(SearchConfig.SearchScope.URL);
         }
@@ -391,20 +482,20 @@ public class RequestListPanel extends JPanel {
     }
 
     /**
-     * 根据判决过滤下拉框选择创建 RowFilter
-     * @return 判决过滤器，选择"全部"时返回 null
+     * 根据判决过滤下拉框选择创建 RowFilter（按索引映射，与显示文本解耦）
+     * @return 判决过滤器，选择"全部"（索引0）时返回 null
      */
     private RowFilter<DefaultTableModel, Integer> createJudgmentFilter() {
-        String selected = (String) judgmentFilterCombo.getSelectedItem();
-        if (selected == null || "全部".equals(selected)) {
+        int selectedIndex = judgmentFilterCombo.getSelectedIndex();
+        if (selectedIndex <= 0) {
             return null;
         }
 
         final String targetJudgment;
-        switch (selected) {
-            case "越权": targetJudgment = "ESCALATED"; break;
-            case "安全": targetJudgment = "NOT_ESCALATED"; break;
-            case "错误": targetJudgment = "ERROR"; break;
+        switch (selectedIndex) {
+            case 1: targetJudgment = "ESCALATED"; break;
+            case 2: targetJudgment = "NOT_ESCALATED"; break;
+            case 3: targetJudgment = "ERROR"; break;
             default: return null;
         }
 

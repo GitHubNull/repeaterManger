@@ -24,6 +24,7 @@ import org.oxff.repeater.ui.AboutPanel;
 import org.oxff.repeater.db.history.HistoryReadDAO;
 import org.oxff.repeater.db.history.HistoryWriteDAO;
 import org.oxff.repeater.db.RequestDAO;
+import org.oxff.repeater.i18n.I18nManager;
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
@@ -133,7 +134,7 @@ public class RepeaterManagerUI {
             requestPanel.setRequest(new byte[0]);
             responsePanel.clear();
 
-            LogManager.getInstance().printOutput("[+] 调度处理器数据已清空");
+            LogManager.getInstance().printOutput(I18nManager.tr("log.dispatcher.cleared"));
         });
 
         // 注册模式变更监听器：同步状态栏指示
@@ -244,13 +245,16 @@ public class RepeaterManagerUI {
 
         // 创建选项卡面板
         tabbedPane = new JTabbedPane();
-        tabbedPane.addTab("请求管理", mainSplitPane);
-        tabbedPane.addTab("权限测试", privilegeTestPanel);
-        tabbedPane.addTab("数据", dataPanel);
-        tabbedPane.addTab("配置", configPanel);
-        tabbedPane.addTab("日志", logPanel);
-        tabbedPane.addTab("使用教程", usageTutorialPanel);
-        tabbedPane.addTab("关于", aboutPanel);
+        tabbedPane.addTab(I18nManager.tr("tab.request"), mainSplitPane);
+        tabbedPane.addTab(I18nManager.tr("tab.privilege"), privilegeTestPanel);
+        tabbedPane.addTab(I18nManager.tr("tab.data"), dataPanel);
+        tabbedPane.addTab(I18nManager.tr("tab.config"), configPanel);
+        tabbedPane.addTab(I18nManager.tr("tab.log"), logPanel);
+        tabbedPane.addTab(I18nManager.tr("tab.tutorial"), usageTutorialPanel);
+        tabbedPane.addTab(I18nManager.tr("tab.about"), aboutPanel);
+
+        // 注册语言变更监听：刷新主选项卡标题
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTabTitles);
 
         // 监听标签页切换（不再绑定权限测试模式，模式通过工具栏按钮独立控制）
         tabbedPane.addChangeListener(e -> {
@@ -276,6 +280,24 @@ public class RepeaterManagerUI {
     }
 
     /**
+     * 语言变更时刷新主选项卡标题
+     */
+    private void refreshTabTitles() {
+        if (tabbedPane == null || tabbedPane.getTabCount() < 7) {
+            return;
+        }
+        tabbedPane.setTitleAt(0, I18nManager.tr("tab.request"));
+        tabbedPane.setTitleAt(1, I18nManager.tr("tab.privilege"));
+        tabbedPane.setTitleAt(2, I18nManager.tr("tab.data"));
+        tabbedPane.setTitleAt(3, I18nManager.tr("tab.config"));
+        tabbedPane.setTitleAt(4, I18nManager.tr("tab.log"));
+        tabbedPane.setTitleAt(5, I18nManager.tr("tab.tutorial"));
+        tabbedPane.setTitleAt(6, I18nManager.tr("tab.about"));
+        tabbedPane.revalidate();
+        tabbedPane.repaint();
+    }
+
+    /**
      * 创建新请求
      */
     private void createNewRequest() {
@@ -294,7 +316,7 @@ public class RepeaterManagerUI {
         int dbId = requestDAO.saveRequest("http", "example.com", "/", "", "GET", newRequestTemplate.getBytes());
 
         if (dbId <= 0) {
-            LogManager.getInstance().printError("[!] 创建新请求时保存到数据库失败");
+            LogManager.getInstance().printError(I18nManager.tr("log.request.save.failed"));
             return;
         }
 
@@ -302,7 +324,7 @@ public class RepeaterManagerUI {
         dispatchHandler.setCurrentRequestId(dbId);
 
         // 更新历史面板标题
-        historyPanel.setBorderTitle("请求历史记录 - 新建请求");
+        historyPanel.setBorderTitle(I18nManager.tr("history.border.new"));
 
         // 清空历史记录并初始化新的历史记录列表
         historyPanel.clearHistory();
@@ -326,7 +348,7 @@ public class RepeaterManagerUI {
         lastSelectedRequestId = requestId;
         lastSelectTime = now;
 
-        LogManager.getInstance().printOutput("[*] 请求选中回调触发，请求ID: " + requestId);
+        LogManager.getInstance().printOutput(I18nManager.tr("log.request.selected", requestId));
 
         dispatchHandler.setCurrentRequestId(requestId);
 
@@ -338,7 +360,7 @@ public class RepeaterManagerUI {
         // 设置请求内容
         if (requestData != null && requestData.length > 0) {
             requestPanel.setRequest(requestData);
-            LogManager.getInstance().printOutput("[+] 已加载请求数据到编辑器，大小: " + requestData.length + " 字节");
+            LogManager.getInstance().printOutput(I18nManager.tr("log.request.loaded.editor", requestData.length));
 
             // 从请求列表的表格数据中获取协议、主机、端口信息，重建HttpService
             // 优先使用已保存的原始HttpService（包含正确的非标准端口如9527）
@@ -357,7 +379,7 @@ public class RepeaterManagerUI {
                 httpRequest = HttpRequest.httpRequest(service, ByteArray.byteArray(requestData));
             }
             String url = HttpRequestHelper.extractUrlFromRequest(requestData, httpRequest, service);
-            historyPanel.setBorderTitle("请求历史记录 - " + url);
+            historyPanel.setBorderTitle(I18nManager.tr("history.border.title") + " - " + url);
 
             // 优先加载基线响应（来自 requests 表），没有基线时才回退到最新历史响应
             // 修复：之前直接调用 loadLatestResponseForRequest 会拿到越权重放的历史响应，
@@ -367,9 +389,9 @@ public class RepeaterManagerUI {
             // 加载相关的历史记录（批量添加模式下使用静默模式，避免"没有历史记录"噪音日志）
             loadHistoryForRequest(requestId, requestListPanel.isBatchAddMode());
         } else {
-            LogManager.getInstance().printOutput("[!] 请求数据为空，ID: " + requestId);
+            LogManager.getInstance().printOutput(I18nManager.tr("log.request.empty", requestId));
             dispatchHandler.setCurrentHttpService(null);
-            historyPanel.setBorderTitle("请求历史记录");
+            historyPanel.setBorderTitle(I18nManager.tr("history.border.title"));
             historyPanel.clearHistory();
         }
     }
@@ -394,11 +416,11 @@ public class RepeaterManagerUI {
                 boolean success = statusCode >= 100 && statusCode < 400;
                 statusPanel.updateStatus(success, baselineResponse.length, 0, 0, 0);
                 LogManager.getInstance().printOutput(
-                    String.format("[+] 已加载请求ID %d 的基线响应 (%d 字节)", requestId, baselineResponse.length));
+                    I18nManager.tr("log.baseline.loaded", requestId, baselineResponse.length));
                 return;
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 加载基线响应失败: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("log.baseline.load.failed", e.getMessage()));
         }
 
         // 回退：没有基线响应时，尝试加载最新历史响应（兼容旧数据或纯重放场景）
@@ -420,11 +442,11 @@ public class RepeaterManagerUI {
                 if (responseData != null && responseData.length > 0) {
                     responsePanel.setResponse(responseData);
                     dispatchHandler.updateStatusFromRecord(latestRecord);
-                    LogManager.getInstance().printOutput("[+] 已加载请求ID " + requestId + " 的最新响应数据");
+                    LogManager.getInstance().printOutput(I18nManager.tr("log.latest.response.loaded", requestId));
                 }
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 加载最新响应数据失败: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("log.latest.response.failed", e.getMessage()));
         }
     }
 
@@ -438,7 +460,7 @@ public class RepeaterManagerUI {
         historyPanel.clearHistory();
 
         if (!silent) {
-            LogManager.getInstance().printOutput(String.format("[*] 开始加载请求ID %d 的历史记录", requestId));
+            LogManager.getInstance().printOutput(I18nManager.tr("log.history.loading", requestId));
         }
 
         // 优先从数据库加载历史记录
@@ -449,8 +471,7 @@ public class RepeaterManagerUI {
             if (dbHistoryList != null && !dbHistoryList.isEmpty()) {
                 if (!silent) {
                     LogManager.getInstance().printOutput(
-                        String.format("[*] 从数据库加载请求ID %d 的历史记录，共 %d 条",
-                            requestId, dbHistoryList.size()));
+                        I18nManager.tr("log.history.fromdb", requestId, dbHistoryList.size()));
                 }
 
                 for (RequestResponseRecord record : dbHistoryList) {
@@ -460,12 +481,12 @@ public class RepeaterManagerUI {
                 dispatchHandler.getRequestHistoryMap().put(requestId, new ArrayList<>(dbHistoryList));
 
                 if (!silent) {
-                    LogManager.getInstance().printOutput(String.format("[+] 请求ID %d 的历史记录加载完成", requestId));
+                    LogManager.getInstance().printOutput(I18nManager.tr("log.history.load.done", requestId));
                 }
                 return;
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 从数据库加载历史记录失败: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("log.history.db.failed", e.getMessage()));
         }
 
         // 如果数据库中没有或加载失败，尝试从内存映射中获取
@@ -474,8 +495,7 @@ public class RepeaterManagerUI {
         if (historyList != null && !historyList.isEmpty()) {
             if (!silent) {
                 LogManager.getInstance().printOutput(
-                    String.format("[*] 从内存加载请求ID %d 的历史记录，共 %d 条",
-                        requestId, historyList.size()));
+                    I18nManager.tr("log.history.frommem", requestId, historyList.size()));
             }
 
             for (RequestResponseRecord record : historyList) {
@@ -502,8 +522,8 @@ public class RepeaterManagerUI {
                         baselineRecord.setStatusCode(baselineStatusCode);
                         baselineRecord.setResponseLength(baselineResponse.length);
                         baselineRecord.setResponseTime(0);
-                        baselineRecord.setUserSessionName("(原始基线)");
-                        baselineRecord.setComment("原始响应基线");
+                        baselineRecord.setUserSessionName(I18nManager.tr("baseline.tag"));
+                        baselineRecord.setComment(I18nManager.tr("baseline.comment"));
                         baselineRecord.setTimestamp(new java.util.Date());
 
                         // 尝试从请求字节数组解析HTTP元数据
@@ -534,23 +554,22 @@ public class RepeaterManagerUI {
 
                         if (!silent) {
                             LogManager.getInstance().printOutput(
-                                String.format("[+] 从基线加载请求ID %d 的原始响应 (%d 字节)",
-                                    requestId, baselineResponse.length));
+                                I18nManager.tr("log.history.baseline.loaded", requestId, baselineResponse.length));
                         }
                     }
                 } else if (!silent) {
                     LogManager.getInstance().printOutput(
-                        String.format("[*] 请求ID %d 没有历史记录", requestId));
+                        I18nManager.tr("log.history.none", requestId));
                 }
             } catch (Exception e) {
                 if (!silent) {
                     LogManager.getInstance().printOutput(
-                        String.format("[*] 请求ID %d 没有历史记录", requestId));
+                        I18nManager.tr("log.history.none", requestId));
                 }
             }
         }
 
-        historyPanel.setBorderTitle("请求历史记录 - ID: " + requestId);
+        historyPanel.setBorderTitle(I18nManager.tr("history.border.title") + " - ID: " + requestId);
     }
 
     public RequestLoader getRequestLoader() {
@@ -569,9 +588,9 @@ public class RepeaterManagerUI {
         int historyId = historyWriteDAO.saveHistory(record);
         if (historyId > 0) {
             record.setId(historyId);
-            LogManager.getInstance().printOutput("[+] 越权测试记录已保存到数据库，ID: " + historyId);
+            LogManager.getInstance().printOutput(I18nManager.tr("log.privilege.record.saved", historyId));
         } else {
-            LogManager.getInstance().printError("[!] 越权测试记录保存到数据库失败");
+            LogManager.getInstance().printError(I18nManager.tr("log.privilege.record.failed"));
         }
 
         // 添加到历史面板
@@ -626,7 +645,7 @@ public class RepeaterManagerUI {
      * 在数据库导入后调用，用于重新加载UI中显示的数据
      */
     public void refreshAllData() {
-        LogManager.getInstance().printOutput("[*] 开始刷新界面数据...");
+        LogManager.getInstance().printOutput(I18nManager.tr("log.refresh.start"));
 
         requestListPanel.clearAllRequests();
         historyPanel.clearAllHistory();
@@ -637,7 +656,7 @@ public class RepeaterManagerUI {
             try {
                 RequestDAO requestDAO = new RequestDAO();
                 java.util.List<java.util.Map<String, Object>> requests = requestDAO.getAllRequests();
-                LogManager.getInstance().printOutput("[+] 从数据库加载 " + requests.size() + " 条请求记录");
+                LogManager.getInstance().printOutput(I18nManager.tr("log.requests.loaded", requests.size()));
 
                 for (java.util.Map<String, Object> request : requests) {
                     int dbId = (Integer) request.get("id");
@@ -664,7 +683,7 @@ public class RepeaterManagerUI {
 
                 HistoryReadDAO historyReadDAO = new HistoryReadDAO();
                 java.util.List<RequestResponseRecord> allHistory = historyReadDAO.getAllHistory();
-                LogManager.getInstance().printOutput("[+] 从数据库加载 " + allHistory.size() + " 条历史记录");
+                LogManager.getInstance().printOutput(I18nManager.tr("log.refresh.history.loaded", allHistory.size()));
 
                 for (RequestResponseRecord record : allHistory) {
                     int requestId = record.getRequestId();
@@ -673,9 +692,9 @@ public class RepeaterManagerUI {
                     }
                 }
 
-                LogManager.getInstance().printOutput("[+] 数据刷新完成");
+                LogManager.getInstance().printOutput(I18nManager.tr("log.refresh.done"));
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 刷新数据时出错: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.refresh.failed", e.getMessage()));
             }
         }).start();
     }

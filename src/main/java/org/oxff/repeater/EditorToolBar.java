@@ -1,5 +1,6 @@
 package org.oxff.repeater;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.ui.*;
 import org.oxff.repeater.ui.layout.LayoutManager;
@@ -31,6 +32,13 @@ public class EditorToolBar {
     public final JLabel languageZhLabel;
     public final JLabel languageEnLabel;
 
+    // 布局下拉框（需要在语言切换时刷新选项文本）
+    private JComboBox<String> layoutComboBox;
+    // 布局标签
+    private JLabel layoutLabel;
+    // 相似度计算按钮
+    private JButton similarityCalcBtn;
+
     public EditorToolBar(RequestDispatchHandler dispatchHandler,
                          LayoutManager layoutManager, JPanel mainPanel) {
         this.dispatchHandler = dispatchHandler;
@@ -39,17 +47,24 @@ public class EditorToolBar {
 
         // 创建组件实例（供外部引用）
         this.modeToggleButton = new SwitchButton();
-        this.normalModeLabel = new JLabel("普通模式");
-        this.privilegeModeLabel = new JLabel("权限测试");
+        this.normalModeLabel = new JLabel(I18nManager.tr("toolbar.mode.normal"));
+        this.privilegeModeLabel = new JLabel(I18nManager.tr("toolbar.mode.privilege"));
         this.debugToggleButton = new SwitchButton();
-        this.debugNormalLabel = new JLabel("正常");
-        this.debugModeLabel = new JLabel("调试");
+        this.debugNormalLabel = new JLabel(I18nManager.tr("toolbar.debug.normal"));
+        this.debugModeLabel = new JLabel(I18nManager.tr("toolbar.debug.mode"));
         this.gcToggleButton = new SwitchButton();
-        this.gcOffLabel = new JLabel("手动GC");
-        this.gcOnLabel = new JLabel("自动GC");
+        this.gcOffLabel = new JLabel(I18nManager.tr("toolbar.gc.manual"));
+        this.gcOnLabel = new JLabel(I18nManager.tr("toolbar.gc.auto"));
         this.languageToggleButton = new SwitchButton();
+        // 语言名标签使用固有名称，不随界面语言切换变化
         this.languageZhLabel = new JLabel("中文");
-        this.languageEnLabel = new JLabel("英文");
+        this.languageEnLabel = new JLabel("English");
+
+        // 根据当前语言偏好初始化开关状态
+        this.languageToggleButton.setSelected(I18nManager.getInstance().isEnglish());
+
+        // 注册语言变更监听：刷新工具栏所有文本
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
     }
 
     /**
@@ -64,72 +79,70 @@ public class EditorToolBar {
         ));
 
         // 普通模式/权限测试切换
-        normalModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
+        normalModeLabel.setToolTipText(I18nManager.tr("toolbar.mode.tooltip"));
         globalToolBar.add(normalModeLabel);
 
-        modeToggleButton.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
+        modeToggleButton.setToolTipText(I18nManager.tr("toolbar.mode.tooltip"));
         modeToggleButton.addActionListener(e -> {
             boolean selected = modeToggleButton.isSelected();
             dispatchHandler.setPrivilegeTestMode(selected);
-            LogManager.getInstance().printOutput("[*] 权限测试模式: " + (selected ? "已开启" : "已关闭"));
+            LogManager.getInstance().printOutput(
+                I18nManager.tr(selected ? "log.privilege.mode.on" : "log.privilege.mode.off"));
         });
         globalToolBar.add(modeToggleButton);
 
-        privilegeModeLabel.setToolTipText("切换普通模式/权限测试模式 — 开启后从右键菜单发送的请求将自动进行越权重放");
+        privilegeModeLabel.setToolTipText(I18nManager.tr("toolbar.mode.tooltip"));
         globalToolBar.add(privilegeModeLabel);
         globalToolBar.add(new JSeparator(SwingConstants.VERTICAL));
 
         // 调试切换
-        debugNormalLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
+        debugNormalLabel.setToolTipText(I18nManager.tr("toolbar.debug.tooltip"));
         globalToolBar.add(debugNormalLabel);
 
-        debugToggleButton.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
+        debugToggleButton.setToolTipText(I18nManager.tr("toolbar.debug.tooltip"));
         debugToggleButton.addActionListener(e -> {
             boolean selected = debugToggleButton.isSelected();
             LogManager.getInstance().setJudgmentDebugEnabled(selected);
-            LogManager.getInstance().printOutput("[*] 判决调试模式: " + (selected ? "已开启" : "已关闭"));
+            LogManager.getInstance().printOutput(
+                I18nManager.tr(selected ? "log.debug.mode.on" : "log.debug.mode.off"));
         });
         globalToolBar.add(debugToggleButton);
 
-        debugModeLabel.setToolTipText("切换正常模式/调试模式 — 调试模式会在日志中输出判决引擎详细计算过程");
+        debugModeLabel.setToolTipText(I18nManager.tr("toolbar.debug.tooltip"));
         globalToolBar.add(debugModeLabel);
         globalToolBar.add(new JSeparator(SwingConstants.VERTICAL));
 
         // GC切换
-        gcOffLabel.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
+        gcOffLabel.setToolTipText(I18nManager.tr("toolbar.gc.tooltip"));
         globalToolBar.add(gcOffLabel);
 
-        gcToggleButton.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
+        gcToggleButton.setToolTipText(I18nManager.tr("toolbar.gc.tooltip"));
         gcToggleButton.addActionListener(e -> {
             boolean selected = gcToggleButton.isSelected();
             LogManager.getInstance().setAutoGcEnabled(selected);
-            LogManager.getInstance().printOutput("[*] 自动GC: " + (selected ? "已开启" : "已关闭"));
+            LogManager.getInstance().printOutput(
+                I18nManager.tr(selected ? "log.gc.on" : "log.gc.off"));
         });
         globalToolBar.add(gcToggleButton);
 
-        gcOnLabel.setToolTipText("切换手动GC/自动GC — 开启后每隔30秒自动触发一次垃圾回收");
+        gcOnLabel.setToolTipText(I18nManager.tr("toolbar.gc.tooltip"));
         globalToolBar.add(gcOnLabel);
         globalToolBar.add(new JSeparator(SwingConstants.VERTICAL));
 
-        // 语言切换（新增，功能待实现）：左侧中文、右侧英文，默认中文（开关关闭状态）
-        languageZhLabel.setToolTipText("切换界面语言 / Switch Language");
+        // 语言切换：左侧中文、右侧English，开关选中=英文
+        languageZhLabel.setToolTipText(I18nManager.tr("toolbar.language.tooltip"));
         globalToolBar.add(languageZhLabel);
 
-        languageToggleButton.setToolTipText("切换界面语言 / Switch Language");
+        languageToggleButton.setToolTipText(I18nManager.tr("toolbar.language.tooltip"));
         languageToggleButton.addActionListener(e -> {
-            // UI占位：功能未实现，提示后恢复为默认中文状态
-            JOptionPane.showMessageDialog(
-                mainPanel,
-                "语言切换功能开发中，敬请期待！\nLanguage switching feature is under development.",
-                "功能提示 / Feature Notice",
-                JOptionPane.INFORMATION_MESSAGE
-            );
-            languageToggleButton.setSelected(false);
-            LogManager.getInstance().printOutput("[*] 语言切换: 功能开发中，当前保持中文");
+            boolean toEnglish = languageToggleButton.isSelected();
+            I18nManager.getInstance().setLocale(
+                toEnglish ? I18nManager.LOCALE_EN : I18nManager.LOCALE_ZH);
+            LogManager.getInstance().printOutput(I18nManager.tr("log.language.switched"));
         });
         globalToolBar.add(languageToggleButton);
 
-        languageEnLabel.setToolTipText("切换界面语言 / Switch Language");
+        languageEnLabel.setToolTipText(I18nManager.tr("toolbar.language.tooltip"));
         globalToolBar.add(languageEnLabel);
 
         return globalToolBar;
@@ -148,8 +161,8 @@ public class EditorToolBar {
 
         // 左侧：相似度计算
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
-        JButton similarityCalcBtn = new JButton("相似度计算");
-        similarityCalcBtn.setToolTipText("打开相似度计算工具，比较两个HTTP报文的相似度");
+        similarityCalcBtn = new JButton(I18nManager.tr("toolbar.similarity"));
+        similarityCalcBtn.setToolTipText(I18nManager.tr("toolbar.similarity.tooltip"));
         similarityCalcBtn.addActionListener(e -> {
             SimilarityCalculatorDialog dialog = new SimilarityCalculatorDialog(
                 (Frame) SwingUtilities.getWindowAncestor(mainPanel));
@@ -157,29 +170,107 @@ public class EditorToolBar {
         });
         leftPanel.add(similarityCalcBtn);
 
-        // 右侧：布局选择
+        // 右侧：布局选择（按索引判断逻辑，显示文本从资源读取，与逻辑解耦）
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 2));
-        JComboBox<String> layoutComboBox = new JComboBox<>(new String[]{"左右布局", "上下布局", "仅请求", "仅响应"});
-        layoutComboBox.setToolTipText("切换请求和响应的布局方式");
+        layoutComboBox = new JComboBox<>(buildLayoutItems());
+        layoutComboBox.setToolTipText(I18nManager.tr("toolbar.layout.tooltip"));
         layoutComboBox.addActionListener(e -> {
-            String selectedLayout = (String) layoutComboBox.getSelectedItem();
-            if ("左右布局".equals(selectedLayout)) {
-                layoutManager.setLayout(LayoutManager.LayoutType.HORIZONTAL);
-            } else if ("上下布局".equals(selectedLayout)) {
-                layoutManager.setLayout(LayoutManager.LayoutType.VERTICAL);
-            } else if ("仅请求".equals(selectedLayout)) {
-                layoutManager.setLayoutRequestOnly();
-            } else if ("仅响应".equals(selectedLayout)) {
-                layoutManager.setLayoutResponseOnly();
+            int index = layoutComboBox.getSelectedIndex();
+            switch (index) {
+                case 0:
+                    layoutManager.setLayout(LayoutManager.LayoutType.HORIZONTAL);
+                    break;
+                case 1:
+                    layoutManager.setLayout(LayoutManager.LayoutType.VERTICAL);
+                    break;
+                case 2:
+                    layoutManager.setLayoutRequestOnly();
+                    break;
+                case 3:
+                    layoutManager.setLayoutResponseOnly();
+                    break;
+                default:
+                    break;
             }
         });
-        rightPanel.add(new JLabel("布局："));
+        layoutLabel = new JLabel(I18nManager.tr("toolbar.layout.label"));
+        rightPanel.add(layoutLabel);
         rightPanel.add(layoutComboBox);
 
         toolBar.add(leftPanel, BorderLayout.WEST);
         toolBar.add(rightPanel, BorderLayout.EAST);
 
         return toolBar;
+    }
+
+    /**
+     * 构建布局下拉框选项（从资源读取当前语言文本）
+     */
+    private String[] buildLayoutItems() {
+        return new String[]{
+            I18nManager.tr("toolbar.layout.horizontal"),
+            I18nManager.tr("toolbar.layout.vertical"),
+            I18nManager.tr("toolbar.layout.requestOnly"),
+            I18nManager.tr("toolbar.layout.responseOnly")
+        };
+    }
+
+    /**
+     * 语言变更时刷新工具栏所有文本
+     */
+    private void refreshTexts() {
+        // 全局工具栏标签
+        normalModeLabel.setText(I18nManager.tr("toolbar.mode.normal"));
+        privilegeModeLabel.setText(I18nManager.tr("toolbar.mode.privilege"));
+        debugNormalLabel.setText(I18nManager.tr("toolbar.debug.normal"));
+        debugModeLabel.setText(I18nManager.tr("toolbar.debug.mode"));
+        gcOffLabel.setText(I18nManager.tr("toolbar.gc.manual"));
+        gcOnLabel.setText(I18nManager.tr("toolbar.gc.auto"));
+
+        // tooltip
+        String modeTooltip = I18nManager.tr("toolbar.mode.tooltip");
+        normalModeLabel.setToolTipText(modeTooltip);
+        modeToggleButton.setToolTipText(modeTooltip);
+        privilegeModeLabel.setToolTipText(modeTooltip);
+
+        String debugTooltip = I18nManager.tr("toolbar.debug.tooltip");
+        debugNormalLabel.setToolTipText(debugTooltip);
+        debugToggleButton.setToolTipText(debugTooltip);
+        debugModeLabel.setToolTipText(debugTooltip);
+
+        String gcTooltip = I18nManager.tr("toolbar.gc.tooltip");
+        gcOffLabel.setToolTipText(gcTooltip);
+        gcToggleButton.setToolTipText(gcTooltip);
+        gcOnLabel.setToolTipText(gcTooltip);
+
+        String langTooltip = I18nManager.tr("toolbar.language.tooltip");
+        languageZhLabel.setToolTipText(langTooltip);
+        languageToggleButton.setToolTipText(langTooltip);
+        languageEnLabel.setToolTipText(langTooltip);
+
+        // 编辑区工具栏
+        if (similarityCalcBtn != null) {
+            similarityCalcBtn.setText(I18nManager.tr("toolbar.similarity"));
+            similarityCalcBtn.setToolTipText(I18nManager.tr("toolbar.similarity.tooltip"));
+        }
+        if (layoutLabel != null) {
+            layoutLabel.setText(I18nManager.tr("toolbar.layout.label"));
+        }
+        if (layoutComboBox != null) {
+            layoutComboBox.setToolTipText(I18nManager.tr("toolbar.layout.tooltip"));
+            // 重建下拉项文本，保持选中索引不变
+            int selectedIndex = layoutComboBox.getSelectedIndex();
+            layoutComboBox.setModel(new DefaultComboBoxModel<>(buildLayoutItems()));
+            if (selectedIndex >= 0 && selectedIndex < layoutComboBox.getItemCount()) {
+                layoutComboBox.setSelectedIndex(selectedIndex);
+            }
+        }
+
+        // 触发布局重算，适应文本长度变化
+        if (mainPanel != null) {
+            mainPanel.revalidate();
+            mainPanel.repaint();
+        }
     }
 
     /**

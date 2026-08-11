@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -217,9 +219,9 @@ public class DiffNavigator {
      */
     public String getStatusText() {
         if (mergedRegions.isEmpty()) {
-            return "差异 0/0";
+            return I18nManager.tr("comparison.diff.zero");
         }
         int displayIndex = (currentDiffIndex >= 0) ? currentDiffIndex + 1 : 0;
-        return "差异 " + displayIndex + "/" + mergedRegions.size();
+        return I18nManager.tr("comparison.diff.count", displayIndex, mergedRegions.size());
     }
 }

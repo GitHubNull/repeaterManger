@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
@@ -22,52 +24,100 @@ public class StatusPanel extends JPanel {
     private final JLabel durationLabel;
     private final JLabel batchProgressLabel;
 
+    // 需要在语言切换时刷新的静态标签
+    private final JLabel modeTitleLabel;
+    private final JLabel statusTitleLabel;
+    private final JLabel responseSizeTitleLabel;
+    private final JLabel requestTimeTitleLabel;
+    private final JLabel responseTimeTitleLabel;
+    private final JLabel durationTitleLabel;
+    private final JLabel msUnitLabel;
+
+    // 当前模式状态（用于语言切换时恢复显示）
+    private boolean currentPrivilegeMode = false;
+    // 当前成功状态（用于语言切换时恢复显示）
+    private Boolean lastSuccess = null;
+
     public StatusPanel() {
         setLayout(new FlowLayout(FlowLayout.LEFT, 12, 2));
         setBorder(BorderFactory.createEtchedBorder());
 
         // 模式指示
-        add(new JLabel("模式:"));
-        modeLabel = new JLabel("普通模式");
+        modeTitleLabel = new JLabel(I18nManager.tr("status.mode"));
+        add(modeTitleLabel);
+        modeLabel = new JLabel(I18nManager.tr("status.mode.normal"));
         modeLabel.setForeground(new Color(0, 100, 200));
         add(modeLabel);
 
         // 状态
         add(createSeparator());
-        add(new JLabel("状态:"));
+        statusTitleLabel = new JLabel(I18nManager.tr("status.state"));
+        add(statusTitleLabel);
         statusLabel = new JLabel(PLACEHOLDER);
         add(statusLabel);
 
         // 响应大小
         add(createSeparator());
-        add(new JLabel("响应大小:"));
+        responseSizeTitleLabel = new JLabel(I18nManager.tr("status.response.size"));
+        add(responseSizeTitleLabel);
         responseSizeLabel = new JLabel(PLACEHOLDER);
         add(responseSizeLabel);
 
         // 请求时间
         add(createSeparator());
-        add(new JLabel("请求时间:"));
+        requestTimeTitleLabel = new JLabel(I18nManager.tr("status.request.time"));
+        add(requestTimeTitleLabel);
         requestTimeLabel = new JLabel(PLACEHOLDER);
         add(requestTimeLabel);
 
         // 响应时间
         add(createSeparator());
-        add(new JLabel("响应时间:"));
+        responseTimeTitleLabel = new JLabel(I18nManager.tr("status.response.time"));
+        add(responseTimeTitleLabel);
         responseTimeLabel = new JLabel(PLACEHOLDER);
         add(responseTimeLabel);
 
         // 耗时
         add(createSeparator());
-        add(new JLabel("耗时:"));
+        durationTitleLabel = new JLabel(I18nManager.tr("status.elapsed"));
+        add(durationTitleLabel);
         durationLabel = new JLabel(PLACEHOLDER);
         add(durationLabel);
-        add(new JLabel("ms"));
+        msUnitLabel = new JLabel(I18nManager.tr("common.unit.ms"));
+        add(msUnitLabel);
 
         // 批量操作进度
         add(createSeparator());
         batchProgressLabel = new JLabel("");
         batchProgressLabel.setForeground(new Color(0, 100, 200));
         add(batchProgressLabel);
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新所有静态文本
+     */
+    private void refreshTexts() {
+        modeTitleLabel.setText(I18nManager.tr("status.mode"));
+        statusTitleLabel.setText(I18nManager.tr("status.state"));
+        responseSizeTitleLabel.setText(I18nManager.tr("status.response.size"));
+        requestTimeTitleLabel.setText(I18nManager.tr("status.request.time"));
+        responseTimeTitleLabel.setText(I18nManager.tr("status.response.time"));
+        durationTitleLabel.setText(I18nManager.tr("status.elapsed"));
+        msUnitLabel.setText(I18nManager.tr("common.unit.ms"));
+
+        // 恢复模式指示文本
+        modeLabel.setText(I18nManager.tr(currentPrivilegeMode ? "status.mode.privilege" : "status.mode.normal"));
+
+        // 恢复状态文本
+        if (lastSuccess != null) {
+            statusLabel.setText(I18nManager.tr(lastSuccess ? "status.success" : "status.failure"));
+        }
+
+        revalidate();
+        repaint();
     }
 
     /**
@@ -80,11 +130,12 @@ public class StatusPanel extends JPanel {
      * @param durationMs    请求响应耗时（毫秒）
      */
     public void updateStatus(boolean success, int responseSize, long requestTimeMs, long responseTimeMs, long durationMs) {
+        lastSuccess = success;
         if (success) {
-            statusLabel.setText("\u2713 成功");
+            statusLabel.setText(I18nManager.tr("status.success"));
             statusLabel.setForeground(new Color(0, 128, 0));
         } else {
-            statusLabel.setText("\u2717 失败");
+            statusLabel.setText(I18nManager.tr("status.failure"));
             statusLabel.setForeground(Color.RED);
         }
 
@@ -100,13 +151,14 @@ public class StatusPanel extends JPanel {
      * @param privilegeTestMode true=权限测试模式, false=普通模式
      */
     public void setModeIndicator(boolean privilegeTestMode) {
+        currentPrivilegeMode = privilegeTestMode;
         SwingUtilities.invokeLater(() -> {
             if (privilegeTestMode) {
-                modeLabel.setText("权限测试");
+                modeLabel.setText(I18nManager.tr("status.mode.privilege"));
                 modeLabel.setForeground(new Color(200, 80, 0));
                 modeLabel.setFont(modeLabel.getFont().deriveFont(Font.BOLD));
             } else {
-                modeLabel.setText("普通模式");
+                modeLabel.setText(I18nManager.tr("status.mode.normal"));
                 modeLabel.setForeground(new Color(0, 100, 200));
                 modeLabel.setFont(modeLabel.getFont().deriveFont(Font.PLAIN));
             }
@@ -117,6 +169,7 @@ public class StatusPanel extends JPanel {
      * 清空状态栏，恢复初始状态
      */
     public void clear() {
+        lastSuccess = null;
         statusLabel.setText(PLACEHOLDER);
         statusLabel.setForeground(UIManager.getColor("Label.foreground"));
         responseSizeLabel.setText(PLACEHOLDER);
@@ -136,7 +189,7 @@ public class StatusPanel extends JPanel {
      */
     public void showBatchProgress(int current, int total, String description) {
         SwingUtilities.invokeLater(() -> {
-            batchProgressLabel.setText(String.format("批量操作: %d/%d (%s中...)", current, total, description));
+            batchProgressLabel.setText(I18nManager.tr("status.batch", current, total, description));
             batchProgressLabel.setFont(batchProgressLabel.getFont().deriveFont(Font.BOLD));
         });
     }

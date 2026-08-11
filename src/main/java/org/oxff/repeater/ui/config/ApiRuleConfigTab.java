@@ -4,7 +4,9 @@ import org.oxff.repeater.api.ApiExtractionEngine;
 import org.oxff.repeater.api.ApiExtractionRule;
 import org.oxff.repeater.api.ApiRuleManager;
 import org.oxff.repeater.api.ApiRuleYamlIO;
+import org.oxff.repeater.i18n.I18nManager;
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import javax.swing.table.TableRowSorter;
 import javax.swing.RowFilter;
 import java.awt.*;
@@ -46,6 +48,27 @@ public class ApiRuleConfigTab extends JPanel {
     private JTextField testContentTypeField;
     private JTextField testResultField;
 
+    // 需要随语言切换刷新的组件
+    private JLabel searchLabel;
+    private JLabel advSourceLabel;
+    private JLabel advMethodLabel;
+    private JLabel advStatusLabel;
+    private JLabel advExprLabel;
+    private JButton addRuleBtn;
+    private JButton editRuleBtn;
+    private JButton deleteRuleBtn;
+    private JButton reExtractBtn;
+    private JButton exportYamlBtn;
+    private JButton importYamlBtn;
+    private JPanel testWrapper;
+    private JLabel testPathLabel;
+    private JLabel testQueryLabel;
+    private JLabel testHeadersLabel;
+    private JLabel testBodyLabel;
+    private JLabel testContentTypeLabel;
+    private JButton testExtractBtn;
+    private JTextArea descArea;
+
     /**
      * 创建API提取规则配置面板
      *
@@ -56,6 +79,75 @@ public class ApiRuleConfigTab extends JPanel {
         this.onDataChanged = onDataChanged;
         setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         initUI();
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言切换时刷新所有文本
+     */
+    private void refreshTexts() {
+        searchLabel.setText(I18nManager.tr("api.rule.search"));
+        apiSearchField.setToolTipText(I18nManager.tr("api.rule.search.tooltip"));
+        advancedSearchToggleBtn.setText(advancedSearchPanel.isVisible()
+            ? I18nManager.tr("api.rule.advanced.hide") : I18nManager.tr("api.rule.advanced.show"));
+        advancedSearchToggleBtn.setToolTipText(I18nManager.tr("api.rule.advanced.tooltip"));
+        ((TitledBorder) advancedSearchPanel.getBorder()).setTitle(I18nManager.tr("api.rule.advanced.title"));
+        advSourceLabel.setText(I18nManager.tr("api.rule.advanced.source"));
+        advMethodLabel.setText(I18nManager.tr("api.rule.advanced.method"));
+        advStatusLabel.setText(I18nManager.tr("api.rule.advanced.status"));
+        advExprLabel.setText(I18nManager.tr("api.rule.advanced.expression"));
+        advRegexMatchCheckbox.setText(I18nManager.tr("api.rule.regex"));
+        advExpressionField.setToolTipText(I18nManager.tr("api.rule.advanced.expr.tooltip"));
+
+        // 刷新高级搜索下拉项
+        int srcIdx = advSourceFilterCombo.getSelectedIndex();
+        advSourceFilterCombo.setModel(new DefaultComboBoxModel<>(new String[]{
+            I18nManager.tr("api.rule.source.all"), I18nManager.tr("api.rule.source.urlPath"),
+            I18nManager.tr("api.rule.source.urlParam"), I18nManager.tr("api.rule.source.header"),
+            I18nManager.tr("api.rule.source.body")
+        }));
+        advSourceFilterCombo.setSelectedIndex(srcIdx);
+
+        int mthIdx = advMethodFilterCombo.getSelectedIndex();
+        advMethodFilterCombo.setModel(new DefaultComboBoxModel<>(new String[]{
+            I18nManager.tr("api.rule.method.all"), I18nManager.tr("api.rule.method.regex"),
+            I18nManager.tr("api.rule.method.substring"), I18nManager.tr("api.rule.method.jsonPath"),
+            I18nManager.tr("api.rule.method.xpath")
+        }));
+        advMethodFilterCombo.setSelectedIndex(mthIdx);
+
+        int stIdx = advEnabledFilterCombo.getSelectedIndex();
+        advEnabledFilterCombo.setModel(new DefaultComboBoxModel<>(new String[]{
+            I18nManager.tr("api.rule.status.all"), I18nManager.tr("api.rule.status.enabled"),
+            I18nManager.tr("api.rule.status.disabled")
+        }));
+        advEnabledFilterCombo.setSelectedIndex(stIdx);
+
+        addRuleBtn.setText(I18nManager.tr("api.rule.add"));
+        editRuleBtn.setText(I18nManager.tr("api.rule.edit"));
+        deleteRuleBtn.setText(I18nManager.tr("api.rule.delete"));
+        reExtractBtn.setText(I18nManager.tr("api.rule.reextract"));
+        reExtractBtn.setToolTipText(I18nManager.tr("api.rule.reextract.tooltip"));
+        exportYamlBtn.setText(I18nManager.tr("api.rule.exportYaml"));
+        exportYamlBtn.setToolTipText(I18nManager.tr("api.rule.exportYaml.tooltip"));
+        importYamlBtn.setText(I18nManager.tr("api.rule.importYaml"));
+        importYamlBtn.setToolTipText(I18nManager.tr("api.rule.importYaml.tooltip"));
+
+        ((TitledBorder) testWrapper.getBorder()).setTitle(I18nManager.tr("api.rule.test.title"));
+        testPathLabel.setText(I18nManager.tr("api.rule.test.urlPath"));
+        testQueryLabel.setText(I18nManager.tr("api.rule.test.urlParam"));
+        testHeadersLabel.setText(I18nManager.tr("api.rule.test.header"));
+        testBodyLabel.setText(I18nManager.tr("api.rule.test.body"));
+        testContentTypeLabel.setText(I18nManager.tr("api.rule.test.contentType"));
+        testExtractBtn.setText(I18nManager.tr("api.rule.test.run"));
+        descArea.setText(I18nManager.tr("api.rule.test.desc"));
+
+        // 刷新表格列名
+        apiRuleTableModel.refreshColumnNames();
+        applyColumnWidths();
+
+        revalidate();
+        repaint();
     }
 
     /**
@@ -78,9 +170,10 @@ public class ApiRuleConfigTab extends JPanel {
 
         // 简单搜索行
         JPanel searchRow = new JPanel(new BorderLayout(5, 0));
-        searchRow.add(new JLabel("搜索:"), BorderLayout.WEST);
+        searchLabel = new JLabel(I18nManager.tr("api.rule.search"));
+        searchRow.add(searchLabel, BorderLayout.WEST);
         apiSearchField = new JTextField(20);
-        apiSearchField.setToolTipText("输入关键词搜索规则（匹配来源、方法、表达式）");
+        apiSearchField.setToolTipText(I18nManager.tr("api.rule.search.tooltip"));
         apiSearchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { applyApiRuleFilter(); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { applyApiRuleFilter(); }
@@ -88,8 +181,8 @@ public class ApiRuleConfigTab extends JPanel {
         });
         searchRow.add(apiSearchField, BorderLayout.CENTER);
 
-        advancedSearchToggleBtn = new JButton("▶ 高级搜索");
-        advancedSearchToggleBtn.setToolTipText("展开/折叠高级搜索条件");
+        advancedSearchToggleBtn = new JButton(I18nManager.tr("api.rule.advanced.show"));
+        advancedSearchToggleBtn.setToolTipText(I18nManager.tr("api.rule.advanced.tooltip"));
         advancedSearchToggleBtn.addActionListener(e -> toggleAdvancedSearch());
         searchRow.add(advancedSearchToggleBtn, BorderLayout.EAST);
 
@@ -97,7 +190,7 @@ public class ApiRuleConfigTab extends JPanel {
 
         // 高级搜索面板
         advancedSearchPanel = new JPanel(new GridBagLayout());
-        advancedSearchPanel.setBorder(BorderFactory.createTitledBorder("高级搜索"));
+        advancedSearchPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("api.rule.advanced.title")));
         advancedSearchPanel.setVisible(false);
 
         GridBagConstraints ac = new GridBagConstraints();
@@ -105,33 +198,48 @@ public class ApiRuleConfigTab extends JPanel {
         ac.insets = new Insets(2, 5, 2, 5);
 
         ac.gridx = 0; ac.gridy = 0; ac.weightx = 0;
-        advancedSearchPanel.add(new JLabel("来源:"), ac);
+        advSourceLabel = new JLabel(I18nManager.tr("api.rule.advanced.source"));
+        advancedSearchPanel.add(advSourceLabel, ac);
         ac.gridx = 1; ac.gridy = 0; ac.weightx = 1.0;
-        advSourceFilterCombo = new JComboBox<>(new String[]{"全部", "URL路径", "URL参数", "请求头", "请求体"});
+        advSourceFilterCombo = new JComboBox<>(new String[]{
+            I18nManager.tr("api.rule.source.all"), I18nManager.tr("api.rule.source.urlPath"),
+            I18nManager.tr("api.rule.source.urlParam"), I18nManager.tr("api.rule.source.header"),
+            I18nManager.tr("api.rule.source.body")
+        });
         advSourceFilterCombo.addActionListener(e -> applyApiRuleFilter());
         advancedSearchPanel.add(advSourceFilterCombo, ac);
 
         ac.gridx = 2; ac.gridy = 0; ac.weightx = 0;
-        advancedSearchPanel.add(new JLabel("方法:"), ac);
+        advMethodLabel = new JLabel(I18nManager.tr("api.rule.advanced.method"));
+        advancedSearchPanel.add(advMethodLabel, ac);
         ac.gridx = 3; ac.gridy = 0; ac.weightx = 1.0;
-        advMethodFilterCombo = new JComboBox<>(new String[]{"全部", "正则匹配", "子串截取", "JSON路径", "XPath"});
+        advMethodFilterCombo = new JComboBox<>(new String[]{
+            I18nManager.tr("api.rule.method.all"), I18nManager.tr("api.rule.method.regex"),
+            I18nManager.tr("api.rule.method.substring"), I18nManager.tr("api.rule.method.jsonPath"),
+            I18nManager.tr("api.rule.method.xpath")
+        });
         advMethodFilterCombo.addActionListener(e -> applyApiRuleFilter());
         advancedSearchPanel.add(advMethodFilterCombo, ac);
 
         ac.gridx = 0; ac.gridy = 1; ac.weightx = 0;
-        advancedSearchPanel.add(new JLabel("启用状态:"), ac);
+        advStatusLabel = new JLabel(I18nManager.tr("api.rule.advanced.status"));
+        advancedSearchPanel.add(advStatusLabel, ac);
         ac.gridx = 1; ac.gridy = 1; ac.weightx = 1.0;
-        advEnabledFilterCombo = new JComboBox<>(new String[]{"全部", "已启用", "已禁用"});
+        advEnabledFilterCombo = new JComboBox<>(new String[]{
+            I18nManager.tr("api.rule.status.all"), I18nManager.tr("api.rule.status.enabled"),
+            I18nManager.tr("api.rule.status.disabled")
+        });
         advEnabledFilterCombo.addActionListener(e -> applyApiRuleFilter());
         advancedSearchPanel.add(advEnabledFilterCombo, ac);
 
         ac.gridx = 2; ac.gridy = 1; ac.weightx = 0;
-        advancedSearchPanel.add(new JLabel("表达式:"), ac);
+        advExprLabel = new JLabel(I18nManager.tr("api.rule.advanced.expression"));
+        advancedSearchPanel.add(advExprLabel, ac);
         ac.gridx = 3; ac.gridy = 1; ac.weightx = 1.0;
         JPanel exprPanel = new JPanel(new BorderLayout(3, 0));
-        advRegexMatchCheckbox = new JCheckBox("正则匹配");
+        advRegexMatchCheckbox = new JCheckBox(I18nManager.tr("api.rule.regex"));
         advExpressionField = new JTextField(15);
-        advExpressionField.setToolTipText("表达式搜索内容");
+        advExpressionField.setToolTipText(I18nManager.tr("api.rule.advanced.expr.tooltip"));
         advExpressionField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { applyApiRuleFilter(); }
             public void removeUpdate(javax.swing.event.DocumentEvent e) { applyApiRuleFilter(); }
@@ -153,14 +261,7 @@ public class ApiRuleConfigTab extends JPanel {
         apiRuleTable = new JTable(apiRuleTableModel);
         apiRuleTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         apiRuleTable.setRowHeight(22);
-        apiRuleTable.getColumnModel().getColumn(0).setPreferredWidth(50);
-        apiRuleTable.getColumnModel().getColumn(1).setPreferredWidth(80);
-        apiRuleTable.getColumnModel().getColumn(2).setPreferredWidth(70);
-        apiRuleTable.getColumnModel().getColumn(3).setPreferredWidth(70);
-        apiRuleTable.getColumnModel().getColumn(4).setPreferredWidth(250);
-        apiRuleTable.getColumnModel().getColumn(5).setPreferredWidth(50);
-        apiRuleTable.getColumnModel().getColumn(6).setPreferredWidth(120);
-        apiRuleTable.getColumnModel().getColumn(7).setPreferredWidth(80);
+        applyColumnWidths();
 
         apiRuleSorter = new TableRowSorter<>(apiRuleTableModel);
         apiRuleTable.setRowSorter(apiRuleSorter);
@@ -177,20 +278,20 @@ public class ApiRuleConfigTab extends JPanel {
 
         // 按钮行
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 3));
-        JButton addRuleBtn = new JButton("添加规则");
+        addRuleBtn = new JButton(I18nManager.tr("api.rule.add"));
         addRuleBtn.addActionListener(e -> addApiRule());
-        JButton editRuleBtn = new JButton("编辑规则");
+        editRuleBtn = new JButton(I18nManager.tr("api.rule.edit"));
         editRuleBtn.addActionListener(e -> editApiRule());
-        JButton deleteRuleBtn = new JButton("删除规则");
+        deleteRuleBtn = new JButton(I18nManager.tr("api.rule.delete"));
         deleteRuleBtn.addActionListener(e -> deleteApiRule());
-        JButton reExtractBtn = new JButton("重新提取所有API");
-        reExtractBtn.setToolTipText("使用当前规则重新计算所有请求和历史记录的API值");
+        reExtractBtn = new JButton(I18nManager.tr("api.rule.reextract"));
+        reExtractBtn.setToolTipText(I18nManager.tr("api.rule.reextract.tooltip"));
         reExtractBtn.addActionListener(e -> ApiReExtractWorker.reExtractWithProgress(this, onDataChanged));
-        JButton exportYamlBtn = new JButton("导出YAML");
-        exportYamlBtn.setToolTipText("将所有规则导出为YAML格式文件");
+        exportYamlBtn = new JButton(I18nManager.tr("api.rule.exportYaml"));
+        exportYamlBtn.setToolTipText(I18nManager.tr("api.rule.exportYaml.tooltip"));
         exportYamlBtn.addActionListener(e -> exportRulesToYaml());
-        JButton importYamlBtn = new JButton("导入YAML");
-        importYamlBtn.setToolTipText("从YAML格式文件导入规则");
+        importYamlBtn = new JButton(I18nManager.tr("api.rule.importYaml"));
+        importYamlBtn.setToolTipText(I18nManager.tr("api.rule.importYaml.tooltip"));
         importYamlBtn.addActionListener(e -> importRulesFromYaml());
 
         buttonPanel.add(addRuleBtn);
@@ -203,7 +304,7 @@ public class ApiRuleConfigTab extends JPanel {
         buttonPanel.add(reExtractBtn);
 
         // 规则测试区域
-        JPanel testWrapper = createTestPanel();
+        testWrapper = createTestPanel();
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScroll, testWrapper);
         splitPane.setResizeWeight(0.6);
@@ -216,9 +317,24 @@ public class ApiRuleConfigTab extends JPanel {
         refreshApiRuleTable();
     }
 
+    /**
+     * 应用表格列宽
+     */
+    private void applyColumnWidths() {
+        if (apiRuleTable.getColumnModel().getColumnCount() < 8) return;
+        apiRuleTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+        apiRuleTable.getColumnModel().getColumn(1).setPreferredWidth(80);
+        apiRuleTable.getColumnModel().getColumn(2).setPreferredWidth(70);
+        apiRuleTable.getColumnModel().getColumn(3).setPreferredWidth(70);
+        apiRuleTable.getColumnModel().getColumn(4).setPreferredWidth(250);
+        apiRuleTable.getColumnModel().getColumn(5).setPreferredWidth(50);
+        apiRuleTable.getColumnModel().getColumn(6).setPreferredWidth(120);
+        apiRuleTable.getColumnModel().getColumn(7).setPreferredWidth(80);
+    }
+
     private JPanel createTestPanel() {
-        JPanel testWrapper = new JPanel(new BorderLayout(5, 5));
-        testWrapper.setBorder(BorderFactory.createTitledBorder("规则测试"));
+        testWrapper = new JPanel(new BorderLayout(5, 5));
+        testWrapper.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("api.rule.test.title")));
 
         JPanel testPanel = new JPanel(new GridBagLayout());
         GridBagConstraints tc = new GridBagConstraints();
@@ -226,19 +342,22 @@ public class ApiRuleConfigTab extends JPanel {
         tc.insets = new Insets(2, 5, 2, 5);
 
         tc.gridx = 0; tc.gridy = 0; tc.weightx = 0;
-        testPanel.add(new JLabel("URL路径:"), tc);
+        testPathLabel = new JLabel(I18nManager.tr("api.rule.test.urlPath"));
+        testPanel.add(testPathLabel, tc);
         tc.gridx = 1; tc.gridy = 0; tc.weightx = 1.0; tc.gridwidth = 2;
         testPathField = new JTextField("/api/v1/users");
         testPanel.add(testPathField, tc);
 
         tc.gridx = 0; tc.gridy = 1; tc.weightx = 0; tc.gridwidth = 1;
-        testPanel.add(new JLabel("URL参数:"), tc);
+        testQueryLabel = new JLabel(I18nManager.tr("api.rule.test.urlParam"));
+        testPanel.add(testQueryLabel, tc);
         tc.gridx = 1; tc.gridy = 1; tc.weightx = 1.0; tc.gridwidth = 2;
         testQueryField = new JTextField("action=getUser&id=1");
         testPanel.add(testQueryField, tc);
 
         tc.gridx = 0; tc.gridy = 2; tc.weightx = 0; tc.gridwidth = 1;
-        testPanel.add(new JLabel("请求头:"), tc);
+        testHeadersLabel = new JLabel(I18nManager.tr("api.rule.test.header"));
+        testPanel.add(testHeadersLabel, tc);
         tc.gridx = 1; tc.gridy = 2; tc.weightx = 1.0; tc.gridwidth = 2;
         testHeadersArea = new JTextArea(3, 30);
         testHeadersArea.setText("Host: example.com\nContent-Type: application/json");
@@ -246,7 +365,8 @@ public class ApiRuleConfigTab extends JPanel {
         testPanel.add(new JScrollPane(testHeadersArea), tc);
 
         tc.gridx = 0; tc.gridy = 3; tc.weightx = 0; tc.gridwidth = 1;
-        testPanel.add(new JLabel("请求体:"), tc);
+        testBodyLabel = new JLabel(I18nManager.tr("api.rule.test.body"));
+        testPanel.add(testBodyLabel, tc);
         tc.gridx = 1; tc.gridy = 3; tc.weightx = 1.0; tc.gridwidth = 2;
         testBodyArea = new JTextArea(3, 30);
         testBodyArea.setText("{\"api\": \"login\"}");
@@ -254,13 +374,14 @@ public class ApiRuleConfigTab extends JPanel {
         testPanel.add(new JScrollPane(testBodyArea), tc);
 
         tc.gridx = 0; tc.gridy = 4; tc.weightx = 0; tc.gridwidth = 1;
-        testPanel.add(new JLabel("Content-Type:"), tc);
+        testContentTypeLabel = new JLabel(I18nManager.tr("api.rule.test.contentType"));
+        testPanel.add(testContentTypeLabel, tc);
         tc.gridx = 1; tc.gridy = 4; tc.weightx = 1.0; tc.gridwidth = 2;
         testContentTypeField = new JTextField("application/json");
         testPanel.add(testContentTypeField, tc);
 
         tc.gridx = 0; tc.gridy = 5; tc.weightx = 0; tc.gridwidth = 1;
-        JButton testExtractBtn = new JButton("测试提取");
+        testExtractBtn = new JButton(I18nManager.tr("api.rule.test.run"));
         testExtractBtn.addActionListener(e -> testApiExtraction());
         testPanel.add(testExtractBtn, tc);
 
@@ -272,14 +393,7 @@ public class ApiRuleConfigTab extends JPanel {
 
         tc.gridx = 0; tc.gridy = 6; tc.weightx = 1.0; tc.gridwidth = 3;
         tc.fill = GridBagConstraints.BOTH;
-        JTextArea descArea = new JTextArea(
-            "说明:\n" +
-            "• 规则按优先级执行，首次匹配成功即返回结果\n" +
-            "• 若无规则或所有规则未匹配，则使用URL路径作为API\n" +
-            "• URL参数来源从URL的query字符串中提取（如 action=getUser）\n" +
-            "• substr格式: START,END (END关键字表示到末尾, 负数从末尾计)\n" +
-            "• 请求体提取仅对文本类型有效(JSON/XML/表单/纯文本)"
-        );
+        descArea = new JTextArea(I18nManager.tr("api.rule.test.desc"));
         descArea.setEditable(false);
         descArea.setOpaque(false);
         descArea.setFont(descArea.getFont().deriveFont(Font.PLAIN, 11f));
@@ -292,14 +406,15 @@ public class ApiRuleConfigTab extends JPanel {
     private void toggleAdvancedSearch() {
         boolean visible = !advancedSearchPanel.isVisible();
         advancedSearchPanel.setVisible(visible);
-        advancedSearchToggleBtn.setText(visible ? "▼ 高级搜索" : "▶ 高级搜索");
+        advancedSearchToggleBtn.setText(visible
+            ? I18nManager.tr("api.rule.advanced.hide") : I18nManager.tr("api.rule.advanced.show"));
     }
 
     private void applyApiRuleFilter() {
         String searchText = apiSearchField.getText().trim().toLowerCase();
-        String sourceFilter = (String) advSourceFilterCombo.getSelectedItem();
-        String methodFilter = (String) advMethodFilterCombo.getSelectedItem();
-        String enabledFilter = (String) advEnabledFilterCombo.getSelectedItem();
+        int sourceFilterIndex = advSourceFilterCombo.getSelectedIndex();
+        int methodFilterIndex = advMethodFilterCombo.getSelectedIndex();
+        int enabledFilterIndex = advEnabledFilterCombo.getSelectedIndex();
         boolean regexMode = advRegexMatchCheckbox.isSelected();
         String exprFilter = advExpressionField.getText().trim();
 
@@ -310,31 +425,35 @@ public class ApiRuleConfigTab extends JPanel {
             filters.add(RowFilter.regexFilter("(?i)" + Pattern.quote(searchText)));
         }
 
-        // 来源过滤
-        if (sourceFilter != null && !"全部".equals(sourceFilter)) {
-            filters.add(RowFilter.regexFilter("^" + Pattern.quote(sourceFilter) + "$", 2));
-        }
-
-        // 方法过滤
-        if (methodFilter != null && !"全部".equals(methodFilter)) {
-            filters.add(RowFilter.regexFilter("^" + Pattern.quote(methodFilter) + "$", 3));
-        }
-
-        // 启用状态过滤
-        if (enabledFilter != null && !"全部".equals(enabledFilter)) {
-            if ("已启用".equals(enabledFilter)) {
-                filters.add(new RowFilter<ApiRuleTableModel, Integer>() {
-                    public boolean include(Entry<? extends ApiRuleTableModel, ? extends Integer> entry) {
-                        return Boolean.TRUE.equals(entry.getValue(5));
-                    }
-                });
-            } else if ("已禁用".equals(enabledFilter)) {
-                filters.add(new RowFilter<ApiRuleTableModel, Integer>() {
-                    public boolean include(Entry<? extends ApiRuleTableModel, ? extends Integer> entry) {
-                        return Boolean.FALSE.equals(entry.getValue(5));
-                    }
-                });
+        // 来源过滤（按索引，0=全部）
+        if (sourceFilterIndex > 0) {
+            String sourceValue = (String) advSourceFilterCombo.getSelectedItem();
+            if (sourceValue != null) {
+                filters.add(RowFilter.regexFilter("^" + Pattern.quote(sourceValue) + "$", 2));
             }
+        }
+
+        // 方法过滤（按索引，0=全部）
+        if (methodFilterIndex > 0) {
+            String methodValue = (String) advMethodFilterCombo.getSelectedItem();
+            if (methodValue != null) {
+                filters.add(RowFilter.regexFilter("^" + Pattern.quote(methodValue) + "$", 3));
+            }
+        }
+
+        // 启用状态过滤（按索引，0=全部，1=已启用，2=已禁用）
+        if (enabledFilterIndex == 1) {
+            filters.add(new RowFilter<ApiRuleTableModel, Integer>() {
+                public boolean include(Entry<? extends ApiRuleTableModel, ? extends Integer> entry) {
+                    return Boolean.TRUE.equals(entry.getValue(5));
+                }
+            });
+        } else if (enabledFilterIndex == 2) {
+            filters.add(new RowFilter<ApiRuleTableModel, Integer>() {
+                public boolean include(Entry<? extends ApiRuleTableModel, ? extends Integer> entry) {
+                    return Boolean.FALSE.equals(entry.getValue(5));
+                }
+            });
         }
 
         // 表达式过滤
@@ -369,7 +488,8 @@ public class ApiRuleConfigTab extends JPanel {
                 refreshApiRuleTable();
                 ApiReExtractWorker.reExtractSilently(onDataChanged);
             } else {
-                JOptionPane.showMessageDialog(this, "保存规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.save.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -377,7 +497,8 @@ public class ApiRuleConfigTab extends JPanel {
     private void editApiRule() {
         int selectedRow = apiRuleTable.getSelectedRow();
         if (selectedRow == -1) {
-            JOptionPane.showMessageDialog(this, "请先选择要编辑的规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.select.edit"),
+                I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = apiRuleTable.convertRowIndexToModel(selectedRow);
@@ -390,7 +511,8 @@ public class ApiRuleConfigTab extends JPanel {
                 refreshApiRuleTable();
                 ApiReExtractWorker.reExtractSilently(onDataChanged);
             } else {
-                JOptionPane.showMessageDialog(this, "更新规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.update.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -398,7 +520,8 @@ public class ApiRuleConfigTab extends JPanel {
     private void deleteApiRule() {
         int selectedRow = apiRuleTable.getSelectedRow();
         if (selectedRow == -1) {
-            JOptionPane.showMessageDialog(this, "请先选择要删除的规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.select.delete"),
+                I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = apiRuleTable.convertRowIndexToModel(selectedRow);
@@ -406,23 +529,26 @@ public class ApiRuleConfigTab extends JPanel {
         if (rule == null) return;
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确定要删除规则 \"" + rule.getName() + "\" 吗？",
-                "确认删除", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                I18nManager.tr("api.rule.delete.confirm", rule.getName()),
+                I18nManager.tr("api.rule.delete.confirm.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm == JOptionPane.YES_OPTION) {
             if (ApiRuleManager.getInstance().deleteRule(rule.getId())) {
                 refreshApiRuleTable();
                 ApiReExtractWorker.reExtractSilently(onDataChanged);
             } else {
-                JOptionPane.showMessageDialog(this, "删除规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.delete.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
     private void exportRulesToYaml() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_EXPORT, "导出API提取规则", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_EXPORT,
+                I18nManager.tr("api.rule.export.dialog"), this,
                 new File("api_extraction_rules.yaml"),
-                new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                new javax.swing.filechooser.FileNameExtensionFilter(
+                    I18nManager.tr("api.rule.yaml.filter"), "yaml", "yml"));
 
         if (selectedFile == null) {
             return;
@@ -433,22 +559,26 @@ public class ApiRuleConfigTab extends JPanel {
         }
         List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getAllRulesForDisplay();
         if (rules.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "没有规则可导出", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.export.empty"),
+                I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         if (ApiRuleYamlIO.writeToFile(rules, selectedFile.getAbsolutePath())) {
             JOptionPane.showMessageDialog(this,
-                    "已导出 " + rules.size() + " 条规则到:\n" + selectedFile.getAbsolutePath(),
-                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("api.rule.export.success", rules.size(), selectedFile.getAbsolutePath()),
+                    I18nManager.tr("api.rule.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } else {
-            JOptionPane.showMessageDialog(this, "导出规则失败", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.export.failed"),
+                I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importRulesFromYaml() {
         File file = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_IMPORT, "导入API提取规则", this,
-                new javax.swing.filechooser.FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_IMPORT,
+                I18nManager.tr("api.rule.import.dialog"), this,
+                new javax.swing.filechooser.FileNameExtensionFilter(
+                    I18nManager.tr("api.rule.yaml.filter"), "yaml", "yml"));
 
         if (file == null) {
             return;
@@ -456,14 +586,19 @@ public class ApiRuleConfigTab extends JPanel {
 
         List<ApiExtractionRule> importedRules = ApiRuleYamlIO.readFromFile(file.getAbsolutePath());
         if (importedRules.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "文件中没有找到有效规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("api.rule.import.empty"),
+                I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
-        String[] options = {"合并（保留现有规则）", "替换（清除现有规则）", "取消"};
+        String[] options = {
+            I18nManager.tr("api.rule.import.mode.merge"),
+            I18nManager.tr("api.rule.import.mode.replace"),
+            I18nManager.tr("api.rule.import.mode.cancel")
+        };
         int choice = JOptionPane.showOptionDialog(this,
-                "检测到 " + importedRules.size() + " 条规则\n请选择导入模式:",
-                "导入模式", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
+                I18nManager.tr("api.rule.import.mode.msg", importedRules.size()),
+                I18nManager.tr("api.rule.import.mode.title"), JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
                 null, options, options[0]);
 
         if (choice == 0) {
@@ -471,19 +606,19 @@ public class ApiRuleConfigTab extends JPanel {
             refreshApiRuleTable();
             ApiReExtractWorker.reExtractSilently(onDataChanged);
             JOptionPane.showMessageDialog(this,
-                    "合并导入完成\n新增 " + added + " 条规则（去重后）",
-                    "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("api.rule.import.merge.success", added),
+                    I18nManager.tr("api.rule.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } else if (choice == 1) {
             int confirm = JOptionPane.showConfirmDialog(this,
-                    "替换模式将删除所有现有规则，确定继续吗？",
-                    "确认替换", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    I18nManager.tr("api.rule.import.replace.confirm"),
+                    I18nManager.tr("api.rule.import.replace.confirm.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (confirm == JOptionPane.YES_OPTION) {
                 ApiRuleManager.getInstance().importRulesReplace(importedRules);
                 refreshApiRuleTable();
                 ApiReExtractWorker.reExtractSilently(onDataChanged);
                 JOptionPane.showMessageDialog(this,
-                        "替换导入完成，共导入 " + importedRules.size() + " 条规则",
-                        "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("api.rule.import.replace.success", importedRules.size()),
+                        I18nManager.tr("api.rule.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
             }
         }
     }

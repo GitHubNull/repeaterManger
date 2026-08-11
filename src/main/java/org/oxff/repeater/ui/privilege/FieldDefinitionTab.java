@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.FieldType;
@@ -34,12 +35,23 @@ public class FieldDefinitionTab extends JPanel {
     private JCheckBox caseSensitiveCheckbox;
     private JCheckBox regexCheckbox;
 
+    private JLabel searchLabel;
+    private JButton clearSearchBtn;
+    private JMenuItem editItem;
+    private JMenuItem deleteItem;
+    private JButton addBtn;
+    private JButton editBtn;
+    private JButton deleteBtn;
+    private JButton importBtn;
+    private JButton exportBtn;
+
     public FieldDefinitionTab() {
         super(new BorderLayout(0, 5));
 
         // ========== 字段搜索面板 ==========
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        searchPanel.add(new JLabel("搜索:"));
+        searchLabel = new JLabel(I18nManager.tr("field.search"));
+        searchPanel.add(searchLabel);
         searchField = new JTextField(15);
         searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
@@ -52,16 +64,16 @@ public class FieldDefinitionTab extends JPanel {
         searchPanel.add(searchField);
 
         caseSensitiveCheckbox = new JCheckBox("Aa");
-        caseSensitiveCheckbox.setToolTipText("区分大小写");
+        caseSensitiveCheckbox.setToolTipText(I18nManager.tr("field.search.case.tooltip"));
         caseSensitiveCheckbox.addActionListener(e -> applyFilter());
         searchPanel.add(caseSensitiveCheckbox);
 
         regexCheckbox = new JCheckBox(".*");
-        regexCheckbox.setToolTipText("启用正则表达式匹配");
+        regexCheckbox.setToolTipText(I18nManager.tr("field.search.regex.tooltip"));
         regexCheckbox.addActionListener(e -> applyFilter());
         searchPanel.add(regexCheckbox);
 
-        JButton clearSearchBtn = new JButton("清除");
+        clearSearchBtn = new JButton(I18nManager.tr("field.clear"));
         clearSearchBtn.addActionListener(e -> {
             searchField.setText("");
             applyFilter();
@@ -107,9 +119,9 @@ public class FieldDefinitionTab extends JPanel {
 
         // 右键菜单
         JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem editItem = new JMenuItem("编辑");
+        editItem = new JMenuItem(I18nManager.tr("field.edit"));
         editItem.addActionListener(e -> editField());
-        JMenuItem deleteItem = new JMenuItem("删除");
+        deleteItem = new JMenuItem(I18nManager.tr("field.delete"));
         deleteItem.addActionListener(e -> deleteField());
         popupMenu.add(editItem);
         popupMenu.add(deleteItem);
@@ -120,11 +132,11 @@ public class FieldDefinitionTab extends JPanel {
 
         // ========== 按钮面板 ==========
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton addBtn = new JButton("添加字段");
-        JButton editBtn = new JButton("编辑字段");
-        JButton deleteBtn = new JButton("删除字段");
-        JButton importBtn = new JButton("导入");
-        JButton exportBtn = new JButton("导出");
+        addBtn = new JButton(I18nManager.tr("field.add"));
+        editBtn = new JButton(I18nManager.tr("field.edit.title"));
+        deleteBtn = new JButton(I18nManager.tr("field.delete.title"));
+        importBtn = new JButton(I18nManager.tr("field.import"));
+        exportBtn = new JButton(I18nManager.tr("field.export"));
 
         addBtn.addActionListener(e -> addField());
         editBtn.addActionListener(e -> editField());
@@ -139,6 +151,26 @@ public class FieldDefinitionTab extends JPanel {
         buttonPanel.add(exportBtn);
 
         add(buttonPanel, BorderLayout.SOUTH);
+
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        searchLabel.setText(I18nManager.tr("field.search"));
+        caseSensitiveCheckbox.setToolTipText(I18nManager.tr("field.search.case.tooltip"));
+        regexCheckbox.setToolTipText(I18nManager.tr("field.search.regex.tooltip"));
+        clearSearchBtn.setText(I18nManager.tr("field.clear"));
+        editItem.setText(I18nManager.tr("field.edit"));
+        deleteItem.setText(I18nManager.tr("field.delete"));
+        addBtn.setText(I18nManager.tr("field.add"));
+        editBtn.setText(I18nManager.tr("field.edit.title"));
+        deleteBtn.setText(I18nManager.tr("field.delete.title"));
+        importBtn.setText(I18nManager.tr("field.import"));
+        exportBtn.setText(I18nManager.tr("field.export"));
+        fieldModel.refreshColumnNames();
     }
 
     private void selectRowOnRightClick(MouseEvent e, JTable table) {
@@ -181,7 +213,7 @@ public class FieldDefinitionTab extends JPanel {
 
     private void addField() {
         FieldDefinitionEditDialog dialog = new FieldDefinitionEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加字段定义", null);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("field.add.title"), null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().addFieldDefinition(
@@ -194,13 +226,14 @@ public class FieldDefinitionTab extends JPanel {
     private void editField() {
         int viewRow = fieldTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个字段定义", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("field.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = fieldTable.convertRowIndexToModel(viewRow);
         FieldDefinition selected = fieldModel.getFieldDefinition(modelRow);
         FieldDefinitionEditDialog dialog = new FieldDefinitionEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑字段定义", selected);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("field.edit.title"), selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().updateFieldDefinition(
@@ -213,7 +246,8 @@ public class FieldDefinitionTab extends JPanel {
     private void deleteField() {
         int viewRow = fieldTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个字段定义", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("field.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = fieldTable.convertRowIndexToModel(viewRow);
@@ -221,11 +255,11 @@ public class FieldDefinitionTab extends JPanel {
 
         // 查询引用方案数
         int refCount = SessionManager.getInstance().getSchemeReferenceCountByField(selected.getId());
-        String refMsg = refCount > 0 ? "\n该字段被 " + refCount + " 个方案引用，删除后将从方案中移除。" : "";
+        String refMsg = refCount > 0 ? I18nManager.tr("field.delete.ref", refCount) : "";
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除字段定义: " + selected.getExpression() + "?\n关联的所有用户字段值也会被删除。" + refMsg,
-                "删除确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("field.delete.confirm", selected.getExpression()) + refMsg,
+                I18nManager.tr("field.delete.title"), JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             SessionManager.getInstance().deleteFieldDefinition(selected.getId());
             refreshData();
@@ -234,9 +268,10 @@ public class FieldDefinitionTab extends JPanel {
 
     private void exportFields() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出字段定义", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT,
+                I18nManager.tr("field.export.dialog"), this,
                 new File("field_definitions.yaml"),
-                new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter"), "yaml"));
 
         if (selectedFile == null) return;
 
@@ -267,18 +302,20 @@ public class FieldDefinitionTab extends JPanel {
             }
 
             JOptionPane.showMessageDialog(this,
-                "成功导出 " + exportList.size() + " 条字段定义到:\n" + file.getAbsolutePath(),
-                "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                I18nManager.tr("field.export.success", exportList.size(), file.getAbsolutePath()),
+                I18nManager.tr("field.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("field.export.failed", e.getMessage()),
+                I18nManager.tr("field.export.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importFields() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入字段定义", this,
-                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT,
+                I18nManager.tr("field.import.dialog"), this,
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter.all"), "yaml", "yml"));
 
         if (selectedFile == null) return;
 
@@ -305,7 +342,8 @@ public class FieldDefinitionTab extends JPanel {
 
             if (importList.isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                    "文件中没有找到字段定义数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("field.import.empty"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 
@@ -328,11 +366,12 @@ public class FieldDefinitionTab extends JPanel {
 
             refreshData();
             JOptionPane.showMessageDialog(this,
-                "成功导入 " + imported + " 条字段定义",
-                "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                I18nManager.tr("field.import.success", imported),
+                I18nManager.tr("field.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("field.import.failed", e.getMessage()),
+                I18nManager.tr("field.import.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 

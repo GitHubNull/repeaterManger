@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.config;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.api.ApiExtractionEngine;
 import org.oxff.repeater.api.ApiExtractionRule;
@@ -36,7 +37,7 @@ public class ApiReExtractWorker {
     public static void reExtractSilently(final Runnable onComplete) {
         Thread worker = new Thread(() -> {
             try {
-                LogManager.getInstance().printOutput("[*] 规则变更，自动重新提取所有API值...");
+                LogManager.getInstance().printOutput(I18nManager.tr("log.api.reextract.auto.started"));
                 List<ApiExtractionRule> rules = ApiRuleManager.getInstance().getActiveRules();
                 PoolManager poolMgr = new PoolManager();
                 ContentSplitter splitter = new ContentSplitter();
@@ -44,14 +45,14 @@ public class ApiReExtractWorker {
                 int reqUpdated = reExtractRequests(rules, poolMgr, splitter);
                 int histUpdated = reExtractHistory(rules, poolMgr, splitter);
 
-                LogManager.getInstance().printOutput("[+] 自动重新提取API完成：请求 " + reqUpdated + " 条，历史 " + histUpdated + " 条");
+                LogManager.getInstance().printOutput(I18nManager.tr("log.api.reextract.auto.done", reqUpdated, histUpdated));
                 SwingUtilities.invokeLater(() -> {
                     if (onComplete != null) {
                         onComplete.run();
                     }
                 });
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 自动重新提取API异常: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.api.reextract.auto.failed", e.getMessage()));
             }
         }, "api-reextract-auto");
         worker.setDaemon(true);
@@ -66,19 +67,18 @@ public class ApiReExtractWorker {
      */
     public static void reExtractWithProgress(Component parent, final Runnable onComplete) {
         int confirm = JOptionPane.showConfirmDialog(parent,
-                "确定要使用当前规则重新提取所有请求和历史记录的API值吗？\n" +
-                "此操作可能需要一定时间。",
-                "确认重新提取", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                I18nManager.tr("api.rule.reextract.confirm"),
+                I18nManager.tr("api.rule.reextract.confirm.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm != JOptionPane.YES_OPTION) return;
 
         final Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(parent);
-        final JDialog progressDialog = new JDialog(parentFrame, "重新提取API", true);
+        final JDialog progressDialog = new JDialog(parentFrame, I18nManager.tr("api.rule.reextract.progress.title"), true);
         progressDialog.setLayout(new BorderLayout(10, 10));
         progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
         JProgressBar progressBar = new JProgressBar();
         progressBar.setIndeterminate(true);
-        JLabel statusLabel = new JLabel("正在重新提取所有API值...");
+        JLabel statusLabel = new JLabel(I18nManager.tr("api.rule.reextract.progress.msg"));
 
         progressDialog.add(statusLabel, BorderLayout.NORTH);
         progressDialog.add(progressBar, BorderLayout.CENTER);
@@ -107,22 +107,20 @@ public class ApiReExtractWorker {
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
                     JOptionPane.showMessageDialog(parent,
-                            "API重新提取完成\n" +
-                            "请求: " + finalReqTotal + " 条, 更新 " + finalReqUpdated + " 条\n" +
-                            "历史: " + finalHistTotal + " 条, 更新 " + finalHistUpdated + " 条\n" +
-                            "合计更新: " + finalTotalUpdated + " 条",
-                            "完成", JOptionPane.INFORMATION_MESSAGE);
+                            I18nManager.tr("api.rule.reextract.done",
+                                finalReqTotal, finalReqUpdated, finalHistTotal, finalHistUpdated, finalTotalUpdated),
+                            I18nManager.tr("api.rule.reextract.done.title"), JOptionPane.INFORMATION_MESSAGE);
                     if (onComplete != null) {
                         onComplete.run();
                     }
                 });
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 重新提取API异常: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.api.reextract.auto.failed", e.getMessage()));
                 SwingUtilities.invokeLater(() -> {
                     progressDialog.dispose();
                     JOptionPane.showMessageDialog(parent,
-                            "重新提取API时发生错误: " + e.getMessage(),
-                            "错误", JOptionPane.ERROR_MESSAGE);
+                            I18nManager.tr("api.rule.reextract.failed", e.getMessage()),
+                            I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
                 });
             }
         });
@@ -190,11 +188,11 @@ public class ApiReExtractWorker {
                         updated++;
                     } catch (SQLException ex) {
                         conn.rollback();
-                        LogManager.getInstance().printError("[!] 重提取API失败(reqId=" + reqId + "): " + ex.getMessage());
+                        LogManager.getInstance().printError(I18nManager.tr("log.api.reextract.request.failed", reqId, ex.getMessage()));
                     }
                 }
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 重提取请求API出错: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.api.reextract.request.error", e.getMessage()));
             }
         }
         return updated;
@@ -258,11 +256,11 @@ public class ApiReExtractWorker {
                         updated++;
                     } catch (SQLException ex) {
                         conn.rollback();
-                        LogManager.getInstance().printError("[!] 重提取历史API失败(histId=" + histId + "): " + ex.getMessage());
+                        LogManager.getInstance().printError(I18nManager.tr("log.api.reextract.history.failed", histId, ex.getMessage()));
                     }
                 }
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 重提取历史API出错: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.api.reextract.history.error", e.getMessage()));
             }
         }
         return updated;

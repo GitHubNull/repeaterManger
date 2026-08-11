@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.report.ReportContainerWriter;
 import org.oxff.repeater.privilege.report.ReportExporter;
 
@@ -24,6 +25,20 @@ public class PrivilegeTestPanel extends JPanel {
     private final ScopeConfigTab scopeConfigTab;
     private final SessionConfigTab sessionConfigTab;
 
+    // 报告导出面板组件
+    private JLabel reportTitleLabel;
+    private JEditorPane reportDescPane;
+    private JLabel reportFormatLabel;
+    private JRadioButton encryptedRadio;
+    private JRadioButton compressedRadio;
+    private JRadioButton plainRadio;
+    private JLabel reportModeLabel;
+    private JEditorPane reportModeDescPane;
+    private JButton generateButton;
+    private JButton decryptButton;
+    private JEditorPane reportFormatDescPane;
+    private JEditorPane reportWarningPane;
+
     public PrivilegeTestPanel() {
         super(new BorderLayout());
 
@@ -31,29 +46,65 @@ public class PrivilegeTestPanel extends JPanel {
 
         // 会话配置子Tab
         sessionConfigTab = new SessionConfigTab();
-        innerTabbedPane.addTab("会话配置", sessionConfigTab);
+        innerTabbedPane.addTab(I18nManager.tr("privilege.tab.session"), sessionConfigTab);
 
         // 判决规则子Tab（Phase 2）
         JudgmentRuleConfigTab judgmentRuleConfigTab = new JudgmentRuleConfigTab();
-        innerTabbedPane.addTab("判决规则", judgmentRuleConfigTab);
+        innerTabbedPane.addTab(I18nManager.tr("privilege.tab.judgment"), judgmentRuleConfigTab);
 
         // Scope子Tab
         scopeConfigTab = new ScopeConfigTab();
-        innerTabbedPane.addTab("Scope", scopeConfigTab);
+        innerTabbedPane.addTab(I18nManager.tr("privilege.tab.scope"), scopeConfigTab);
 
         // 去重配置子Tab
         DedupConfigTab dedupConfigTab = new DedupConfigTab();
-        innerTabbedPane.addTab("去重配置", dedupConfigTab);
+        innerTabbedPane.addTab(I18nManager.tr("privilege.tab.dedup"), dedupConfigTab);
 
         // 测试信息配置子Tab
         TestInfoConfigTab testInfoConfigTab = new TestInfoConfigTab();
-        innerTabbedPane.addTab("测试信息配置", testInfoConfigTab);
+        innerTabbedPane.addTab(I18nManager.tr("privilege.tab.testInfo"), testInfoConfigTab);
 
         // 报告导出子Tab
         JPanel reportExportPanel = createReportExportPanel();
-        innerTabbedPane.addTab("报告导出", reportExportPanel);
+        innerTabbedPane.addTab(I18nManager.tr("privilege.tab.report"), reportExportPanel);
 
         add(innerTabbedPane, BorderLayout.CENTER);
+
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言切换时刷新Tab标题和报告导出面板文本
+     */
+    private void refreshTexts() {
+        innerTabbedPane.setTitleAt(0, I18nManager.tr("privilege.tab.session"));
+        innerTabbedPane.setTitleAt(1, I18nManager.tr("privilege.tab.judgment"));
+        innerTabbedPane.setTitleAt(2, I18nManager.tr("privilege.tab.scope"));
+        innerTabbedPane.setTitleAt(3, I18nManager.tr("privilege.tab.dedup"));
+        innerTabbedPane.setTitleAt(4, I18nManager.tr("privilege.tab.testInfo"));
+        innerTabbedPane.setTitleAt(5, I18nManager.tr("privilege.tab.report"));
+
+        if (reportTitleLabel != null) {
+            reportTitleLabel.setText(I18nManager.tr("report.title"));
+            reportDescPane.setText(wrapHtml(I18nManager.tr("report.desc")));
+            reportFormatLabel.setText(I18nManager.tr("report.format"));
+            reportModeLabel.setText(I18nManager.tr("report.mode"));
+            encryptedRadio.setText(I18nManager.tr("report.mode.encrypted"));
+            compressedRadio.setText(I18nManager.tr("report.mode.compressed"));
+            plainRadio.setText(I18nManager.tr("report.mode.plain"));
+            reportModeDescPane.setText(wrapHtml(I18nManager.tr("report.mode.desc")));
+            generateButton.setText(I18nManager.tr("report.generate"));
+            decryptButton.setText(I18nManager.tr("report.decrypt"));
+            reportFormatDescPane.setText(wrapHtml(I18nManager.tr("report.format.desc")));
+            reportWarningPane.setText(wrapHtml(I18nManager.tr("report.warning")));
+        }
+    }
+
+    /**
+     * 包装HTML内容为完整的HTML文档结构
+     */
+    private String wrapHtml(String body) {
+        return "<html><body>" + body + "</body></html>";
     }
 
     /**
@@ -72,7 +123,7 @@ public class PrivilegeTestPanel extends JPanel {
         styleSheet.addRule(REPORT_CSS);
         pane.setEditorKit(kit);
 
-        pane.setText("<html><body>" + htmlBody + "</body></html>");
+        pane.setText(wrapHtml(htmlBody));
         pane.setCaretPosition(0);
 
         // 使JEditorPane在布局中表现为标签行为（不抢焦点、背景透明）
@@ -90,24 +141,23 @@ public class PrivilegeTestPanel extends JPanel {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // row 0: 标题
-        JLabel titleLabel = new JLabel("越权测试报告导出");
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
+        reportTitleLabel = new JLabel(I18nManager.tr("report.title"));
+        reportTitleLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 2;
-        panel.add(titleLabel, gbc);
+        panel.add(reportTitleLabel, gbc);
 
         // row 1: 说明
-        JEditorPane descPane = createHtmlLabel(
-                "<p>生成专业的越权测试报告，包含完整的请求/响应详情、<br>"
-              + "判决结果、cURL命令和Postman导入片段，方便与开发人员沟通复现。</p>");
+        reportDescPane = createHtmlLabel(I18nManager.tr("report.desc"));
         gbc.gridy = 1;
-        panel.add(descPane, gbc);
+        panel.add(reportDescPane, gbc);
 
         // row 2: 格式选择
         gbc.gridwidth = 1;
         gbc.gridy = 2;
-        panel.add(new JLabel("报告格式:"), gbc);
+        reportFormatLabel = new JLabel(I18nManager.tr("report.format"));
+        panel.add(reportFormatLabel, gbc);
 
         JRadioButton htmlRadio = new JRadioButton("HTML", true);
         JRadioButton mdRadio = new JRadioButton("Markdown");
@@ -129,11 +179,12 @@ public class PrivilegeTestPanel extends JPanel {
         gbc.gridx = 0;
         gbc.gridy = 3;
         gbc.gridwidth = 1;
-        panel.add(new JLabel("输出模式:"), gbc);
+        reportModeLabel = new JLabel(I18nManager.tr("report.mode"));
+        panel.add(reportModeLabel, gbc);
 
-        JRadioButton encryptedRadio = new JRadioButton("加密+压缩 (推荐)", true);
-        JRadioButton compressedRadio = new JRadioButton("仅压缩");
-        JRadioButton plainRadio = new JRadioButton("明文 (不推荐)");
+        encryptedRadio = new JRadioButton(I18nManager.tr("report.mode.encrypted"), true);
+        compressedRadio = new JRadioButton(I18nManager.tr("report.mode.compressed"));
+        plainRadio = new JRadioButton(I18nManager.tr("report.mode.plain"));
 
         ButtonGroup modeGroup = new ButtonGroup();
         modeGroup.add(encryptedRadio);
@@ -151,16 +202,15 @@ public class PrivilegeTestPanel extends JPanel {
         gbc.gridx = 0;
         gbc.gridy = 4;
         gbc.gridwidth = 2;
-        JEditorPane modeDescPane = createHtmlLabel(
-                "<p>加密+压缩：生成.ermr文件，需密码解密查看 | 仅压缩：生成.ermr文件，无需密码 | 明文：原始格式文件</p>");
-        panel.add(modeDescPane, gbc);
+        reportModeDescPane = createHtmlLabel(I18nManager.tr("report.mode.desc"));
+        panel.add(reportModeDescPane, gbc);
 
         // row 5: 按钮区（生成 + 解密）
         gbc.gridy = 5;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
 
-        JButton generateButton = new JButton("生成报告");
+        generateButton = new JButton(I18nManager.tr("report.generate"));
         generateButton.setPreferredSize(new Dimension(140, 32));
         generateButton.addActionListener(e -> {
             String format;
@@ -185,7 +235,7 @@ public class PrivilegeTestPanel extends JPanel {
             exporter.export(format, encryptionMode);
         });
 
-        JButton decryptButton = new JButton("解密报告");
+        decryptButton = new JButton(I18nManager.tr("report.decrypt"));
         decryptButton.setPreferredSize(new Dimension(140, 32));
         decryptButton.addActionListener(e -> {
             ReportExporter.decryptReportFile(this);
@@ -199,18 +249,13 @@ public class PrivilegeTestPanel extends JPanel {
         // row 6: 格式说明
         gbc.gridy = 6;
         gbc.anchor = GridBagConstraints.WEST;
-        JEditorPane formatDescPane = createHtmlLabel(
-                "<b>HTML</b> — 自包含网页报告，样式美观，支持折叠展开，可直接打印为PDF<br>"
-              + "<b>Markdown</b> — 纯文本标记格式，适合存入Git仓库或文档系统<br>"
-              + "<b>PDF</b> — 原生PDF文件，适合正式报告分发");
-        panel.add(formatDescPane, gbc);
+        reportFormatDescPane = createHtmlLabel(I18nManager.tr("report.format.desc"));
+        panel.add(reportFormatDescPane, gbc);
 
         // row 7: 警告
         gbc.gridy = 7;
-        JEditorPane warningPane = createHtmlLabel(
-                "<p class='warning'>⚠ 报告可能包含敏感字段数据（Bearer Token、Session Cookie等），请妥善保管导出的文件。<br>"
-              + "加密模式的报告文件(.ermr)需要密码才能查看，请妥善保管密码。</p>");
-        panel.add(warningPane, gbc);
+        reportWarningPane = createHtmlLabel(I18nManager.tr("report.warning"));
+        panel.add(reportWarningPane, gbc);
 
         return panel;
     }

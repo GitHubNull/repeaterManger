@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.SchemeYamlIO;
 import org.oxff.repeater.privilege.model.FieldDefinition;
@@ -25,12 +26,24 @@ public class SchemeTab extends JPanel {
     private TableRowSorter<SchemeTableModel> schemeSorter;
     private JTextField searchField;
 
+    private JLabel searchLabel;
+    private JButton clearSearchBtn;
+    private JMenuItem editItem;
+    private JMenuItem deleteItem;
+    private JButton addBtn;
+    private JButton editBtn;
+    private JButton deleteBtn;
+    private JButton toggleBtn;
+    private JButton importBtn;
+    private JButton exportBtn;
+
     public SchemeTab() {
         super(new BorderLayout(0, 5));
 
         // ========== 搜索面板 ==========
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        searchPanel.add(new JLabel("搜索:"));
+        searchLabel = new JLabel(I18nManager.tr("scheme.search"));
+        searchPanel.add(searchLabel);
         searchField = new JTextField(15);
         searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
@@ -42,7 +55,7 @@ public class SchemeTab extends JPanel {
         });
         searchPanel.add(searchField);
 
-        JButton clearSearchBtn = new JButton("清除");
+        clearSearchBtn = new JButton(I18nManager.tr("scheme.clear"));
         clearSearchBtn.addActionListener(e -> {
             searchField.setText("");
             applyFilter();
@@ -82,9 +95,9 @@ public class SchemeTab extends JPanel {
         });
 
         JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem editItem = new JMenuItem("编辑");
+        editItem = new JMenuItem(I18nManager.tr("scheme.edit"));
         editItem.addActionListener(e -> editScheme());
-        JMenuItem deleteItem = new JMenuItem("删除");
+        deleteItem = new JMenuItem(I18nManager.tr("scheme.delete"));
         deleteItem.addActionListener(e -> deleteScheme());
         popupMenu.add(editItem);
         popupMenu.add(deleteItem);
@@ -95,12 +108,12 @@ public class SchemeTab extends JPanel {
 
         // ========== 按钮面板 ==========
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton addBtn = new JButton("添加方案");
-        JButton editBtn = new JButton("编辑方案");
-        JButton deleteBtn = new JButton("删除方案");
-        JButton toggleBtn = new JButton("启用/禁用");
-        JButton importBtn = new JButton("导入");
-        JButton exportBtn = new JButton("导出");
+        addBtn = new JButton(I18nManager.tr("scheme.add"));
+        editBtn = new JButton(I18nManager.tr("scheme.edit.title"));
+        deleteBtn = new JButton(I18nManager.tr("scheme.delete.title"));
+        toggleBtn = new JButton(I18nManager.tr("scheme.toggle"));
+        importBtn = new JButton(I18nManager.tr("scheme.import"));
+        exportBtn = new JButton(I18nManager.tr("scheme.export"));
 
         addBtn.addActionListener(e -> addScheme());
         editBtn.addActionListener(e -> editScheme());
@@ -117,6 +130,25 @@ public class SchemeTab extends JPanel {
         buttonPanel.add(exportBtn);
 
         add(buttonPanel, BorderLayout.SOUTH);
+
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        searchLabel.setText(I18nManager.tr("scheme.search"));
+        clearSearchBtn.setText(I18nManager.tr("scheme.clear"));
+        editItem.setText(I18nManager.tr("scheme.edit"));
+        deleteItem.setText(I18nManager.tr("scheme.delete"));
+        addBtn.setText(I18nManager.tr("scheme.add"));
+        editBtn.setText(I18nManager.tr("scheme.edit.title"));
+        deleteBtn.setText(I18nManager.tr("scheme.delete.title"));
+        toggleBtn.setText(I18nManager.tr("scheme.toggle"));
+        importBtn.setText(I18nManager.tr("scheme.import"));
+        exportBtn.setText(I18nManager.tr("scheme.export"));
+        schemeModel.refreshColumnNames();
     }
 
     private void selectRowOnRightClick(MouseEvent e) {
@@ -145,7 +177,7 @@ public class SchemeTab extends JPanel {
 
     private void addScheme() {
         SchemeEditDialog dialog = new SchemeEditDialog(
-                SwingUtilities.getWindowAncestor(this), "添加方案", null);
+                SwingUtilities.getWindowAncestor(this), I18nManager.tr("scheme.add"), null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager.getInstance().addScheme(
@@ -158,13 +190,14 @@ public class SchemeTab extends JPanel {
     private void editScheme() {
         int viewRow = schemeTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个方案", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scheme.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
         Scheme selected = schemeModel.getScheme(modelRow);
         SchemeEditDialog dialog = new SchemeEditDialog(
-                SwingUtilities.getWindowAncestor(this), "编辑方案", selected);
+                SwingUtilities.getWindowAncestor(this), I18nManager.tr("scheme.edit.title"), selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager sm = SessionManager.getInstance();
@@ -178,18 +211,19 @@ public class SchemeTab extends JPanel {
     private void deleteScheme() {
         int viewRow = schemeTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个方案", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scheme.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
         Scheme selected = schemeModel.getScheme(modelRow);
 
         int refCount = SessionManager.getInstance().getSessionReferenceCountByScheme(selected.getId());
-        String refMsg = refCount > 0 ? "\n该方案被 " + refCount + " 个用户会话引用，删除后这些会话将不再关联任何方案。" : "";
+        String refMsg = refCount > 0 ? I18nManager.tr("scheme.delete.ref", refCount) : "";
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除方案: " + selected.getName() + "?" + refMsg,
-                "删除确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("scheme.delete.confirm", selected.getName()) + refMsg,
+                I18nManager.tr("scheme.delete.title"), JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             SessionManager.getInstance().deleteScheme(selected.getId());
             refreshData();
@@ -199,7 +233,8 @@ public class SchemeTab extends JPanel {
     private void toggleSchemeEnabled() {
         int viewRow = schemeTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个方案", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scheme.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = schemeTable.convertRowIndexToModel(viewRow);
@@ -211,9 +246,10 @@ public class SchemeTab extends JPanel {
 
     private void exportSchemes() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出方案", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT,
+                I18nManager.tr("scheme.export.dialog"), this,
                 new File("schemes.yaml"),
-                new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter"), "yaml"));
         if (selectedFile == null) return;
 
         File file = selectedFile;
@@ -228,21 +264,24 @@ public class SchemeTab extends JPanel {
             boolean success = SchemeYamlIO.writeToFile(schemes, fields, file.getAbsolutePath());
             if (success) {
                 JOptionPane.showMessageDialog(this,
-                    "成功导出 " + schemes.size() + " 个方案到:\n" + file.getAbsolutePath(),
-                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("scheme.export.success", schemes.size(), file.getAbsolutePath()),
+                    I18nManager.tr("scheme.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, "导出失败", "导出错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18nManager.tr("scheme.export.failed"),
+                        I18nManager.tr("scheme.export.failed.title"), JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("scheme.export.failed.msg", e.getMessage()),
+                I18nManager.tr("scheme.export.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importSchemes() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入方案", this,
-                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT,
+                I18nManager.tr("scheme.import.dialog"), this,
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter.all"), "yaml", "yml"));
         if (selectedFile == null) return;
 
         try {
@@ -252,7 +291,8 @@ public class SchemeTab extends JPanel {
 
             if (importedSchemes.isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                    "文件中没有找到方案数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("scheme.import.empty"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 
@@ -265,11 +305,12 @@ public class SchemeTab extends JPanel {
 
             refreshData();
             JOptionPane.showMessageDialog(this,
-                "成功导入 " + imported + " 个方案",
-                "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                I18nManager.tr("scheme.import.success", imported),
+                I18nManager.tr("scheme.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("scheme.import.failed", e.getMessage()),
+                I18nManager.tr("scheme.import.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 }

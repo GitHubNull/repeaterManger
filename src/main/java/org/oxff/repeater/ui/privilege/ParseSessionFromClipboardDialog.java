@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SchemeMatch;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.SessionParseResult;
@@ -42,7 +43,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
     public ParseSessionFromClipboardDialog(Frame owner, SessionParseResult parseResult,
                                             List<SchemeMatch> schemeMatches, List<FieldDefinition> allLocations,
                                             String suggestedName) {
-        super(owner, "从HTTP报文解析用户会话", true);
+        super(owner, I18nManager.tr("parse.title"), true);
         this.parseResult = parseResult;
         this.schemeMatches = schemeMatches;
         this.allLocations = allLocations;
@@ -57,27 +58,27 @@ public class ParseSessionFromClipboardDialog extends JDialog {
         // ========== 顶部：解析结果摘要 ==========
         JPanel summaryPanel = new JPanel();
         summaryPanel.setLayout(new BoxLayout(summaryPanel, BoxLayout.Y_AXIS));
-        summaryPanel.setBorder(BorderFactory.createTitledBorder("解析结果摘要"));
+        summaryPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("parse.summary")));
 
         // 匹配到的Scheme
         if (schemeMatches != null && !schemeMatches.isEmpty()) {
             SchemeMatch selectedMatch = schemeMatches.get(0);
-            JLabel schemeLabel = new JLabel(String.format("已选方案: %s (%d/%d 字段匹配, %.0f%%)",
+            JLabel schemeLabel = new JLabel(I18nManager.tr("parse.scheme.matched",
                     selectedMatch.getScheme().getName(),
                     selectedMatch.getMatchedCount(),
                     selectedMatch.getTotalCount(),
-                    selectedMatch.getMatchRate() * 100));
+                    Math.round(selectedMatch.getMatchRate() * 100)));
             schemeLabel.setFont(schemeLabel.getFont().deriveFont(Font.BOLD));
             summaryPanel.add(schemeLabel);
             summaryPanel.add(Box.createVerticalStrut(5));
         } else {
-            JLabel noSchemeLabel = new JLabel("未匹配到任何方案");
+            JLabel noSchemeLabel = new JLabel(I18nManager.tr("parse.scheme.unmatched"));
             noSchemeLabel.setForeground(Color.RED);
             summaryPanel.add(noSchemeLabel);
         }
 
         // 提取到的字段值列表
-        JLabel tokensLabel = new JLabel("提取到的字段值:");
+        JLabel tokensLabel = new JLabel(I18nManager.tr("parse.extracted.fields"));
         tokensLabel.setFont(tokensLabel.getFont().deriveFont(Font.BOLD));
         summaryPanel.add(tokensLabel);
 
@@ -96,7 +97,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
                 valueLabel.setToolTipText(value);
                 valueLabel.setForeground(new Color(0, 128, 0));
             } else {
-                valueLabel = new JLabel("未匹配");
+                valueLabel = new JLabel(I18nManager.tr("parse.unmatched"));
                 valueLabel.setForeground(Color.GRAY);
             }
             tokenRow.add(locLabel, BorderLayout.WEST);
@@ -104,7 +105,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
             tokensPanel.add(tokenRow);
         }
         if (!anyExtracted) {
-            JLabel noneLabel = new JLabel("  未提取到任何字段值");
+            JLabel noneLabel = new JLabel(I18nManager.tr("parse.noFields"));
             noneLabel.setForeground(Color.RED);
             tokensPanel.add(noneLabel);
         }
@@ -118,21 +119,21 @@ public class ParseSessionFromClipboardDialog extends JDialog {
 
         // ========== 中部：会话配置 ==========
         JPanel configPanel = new JPanel(new GridBagLayout());
-        configPanel.setBorder(BorderFactory.createTitledBorder("会话配置"));
+        configPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("parse.config")));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // 会话名称
         gbc.gridx = 0; gbc.gridy = 0;
-        configPanel.add(new JLabel("会话名称:"), gbc);
+        configPanel.add(new JLabel(I18nManager.tr("parse.sessionName")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         nameField = new JTextField(suggestedName != null ? suggestedName : "", 20);
         configPanel.add(nameField, gbc);
 
         // 颜色选择
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        configPanel.add(new JLabel("颜色:"), gbc);
+        configPanel.add(new JLabel(I18nManager.tr("parse.color")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         JPanel colorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         colorPreview = new JLabel("  ");
@@ -140,9 +141,9 @@ public class ParseSessionFromClipboardDialog extends JDialog {
         colorPreview.setPreferredSize(new Dimension(30, 20));
         selectedColor = generateRandomColor();
         colorPreview.setBackground(selectedColor);
-        JButton colorBtn = new JButton("选择颜色");
+        JButton colorBtn = new JButton(I18nManager.tr("parse.chooseColor"));
         colorBtn.addActionListener(e -> {
-            Color c = JColorChooser.showDialog(this, "选择颜色", selectedColor);
+            Color c = JColorChooser.showDialog(this, I18nManager.tr("parse.chooseColor"), selectedColor);
             if (c != null) {
                 selectedColor = c;
                 colorPreview.setBackground(c);
@@ -154,14 +155,14 @@ public class ParseSessionFromClipboardDialog extends JDialog {
 
         // 启用复选框
         gbc.gridx = 0; gbc.gridy = 2;
-        configPanel.add(new JLabel("启用:"), gbc);
+        configPanel.add(new JLabel(I18nManager.tr("parse.enabled")), gbc);
         gbc.gridx = 1;
-        enabledCheckbox = new JCheckBox("启用此用户会话", true);
+        enabledCheckbox = new JCheckBox(I18nManager.tr("parse.enabled.session"), true);
         configPanel.add(enabledCheckbox, gbc);
 
         // 方案选择
         gbc.gridx = 0; gbc.gridy = 3;
-        configPanel.add(new JLabel("方案:"), gbc);
+        configPanel.add(new JLabel(I18nManager.tr("parse.scheme")), gbc);
         gbc.gridx = 1;
         schemeComboBox = new JComboBox<>();
         schemeNameToId.clear();
@@ -191,7 +192,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
         updateExistingLabel = new JLabel("");
         configPanel.add(updateExistingLabel, gbc);
         gbc.gridx = 1;
-        updateExistingCheckbox = new JCheckBox("更新现有会话");
+        updateExistingCheckbox = new JCheckBox(I18nManager.tr("parse.updateExisting"));
         updateExistingCheckbox.setVisible(false);
         updateExistingCheckbox.setEnabled(false);
         configPanel.add(updateExistingCheckbox, gbc);
@@ -208,12 +209,14 @@ public class ParseSessionFromClipboardDialog extends JDialog {
 
         // ========== 底部：按钮 ==========
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okBtn = new JButton("确定");
-        JButton cancelBtn = new JButton("取消");
+        JButton okBtn = new JButton(I18nManager.tr("common.ok"));
+        JButton cancelBtn = new JButton(I18nManager.tr("common.cancel"));
 
         okBtn.addActionListener(e -> {
             if (nameField.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "会话名称不能为空", "提示", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        I18nManager.tr("parse.name.empty"),
+                        I18nManager.tr("common.hint"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             confirmed = true;
@@ -236,7 +239,7 @@ public class ParseSessionFromClipboardDialog extends JDialog {
         Integer existingId = existingSessionNameToId.get(name);
         if (existingId != null) {
             existingSessionId = existingId;
-            updateExistingLabel.setText("已存在同名会话:");
+            updateExistingLabel.setText(I18nManager.tr("parse.duplicateName"));
             updateExistingCheckbox.setVisible(true);
             updateExistingCheckbox.setEnabled(true);
             updateExistingCheckbox.setSelected(true);

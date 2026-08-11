@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.privilege.ClipboardFormat;
 import org.oxff.repeater.privilege.FetchRequestParser;
@@ -31,7 +32,8 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
         this.parentComponent = parentComponent;
 
         // 创建进度对话框
-        progressDialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(parentComponent), "解析中", true);
+        progressDialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(parentComponent),
+                I18nManager.tr("parse.worker.title"), true);
         progressDialog.setSize(300, 120);
         progressDialog.setLocationRelativeTo(parentComponent);
         progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
@@ -39,7 +41,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
 
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        progressLabel = new JLabel("正在读取剪贴板...");
+        progressLabel = new JLabel(I18nManager.tr("parse.worker.reading"));
         progressLabel.setHorizontalAlignment(SwingConstants.CENTER);
         panel.add(progressLabel, BorderLayout.CENTER);
 
@@ -52,37 +54,37 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
 
     @Override
     protected Result doInBackground() throws Exception {
-        publish("正在读取剪贴板...");
+        publish(I18nManager.tr("parse.worker.reading"));
 
         // 1. 读取系统剪贴板
         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
         Transferable contents = clipboard.getContents(null);
         if (contents == null || !contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
-            return Result.error("剪贴板中没有文本内容，请先复制HTTP报文");
+            return Result.error(I18nManager.tr("parse.worker.noText"));
         }
 
         String clipboardText = (String) contents.getTransferData(DataFlavor.stringFlavor);
         if (clipboardText == null || clipboardText.trim().isEmpty()) {
-            return Result.error("剪贴板内容为空");
+            return Result.error(I18nManager.tr("parse.worker.empty"));
         }
 
-        publish("正在解析HTTP报文...");
+        publish(I18nManager.tr("parse.worker.parsing"));
 
         // 2. 检测格式并转换
         ClipboardFormat format = FetchRequestParser.detectFormat(clipboardText);
         byte[] httpMessage;
         if (format == ClipboardFormat.FETCH_BROWSER
                 || format == ClipboardFormat.FETCH_NODEJS) {
-            publish("正在转换 fetch 格式...");
+            publish(I18nManager.tr("parse.worker.converting"));
             try {
                 httpMessage = FetchRequestParser.convertToRawHttp(clipboardText);
             } catch (IllegalArgumentException e) {
-                return Result.error("fetch 格式转换失败: " + e.getMessage());
+                return Result.error(I18nManager.tr("parse.worker.convertFailed", e.getMessage()));
             }
         } else if (format == ClipboardFormat.RAW_HTTP) {
             httpMessage = clipboardText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         } else {
-            return Result.error("无法识别剪贴板内容格式，请复制原始HTTP报文或Chrome fetch格式");
+            return Result.error(I18nManager.tr("parse.worker.unknownFormat"));
         }
 
         // 3. 获取字段定义和方案
@@ -91,13 +93,13 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
         List<Scheme> schemes = sm.getSchemes();
 
         if (locations.isEmpty()) {
-            return Result.error("未配置任何字段定义，请先配置字段定义");
+            return Result.error(I18nManager.tr("parse.worker.noFields"));
         }
 
         // 3. 调用解析引擎
         SessionParseResult parseResult = SessionParserEngine.parse(httpMessage, locations);
 
-        publish("正在匹配方案...");
+        publish(I18nManager.tr("parse.worker.matching"));
 
         // 4. 匹配最佳方案
         List<SchemeMatch> schemeMatches = SessionParserEngine.matchSchemes(parseResult, schemes);
@@ -125,7 +127,8 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
             Result result = get();
             if (result.isError()) {
                 JOptionPane.showMessageDialog(parentComponent,
-                        result.getErrorMessage(), "解析失败", JOptionPane.ERROR_MESSAGE);
+                        result.getErrorMessage(),
+                        I18nManager.tr("parse.worker.failed"), JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -141,9 +144,9 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 Frame owner = (Frame) SwingUtilities.getWindowAncestor(parentComponent);
                 String message;
                 if (!hasEnabledScheme) {
-                    message = "<html>没有任何启用的方案。<br>请选择一个方案，选中后将自动启用。</html>";
+                    message = I18nManager.tr("parse.worker.noEnabled");
                 } else {
-                    message = "<html>没有启用的方案匹配当前报文。<br>请选择一个方案，选中后将自动启用。</html>";
+                    message = I18nManager.tr("parse.worker.noMatch");
                 }
 
                 SelectSchemeDialog selectDialog = new SelectSchemeDialog(owner, allSchemes, message);
@@ -163,7 +166,7 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     selectedScheme.setEnabled(true);
                     sm.updateScheme(selectedScheme.getId(), selectedScheme.getName(),
                             selectedScheme.getDescription(), true, selectedScheme.isPersistToGlobal());
-                    LogManager.getInstance().printOutput("[+] 已自动启用方案: " + selectedScheme.getName());
+                    LogManager.getInstance().printOutput(I18nManager.tr("parse.worker.autoEnabled", selectedScheme.getName()));
                 }
 
                 // 重新解析匹配（使用刚启用的方案）
@@ -201,12 +204,13 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     // 更新现有会话
                     sessionId = dialog.getExistingSessionId();
                     sm.updateUserSession(sessionId, sessionName, colorHex, enabled, schemeId);
-                    LogManager.getInstance().printOutput("[+] 已更新用户会话: " + sessionName);
+                    LogManager.getInstance().printOutput(I18nManager.tr("parse.worker.sessionUpdated", sessionName));
                 } else {
                     // 创建新会话
                     sessionId = sm.addUserSession(sessionName, colorHex, enabled, schemeId);
                     if (sessionId > 0) {
-                        LogManager.getInstance().printOutput("[+] 已创建用户会话: " + sessionName + " (ID=" + sessionId + ")");
+                        LogManager.getInstance().printOutput(
+                                I18nManager.tr("parse.worker.sessionCreated", sessionName, sessionId));
                     }
                 }
 
@@ -215,7 +219,8 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                     java.util.Map<Integer, String> extractedValues = result.getParseResult().getAllExtractedValues();
                     if (!extractedValues.isEmpty()) {
                         sm.saveFieldValues(sessionId, extractedValues);
-                        LogManager.getInstance().printOutput("[+] 已保存 " + extractedValues.size() + " 个字段值");
+                        LogManager.getInstance().printOutput(
+                                I18nManager.tr("parse.worker.fieldsSaved", extractedValues.size()));
                     }
 
                     // 刷新UI
@@ -223,9 +228,10 @@ public class ParseSessionWorker extends SwingWorker<ParseSessionWorker.Result, S
                 }
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 解析用户会话时发生错误: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("parse.worker.errorLog", e.getMessage()));
             JOptionPane.showMessageDialog(parentComponent,
-                    "解析过程中发生错误: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("parse.worker.error", e.getMessage()),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 

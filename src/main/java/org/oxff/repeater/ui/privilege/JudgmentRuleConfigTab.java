@@ -1,10 +1,12 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.JudgmentRuleManager;
 import org.oxff.repeater.privilege.JudgmentRuleYamlIO;
 import org.oxff.repeater.privilege.model.JudgmentRule;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
@@ -20,12 +22,25 @@ public class JudgmentRuleConfigTab extends JPanel {
     private final JudgmentRuleTableModel ruleModel;
     private final JTextField searchField;
 
+    private JLabel searchLabel;
+    private JButton clearSearchBtn;
+    private JPanel tablePanel;
+    private JPanel infoPanel;
+    private JTextArea infoArea;
+    private JButton addBtn;
+    private JButton editBtn;
+    private JButton deleteBtn;
+    private JButton toggleBtn;
+    private JButton exportBtn;
+    private JButton importBtn;
+
     public JudgmentRuleConfigTab() {
         super(new BorderLayout(0, 5));
 
         // ========== 搜索面板 ==========
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        searchPanel.add(new JLabel("搜索:"));
+        searchLabel = new JLabel(I18nManager.tr("judgment.search"));
+        searchPanel.add(searchLabel);
         searchField = new JTextField(20);
         searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent e) { filterRules(); }
@@ -33,13 +48,13 @@ public class JudgmentRuleConfigTab extends JPanel {
             public void changedUpdate(javax.swing.event.DocumentEvent e) { filterRules(); }
         });
         searchPanel.add(searchField);
-        JButton clearSearchBtn = new JButton("清除");
+        clearSearchBtn = new JButton(I18nManager.tr("judgment.clear"));
         clearSearchBtn.addActionListener(e -> { searchField.setText(""); filterRules(); });
         searchPanel.add(clearSearchBtn);
 
         // ========== 规则表格 ==========
-        JPanel tablePanel = new JPanel(new BorderLayout());
-        tablePanel.setBorder(BorderFactory.createTitledBorder("判决规则"));
+        tablePanel = new JPanel(new BorderLayout());
+        tablePanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("judgment.title")));
 
         ruleModel = new JudgmentRuleTableModel();
         ruleTable = new JTable(ruleModel);
@@ -58,10 +73,10 @@ public class JudgmentRuleConfigTab extends JPanel {
         // ========== 按钮面板 ==========
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
-        JButton addBtn = new JButton("添加规则");
-        JButton editBtn = new JButton("编辑规则");
-        JButton deleteBtn = new JButton("删除规则");
-        JButton toggleBtn = new JButton("启用/禁用");
+        addBtn = new JButton(I18nManager.tr("judgment.add"));
+        editBtn = new JButton(I18nManager.tr("judgment.edit"));
+        deleteBtn = new JButton(I18nManager.tr("judgment.delete"));
+        toggleBtn = new JButton(I18nManager.tr("judgment.toggle"));
 
         addBtn.addActionListener(e -> addRule());
         editBtn.addActionListener(e -> editRule());
@@ -75,8 +90,8 @@ public class JudgmentRuleConfigTab extends JPanel {
         buttonPanel.add(Box.createHorizontalStrut(20));
 
         // 导入导出按钮
-        JButton exportBtn = new JButton("导出规则");
-        JButton importBtn = new JButton("导入规则");
+        exportBtn = new JButton(I18nManager.tr("judgment.export"));
+        importBtn = new JButton(I18nManager.tr("judgment.import"));
         exportBtn.addActionListener(e -> exportRules());
         importBtn.addActionListener(e -> importRules());
         buttonPanel.add(exportBtn);
@@ -85,17 +100,12 @@ public class JudgmentRuleConfigTab extends JPanel {
         tablePanel.add(buttonPanel, BorderLayout.SOUTH);
 
         // ========== 说明面板 ==========
-        JPanel infoPanel = new JPanel(new BorderLayout());
-        infoPanel.setBorder(BorderFactory.createTitledBorder("判决逻辑说明"));
-        JTextArea infoArea = new JTextArea(4, 50);
+        infoPanel = new JPanel(new BorderLayout());
+        infoPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("judgment.logic.title")));
+        infoArea = new JTextArea(4, 50);
         infoArea.setEditable(false);
         infoArea.setLineWrap(true);
-        infoArea.setText(
-            "• 每次使用一个活跃规则组（勾选\"活跃\"列切换），组内条件按 AND/OR 组合求值\n" +
-            "• 活跃规则组条件组合满足 → 标记为越权（红色），不满足 → 标记为安全（绿色）\n" +
-            "• 无活跃规则组或不匹配时，回退默认相似度判决（相似度>=阈值则判定为越权）\n" +
-            "• 勾选\"持久化\"（表格列或编辑框）可跨会话保留，重启插件后自动恢复；不勾选则为临时规则"
-        );
+        infoArea.setText(I18nManager.tr("judgment.info.text"));
         infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
 
         // ========== 组装 ==========
@@ -103,8 +113,29 @@ public class JudgmentRuleConfigTab extends JPanel {
         add(tablePanel, BorderLayout.CENTER);
         add(infoPanel, BorderLayout.SOUTH);
 
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+
         // 初始加载
         refreshData();
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        searchLabel.setText(I18nManager.tr("judgment.search"));
+        clearSearchBtn.setText(I18nManager.tr("judgment.clear"));
+        ((TitledBorder) tablePanel.getBorder()).setTitle(I18nManager.tr("judgment.title"));
+        ((TitledBorder) infoPanel.getBorder()).setTitle(I18nManager.tr("judgment.logic.title"));
+        infoArea.setText(I18nManager.tr("judgment.info.text"));
+        addBtn.setText(I18nManager.tr("judgment.add"));
+        editBtn.setText(I18nManager.tr("judgment.edit"));
+        deleteBtn.setText(I18nManager.tr("judgment.delete"));
+        toggleBtn.setText(I18nManager.tr("judgment.toggle"));
+        exportBtn.setText(I18nManager.tr("judgment.export"));
+        importBtn.setText(I18nManager.tr("judgment.import"));
+        ruleModel.refreshColumnNames();
+        repaint();
     }
 
     /**
@@ -117,7 +148,7 @@ public class JudgmentRuleConfigTab extends JPanel {
 
     private void addRule() {
         JudgmentRuleEditDialog dialog = new JudgmentRuleEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加判决规则", null);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("judgment.add.title"), null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             JudgmentRule rule = dialog.toRule();
@@ -129,12 +160,13 @@ public class JudgmentRuleConfigTab extends JPanel {
     private void editRule() {
         int row = ruleTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一条规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("judgment.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         JudgmentRule selected = ruleModel.getRule(row);
         JudgmentRuleEditDialog dialog = new JudgmentRuleEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑判决规则", selected);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("judgment.edit.title"), selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             JudgmentRule updated = dialog.toRule();
@@ -146,13 +178,14 @@ public class JudgmentRuleConfigTab extends JPanel {
     private void deleteRule() {
         int row = ruleTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一条规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("judgment.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         JudgmentRule selected = ruleModel.getRule(row);
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除判决规则: " + selected.getName() + "?",
-                "删除确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("judgment.delete.confirm", selected.getName()),
+                I18nManager.tr("judgment.delete.confirm.title"), JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             JudgmentRuleManager.getInstance().deleteRule(selected.getId());
             refreshData();
@@ -162,7 +195,8 @@ public class JudgmentRuleConfigTab extends JPanel {
     private void toggleRule() {
         int row = ruleTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一条规则", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("judgment.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         JudgmentRule selected = ruleModel.getRule(row);
@@ -172,9 +206,10 @@ public class JudgmentRuleConfigTab extends JPanel {
 
     private void exportRules() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_EXPORT, "导出判决规则", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_EXPORT,
+                I18nManager.tr("judgment.export.dialog"), this,
                 new File("judgment_rules.yml"),
-                new FileNameExtensionFilter("YAML文件 (*.yml, *.yaml)", "yml", "yaml"));
+                new FileNameExtensionFilter(I18nManager.tr("judgment.yaml.filter"), "yml", "yaml"));
 
         if (selectedFile == null) {
             return;
@@ -186,17 +221,19 @@ public class JudgmentRuleConfigTab extends JPanel {
         }
         if (JudgmentRuleYamlIO.writeToFile(
                 JudgmentRuleManager.getInstance().getAllRules(), filePath)) {
-            JOptionPane.showMessageDialog(this, "规则导出成功: " + filePath,
-                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("judgment.export.success", filePath),
+                    I18nManager.tr("judgment.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } else {
-            JOptionPane.showMessageDialog(this, "规则导出失败", "导出失败", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("judgment.export.failed"),
+                    I18nManager.tr("judgment.export.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importRules() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_IMPORT, "导入判决规则", this,
-                new FileNameExtensionFilter("YAML文件 (*.yml, *.yaml)", "yml", "yaml"));
+                org.oxff.repeater.utils.FileChooserHelper.OP_YAML_RULE_IMPORT,
+                I18nManager.tr("judgment.import.dialog"), this,
+                new FileNameExtensionFilter(I18nManager.tr("judgment.yaml.filter"), "yml", "yaml"));
 
         if (selectedFile == null) {
             return;
@@ -205,23 +242,27 @@ public class JudgmentRuleConfigTab extends JPanel {
         String filePath = selectedFile.getAbsolutePath();
         List<JudgmentRule> importedRules = JudgmentRuleYamlIO.readFromFile(filePath);
         if (importedRules.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "未找到有效的判决规则", "导入失败", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("judgment.import.empty"),
+                    I18nManager.tr("judgment.import.failed.title"), JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        String[] options = {"合并导入", "替换导入", "取消"};
+        String[] options = {I18nManager.tr("judgment.import.merge"),
+                I18nManager.tr("judgment.import.replace"), I18nManager.tr("judgment.import.cancel")};
         int choice = JOptionPane.showOptionDialog(this,
-                "发现 " + importedRules.size() + " 条规则，请选择导入方式",
-                "导入方式", 0, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                I18nManager.tr("judgment.import.choice.msg", importedRules.size()),
+                I18nManager.tr("judgment.import.choice.title"), 0, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 
         if (choice == 0) {
             int added = JudgmentRuleManager.getInstance().importRulesMerge(importedRules);
             JOptionPane.showMessageDialog(this,
-                    "合并导入完成，新增 " + added + " 条规则", "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("judgment.import.merge.done", added),
+                    I18nManager.tr("judgment.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } else if (choice == 1) {
             JudgmentRuleManager.getInstance().importRulesReplace(importedRules);
             JOptionPane.showMessageDialog(this,
-                    "替换导入完成，共 " + importedRules.size() + " 条规则", "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("judgment.import.replace.done", importedRules.size()),
+                    I18nManager.tr("judgment.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
         }
         refreshData();
     }

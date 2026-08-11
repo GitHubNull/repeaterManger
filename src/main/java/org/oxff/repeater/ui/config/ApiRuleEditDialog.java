@@ -3,6 +3,7 @@ package org.oxff.repeater.ui.config;
 import org.oxff.repeater.api.ApiExtractionRule;
 import org.oxff.repeater.api.ApiRuleMethod;
 import org.oxff.repeater.api.ApiRuleSource;
+import org.oxff.repeater.i18n.I18nManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -45,7 +46,7 @@ public class ApiRuleEditDialog extends JDialog {
 
     private ApiRuleEditDialog(Component parent, ApiExtractionRule rule, boolean isNew) {
         super((Frame) SwingUtilities.getWindowAncestor(parent),
-                isNew ? "添加API提取规则" : "编辑API提取规则", true);
+                isNew ? I18nManager.tr("api.rule.dialog.add") : I18nManager.tr("api.rule.dialog.edit"), true);
         this.rule = rule;
         initUI();
     }
@@ -73,22 +74,22 @@ public class ApiRuleEditDialog extends JDialog {
 
         // 优先级
         fc.gridx = 0; fc.gridy = 0; fc.weightx = 0;
-        formPanel.add(new JLabel("优先级:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.priority")), fc);
         fc.gridx = 1; fc.gridy = 0; fc.weightx = 1.0; fc.gridwidth = 2;
         prioritySpinner = new JSpinner(new SpinnerNumberModel(rule.getPriority(), 1, 999, 1));
         formPanel.add(prioritySpinner, fc);
 
         // 名称
         fc.gridx = 0; fc.gridy = 1; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("名称:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.name")), fc);
         fc.gridx = 1; fc.gridy = 1; fc.weightx = 1.0; fc.gridwidth = 2;
         nameField = new JTextField(rule.getName(), 30);
-        nameField.setToolTipText("规则名称，便于识别和管理");
+        nameField.setToolTipText(I18nManager.tr("api.rule.dialog.name.tooltip"));
         formPanel.add(nameField, fc);
 
         // 来源
         fc.gridx = 0; fc.gridy = 2; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("来源:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.source")), fc);
         fc.gridx = 1; fc.gridy = 2; fc.weightx = 1.0; fc.gridwidth = 2;
         sourceCombo = new JComboBox<>(ApiRuleSource.values());
         sourceCombo.setRenderer(new DefaultListCellRenderer() {
@@ -107,7 +108,7 @@ public class ApiRuleEditDialog extends JDialog {
 
         // 方法
         fc.gridx = 0; fc.gridy = 3; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("方法:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.method")), fc);
         fc.gridx = 1; fc.gridy = 3; fc.weightx = 1.0; fc.gridwidth = 2;
         methodCombo = new JComboBox<>();
         methodCombo.setRenderer(new DefaultListCellRenderer() {
@@ -130,7 +131,7 @@ public class ApiRuleEditDialog extends JDialog {
 
         // 表达式
         fc.gridx = 0; fc.gridy = 4; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("表达式:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.expression")), fc);
         fc.gridx = 1; fc.gridy = 4; fc.weightx = 1.0; fc.gridwidth = 2;
         expressionField = new JTextField(rule.getExpression(), 30);
         formPanel.add(expressionField, fc);
@@ -149,35 +150,35 @@ public class ApiRuleEditDialog extends JDialog {
 
         // 启用
         fc.gridx = 0; fc.gridy = 6; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("启用:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.enabled")), fc);
         fc.gridx = 1; fc.gridy = 6; fc.weightx = 1.0; fc.gridwidth = 2;
-        enabledCheckbox = new JCheckBox("启用此规则", rule.isEnabled());
+        enabledCheckbox = new JCheckBox(I18nManager.tr("api.rule.dialog.enable"), rule.isEnabled());
         formPanel.add(enabledCheckbox, fc);
 
         // 备注
         fc.gridx = 0; fc.gridy = 7; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("备注:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.remark")), fc);
         fc.gridx = 1; fc.gridy = 7; fc.weightx = 1.0; fc.gridwidth = 2;
         remarkField = new JTextField(rule.getRemark(), 30);
-        remarkField.setToolTipText("备注信息，用于记录规则用途或注意事项");
+        remarkField.setToolTipText(I18nManager.tr("api.rule.dialog.remark.tooltip"));
         formPanel.add(remarkField, fc);
 
         // 持久化选项
         fc.gridx = 0; fc.gridy = 8; fc.weightx = 0; fc.gridwidth = 1;
-        formPanel.add(new JLabel("持久化:"), fc);
+        formPanel.add(new JLabel(I18nManager.tr("api.rule.dialog.persist")), fc);
         fc.gridx = 1; fc.gridy = 8; fc.weightx = 1.0; fc.gridwidth = 2;
         JPanel persistPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        persistentCheckbox = new JCheckBox("持久化到项目", rule.isPersistent());
-        persistentCheckbox.setToolTipText("将规则保存到当前项目的SQLite数据库中，项目内持久保存");
-        globalCheckbox = new JCheckBox("持久化到全局", rule.isGlobal());
-        globalCheckbox.setToolTipText("将规则保存到全局YAML文件，新项目加载时自动加载此规则");
+        persistentCheckbox = new JCheckBox(I18nManager.tr("api.rule.dialog.persistProject"), rule.isPersistent());
+        persistentCheckbox.setToolTipText(I18nManager.tr("api.rule.dialog.persistProject.tooltip"));
+        globalCheckbox = new JCheckBox(I18nManager.tr("api.rule.dialog.persistGlobal"), rule.isGlobal());
+        globalCheckbox.setToolTipText(I18nManager.tr("api.rule.dialog.persistGlobal.tooltip"));
         persistPanel.add(persistentCheckbox);
         persistPanel.add(globalCheckbox);
         formPanel.add(persistPanel, fc);
 
         // 持久化提示
         fc.gridx = 1; fc.gridy = 9; fc.weightx = 1.0; fc.gridwidth = 2;
-        JLabel persistHintLabel = new JLabel("若两者均不勾选，规则仅保存在内存中，重启后丢失");
+        JLabel persistHintLabel = new JLabel(I18nManager.tr("api.rule.dialog.persistHint"));
         persistHintLabel.setForeground(new Color(120, 120, 120));
         persistHintLabel.setFont(persistHintLabel.getFont().deriveFont(Font.PLAIN, 11f));
         formPanel.add(persistHintLabel, fc);
@@ -187,7 +188,7 @@ public class ApiRuleEditDialog extends JDialog {
 
     private JPanel createButtonPanel() {
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
-        JButton okBtn = new JButton("确定");
+        JButton okBtn = new JButton(I18nManager.tr("common.ok"));
         okBtn.addActionListener(e -> {
             // 校验
             ApiRuleSource source = (ApiRuleSource) sourceCombo.getSelectedItem();
@@ -195,13 +196,15 @@ public class ApiRuleEditDialog extends JDialog {
             String expression = expressionField.getText().trim();
 
             if (expression.isEmpty()) {
-                JOptionPane.showMessageDialog(ApiRuleEditDialog.this, "表达式不能为空", "校验失败", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(ApiRuleEditDialog.this,
+                        I18nManager.tr("api.rule.dialog.expr.empty"),
+                        I18nManager.tr("api.rule.dialog.validation.failed"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             if (method != null && !ApiRuleMethod.isValidForSource(method, source)) {
                 JOptionPane.showMessageDialog(ApiRuleEditDialog.this,
-                        method.getDisplayName() + " 不适用于 " + source.getDisplayName(),
-                        "校验失败", JOptionPane.WARNING_MESSAGE);
+                        I18nManager.tr("api.rule.dialog.method.not.applicable", method.getDisplayName(), source.getDisplayName()),
+                        I18nManager.tr("api.rule.dialog.validation.failed"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             // 正则预校验
@@ -210,8 +213,8 @@ public class ApiRuleEditDialog extends JDialog {
                     Pattern.compile(expression);
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(ApiRuleEditDialog.this,
-                            "正则表达式语法错误: " + ex.getMessage(),
-                            "校验失败", JOptionPane.WARNING_MESSAGE);
+                            I18nManager.tr("api.rule.dialog.regex.error", ex.getMessage()),
+                            I18nManager.tr("api.rule.dialog.validation.failed"), JOptionPane.WARNING_MESSAGE);
                     return;
                 }
             }
@@ -228,7 +231,7 @@ public class ApiRuleEditDialog extends JDialog {
             confirmed = true;
             dispose();
         });
-        JButton cancelBtn = new JButton("取消");
+        JButton cancelBtn = new JButton(I18nManager.tr("common.cancel"));
         cancelBtn.addActionListener(e -> dispose());
         btnPanel.add(okBtn);
         btnPanel.add(cancelBtn);
@@ -259,16 +262,16 @@ public class ApiRuleEditDialog extends JDialog {
         }
         switch (method) {
             case REGEX:
-                label.setText("正则表达式（使用捕获组提取，如: /api/v\\d+/(\\w+)）");
+                label.setText(I18nManager.tr("api.rule.dialog.hint.regex"));
                 break;
             case SUBSTR:
-                label.setText("START,END（如: 0,10 或 5,END 或 4,-3）");
+                label.setText(I18nManager.tr("api.rule.dialog.hint.substr"));
                 break;
             case JSON_PATH:
-                label.setText("JSON路径（如: $.data.apiName 或 $.items[0].name）");
+                label.setText(I18nManager.tr("api.rule.dialog.hint.jsonPath"));
                 break;
             case XPATH:
-                label.setText("XPath表达式（如: /root/api/name/text()）");
+                label.setText(I18nManager.tr("api.rule.dialog.hint.xpath"));
                 break;
             default:
                 label.setText(" ");

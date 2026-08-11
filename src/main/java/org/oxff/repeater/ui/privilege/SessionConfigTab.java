@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -29,15 +31,27 @@ public class SessionConfigTab extends JPanel {
         userSessionTab = new UserSessionTab();
         replayConfigTab = new ReplayConfigTab();
 
-        innerTabbedPane.addTab("字段管理", fieldDefinitionTab);
-        innerTabbedPane.addTab("方案管理", schemeTab);
-        innerTabbedPane.addTab("用户会话", userSessionTab);
-        innerTabbedPane.addTab("重放配置", replayConfigTab);
+        innerTabbedPane.addTab(I18nManager.tr("session.tab.field"), fieldDefinitionTab);
+        innerTabbedPane.addTab(I18nManager.tr("session.tab.scheme"), schemeTab);
+        innerTabbedPane.addTab(I18nManager.tr("session.tab.user"), userSessionTab);
+        innerTabbedPane.addTab(I18nManager.tr("session.tab.replay"), replayConfigTab);
 
         add(innerTabbedPane, BorderLayout.CENTER);
 
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+
         // 初始加载数据
         refreshData();
+    }
+
+    /**
+     * 语言切换时刷新Tab标题
+     */
+    private void refreshTexts() {
+        innerTabbedPane.setTitleAt(0, I18nManager.tr("session.tab.field"));
+        innerTabbedPane.setTitleAt(1, I18nManager.tr("session.tab.scheme"));
+        innerTabbedPane.setTitleAt(2, I18nManager.tr("session.tab.user"));
+        innerTabbedPane.setTitleAt(3, I18nManager.tr("session.tab.replay"));
     }
 
     /**

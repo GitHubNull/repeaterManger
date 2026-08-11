@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.FieldType;
 
@@ -32,46 +33,48 @@ public class FieldDefinitionEditDialog extends JDialog {
 
         // 类型
         gbc.gridx = 0; gbc.gridy = 0;
-        mainPanel.add(new JLabel("类型:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("field.dialog.type")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         typeCombo = new JComboBox<>(FieldType.values());
         mainPanel.add(typeCombo, gbc);
 
         // 表达式
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        mainPanel.add(new JLabel("表达式:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("field.dialog.expression")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         expressionField = new JTextField(25);
         mainPanel.add(expressionField, gbc);
 
         // 描述
         gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0;
-        mainPanel.add(new JLabel("描述:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("field.dialog.description")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         descriptionField = new JTextField(25);
         mainPanel.add(descriptionField, gbc);
 
         // 持久化到全局
         gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
-        mainPanel.add(new JLabel("持久化到全局:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("field.dialog.persist")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
-        persistToGlobalCheckbox = new JCheckBox("是", true);
+        persistToGlobalCheckbox = new JCheckBox(I18nManager.tr("field.dialog.yes"), true);
         mainPanel.add(persistToGlobalCheckbox, gbc);
 
         // 是否启用
         gbc.gridx = 0; gbc.gridy = 4; gbc.weightx = 0;
-        mainPanel.add(new JLabel("启用:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("field.dialog.enabled")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
-        enabledCheckbox = new JCheckBox("是", true);
+        enabledCheckbox = new JCheckBox(I18nManager.tr("field.dialog.yes"), true);
         mainPanel.add(enabledCheckbox, gbc);
 
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okBtn = new JButton("确定");
-        JButton cancelBtn = new JButton("取消");
+        JButton okBtn = new JButton(I18nManager.tr("field.dialog.ok"));
+        JButton cancelBtn = new JButton(I18nManager.tr("field.dialog.cancel"));
         okBtn.addActionListener(e -> {
             if (expressionField.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "表达式不能为空", "提示", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        I18nManager.tr("field.dialog.expression.empty"),
+                        I18nManager.tr("common.hint"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             confirmed = true;

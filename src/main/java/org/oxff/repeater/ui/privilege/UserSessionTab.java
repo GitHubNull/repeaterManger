@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.UserSessionYamlIO;
 import org.oxff.repeater.privilege.model.FieldDefinition;
@@ -34,12 +35,28 @@ public class UserSessionTab extends JPanel {
     private TableRowSorter<UserSessionTableModel> userSessionSorter;
     private JTextField sessionSearchField;
 
+    private JLabel sessionSearchLabel;
+    private JButton clearSessionSearchBtn;
+    private JMenuItem editSessionItem;
+    private JMenuItem deleteSessionItem;
+    private JMenuItem viewUserInfoItem;
+    private JButton addSessionBtn;
+    private JButton editSessionBtn;
+    private JButton deleteSessionBtn;
+    private JButton toggleEnableBtn;
+    private JButton importSessionBtn;
+    private JButton exportSessionBtn;
+    private JButton userInfoBtn;
+    private JButton parseFromClipboardBtn;
+    private JButton addAnonymousBtn;
+
     public UserSessionTab() {
         super(new BorderLayout(0, 5));
 
         // ========== 搜索面板 ==========
         JPanel sessionSearchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        sessionSearchPanel.add(new JLabel("搜索:"));
+        sessionSearchLabel = new JLabel(I18nManager.tr("session.search"));
+        sessionSearchPanel.add(sessionSearchLabel);
         sessionSearchField = new JTextField(15);
         sessionSearchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
@@ -51,7 +68,7 @@ public class UserSessionTab extends JPanel {
         });
         sessionSearchPanel.add(sessionSearchField);
 
-        JButton clearSessionSearchBtn = new JButton("清除");
+        clearSessionSearchBtn = new JButton(I18nManager.tr("session.clear"));
         clearSessionSearchBtn.addActionListener(e -> {
             sessionSearchField.setText("");
             applyUserSessionFilter();
@@ -95,11 +112,11 @@ public class UserSessionTab extends JPanel {
         });
 
         JPopupMenu userSessionPopupMenu = new JPopupMenu();
-        JMenuItem editSessionItem = new JMenuItem("编辑");
+        editSessionItem = new JMenuItem(I18nManager.tr("session.edit"));
         editSessionItem.addActionListener(e -> editUserSession());
-        JMenuItem deleteSessionItem = new JMenuItem("删除");
+        deleteSessionItem = new JMenuItem(I18nManager.tr("session.delete"));
         deleteSessionItem.addActionListener(e -> deleteUserSession());
-        JMenuItem viewUserInfoItem = new JMenuItem("查看用户信息");
+        viewUserInfoItem = new JMenuItem(I18nManager.tr("session.viewInfo"));
         viewUserInfoItem.addActionListener(e -> showUserInfo());
         userSessionPopupMenu.add(editSessionItem);
         userSessionPopupMenu.add(deleteSessionItem);
@@ -112,15 +129,15 @@ public class UserSessionTab extends JPanel {
 
         // ========== 按钮面板 ==========
         JPanel sessionButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton addSessionBtn = new JButton("添加用户");
-        JButton editSessionBtn = new JButton("编辑用户");
-        JButton deleteSessionBtn = new JButton("删除用户");
-        JButton toggleEnableBtn = new JButton("启用/禁用");
-        JButton importSessionBtn = new JButton("导入");
-        JButton exportSessionBtn = new JButton("导出");
-        JButton userInfoBtn = new JButton("用户信息");
-        JButton parseFromClipboardBtn = new JButton("从报文解析");
-        JButton addAnonymousBtn = new JButton("添加匿名用户");
+        addSessionBtn = new JButton(I18nManager.tr("session.add"));
+        editSessionBtn = new JButton(I18nManager.tr("session.edit.title"));
+        deleteSessionBtn = new JButton(I18nManager.tr("session.delete.title"));
+        toggleEnableBtn = new JButton(I18nManager.tr("session.toggle"));
+        importSessionBtn = new JButton(I18nManager.tr("session.import"));
+        exportSessionBtn = new JButton(I18nManager.tr("session.export"));
+        userInfoBtn = new JButton(I18nManager.tr("session.userInfo"));
+        parseFromClipboardBtn = new JButton(I18nManager.tr("session.parseFromClipboard"));
+        addAnonymousBtn = new JButton(I18nManager.tr("session.addAnonymous"));
 
         addSessionBtn.addActionListener(e -> addUserSession());
         editSessionBtn.addActionListener(e -> editUserSession());
@@ -143,6 +160,29 @@ public class UserSessionTab extends JPanel {
         sessionButtonPanel.add(userInfoBtn);
 
         add(sessionButtonPanel, BorderLayout.SOUTH);
+
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        sessionSearchLabel.setText(I18nManager.tr("session.search"));
+        clearSessionSearchBtn.setText(I18nManager.tr("session.clear"));
+        editSessionItem.setText(I18nManager.tr("session.edit"));
+        deleteSessionItem.setText(I18nManager.tr("session.delete"));
+        viewUserInfoItem.setText(I18nManager.tr("session.viewInfo"));
+        addSessionBtn.setText(I18nManager.tr("session.add"));
+        editSessionBtn.setText(I18nManager.tr("session.edit.title"));
+        deleteSessionBtn.setText(I18nManager.tr("session.delete.title"));
+        toggleEnableBtn.setText(I18nManager.tr("session.toggle"));
+        importSessionBtn.setText(I18nManager.tr("session.import"));
+        exportSessionBtn.setText(I18nManager.tr("session.export"));
+        userInfoBtn.setText(I18nManager.tr("session.userInfo"));
+        parseFromClipboardBtn.setText(I18nManager.tr("session.parseFromClipboard"));
+        addAnonymousBtn.setText(I18nManager.tr("session.addAnonymous"));
+        userSessionModel.refreshColumnNames();
     }
 
     private void parseSessionFromClipboard() {
@@ -151,8 +191,8 @@ public class UserSessionTab extends JPanel {
         List<Scheme> schemes = sm.getSchemes();
         if (schemes.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "未配置任何方案，请先配置方案后再使用此功能。",
-                    "提示", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("session.no.scheme"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
@@ -188,7 +228,7 @@ public class UserSessionTab extends JPanel {
 
     private void addUserSession() {
         UserSessionEditDialog dialog = new UserSessionEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加用户会话", null);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("session.dialog.add.title"), null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             SessionManager sm = SessionManager.getInstance();
@@ -214,7 +254,7 @@ public class UserSessionTab extends JPanel {
         SessionManager sm = SessionManager.getInstance();
 
         // 生成唯一名称
-        String baseName = "匿名用户";
+        String baseName = I18nManager.tr("session.anonymous");
         String candidateName = baseName;
         int suffix = 2;
         Set<String> existingNames = sm.getUserSessions().stream()
@@ -236,10 +276,12 @@ public class UserSessionTab extends JPanel {
             sm.saveUserInfo(new UserInfo(id, "", "", true, new ArrayList<>()));
             refreshData();
             JOptionPane.showMessageDialog(this,
-                    "匿名用户 \"" + candidateName + "\" 已创建", "成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("session.anonymous.created", candidateName),
+                    I18nManager.tr("common.success"), JOptionPane.INFORMATION_MESSAGE);
         } else {
             JOptionPane.showMessageDialog(this,
-                    "创建匿名用户失败", "错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("session.anonymous.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -294,7 +336,7 @@ public class UserSessionTab extends JPanel {
         tempSession.setColor(new Color(0x99, 0x99, 0x99));
 
         Frame owner = (Frame) SwingUtilities.getWindowAncestor(this);
-        UserSessionEditDialog dialog = new UserSessionEditDialog(owner, "添加匿名用户", tempSession);
+        UserSessionEditDialog dialog = new UserSessionEditDialog(owner, I18nManager.tr("session.addAnonymous"), tempSession);
         dialog.setVisible(true);
 
         if (dialog.isConfirmed()) {
@@ -306,32 +348,35 @@ public class UserSessionTab extends JPanel {
     private void editUserSession() {
         int viewRow = userSessionTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
         UserSession selected = userSessionModel.getUserSession(modelRow);
         if (selected == null) {
-            JOptionPane.showMessageDialog(this, "无法获取选中的用户会话数据", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.get.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             LOGGER.warning("editUserSession: getUserSession returned null for model row " + modelRow);
             return;
         }
 
         Window owner = SwingUtilities.getWindowAncestor(this);
         if (!(owner instanceof Frame)) {
-            JOptionPane.showMessageDialog(this, "无法确定父窗口，请重试", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.owner.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             LOGGER.warning("editUserSession: owner is not a Frame, got " + (owner != null ? owner.getClass().getName() : "null"));
             return;
         }
 
         UserSessionEditDialog dialog = null;
         try {
-            dialog = new UserSessionEditDialog((Frame) owner, "编辑用户会话", selected);
+            dialog = new UserSessionEditDialog((Frame) owner, I18nManager.tr("session.edit.dialog.title"), selected);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "创建编辑对话框失败", e);
             JOptionPane.showMessageDialog(this,
-                    "创建编辑对话框失败: " + e.getMessage(),
-                    "错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("session.dialog.create.failed", e.getMessage()),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -343,13 +388,15 @@ public class UserSessionTab extends JPanel {
                         dialog.isSessionEnabled(), dialog.getSchemeId());
                 if (!updated) {
                     JOptionPane.showMessageDialog(this,
-                            "更新用户会话失败，请检查日志", "错误", JOptionPane.ERROR_MESSAGE);
+                            I18nManager.tr("session.update.failed"),
+                            I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
                     return;
                 }
                 boolean saved = sm.saveFieldValues(selected.getId(), dialog.getFieldValues());
                 if (!saved) {
                     JOptionPane.showMessageDialog(this,
-                            "保存字段值失败，请检查日志", "警告", JOptionPane.WARNING_MESSAGE);
+                            I18nManager.tr("session.save.fields.failed"),
+                            I18nManager.tr("common.warning"), JOptionPane.WARNING_MESSAGE);
                 }
                 // 保存用户信息（仅当用户展开了用户信息区域才更新）
                 if (dialog.isUserInfoExpanded()) {
@@ -358,11 +405,13 @@ public class UserSessionTab extends JPanel {
                 }
                 refreshData();
                 JOptionPane.showMessageDialog(this,
-                        "用户会话 \"" + dialog.getSessionName() + "\" 更新成功", "成功", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("session.update.success", dialog.getSessionName()),
+                        I18nManager.tr("common.success"), JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "保存用户会话失败", e);
                 JOptionPane.showMessageDialog(this,
-                        "保存用户会话失败: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                        I18nManager.tr("session.save.failed", e.getMessage()),
+                        I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -373,18 +422,21 @@ public class UserSessionTab extends JPanel {
     private void showUserInfo() {
         int viewRow = userSessionTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
         UserSession selected = userSessionModel.getUserSession(modelRow);
         if (selected == null) {
-            JOptionPane.showMessageDialog(this, "无法获取选中的用户会话数据", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.get.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             return;
         }
         Window owner = SwingUtilities.getWindowAncestor(this);
         if (!(owner instanceof Frame)) {
-            JOptionPane.showMessageDialog(this, "无法确定父窗口", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.owner.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             return;
         }
         UserInfo userInfo = SessionManager.getInstance().getUserInfo(selected.getId());
@@ -395,14 +447,15 @@ public class UserSessionTab extends JPanel {
     private void deleteUserSession() {
         int viewRow = userSessionTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
         UserSession selected = userSessionModel.getUserSession(modelRow);
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除用户会话: " + selected.getName() + "?",
-                "删除确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("session.delete.confirm", selected.getName()),
+                I18nManager.tr("session.delete.title"), JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             SessionManager.getInstance().deleteUserSession(selected.getId());
             refreshData();
@@ -412,7 +465,8 @@ public class UserSessionTab extends JPanel {
     private void toggleUserSessionEnabled() {
         int viewRow = userSessionTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个用户会话", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("session.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = userSessionTable.convertRowIndexToModel(viewRow);
@@ -425,9 +479,10 @@ public class UserSessionTab extends JPanel {
 
     private void exportUserSessions() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT, "导出用户会话", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_EXPORT,
+                I18nManager.tr("session.export.dialog"), this,
                 new File("user_sessions.yaml"),
-                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter.all"), "yaml", "yml"));
         if (selectedFile == null) return;
 
         File file = selectedFile;
@@ -444,21 +499,24 @@ public class UserSessionTab extends JPanel {
             boolean success = UserSessionYamlIO.writeToFile(sessions, locations, schemes, file.getAbsolutePath());
             if (success) {
                 JOptionPane.showMessageDialog(this,
-                    "成功导出 " + sessions.size() + " 个用户会话到:\n" + file.getAbsolutePath(),
-                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("session.export.success", sessions.size(), file.getAbsolutePath()),
+                    I18nManager.tr("session.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, "导出失败", "导出错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18nManager.tr("session.export.failed"),
+                        I18nManager.tr("session.export.failed.title"), JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("session.export.failed.msg", e.getMessage()),
+                I18nManager.tr("session.export.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importUserSessions() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT, "导入用户会话", this,
-                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                org.oxff.repeater.utils.FileChooserHelper.OP_SESSION_YAML_IMPORT,
+                I18nManager.tr("session.import.dialog"), this,
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter.all"), "yaml", "yml"));
         if (selectedFile == null) return;
 
         try {
@@ -470,16 +528,16 @@ public class UserSessionTab extends JPanel {
 
             if (importedSessions.isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                    "文件中没有找到用户会话数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("session.import.empty"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 
-            String[] options = {"合并导入", "替换导入", "取消"};
+            String[] options = {I18nManager.tr("session.import.merge"),
+                    I18nManager.tr("session.import.replace"), I18nManager.tr("session.import.cancel")};
             int choice = JOptionPane.showOptionDialog(this,
-                "发现 " + importedSessions.size() + " 个用户会话，请选择导入方式：\n" +
-                "合并导入：保留现有数据，仅添加不重名的会话\n" +
-                "替换导入：清空所有现有会话后导入",
-                "导入方式",
+                I18nManager.tr("session.import.choice.msg", importedSessions.size()),
+                I18nManager.tr("session.import.choice.title"),
                 JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
                 null, options, options[0]);
 
@@ -487,23 +545,25 @@ public class UserSessionTab extends JPanel {
                 int count = sm.importUserSessionsMerge(importedSessions);
                 refreshData();
                 JOptionPane.showMessageDialog(this,
-                    "合并导入完成，新增 " + count + " 个用户会话",
-                    "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("session.import.merge.done", count),
+                    I18nManager.tr("session.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
             } else if (choice == 1) {
                 int confirm = JOptionPane.showConfirmDialog(this,
-                    "替换导入将删除所有现有用户会话，是否继续？",
-                    "替换确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    I18nManager.tr("session.import.replace.confirm"),
+                    I18nManager.tr("session.import.replace.title"),
+                    JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                 if (confirm == JOptionPane.YES_OPTION) {
                     int count = sm.importUserSessionsReplace(importedSessions);
                     refreshData();
                     JOptionPane.showMessageDialog(this,
-                        "替换导入完成，共导入 " + count + " 个用户会话",
-                        "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("session.import.replace.done", count),
+                        I18nManager.tr("session.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
                 }
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("session.import.failed", e.getMessage()),
+                I18nManager.tr("session.import.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 }

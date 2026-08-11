@@ -1,9 +1,11 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.ScopeManager;
 import org.oxff.repeater.privilege.model.ScopeEntry;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import javax.swing.table.AbstractTableModel;
 import java.awt.*;
 import java.awt.event.ActionListener;
@@ -24,31 +26,42 @@ public class ScopeConfigTab extends JPanel {
     /** autoTestCheckbox 的 ActionListener 实例引用，供 syncAutoTestCheckbox 临时移除/恢复使用 */
     private final ActionListener autoTestActionListener = e -> toggleAutoTest();
 
+    private JPanel controlPanel;
+    private JButton clearDedupBtn;
+    private JPanel tablePanel;
+    private JPanel infoPanel;
+    private JTextArea infoArea;
+    private JButton addBtn;
+    private JButton editBtn;
+    private JButton deleteBtn;
+    private JButton toggleBtn;
+
     public ScopeConfigTab() {
         super(new BorderLayout(0, 5));
 
         // ========== 自动化测试控制面板 ==========
-        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        controlPanel.setBorder(BorderFactory.createTitledBorder("自动化测试控制"));
+        controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        controlPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("scope.autoTest")));
 
-        autoTestCheckbox = new JCheckBox("启用自动化测试", false);
-        autoTestCheckbox.setToolTipText("开启后将自动监听代理流量，对匹配Scope的请求执行权限测试");
+        autoTestCheckbox = new JCheckBox(I18nManager.tr("scope.enableAutoTest"), false);
+        autoTestCheckbox.setToolTipText(I18nManager.tr("scope.autoTest.tooltip"));
         autoTestCheckbox.addActionListener(autoTestActionListener);
 
-        useBurpScopeCheckbox = new JCheckBox("使用Burp Suite Scope", false);
-        useBurpScopeCheckbox.setToolTipText("同时使用Burp Suite自身的Target Scope作为匹配范围");
+        useBurpScopeCheckbox = new JCheckBox(I18nManager.tr("scope.useBurpScope"), false);
+        useBurpScopeCheckbox.setToolTipText(I18nManager.tr("scope.useBurpScope.tooltip"));
         useBurpScopeCheckbox.addActionListener(e -> {
             ScopeManager.getInstance().setUseBurpScope(useBurpScopeCheckbox.isSelected());
         });
 
-        JButton clearDedupBtn = new JButton("清除去重记录");
+        clearDedupBtn = new JButton(I18nManager.tr("scope.clearDedup"));
         clearDedupBtn.addActionListener(e -> {
             org.oxff.repeater.privilege.AutoTestEngine.getInstance().clearProcessedApis();
             updateStatus();
-            JOptionPane.showMessageDialog(this, "去重记录已清除", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scope.clearDedup.done"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
         });
 
-        statusLabel = new JLabel("状态: 已停止");
+        statusLabel = new JLabel(I18nManager.tr("scope.status.stopped"));
 
         controlPanel.add(autoTestCheckbox);
         controlPanel.add(useBurpScopeCheckbox);
@@ -57,8 +70,8 @@ public class ScopeConfigTab extends JPanel {
         controlPanel.add(statusLabel);
 
         // ========== Scope表格 ==========
-        JPanel tablePanel = new JPanel(new BorderLayout());
-        tablePanel.setBorder(BorderFactory.createTitledBorder("自定义Scope"));
+        tablePanel = new JPanel(new BorderLayout());
+        tablePanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("scope.table.title")));
 
         scopeModel = new ScopeTableModel();
         scopeTable = new JTable(scopeModel);
@@ -74,10 +87,10 @@ public class ScopeConfigTab extends JPanel {
 
         // ========== 按钮面板 ==========
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton addBtn = new JButton("添加条目");
-        JButton editBtn = new JButton("编辑条目");
-        JButton deleteBtn = new JButton("删除条目");
-        JButton toggleBtn = new JButton("启用/禁用");
+        addBtn = new JButton(I18nManager.tr("scope.add"));
+        editBtn = new JButton(I18nManager.tr("scope.edit"));
+        deleteBtn = new JButton(I18nManager.tr("scope.delete"));
+        toggleBtn = new JButton(I18nManager.tr("scope.toggle"));
 
         addBtn.addActionListener(e -> addEntry());
         editBtn.addActionListener(e -> editEntry());
@@ -92,15 +105,12 @@ public class ScopeConfigTab extends JPanel {
         tablePanel.add(buttonPanel, BorderLayout.SOUTH);
 
         // ========== 说明面板 ==========
-        JPanel infoPanel = new JPanel(new BorderLayout());
-        infoPanel.setBorder(BorderFactory.createTitledBorder("使用说明"));
-        JTextArea infoArea = new JTextArea(2, 50);
+        infoPanel = new JPanel(new BorderLayout());
+        infoPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("scope.info.title")));
+        infoArea = new JTextArea(2, 50);
         infoArea.setEditable(false);
         infoArea.setLineWrap(true);
-        infoArea.setText(
-            "• 添加URL匹配模式（支持通配符 * ），如 *.example.com/api/*\n" +
-            "• 启用自动化测试后，匹配Scope的代理请求将自动遍历用户会话重放"
-        );
+        infoArea.setText(I18nManager.tr("scope.info.text"));
         infoPanel.add(new JScrollPane(infoArea), BorderLayout.CENTER);
 
         // ========== 组装 ==========
@@ -108,8 +118,32 @@ public class ScopeConfigTab extends JPanel {
         add(tablePanel, BorderLayout.CENTER);
         add(infoPanel, BorderLayout.SOUTH);
 
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+
         // 初始加载
         refreshData();
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        ((TitledBorder) controlPanel.getBorder()).setTitle(I18nManager.tr("scope.autoTest"));
+        autoTestCheckbox.setText(I18nManager.tr("scope.enableAutoTest"));
+        autoTestCheckbox.setToolTipText(I18nManager.tr("scope.autoTest.tooltip"));
+        useBurpScopeCheckbox.setText(I18nManager.tr("scope.useBurpScope"));
+        useBurpScopeCheckbox.setToolTipText(I18nManager.tr("scope.useBurpScope.tooltip"));
+        clearDedupBtn.setText(I18nManager.tr("scope.clearDedup"));
+        ((TitledBorder) tablePanel.getBorder()).setTitle(I18nManager.tr("scope.table.title"));
+        addBtn.setText(I18nManager.tr("scope.add"));
+        editBtn.setText(I18nManager.tr("scope.edit"));
+        deleteBtn.setText(I18nManager.tr("scope.delete"));
+        toggleBtn.setText(I18nManager.tr("scope.toggle"));
+        ((TitledBorder) infoPanel.getBorder()).setTitle(I18nManager.tr("scope.info.title"));
+        infoArea.setText(I18nManager.tr("scope.info.text"));
+        scopeModel.refreshColumnNames();
+        updateStatus();
+        repaint();
     }
 
     /**
@@ -148,9 +182,9 @@ public class ScopeConfigTab extends JPanel {
     private void updateStatus() {
         if (ScopeManager.getInstance().isAutoTestEnabled()) {
             int count = org.oxff.repeater.privilege.AutoTestEngine.getInstance().getProcessedApiCount();
-            statusLabel.setText("状态: 运行中 | 已处理: " + count + " 个API");
+            statusLabel.setText(I18nManager.tr("scope.status.running", count));
         } else {
-            statusLabel.setText("状态: 已停止");
+            statusLabel.setText(I18nManager.tr("scope.status.stopped"));
         }
     }
 
@@ -161,7 +195,7 @@ public class ScopeConfigTab extends JPanel {
 
     private void addEntry() {
         ScopeEditDialog dialog = new ScopeEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加Scope条目", null);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("scope.add.title"), null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             ScopeEntry entry = new ScopeEntry();
@@ -177,12 +211,13 @@ public class ScopeConfigTab extends JPanel {
     private void editEntry() {
         int row = scopeTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个条目", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scope.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         ScopeEntry selected = scopeModel.getEntry(row);
         ScopeEditDialog dialog = new ScopeEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑Scope条目", selected);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("scope.edit.title"), selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             selected.setName(dialog.getEntryName());
@@ -197,13 +232,14 @@ public class ScopeConfigTab extends JPanel {
     private void deleteEntry() {
         int row = scopeTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个条目", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scope.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         ScopeEntry selected = scopeModel.getEntry(row);
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除Scope条目: " + selected.getName() + "?",
-                "删除确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("scope.delete.confirm", selected.getName()),
+                I18nManager.tr("scope.delete.confirm.title"), JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             ScopeManager.getInstance().deleteEntry(selected.getId());
             refreshData();
@@ -213,7 +249,8 @@ public class ScopeConfigTab extends JPanel {
     private void toggleEntry() {
         int row = scopeTable.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个条目", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("scope.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         ScopeEntry selected = scopeModel.getEntry(row);
@@ -225,12 +262,21 @@ public class ScopeConfigTab extends JPanel {
      * Scope表格模型
      */
     private static class ScopeTableModel extends AbstractTableModel {
-        private static final String[] COLUMN_NAMES = {"名称", "URL模式", "启用", "描述"};
+        private static final String[] COLUMN_KEYS = {
+            "scope.col.name", "scope.col.urlPattern", "scope.col.enabled", "scope.col.description"
+        };
         private List<ScopeEntry> entries = new ArrayList<>();
 
         public void setData(List<ScopeEntry> entries) {
             this.entries = entries != null ? entries : new ArrayList<>();
             fireTableDataChanged();
+        }
+
+        /**
+         * 语言切换后刷新列名
+         */
+        public void refreshColumnNames() {
+            fireTableStructureChanged();
         }
 
         public ScopeEntry getEntry(int row) {
@@ -241,9 +287,9 @@ public class ScopeConfigTab extends JPanel {
         @Override
         public int getRowCount() { return entries.size(); }
         @Override
-        public int getColumnCount() { return COLUMN_NAMES.length; }
+        public int getColumnCount() { return COLUMN_KEYS.length; }
         @Override
-        public String getColumnName(int column) { return COLUMN_NAMES[column]; }
+        public String getColumnName(int column) { return I18nManager.tr(COLUMN_KEYS[column]); }
 
         @Override
         public Object getValueAt(int rowIndex, int columnIndex) {
@@ -251,7 +297,7 @@ public class ScopeConfigTab extends JPanel {
             return switch (columnIndex) {
                 case 0 -> entry.getName() != null ? entry.getName() : "";
                 case 1 -> entry.getUrlPattern() != null ? entry.getUrlPattern() : "";
-                case 2 -> entry.isEnabled() ? "是" : "否";
+                case 2 -> entry.isEnabled() ? I18nManager.tr("common.yes") : I18nManager.tr("common.no");
                 case 3 -> entry.getDescription() != null ? entry.getDescription() : "";
                 default -> "";
             };
@@ -284,21 +330,21 @@ public class ScopeConfigTab extends JPanel {
 
             int row = 0;
             gbc.gridx = 0; gbc.gridy = row;
-            mainPanel.add(new JLabel("名称:"), gbc);
+            mainPanel.add(new JLabel(I18nManager.tr("scope.dialog.name")), gbc);
             gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
             nameField = new JTextField(30);
             mainPanel.add(nameField, gbc);
 
             row++;
             gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-            mainPanel.add(new JLabel("URL模式:"), gbc);
+            mainPanel.add(new JLabel(I18nManager.tr("scope.dialog.urlPattern")), gbc);
             gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
             urlPatternField = new JTextField(30);
             mainPanel.add(urlPatternField, gbc);
 
             row++;
             gbc.gridx = 0; gbc.gridy = row;
-            mainPanel.add(new JLabel("启用:"), gbc);
+            mainPanel.add(new JLabel(I18nManager.tr("scope.dialog.enabled")), gbc);
             gbc.gridx = 1; gbc.gridy = row;
             enabledCheckbox = new JCheckBox();
             enabledCheckbox.setSelected(true);
@@ -306,15 +352,15 @@ public class ScopeConfigTab extends JPanel {
 
             row++;
             gbc.gridx = 0; gbc.gridy = row;
-            mainPanel.add(new JLabel("描述:"), gbc);
+            mainPanel.add(new JLabel(I18nManager.tr("scope.dialog.description")), gbc);
             gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
             descriptionField = new JTextField(30);
             mainPanel.add(descriptionField, gbc);
 
             row++;
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-            JButton okBtn = new JButton("确定");
-            JButton cancelBtn = new JButton("取消");
+            JButton okBtn = new JButton(I18nManager.tr("common.ok"));
+            JButton cancelBtn = new JButton(I18nManager.tr("common.cancel"));
             okBtn.addActionListener(e -> onOk());
             cancelBtn.addActionListener(e -> { confirmed = false; dispose(); });
             buttonPanel.add(okBtn);
@@ -335,7 +381,8 @@ public class ScopeConfigTab extends JPanel {
 
         private void onOk() {
             if (urlPatternField.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "URL模式不能为空", "验证错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, I18nManager.tr("scope.dialog.urlPattern.empty"),
+                        I18nManager.tr("scope.dialog.validation.failed"), JOptionPane.ERROR_MESSAGE);
                 return;
             }
             confirmed = true;

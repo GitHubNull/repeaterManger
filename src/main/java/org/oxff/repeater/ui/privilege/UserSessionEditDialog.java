@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.Scheme;
@@ -87,23 +88,23 @@ public class UserSessionEditDialog extends JDialog {
 
         // 名称
         gbc.gridx = 0; gbc.gridy = 0;
-        mainPanel.add(new JLabel("名称:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("session.dialog.name")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         nameField = new JTextField(20);
         mainPanel.add(nameField, gbc);
 
         // 颜色
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        mainPanel.add(new JLabel("颜色:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("session.dialog.color")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         JPanel colorPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         colorPreview = new JLabel("  ");
         colorPreview.setOpaque(true);
         colorPreview.setPreferredSize(new Dimension(30, 20));
         colorPreview.setBackground(Color.GRAY);
-        JButton colorBtn = new JButton("选择颜色");
+        JButton colorBtn = new JButton(I18nManager.tr("session.dialog.chooseColor"));
         colorBtn.addActionListener(e -> {
-            Color c = JColorChooser.showDialog(this, "选择颜色", selectedColor);
+            Color c = JColorChooser.showDialog(this, I18nManager.tr("session.dialog.chooseColor"), selectedColor);
             if (c != null) {
                 selectedColor = c;
                 colorPreview.setBackground(c);
@@ -115,19 +116,19 @@ public class UserSessionEditDialog extends JDialog {
 
         // 启用
         gbc.gridx = 0; gbc.gridy = 2;
-        mainPanel.add(new JLabel("启用:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("session.dialog.enabled")), gbc);
         gbc.gridx = 1;
-        enabledCheckbox = new JCheckBox("启用此用户会话", true);
+        enabledCheckbox = new JCheckBox(I18nManager.tr("session.dialog.enable"), true);
         mainPanel.add(enabledCheckbox, gbc);
 
         // 方案选择
         gbc.gridx = 0; gbc.gridy = 3;
-        mainPanel.add(new JLabel("方案:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("session.dialog.scheme")), gbc);
         gbc.gridx = 1;
         SessionManager sm = SessionManager.getInstance();
         List<Scheme> schemes = sm.getSchemes();
         schemeComboBox = new JComboBox<>();
-        schemeComboBox.addItem("-- 请选择方案 --");
+        schemeComboBox.addItem(I18nManager.tr("session.dialog.selectScheme"));
         schemeNameToId.clear();
         for (Scheme scheme : schemes) {
             schemeComboBox.addItem(scheme.getName());
@@ -139,7 +140,7 @@ public class UserSessionEditDialog extends JDialog {
 
         // 字段值区域标签
         gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
-        fieldValuesLabel = new JLabel("字段值:");
+        fieldValuesLabel = new JLabel(I18nManager.tr("session.dialog.fieldValues"));
         fieldValuesLabel.setVisible(false);
         mainPanel.add(fieldValuesLabel, gbc);
 
@@ -160,7 +161,7 @@ public class UserSessionEditDialog extends JDialog {
         // 折叠切换按钮
         gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 2;
         gbc.insets = new Insets(8, 10, 2, 10);
-        userInfoToggleBtn = new JButton("展开用户信息（可选）");
+        userInfoToggleBtn = new JButton(I18nManager.tr("session.dialog.expandInfo"));
         userInfoToggleBtn.addActionListener(e -> toggleUserInfoPanel());
         mainPanel.add(userInfoToggleBtn, gbc);
 
@@ -176,11 +177,13 @@ public class UserSessionEditDialog extends JDialog {
 
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okBtn = new JButton("确定");
-        JButton cancelBtn = new JButton("取消");
+        JButton okBtn = new JButton(I18nManager.tr("common.ok"));
+        JButton cancelBtn = new JButton(I18nManager.tr("common.cancel"));
         okBtn.addActionListener(e -> {
             if (nameField.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "名称不能为空", "提示", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        I18nManager.tr("session.dialog.name.empty"),
+                        I18nManager.tr("common.hint"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             // 收集字段值
@@ -236,28 +239,28 @@ public class UserSessionEditDialog extends JDialog {
      */
     private JPanel createUserInfoPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("用户信息"));
+        panel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("session.dialog.userInfo")));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(3, 5, 3, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // 角色
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
-        panel.add(new JLabel("角色:"), gbc);
+        panel.add(new JLabel(I18nManager.tr("session.dialog.role")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         roleField = new JTextField(15);
         panel.add(roleField, gbc);
 
         // 用户名
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        panel.add(new JLabel("用户名:"), gbc);
+        panel.add(new JLabel(I18nManager.tr("session.dialog.username")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         usernameField = new JTextField(15);
         panel.add(usernameField, gbc);
 
         // 匿名复选框
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
-        anonymousCheckbox = new JCheckBox("匿名用户（勾选后角色和用户名留空）");
+        anonymousCheckbox = new JCheckBox(I18nManager.tr("session.dialog.anonymous"));
         anonymousCheckbox.addActionListener(e -> {
             boolean anon = anonymousCheckbox.isSelected();
             roleField.setEnabled(!anon);
@@ -268,7 +271,7 @@ public class UserSessionEditDialog extends JDialog {
         // 截图管理
         gbc.gridy = 3;
         gbc.insets = new Insets(8, 5, 3, 5);
-        panel.add(new JLabel("权限截图:"), gbc);
+        panel.add(new JLabel(I18nManager.tr("session.dialog.screenshots")), gbc);
 
         screenshotListModel = new DefaultListModel<>();
         screenshotList = new JList<>(screenshotListModel);
@@ -285,9 +288,9 @@ public class UserSessionEditDialog extends JDialog {
 
         // 截图按钮
         JPanel screenshotBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        JButton addScreenshotBtn = new JButton("添加");
+        JButton addScreenshotBtn = new JButton(I18nManager.tr("session.dialog.add"));
         addScreenshotBtn.addActionListener(e -> addScreenshot());
-        JButton removeScreenshotBtn = new JButton("移除");
+        JButton removeScreenshotBtn = new JButton(I18nManager.tr("session.dialog.remove"));
         removeScreenshotBtn.addActionListener(e -> removeScreenshot());
         screenshotBtnPanel.add(addScreenshotBtn);
         screenshotBtnPanel.add(removeScreenshotBtn);
@@ -307,7 +310,8 @@ public class UserSessionEditDialog extends JDialog {
             userInfoTouched = true; // 展开过就标记为已交互
         }
         userInfoPanel.setVisible(userInfoExpanded);
-        userInfoToggleBtn.setText(userInfoExpanded ? "收起用户信息（可选）" : "展开用户信息（可选）");
+        userInfoToggleBtn.setText(userInfoExpanded
+                ? I18nManager.tr("session.dialog.collapseInfo") : I18nManager.tr("session.dialog.expandInfo"));
         // 调整对话框高度
         if (userInfoExpanded) {
             setSize(getWidth(), 700);
@@ -323,7 +327,8 @@ public class UserSessionEditDialog extends JDialog {
      */
     private void addScreenshot() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setFileFilter(new FileNameExtensionFilter("图片文件 (*.png, *.jpg)", "png", "jpg"));
+        chooser.setFileFilter(new FileNameExtensionFilter(
+                I18nManager.tr("session.dialog.imageFilter"), "png", "jpg"));
         chooser.setMultiSelectionEnabled(true);
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             for (File file : chooser.getSelectedFiles()) {
@@ -410,7 +415,7 @@ public class UserSessionEditDialog extends JDialog {
         if (schemeId == null) {
             // 未选择方案：隐藏字段值区域，显示提示
             fieldValuesLabel.setVisible(false);
-            JLabel hintLabel = new JLabel("请先选择方案以配置字段值");
+            JLabel hintLabel = new JLabel(I18nManager.tr("session.dialog.selectSchemeFirst"));
             hintLabel.setForeground(Color.GRAY);
             fieldValuesPanel.add(hintLabel);
         } else {
@@ -419,7 +424,7 @@ public class UserSessionEditDialog extends JDialog {
             List<FieldDefinition> locations = SessionManager.getInstance().getFieldDefinitionsByScheme(schemeId);
 
             if (locations.isEmpty()) {
-                JLabel noLocationsLabel = new JLabel("该方案暂无关联的字段定义");
+                JLabel noLocationsLabel = new JLabel(I18nManager.tr("session.dialog.noFields"));
                 noLocationsLabel.setForeground(Color.GRAY);
                 fieldValuesPanel.add(noLocationsLabel);
             } else {
@@ -489,15 +494,15 @@ public class UserSessionEditDialog extends JDialog {
      */
     private JPopupMenu createTextContextMenu(JTextArea textArea) {
         JPopupMenu menu = new JPopupMenu();
-        JMenuItem copyItem = new JMenuItem("复制");
+        JMenuItem copyItem = new JMenuItem(I18nManager.tr("session.menu.copy"));
         copyItem.addActionListener(e -> textArea.copy());
-        JMenuItem pasteItem = new JMenuItem("粘贴");
+        JMenuItem pasteItem = new JMenuItem(I18nManager.tr("session.menu.paste"));
         pasteItem.addActionListener(e -> textArea.paste());
-        JMenuItem cutItem = new JMenuItem("剪切");
+        JMenuItem cutItem = new JMenuItem(I18nManager.tr("session.menu.cut"));
         cutItem.addActionListener(e -> textArea.cut());
-        JMenuItem selectAllItem = new JMenuItem("全选");
+        JMenuItem selectAllItem = new JMenuItem(I18nManager.tr("session.menu.selectAll"));
         selectAllItem.addActionListener(e -> textArea.selectAll());
-        JMenuItem clearItem = new JMenuItem("清空");
+        JMenuItem clearItem = new JMenuItem(I18nManager.tr("session.menu.clear"));
         clearItem.addActionListener(e -> textArea.setText(""));
         menu.add(copyItem);
         menu.add(pasteItem);

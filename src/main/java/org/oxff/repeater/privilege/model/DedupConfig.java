@@ -1,5 +1,7 @@
 package org.oxff.repeater.privilege.model;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import java.util.Objects;
 
 /**
@@ -13,18 +15,18 @@ public class DedupConfig {
      */
     public enum StorageType {
         /** 全局持久化：存储到 ~/.burp/repeater_manager/dedup_configs.yaml */
-        GLOBAL("全局持久化"),
+        GLOBAL("dedup.storage.global"),
         /** 会话级：仅内存存储，插件卸载即失效 */
-        SESSION("会话级");
+        SESSION("dedup.storage.session");
 
-        private final String displayName;
+        private final String displayNameKey;
 
-        StorageType(String displayName) {
-            this.displayName = displayName;
+        StorageType(String displayNameKey) {
+            this.displayNameKey = displayNameKey;
         }
 
         public String getDisplayName() {
-            return displayName;
+            return I18nManager.tr(displayNameKey);
         }
 
         public static StorageType fromString(String text) {

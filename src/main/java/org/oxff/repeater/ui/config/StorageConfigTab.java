@@ -3,9 +3,11 @@ package org.oxff.repeater.ui.config;
 import org.oxff.repeater.config.DatabaseConfig;
 import org.oxff.repeater.config.SessionDirectory;
 import org.oxff.repeater.db.DatabaseManager;
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.io.File;
 
@@ -30,6 +32,17 @@ public class StorageConfigTab extends JPanel {
     // 数据变更回调
     private final Runnable onDataChanged;
 
+    // 需要随语言切换刷新的组件
+    private JPanel storagePanel;
+    private JPanel infoPanel;
+    private JLabel storageModeLabel;
+    private JLabel currentSessionLabel;
+    private JLabel storageDirLabel;
+    private JLabel sessionFileLabel;
+    private JLabel autoSaveLabel;
+    private JLabel saveIntervalLabel;
+    private JButton saveConfigButton;
+
     /**
      * 创建存储配置面板
      * @param onDataChanged 数据变更后的回调（通知主UI刷新）
@@ -40,12 +53,56 @@ public class StorageConfigTab extends JPanel {
         this.onDataChanged = onDataChanged;
         initUI();
         onStorageModeChanged();
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言切换时刷新所有文本
+     */
+    private void refreshTexts() {
+        ((TitledBorder) storagePanel.getBorder()).setTitle(I18nManager.tr("storage.title"));
+        ((TitledBorder) infoPanel.getBorder()).setTitle(I18nManager.tr("storage.db.info"));
+        storageModeLabel.setText(I18nManager.tr("storage.mode"));
+        currentSessionLabel.setText(I18nManager.tr("storage.current.session"));
+        storageDirLabel.setText(I18nManager.tr("storage.dir"));
+        browseDirButton.setText(I18nManager.tr("storage.browse"));
+        resetDirButton.setText(I18nManager.tr("storage.reset"));
+        sessionFileLabel.setText(I18nManager.tr("storage.session.file"));
+        applySessionFileButton.setText(I18nManager.tr("storage.apply"));
+        autoSaveLabel.setText(I18nManager.tr("storage.autoSave"));
+        autoSaveCheckbox.setText(I18nManager.tr("storage.autoSave.enable"));
+        saveIntervalLabel.setText(I18nManager.tr("storage.interval"));
+        saveConfigButton.setText(I18nManager.tr("storage.save.config"));
+
+        // 刷新存储模式下拉项
+        int selectedIndex = storageModeCombo.getSelectedIndex();
+        storageModeCombo.setModel(new DefaultComboBoxModel<>(new String[]{
+            I18nManager.tr("storage.mode.auto"),
+            I18nManager.tr("storage.mode.directory"),
+            I18nManager.tr("storage.mode.file")
+        }));
+        storageModeCombo.setSelectedIndex(selectedIndex);
+
+        // 刷新保存间隔下拉项
+        int intervalIndex = saveIntervalCombo.getSelectedIndex();
+        saveIntervalCombo.setModel(new DefaultComboBoxModel<>(new String[]{
+            I18nManager.tr("storage.interval.1"),
+            I18nManager.tr("storage.interval.5"),
+            I18nManager.tr("storage.interval.10"),
+            I18nManager.tr("storage.interval.30"),
+            I18nManager.tr("storage.interval.60")
+        }));
+        saveIntervalCombo.setSelectedIndex(intervalIndex);
+
+        updateInfoArea();
+        revalidate();
+        repaint();
     }
 
     private void initUI() {
         // 存储设置区域
-        JPanel storagePanel = new JPanel(new GridBagLayout());
-        storagePanel.setBorder(BorderFactory.createTitledBorder("存储配置"));
+        storagePanel = new JPanel(new GridBagLayout());
+        storagePanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("storage.title")));
 
         GridBagConstraints c = new GridBagConstraints();
         c.fill = GridBagConstraints.HORIZONTAL;
@@ -53,10 +110,15 @@ public class StorageConfigTab extends JPanel {
 
         // 存储模式
         c.gridx = 0; c.gridy = 0; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("存储模式:"), c);
+        storageModeLabel = new JLabel(I18nManager.tr("storage.mode"));
+        storagePanel.add(storageModeLabel, c);
 
         c.gridx = 1; c.gridy = 0; c.gridwidth = 2; c.weightx = 1.0;
-        String[] modes = {"自动 (默认)", "指定目录", "指定文件"};
+        String[] modes = {
+            I18nManager.tr("storage.mode.auto"),
+            I18nManager.tr("storage.mode.directory"),
+            I18nManager.tr("storage.mode.file")
+        };
         storageModeCombo = new JComboBox<>(modes);
         String currentMode = dbManager.getConfig().getStorageMode();
         if (DatabaseConfig.MODE_DIRECTORY.equals(currentMode)) {
@@ -71,7 +133,8 @@ public class StorageConfigTab extends JPanel {
 
         // 当前会话目录
         c.gridx = 0; c.gridy = 1; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("当前会话:"), c);
+        currentSessionLabel = new JLabel(I18nManager.tr("storage.current.session"));
+        storagePanel.add(currentSessionLabel, c);
 
         c.gridx = 1; c.gridy = 1; c.gridwidth = 2; c.weightx = 1.0;
         currentDbPathField = new JTextField(30);
@@ -82,7 +145,8 @@ public class StorageConfigTab extends JPanel {
 
         // 存储目录
         c.gridx = 0; c.gridy = 2; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("存储目录:"), c);
+        storageDirLabel = new JLabel(I18nManager.tr("storage.dir"));
+        storagePanel.add(storageDirLabel, c);
 
         c.gridx = 1; c.gridy = 2; c.gridwidth = 1; c.weightx = 1.0;
         baseDirField = new JTextField(25);
@@ -93,9 +157,9 @@ public class StorageConfigTab extends JPanel {
 
         c.gridx = 2; c.gridy = 2; c.gridwidth = 1; c.weightx = 0;
         JPanel dirButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        browseDirButton = new JButton("浏览目录...");
+        browseDirButton = new JButton(I18nManager.tr("storage.browse"));
         browseDirButton.addActionListener(e -> browseForDirectory());
-        resetDirButton = new JButton("重置为默认");
+        resetDirButton = new JButton(I18nManager.tr("storage.reset"));
         resetDirButton.addActionListener(e -> resetToDefaultDirectory());
         dirButtonPanel.add(browseDirButton);
         dirButtonPanel.add(resetDirButton);
@@ -103,31 +167,40 @@ public class StorageConfigTab extends JPanel {
 
         // 当前会话文件名
         c.gridx = 0; c.gridy = 3; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("会话文件名:"), c);
+        sessionFileLabel = new JLabel(I18nManager.tr("storage.session.file"));
+        storagePanel.add(sessionFileLabel, c);
 
         c.gridx = 1; c.gridy = 3; c.gridwidth = 1; c.weightx = 1.0;
         sessionFileField = new JTextField(25);
         storagePanel.add(sessionFileField, c);
 
         c.gridx = 2; c.gridy = 3; c.gridwidth = 1; c.weightx = 0;
-        applySessionFileButton = new JButton("应用");
+        applySessionFileButton = new JButton(I18nManager.tr("storage.apply"));
         applySessionFileButton.addActionListener(e -> applySessionFile());
         storagePanel.add(applySessionFileButton, c);
 
         // 自动保存配置
         c.gridx = 0; c.gridy = 4; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("自动保存:"), c);
+        autoSaveLabel = new JLabel(I18nManager.tr("storage.autoSave"));
+        storagePanel.add(autoSaveLabel, c);
 
         c.gridx = 1; c.gridy = 4; c.gridwidth = 2; c.weightx = 1.0;
-        autoSaveCheckbox = new JCheckBox("启用自动保存", dbManager.getConfig().isAutoSaveEnabled());
+        autoSaveCheckbox = new JCheckBox(I18nManager.tr("storage.autoSave.enable"), dbManager.getConfig().isAutoSaveEnabled());
         storagePanel.add(autoSaveCheckbox, c);
 
         // 保存间隔
         c.gridx = 0; c.gridy = 5; c.gridwidth = 1; c.weightx = 0;
-        storagePanel.add(new JLabel("保存间隔:"), c);
+        saveIntervalLabel = new JLabel(I18nManager.tr("storage.interval"));
+        storagePanel.add(saveIntervalLabel, c);
 
         c.gridx = 1; c.gridy = 5; c.gridwidth = 2; c.weightx = 1.0;
-        String[] intervals = {"1分钟", "5分钟", "10分钟", "30分钟", "60分钟"};
+        String[] intervals = {
+            I18nManager.tr("storage.interval.1"),
+            I18nManager.tr("storage.interval.5"),
+            I18nManager.tr("storage.interval.10"),
+            I18nManager.tr("storage.interval.30"),
+            I18nManager.tr("storage.interval.60")
+        };
         saveIntervalCombo = new JComboBox<>(intervals);
         int currentInterval = dbManager.getConfig().getAutoSaveInterval();
         if (currentInterval <= 1) saveIntervalCombo.setSelectedIndex(0);
@@ -140,15 +213,15 @@ public class StorageConfigTab extends JPanel {
         // 保存配置按钮
         c.gridx = 1; c.gridy = 6; c.gridwidth = 2; c.weightx = 0;
         c.anchor = GridBagConstraints.EAST;
-        JButton saveConfigButton = new JButton("保存配置");
+        saveConfigButton = new JButton(I18nManager.tr("storage.save.config"));
         saveConfigButton.addActionListener(e -> saveConfig());
         storagePanel.add(saveConfigButton, c);
 
         add(storagePanel, BorderLayout.NORTH);
 
         // 数据库信息区域
-        JPanel infoPanel = new JPanel(new BorderLayout());
-        infoPanel.setBorder(BorderFactory.createTitledBorder("数据库信息"));
+        infoPanel = new JPanel(new BorderLayout());
+        infoPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("storage.db.info")));
 
         infoArea = new JTextArea(10, 40);
         infoArea.setEditable(false);
@@ -189,7 +262,7 @@ public class StorageConfigTab extends JPanel {
 
     private void updateInfoArea() {
         SessionDirectory sessionDir = dbManager.getConfig().getOrCreateSessionDirectory();
-        String sessionDirPath = sessionDir != null ? sessionDir.getAbsolutePath() : "未创建";
+        String sessionDirPath = sessionDir != null ? sessionDir.getAbsolutePath() : I18nManager.tr("storage.info.notCreated");
         String dbPath = dbManager.getCurrentDatabasePath();
         if (dbPath == null) {
             dbPath = dbManager.getConfig().getEffectiveDatabasePath();
@@ -198,19 +271,19 @@ public class StorageConfigTab extends JPanel {
         String logsDir = sessionDir != null ? sessionDir.getLogsDir().getAbsolutePath() : "-";
 
         infoArea.setText(
-            "当前会话目录: " + sessionDirPath + "\n" +
-            "数据库文件: " + dbPath + "\n" +
-            "Body数据目录: " + blobsDir + "\n" +
-            "日志目录: " + logsDir + "\n" +
-            "存储模式: " + getModeDisplayName(dbManager.getConfig().getStorageMode()) + "\n" +
-            "自动保存: " + (dbManager.getConfig().isAutoSaveEnabled() ? "启用" : "禁用") + "\n" +
-            "保存间隔: " + dbManager.getConfig().getAutoSaveInterval() + "分钟\n\n" +
-            "说明:\n" +
-            "- 每次加载插件或重启Burp Suite都会自动生成新的会话目录\n" +
-            "- 会话目录以时间戳命名，内含数据库、body数据、日志\n" +
-            "- 旧的会话目录会保留在存储目录中\n" +
-            "- 可以配置基础存储目录，会话目录名仍然会自动生成\n" +
-            "- 指定文件模式不创建时间戳子目录，数据存放在DB文件同目录"
+            I18nManager.tr("storage.info.sessionDir") + " " + sessionDirPath + "\n" +
+            I18nManager.tr("storage.info.dbFile") + " " + dbPath + "\n" +
+            I18nManager.tr("storage.info.blobsDir") + " " + blobsDir + "\n" +
+            I18nManager.tr("storage.info.logsDir") + " " + logsDir + "\n" +
+            I18nManager.tr("storage.info.mode") + " " + getModeDisplayName(dbManager.getConfig().getStorageMode()) + "\n" +
+            I18nManager.tr("storage.info.autoSave") + " " + (dbManager.getConfig().isAutoSaveEnabled() ? I18nManager.tr("storage.info.enabled") : I18nManager.tr("storage.info.disabled")) + "\n" +
+            I18nManager.tr("storage.info.interval") + " " + dbManager.getConfig().getAutoSaveInterval() + I18nManager.tr("storage.info.minute") + "\n\n" +
+            I18nManager.tr("storage.info.note") + "\n" +
+            I18nManager.tr("storage.info.note1") + "\n" +
+            I18nManager.tr("storage.info.note2") + "\n" +
+            I18nManager.tr("storage.info.note3") + "\n" +
+            I18nManager.tr("storage.info.note4") + "\n" +
+            I18nManager.tr("storage.info.note5")
         );
     }
 
@@ -225,9 +298,9 @@ public class StorageConfigTab extends JPanel {
 
     private String getModeDisplayName(String mode) {
         switch (mode) {
-            case DatabaseConfig.MODE_AUTO: return "自动 (默认)";
-            case DatabaseConfig.MODE_DIRECTORY: return "指定目录";
-            case DatabaseConfig.MODE_FILE: return "指定文件";
+            case DatabaseConfig.MODE_AUTO: return I18nManager.tr("storage.mode.auto");
+            case DatabaseConfig.MODE_DIRECTORY: return I18nManager.tr("storage.mode.directory");
+            case DatabaseConfig.MODE_FILE: return I18nManager.tr("storage.mode.file");
             default: return mode;
         }
     }
@@ -274,7 +347,8 @@ public class StorageConfigTab extends JPanel {
         }
 
         File selectedDir = org.oxff.repeater.utils.FileChooserHelper.showDirectoryDialog(
-                org.oxff.repeater.utils.FileChooserHelper.OP_STORAGE_DIRECTORY, "选择存储目录", this,
+                org.oxff.repeater.utils.FileChooserHelper.OP_STORAGE_DIRECTORY,
+                I18nManager.tr("storage.select.dir"), this,
                 preferredDir);
 
         if (selectedDir != null) {
@@ -289,8 +363,8 @@ public class StorageConfigTab extends JPanel {
                 refreshStorageInfo();
                 notifyDataChanged();
                 JOptionPane.showMessageDialog(this,
-                    "已切换到新存储目录并生成新的会话目录。\n旧数据在当前会话中不再可用。",
-                    "目录已更改", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("storage.dir.changed"),
+                    I18nManager.tr("storage.dir.changed.title"), JOptionPane.INFORMATION_MESSAGE);
             }
         }
     }
@@ -310,14 +384,17 @@ public class StorageConfigTab extends JPanel {
             storageModeCombo.setSelectedIndex(0);
             onStorageModeChanged();
             JOptionPane.showMessageDialog(this,
-                "已重置为默认存储目录。", "重置成功", JOptionPane.INFORMATION_MESSAGE);
+                I18nManager.tr("storage.reset.success"),
+                I18nManager.tr("storage.reset.success.title"), JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
     private void applySessionFile() {
         String filePath = sessionFileField.getText().trim();
         if (filePath.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "请输入文件名", "输入错误", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                I18nManager.tr("storage.file.empty"),
+                I18nManager.tr("storage.file.empty.title"), JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -341,8 +418,8 @@ public class StorageConfigTab extends JPanel {
             refreshStorageInfo();
             notifyDataChanged();
             JOptionPane.showMessageDialog(this,
-                "已应用会话文件名: " + file.getAbsolutePath() + "\n注意：此设置仅在当前会话有效。",
-                "应用成功", JOptionPane.INFORMATION_MESSAGE);
+                I18nManager.tr("storage.file.applied", file.getAbsolutePath()),
+                I18nManager.tr("storage.file.applied.title"), JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
@@ -382,11 +459,12 @@ public class StorageConfigTab extends JPanel {
 
         if (dbManager.getConfig().saveConfig()) {
             JOptionPane.showMessageDialog(this,
-                "配置已保存。\n注意：会话文件名设置不会被保存，下次启动将恢复自动命名。",
-                "保存成功", JOptionPane.INFORMATION_MESSAGE);
+                I18nManager.tr("storage.save.success"),
+                I18nManager.tr("storage.save.success.title"), JOptionPane.INFORMATION_MESSAGE);
         } else {
             JOptionPane.showMessageDialog(this,
-                "保存配置失败，请检查权限或路径。", "保存失败", JOptionPane.ERROR_MESSAGE);
+                I18nManager.tr("storage.save.failed"),
+                I18nManager.tr("storage.save.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 }

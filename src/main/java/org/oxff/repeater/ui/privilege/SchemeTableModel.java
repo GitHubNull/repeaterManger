@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.Scheme;
 
@@ -13,7 +14,10 @@ import java.util.List;
  */
 public class SchemeTableModel extends AbstractTableModel {
 
-    private static final String[] COLUMN_NAMES = {"名称", "描述", "关联字段数", "全局", "启用"};
+    private static final String[] COLUMN_KEYS = {
+        "scheme.col.name", "scheme.col.description", "scheme.col.fieldCount",
+        "scheme.col.global", "scheme.col.enabled"
+    };
 
     private List<Scheme> schemes = new ArrayList<>();
 
@@ -29,12 +33,19 @@ public class SchemeTableModel extends AbstractTableModel {
 
     @Override
     public int getColumnCount() {
-        return COLUMN_NAMES.length;
+        return COLUMN_KEYS.length;
     }
 
     @Override
     public String getColumnName(int column) {
-        return COLUMN_NAMES[column];
+        return I18nManager.tr(COLUMN_KEYS[column]);
+    }
+
+    /**
+     * 语言切换后刷新列名
+     */
+    public void refreshColumnNames() {
+        fireTableStructureChanged();
     }
 
     @Override

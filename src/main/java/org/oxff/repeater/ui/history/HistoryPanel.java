@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.RequestDispatchHandler;
 import org.oxff.repeater.db.history.HistoryUpdateDAO;
@@ -38,6 +39,14 @@ public class HistoryPanel extends JPanel {
     private RequestDispatchHandler dispatchHandler;
     private HistoryStatsBar statsBar;
 
+    // 需要在语言切换时刷新的组件
+    private JLabel searchLabel;
+    private JButton clearSearchButton;
+    private JButton clearHistoryButton;
+    private JButton advancedSearchButton;
+    private JButton columnControlButton;
+    private JScrollPane tableScrollPane;
+
     /**
      * 创建历史记录面板
      */
@@ -49,7 +58,7 @@ public class HistoryPanel extends JPanel {
 
         // 创建搜索面板
         JPanel searchPanel = new JPanel(new BorderLayout());
-        JLabel searchLabel = new JLabel("搜索: ");
+        searchLabel = new JLabel(I18nManager.tr("history.panel.search"));
         searchField = new JTextField(20);
 
         // 添加搜索输入框的实时过滤功能
@@ -72,19 +81,19 @@ public class HistoryPanel extends JPanel {
 
         searchField.addActionListener(e -> filterTable());
 
-        JButton clearSearchButton = new JButton("清除");
+        clearSearchButton = new JButton(I18nManager.tr("history.panel.clear"));
         clearSearchButton.addActionListener(e -> {
             searchField.setText("");
             filterTable();
         });
 
-        JButton clearHistoryButton = new JButton("清空历史");
+        clearHistoryButton = new JButton(I18nManager.tr("history.panel.clearAll"));
         clearHistoryButton.addActionListener(e -> clearHistoryWithConfirm());
 
-        JButton advancedSearchButton = new JButton("高级搜索");
+        advancedSearchButton = new JButton(I18nManager.tr("history.panel.advanced"));
         advancedSearchButton.addActionListener(e -> showAdvancedSearchDialog());
 
-        JButton columnControlButton = new JButton("显示/隐藏列");
+        columnControlButton = new JButton(I18nManager.tr("history.panel.columns"));
         columnControlButton.addActionListener(e -> showColumnControlDialog());
 
         JPanel searchControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -104,15 +113,15 @@ public class HistoryPanel extends JPanel {
         createTable();
 
         // 创建滚动面板
-        JScrollPane scrollPane = new JScrollPane(historyTable);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("重放历史"));
+        tableScrollPane = new JScrollPane(historyTable);
+        tableScrollPane.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("history.panel.title")));
 
         // 创建状态栏
         statsBar = new HistoryStatsBar();
 
         // 添加到面板
         add(searchPanel, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+        add(tableScrollPane, BorderLayout.CENTER);
         add(statsBar, BorderLayout.SOUTH);
 
         // 创建右键菜单工厂（每次右键时动态生成菜单以反映选中数量）
@@ -129,6 +138,49 @@ public class HistoryPanel extends JPanel {
                 super.show(invoker, x, y);
             }
         });
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新文本
+     */
+    private void refreshTexts() {
+        searchLabel.setText(I18nManager.tr("history.panel.search"));
+        clearSearchButton.setText(I18nManager.tr("history.panel.clear"));
+        clearHistoryButton.setText(I18nManager.tr("history.panel.clearAll"));
+        advancedSearchButton.setText(I18nManager.tr("history.panel.advanced"));
+        columnControlButton.setText(I18nManager.tr("history.panel.columns"));
+        tableScrollPane.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("history.panel.title")));
+        // 刷新表格列名（保持数据）
+        historyTableModel.setColumnIdentifiers(buildColumnNames());
+        applyColumnWidths();
+        revalidate();
+        repaint();
+    }
+
+    /**
+     * 构建表格列名（从资源读取）
+     */
+    private static String[] buildColumnNames() {
+        return new String[] {
+            I18nManager.tr("history.col.index"),
+            I18nManager.tr("history.col.time"),
+            I18nManager.tr("history.col.api"),
+            I18nManager.tr("history.col.method"),
+            I18nManager.tr("history.col.protocol"),
+            I18nManager.tr("history.col.domain"),
+            I18nManager.tr("history.col.path"),
+            I18nManager.tr("history.col.query"),
+            I18nManager.tr("history.col.status"),
+            I18nManager.tr("history.col.length"),
+            I18nManager.tr("history.col.elapsed"),
+            I18nManager.tr("history.col.user"),
+            I18nManager.tr("history.col.judgment"),
+            I18nManager.tr("history.col.privilege"),
+            I18nManager.tr("history.col.comment")
+        };
     }
 
     /**
@@ -136,9 +188,7 @@ public class HistoryPanel extends JPanel {
      */
     private void createTable() {
         // 定义表格列名（v8新增"越权测试"列）
-        String[] columnNames = {
-            "#", "时间", "API", "方法", "协议", "域名/主机", "路径", "查询参数", "状态码", "响应长度", "耗时(ms)", "用户", "判决", "越权测试", "备注"
-        };
+        String[] columnNames = buildColumnNames();
 
         // 创建表格模型(不允许直接编辑)
         historyTableModel = new DefaultTableModel(columnNames, 0) {
@@ -163,22 +213,7 @@ public class HistoryPanel extends JPanel {
         historyTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
         // 设置列宽度
-        historyTable.getColumnModel().getColumn(0).setPreferredWidth(40);   // 序号列
-        historyTable.getColumnModel().getColumn(0).setMaxWidth(50);
-        historyTable.getColumnModel().getColumn(1).setPreferredWidth(150);  // 时间列
-        historyTable.getColumnModel().getColumn(2).setPreferredWidth(200);  // API列
-        historyTable.getColumnModel().getColumn(3).setPreferredWidth(60);   // 方法列
-        historyTable.getColumnModel().getColumn(4).setPreferredWidth(60);   // 协议列
-        historyTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // 域名列
-        historyTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // 路径列
-        historyTable.getColumnModel().getColumn(7).setPreferredWidth(100);  // 查询参数列
-        historyTable.getColumnModel().getColumn(8).setPreferredWidth(70);   // 状态码列
-        historyTable.getColumnModel().getColumn(9).setPreferredWidth(90);   // 响应长度列
-        historyTable.getColumnModel().getColumn(10).setPreferredWidth(70);  // 耗时列
-        historyTable.getColumnModel().getColumn(11).setPreferredWidth(80);  // 用户列
-        historyTable.getColumnModel().getColumn(12).setPreferredWidth(60);  // 判决列
-        historyTable.getColumnModel().getColumn(13).setPreferredWidth(70);  // 越权测试列
-        historyTable.getColumnModel().getColumn(14).setPreferredWidth(100); // 备注列
+        applyColumnWidths();
 
         // 创建排序器
         tableRowSorter = new TableRowSorter<>(historyTableModel);
@@ -219,6 +254,31 @@ public class HistoryPanel extends JPanel {
     }
 
     /**
+     * 应用表格列宽设置（语言切换刷新列名后需重新应用）
+     */
+    private void applyColumnWidths() {
+        if (historyTable.getColumnModel().getColumnCount() < 15) {
+            return;
+        }
+        historyTable.getColumnModel().getColumn(0).setPreferredWidth(40);   // 序号列
+        historyTable.getColumnModel().getColumn(0).setMaxWidth(50);
+        historyTable.getColumnModel().getColumn(1).setPreferredWidth(150);  // 时间列
+        historyTable.getColumnModel().getColumn(2).setPreferredWidth(200);  // API列
+        historyTable.getColumnModel().getColumn(3).setPreferredWidth(60);   // 方法列
+        historyTable.getColumnModel().getColumn(4).setPreferredWidth(60);   // 协议列
+        historyTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // 域名列
+        historyTable.getColumnModel().getColumn(6).setPreferredWidth(120);  // 路径列
+        historyTable.getColumnModel().getColumn(7).setPreferredWidth(100);  // 查询参数列
+        historyTable.getColumnModel().getColumn(8).setPreferredWidth(70);   // 状态码列
+        historyTable.getColumnModel().getColumn(9).setPreferredWidth(90);   // 响应长度列
+        historyTable.getColumnModel().getColumn(10).setPreferredWidth(70);  // 耗时列
+        historyTable.getColumnModel().getColumn(11).setPreferredWidth(80);  // 用户列
+        historyTable.getColumnModel().getColumn(12).setPreferredWidth(60);  // 判决列
+        historyTable.getColumnModel().getColumn(13).setPreferredWidth(70);  // 越权测试列
+        historyTable.getColumnModel().getColumn(14).setPreferredWidth(100); // 备注列
+    }
+
+    /**
      * 添加历史记录
      */
     public void addHistoryRecord(RequestResponseRecord record) {
@@ -248,7 +308,7 @@ public class HistoryPanel extends JPanel {
             record.getResponseTime(),                 // 响应时间
             record.getUserSessionName() != null ? record.getUserSessionName() : "",  // 用户
             record.getJudgment() != null ? JudgmentResult.toDisplayName(record.getJudgment()) : "",                // 判决
-            record.getUserSessionName() != null ? "是" : "否",                         // 越权测试
+            record.getUserSessionName() != null ? I18nManager.tr("history.panel.yes") : I18nManager.tr("history.panel.no"),  // 越权测试
             record.getComment()                       // 备注
         };
 
@@ -303,12 +363,12 @@ public class HistoryPanel extends JPanel {
             if (historyId > 0) {
                 // 添加到UI
                 addHistoryRecord(record);
-                LogManager.getInstance().printOutput("[+] 历史记录已保存到数据库，ID: " + historyId);
+                LogManager.getInstance().printOutput(I18nManager.tr("log.history.saved", historyId));
             } else {
-                LogManager.getInstance().printError("[!] 保存历史记录到数据库失败");
+                LogManager.getInstance().printError(I18nManager.tr("log.history.save.failed"));
             }
         } catch (Exception e) {
-            LogManager.getInstance().printError("[!] 添加历史记录时出错: " + e.getMessage());
+            LogManager.getInstance().printError(I18nManager.tr("log.history.add.failed", e.getMessage()));
         }
     }
 
@@ -341,8 +401,8 @@ public class HistoryPanel extends JPanel {
 
         int result = JOptionPane.showConfirmDialog(
             this,
-            "确认清空所有历史记录?",
-            "清空确认",
+            I18nManager.tr("history.panel.clear.confirm"),
+            I18nManager.tr("history.panel.clear.confirm.title"),
             JOptionPane.YES_NO_OPTION
         );
 
@@ -360,7 +420,7 @@ public class HistoryPanel extends JPanel {
         historyTableModel.fireTableDataChanged();
         historyTable.revalidate();
         historyTable.repaint();
-        LogManager.getInstance().printOutput("[*] 历史记录已清空");
+        LogManager.getInstance().printOutput(I18nManager.tr("log.history.cleared"));
 
         // 刷新状态栏统计
         if (statsBar != null) {
@@ -445,7 +505,7 @@ public class HistoryPanel extends JPanel {
         // 清空数据映射
         historyRecords.clear();
 
-        LogManager.getInstance().printOutput("[*] 历史记录面板已清空");
+        LogManager.getInstance().printOutput(I18nManager.tr("log.history.panel.cleared"));
     }
 
     /**
@@ -503,8 +563,8 @@ public class HistoryPanel extends JPanel {
 
         int result = JOptionPane.showConfirmDialog(
             this,
-            String.format("确认删除选中的 %d 条历史记录?", selected.size()),
-            "删除确认",
+            I18nManager.tr("history.panel.delete.confirm", selected.size()),
+            I18nManager.tr("history.panel.delete.confirm.title"),
             JOptionPane.YES_NO_OPTION
         );
 
@@ -517,7 +577,7 @@ public class HistoryPanel extends JPanel {
                 try {
                     historyUpdateDAO.deleteHistory(record.getId());
                 } catch (Exception e) {
-                    LogManager.getInstance().printError("[!] 删除历史记录失败 ID=" + record.getId() + ": " + e.getMessage());
+                    LogManager.getInstance().printError(I18nManager.tr("log.history.delete.failed", record.getId(), e.getMessage()));
                 }
             }
         }
@@ -538,7 +598,7 @@ public class HistoryPanel extends JPanel {
         }
 
         updateRecordNumbers();
-        LogManager.getInstance().printOutput(String.format("[+] 已删除 %d 条历史记录", selected.size()));
+        LogManager.getInstance().printOutput(I18nManager.tr("log.history.deleted", selected.size()));
 
         // 刷新状态栏统计
         if (statsBar != null) {

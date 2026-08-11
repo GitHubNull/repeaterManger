@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import java.awt.*;
 import java.text.ParseException;
@@ -21,7 +23,7 @@ public class DateTimeRangePickerDialog extends JDialog {
     private final JSpinner endSpinner;
 
     private DateTimeRangePickerDialog(Frame owner, String currentRange) {
-        super(owner, "选择测试时间段", true);
+        super(owner, I18nManager.tr("datetime.title"), true);
         setLayout(new BorderLayout(10, 10));
 
         // 解析已有时间范围
@@ -48,7 +50,7 @@ public class DateTimeRangePickerDialog extends JDialog {
 
         // 开始时间
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
-        formPanel.add(new JLabel("开始时间:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("datetime.start")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         startSpinner = new JSpinner(new SpinnerDateModel(startDate, null, null, java.util.Calendar.MINUTE));
         startSpinner.setEditor(new JSpinner.DateEditor(startSpinner, DATETIME_PATTERN));
@@ -56,7 +58,7 @@ public class DateTimeRangePickerDialog extends JDialog {
 
         // 结束时间
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        formPanel.add(new JLabel("结束时间:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("datetime.end")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         endSpinner = new JSpinner(new SpinnerDateModel(endDate, null, null, java.util.Calendar.MINUTE));
         endSpinner.setEditor(new JSpinner.DateEditor(endSpinner, DATETIME_PATTERN));
@@ -66,19 +68,20 @@ public class DateTimeRangePickerDialog extends JDialog {
 
         // 按钮面板
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton okButton = new JButton("确定");
+        JButton okButton = new JButton(I18nManager.tr("common.ok"));
         okButton.addActionListener(e -> {
             Date start = (Date) startSpinner.getValue();
             Date end = (Date) endSpinner.getValue();
             if (start.after(end)) {
                 JOptionPane.showMessageDialog(this,
-                        "开始时间不能晚于结束时间", "验证失败", JOptionPane.WARNING_MESSAGE);
+                        I18nManager.tr("datetime.invalid"),
+                        I18nManager.tr("datetime.validate.failed"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             confirmed = true;
             dispose();
         });
-        JButton cancelButton = new JButton("取消");
+        JButton cancelButton = new JButton(I18nManager.tr("common.cancel"));
         cancelButton.addActionListener(e -> dispose());
         buttonPanel.add(okButton);
         buttonPanel.add(cancelButton);

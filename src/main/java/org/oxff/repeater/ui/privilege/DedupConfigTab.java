@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.DedupConfigManager;
 import org.oxff.repeater.privilege.model.DedupConfig;
 import org.oxff.repeater.privilege.DedupConfigYamlIO;
@@ -28,13 +29,26 @@ public class DedupConfigTab extends JPanel {
     private TableRowSorter<DedupConfigTableModel> tableSorter;
     private JTextField searchField;
 
+    private JLabel descLabel;
+    private JLabel searchLabel;
+    private JButton clearSearchBtn;
+    private JMenuItem editItem;
+    private JMenuItem deleteItem;
+    private JMenuItem toggleItem;
+    private JButton addBtn;
+    private JButton editBtn;
+    private JButton deleteBtn;
+    private JButton toggleBtn;
+    private JButton importBtn;
+    private JButton exportBtn;
+
     public DedupConfigTab() {
         super(new BorderLayout(0, 5));
         setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
         // ========== 描述区域 ==========
         JPanel descPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JLabel descLabel = new JLabel("去重配置按优先级顺序生效，数字越小优先级越高。所有策略失败时回退到PATH策略。");
+        descLabel = new JLabel(I18nManager.tr("dedup.desc"));
         descLabel.setFont(new Font("SansSerif", Font.ITALIC, 12));
         descPanel.add(descLabel);
         add(descPanel, BorderLayout.NORTH);
@@ -79,11 +93,11 @@ public class DedupConfigTab extends JPanel {
 
         // 右键菜单
         JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem editItem = new JMenuItem("编辑");
+        editItem = new JMenuItem(I18nManager.tr("dedup.edit"));
         editItem.addActionListener(e -> editConfig());
-        JMenuItem deleteItem = new JMenuItem("删除");
+        deleteItem = new JMenuItem(I18nManager.tr("dedup.delete"));
         deleteItem.addActionListener(e -> deleteConfig());
-        JMenuItem toggleItem = new JMenuItem("启用/禁用");
+        toggleItem = new JMenuItem(I18nManager.tr("dedup.toggle"));
         toggleItem.addActionListener(e -> toggleConfigEnabled());
         popupMenu.add(editItem);
         popupMenu.add(toggleItem);
@@ -100,7 +114,8 @@ public class DedupConfigTab extends JPanel {
 
         // 搜索面板
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
-        searchPanel.add(new JLabel("搜索:"));
+        searchLabel = new JLabel(I18nManager.tr("dedup.search"));
+        searchPanel.add(searchLabel);
         searchField = new JTextField(15);
         searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override
@@ -112,7 +127,7 @@ public class DedupConfigTab extends JPanel {
         });
         searchPanel.add(searchField);
 
-        JButton clearSearchBtn = new JButton("清除");
+        clearSearchBtn = new JButton(I18nManager.tr("dedup.clear"));
         clearSearchBtn.addActionListener(e -> {
             searchField.setText("");
             applyFilter();
@@ -124,22 +139,22 @@ public class DedupConfigTab extends JPanel {
         // 按钮面板
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
 
-        JButton addBtn = new JButton("添加配置");
+        addBtn = new JButton(I18nManager.tr("dedup.add"));
         addBtn.addActionListener(e -> addConfig());
 
-        JButton editBtn = new JButton("编辑配置");
+        editBtn = new JButton(I18nManager.tr("dedup.edit.title"));
         editBtn.addActionListener(e -> editConfig());
 
-        JButton deleteBtn = new JButton("删除配置");
+        deleteBtn = new JButton(I18nManager.tr("dedup.delete.title"));
         deleteBtn.addActionListener(e -> deleteConfig());
 
-        JButton toggleBtn = new JButton("启用/禁用");
+        toggleBtn = new JButton(I18nManager.tr("dedup.toggle"));
         toggleBtn.addActionListener(e -> toggleConfigEnabled());
 
-        JButton importBtn = new JButton("导入");
+        importBtn = new JButton(I18nManager.tr("dedup.import"));
         importBtn.addActionListener(e -> importConfigs());
 
-        JButton exportBtn = new JButton("导出");
+        exportBtn = new JButton(I18nManager.tr("dedup.export"));
         exportBtn.addActionListener(e -> exportConfigs());
 
         buttonPanel.add(addBtn);
@@ -153,8 +168,29 @@ public class DedupConfigTab extends JPanel {
         bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
         add(bottomPanel, BorderLayout.SOUTH);
 
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+
         // 初始加载
         refreshData();
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        descLabel.setText(I18nManager.tr("dedup.desc"));
+        searchLabel.setText(I18nManager.tr("dedup.search"));
+        clearSearchBtn.setText(I18nManager.tr("dedup.clear"));
+        editItem.setText(I18nManager.tr("dedup.edit"));
+        deleteItem.setText(I18nManager.tr("dedup.delete"));
+        toggleItem.setText(I18nManager.tr("dedup.toggle"));
+        addBtn.setText(I18nManager.tr("dedup.add"));
+        editBtn.setText(I18nManager.tr("dedup.edit.title"));
+        deleteBtn.setText(I18nManager.tr("dedup.delete.title"));
+        toggleBtn.setText(I18nManager.tr("dedup.toggle"));
+        importBtn.setText(I18nManager.tr("dedup.import"));
+        exportBtn.setText(I18nManager.tr("dedup.export"));
+        tableModel.refreshColumnNames();
     }
 
     private void selectRowOnRightClick(MouseEvent e) {
@@ -188,7 +224,7 @@ public class DedupConfigTab extends JPanel {
 
     private void addConfig() {
         DedupConfigEditDialog dialog = new DedupConfigEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "添加去重配置", null);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("dedup.add"), null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             DedupConfig config = dialog.getConfig();
@@ -205,7 +241,8 @@ public class DedupConfigTab extends JPanel {
     private void editConfig() {
         int viewRow = configTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一条配置", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("dedup.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = configTable.convertRowIndexToModel(viewRow);
@@ -213,7 +250,7 @@ public class DedupConfigTab extends JPanel {
 
         DedupConfig selected = tableModel.getConfig(modelRow);
         DedupConfigEditDialog dialog = new DedupConfigEditDialog(
-                (Frame) SwingUtilities.getWindowAncestor(this), "编辑去重配置", selected);
+                (Frame) SwingUtilities.getWindowAncestor(this), I18nManager.tr("dedup.edit.title"), selected);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             DedupConfig config = dialog.getConfig();
@@ -226,7 +263,8 @@ public class DedupConfigTab extends JPanel {
     private void deleteConfig() {
         int viewRow = configTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一条配置", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("dedup.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = configTable.convertRowIndexToModel(viewRow);
@@ -234,9 +272,9 @@ public class DedupConfigTab extends JPanel {
 
         DedupConfig selected = tableModel.getConfig(modelRow);
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认删除此去重配置？\n策略: " + selected.getStrategy().getDisplayName()
-                        + " | 优先级: " + selected.getPriority(),
-                "删除确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("dedup.delete.confirm",
+                        selected.getStrategy().getDisplayName(), selected.getPriority()),
+                I18nManager.tr("dedup.delete.title"), JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             DedupConfigManager.getInstance().deleteConfig(selected.getId());
             refreshData();
@@ -246,7 +284,8 @@ public class DedupConfigTab extends JPanel {
     private void toggleConfigEnabled() {
         int viewRow = configTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一条配置", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("dedup.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int modelRow = configTable.convertRowIndexToModel(viewRow);
@@ -262,9 +301,9 @@ public class DedupConfigTab extends JPanel {
 
     private void exportConfigs() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-                "TOKEN_LOCATION", "导出去重配置", this,
+                "TOKEN_LOCATION", I18nManager.tr("dedup.export.dialog"), this,
                 new File("dedup_configs.yaml"),
-                new FileNameExtensionFilter("YAML文件 (*.yaml)", "yaml"));
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter"), "yaml"));
 
         if (selectedFile == null) return;
 
@@ -278,19 +317,20 @@ public class DedupConfigTab extends JPanel {
             boolean success = DedupConfigYamlIO.writeToFile(allConfigs, file.getAbsolutePath());
             if (success) {
                 JOptionPane.showMessageDialog(this,
-                        "成功导出 " + allConfigs.size() + " 条去重配置到:\n" + file.getAbsolutePath(),
-                        "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("dedup.export.success", allConfigs.size(), file.getAbsolutePath()),
+                        I18nManager.tr("dedup.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                    "导出失败: " + e.getMessage(), "导出错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("dedup.export.failed", e.getMessage()),
+                    I18nManager.tr("dedup.export.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void importConfigs() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showOpenDialog(
-                "TOKEN_LOCATION", "导入去重配置", this,
-                new FileNameExtensionFilter("YAML文件 (*.yaml, *.yml)", "yaml", "yml"));
+                "TOKEN_LOCATION", I18nManager.tr("dedup.import.dialog"), this,
+                new FileNameExtensionFilter(I18nManager.tr("field.yaml.filter.all"), "yaml", "yml"));
 
         if (selectedFile == null) return;
 
@@ -298,17 +338,17 @@ public class DedupConfigTab extends JPanel {
             List<DedupConfig> imported = DedupConfigYamlIO.readFromFile(selectedFile.getAbsolutePath());
             if (imported.isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                        "文件中没有找到去重配置数据", "导入提示", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("dedup.import.empty"),
+                        I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 
             // 选择导入模式
-            String[] options = {"合并导入", "替换导入", "取消"};
+            String[] options = {I18nManager.tr("dedup.import.merge"),
+                    I18nManager.tr("dedup.import.replace"), I18nManager.tr("dedup.import.cancel")};
             int choice = JOptionPane.showOptionDialog(this,
-                    "发现 " + imported.size() + " 条去重配置，请选择导入方式：\n" +
-                            "合并导入：保留现有配置，追加新配置\n" +
-                            "替换导入：清空所有现有配置后导入",
-                    "导入方式",
+                    I18nManager.tr("dedup.import.choice.msg", imported.size()),
+                    I18nManager.tr("dedup.import.choice.title"),
                     JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
                     null, options, options[0]);
 
@@ -324,12 +364,13 @@ public class DedupConfigTab extends JPanel {
                 }
                 refreshData();
                 JOptionPane.showMessageDialog(this,
-                        "合并导入完成，新增 " + count + " 条去重配置",
-                        "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("dedup.import.merge.done", count),
+                        I18nManager.tr("dedup.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
             } else if (choice == 1) {
                 int confirm = JOptionPane.showConfirmDialog(this,
-                        "替换导入将删除所有现有去重配置，是否继续？",
-                        "替换确认", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                        I18nManager.tr("dedup.import.replace.confirm"),
+                        I18nManager.tr("dedup.import.replace.title"),
+                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                 if (confirm == JOptionPane.YES_OPTION) {
                     // 清空现有全局配置
                     for (DedupConfig existing : mgr.getGlobalConfigs()) {
@@ -345,13 +386,14 @@ public class DedupConfigTab extends JPanel {
                     }
                     refreshData();
                     JOptionPane.showMessageDialog(this,
-                            "替换导入完成，共导入 " + count + " 条去重配置",
-                            "导入成功", JOptionPane.INFORMATION_MESSAGE);
+                            I18nManager.tr("dedup.import.replace.done", count),
+                            I18nManager.tr("dedup.import.success.title"), JOptionPane.INFORMATION_MESSAGE);
                 }
             }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                    "导入失败: " + e.getMessage(), "导入错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("dedup.import.failed", e.getMessage()),
+                    I18nManager.tr("dedup.import.failed.title"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -359,12 +401,22 @@ public class DedupConfigTab extends JPanel {
 
     private static class DedupConfigTableModel extends AbstractTableModel {
 
-        private final String[] columnNames = {"#", "去重策略", "表达式", "保留策略", "优先级", "启用", "存储类型"};
+        private static final String[] COLUMN_KEYS = {
+            "dedup.col.index", "dedup.col.strategy", "dedup.col.expression",
+            "dedup.col.keep", "dedup.col.priority", "dedup.col.enabled", "dedup.col.storage"
+        };
         private List<DedupConfig> data = new ArrayList<>();
 
         public void setData(List<DedupConfig> configs) {
             this.data = configs != null ? configs : new ArrayList<>();
             fireTableDataChanged();
+        }
+
+        /**
+         * 语言切换后刷新列名
+         */
+        public void refreshColumnNames() {
+            fireTableStructureChanged();
         }
 
         public DedupConfig getConfig(int row) {
@@ -378,12 +430,12 @@ public class DedupConfigTab extends JPanel {
 
         @Override
         public int getColumnCount() {
-            return columnNames.length;
+            return COLUMN_KEYS.length;
         }
 
         @Override
         public String getColumnName(int column) {
-            return columnNames[column];
+            return I18nManager.tr(COLUMN_KEYS[column]);
         }
 
         @Override

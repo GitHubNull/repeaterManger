@@ -1,25 +1,27 @@
 package org.oxff.repeater.privilege.model;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 /**
  * 去重保留策略枚举
  * 当多条请求具有相同的去重键时，决定保留哪一条
  */
 public enum DedupKeepPolicy {
     /** 保留第一条（默认） */
-    FIRST("第一条"),
+    FIRST("dedup.keep.first"),
     /** 保留最后一条 */
-    LAST("最后一条"),
+    LAST("dedup.keep.last"),
     /** 保留中间那条（当有奇数条时取正中间，偶数条时取偏后那条） */
-    MIDDLE("中间条");
+    MIDDLE("dedup.keep.middle");
 
-    private final String displayName;
+    private final String displayNameKey;
 
-    DedupKeepPolicy(String displayName) {
-        this.displayName = displayName;
+    DedupKeepPolicy(String displayNameKey) {
+        this.displayNameKey = displayNameKey;
     }
 
     public String getDisplayName() {
-        return displayName;
+        return I18nManager.tr(displayNameKey);
     }
 
     /**
@@ -30,7 +32,7 @@ public enum DedupKeepPolicy {
             return FIRST;
         }
         for (DedupKeepPolicy policy : DedupKeepPolicy.values()) {
-            if (policy.name().equalsIgnoreCase(text) || policy.displayName.equalsIgnoreCase(text)) {
+            if (policy.name().equalsIgnoreCase(text) || policy.getDisplayName().equalsIgnoreCase(text)) {
                 return policy;
             }
         }

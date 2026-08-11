@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.history.HistoryStatsDAO;
 
@@ -73,6 +74,22 @@ public class HistoryStatsBar extends JPanel {
     // 动画Timer
     private Timer animationTimer;
 
+    // 标题标签与资源键的映射（语言切换时刷新）
+    private final java.util.List<TitleLabelRef> titleLabels = new java.util.ArrayList<>();
+    private JLabel hintLabel;
+
+    /**
+     * 标题标签引用（持有资源键以便刷新）
+     */
+    private static class TitleLabelRef {
+        final JLabel label;
+        final String key;
+        TitleLabelRef(JLabel label, String key) {
+            this.label = label;
+            this.key = key;
+        }
+    }
+
     public HistoryStatsBar() {
         this.statsDAO = new HistoryStatsDAO();
 
@@ -106,6 +123,23 @@ public class HistoryStatsBar extends JPanel {
 
         // 初始加载数据
         refreshStats();
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新文本
+     */
+    private void refreshTexts() {
+        for (TitleLabelRef ref : titleLabels) {
+            ref.label.setText(I18nManager.tr(ref.key));
+        }
+        if (hintLabel != null) {
+            hintLabel.setText(I18nManager.tr("history.stats.expand"));
+        }
+        revalidate();
+        repaint();
     }
 
     /**
@@ -144,35 +178,35 @@ public class HistoryStatsBar extends JPanel {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
         panel.setOpaque(false);
 
-        panel.add(createTitleLabel("历史:"));
+        panel.add(createTitleLabel("history.stats.total"));
         panel.add(cTotalCount);
 
         panel.add(createSeparator());
-        panel.add(createTitleLabel("成功:"));
+        panel.add(createTitleLabel("history.stats.success"));
         panel.add(cSuccessCount);
 
         panel.add(createSeparator());
-        panel.add(createTitleLabel("失败:"));
+        panel.add(createTitleLabel("history.stats.failure"));
         panel.add(cFailureCount);
 
         panel.add(createSeparator());
-        panel.add(createTitleLabel("重试:"));
+        panel.add(createTitleLabel("history.stats.retry"));
         panel.add(cRetryCount);
 
         panel.add(createSeparator());
-        panel.add(createTitleLabel("最高:"));
+        panel.add(createTitleLabel("history.stats.max"));
         panel.add(cMaxTime);
         panel.add(createUnitLabel("ms"));
 
         panel.add(createSeparator());
-        panel.add(createTitleLabel("最低:"));
+        panel.add(createTitleLabel("history.stats.min"));
         panel.add(cMinTime);
         panel.add(createUnitLabel("ms"));
 
         // 右侧提示
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 4));
         rightPanel.setOpaque(false);
-        JLabel hintLabel = new JLabel("(双击展开)");
+        hintLabel = new JLabel(I18nManager.tr("history.stats.expand"));
         hintLabel.setFont(FONT_HINT);
         hintLabel.setForeground(COLOR_HINT);
         rightPanel.add(hintLabel);
@@ -197,52 +231,55 @@ public class HistoryStatsBar extends JPanel {
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
         row1.setOpaque(false);
 
-        row1.add(createTitleLabel("历史总数:"));
+        row1.add(createTitleLabel("history.stats.totalFull"));
         row1.add(eTotalCount);
 
         row1.add(createSeparator());
-        row1.add(createTitleLabel("成功:"));
+        row1.add(createTitleLabel("history.stats.success"));
         row1.add(eSuccessCount);
 
         row1.add(createSeparator());
-        row1.add(createTitleLabel("失败:"));
+        row1.add(createTitleLabel("history.stats.failure"));
         row1.add(eFailureCount);
 
         row1.add(createSeparator());
-        row1.add(createTitleLabel("重试:"));
+        row1.add(createTitleLabel("history.stats.retry"));
         row1.add(eRetryCount);
 
         row1.add(createSeparator());
-        row1.add(createTitleLabel("基准请求:"));
+        row1.add(createTitleLabel("history.stats.baseline"));
         row1.add(eRequestCount);
 
         // 第二行：性能统计
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
         row2.setOpaque(false);
 
-        row2.add(createTitleLabel("平均:"));
+        row2.add(createTitleLabel("history.stats.avg"));
         row2.add(eAvgTime);
         row2.add(createUnitLabel("ms"));
 
         row2.add(createSeparator());
-        row2.add(createTitleLabel("标准差:"));
+        row2.add(createTitleLabel("history.stats.stddev"));
         row2.add(eVariance);
 
         row2.add(createSeparator());
-        row2.add(createTitleLabel("众数:"));
+        row2.add(createTitleLabel("history.stats.mode"));
         row2.add(eModeTime);
         row2.add(createUnitLabel("ms"));
 
         row2.add(createSeparator());
-        row2.add(createTitleLabel("中位数:"));
+        row2.add(createTitleLabel("history.stats.median"));
         row2.add(eMedianTime);
         row2.add(createUnitLabel("ms"));
 
         row2.add(createSeparator());
-        row2.add(createTitleLabel("范围:"));
+        row2.add(createTitleLabel("history.stats.range"));
         row2.add(eMinTime);
         row2.add(createUnitLabel("ms"));
-        row2.add(createTitleLabel("~"));
+        JLabel tildeLabel = new JLabel("~");
+        tildeLabel.setFont(FONT_TITLE);
+        tildeLabel.setForeground(COLOR_TITLE);
+        row2.add(tildeLabel);
         row2.add(eMaxTime);
         row2.add(createUnitLabel("ms"));
 
@@ -253,12 +290,13 @@ public class HistoryStatsBar extends JPanel {
     }
 
     /**
-     * 创建标题标签
+     * 创建标题标签（按资源键，注册以便语言切换刷新）
      */
-    private JLabel createTitleLabel(String text) {
-        JLabel label = new JLabel(text);
+    private JLabel createTitleLabel(String resourceKey) {
+        JLabel label = new JLabel(I18nManager.tr(resourceKey));
         label.setFont(FONT_TITLE);
         label.setForeground(COLOR_TITLE);
+        titleLabels.add(new TitleLabelRef(label, resourceKey));
         return label;
     }
 
@@ -393,7 +431,7 @@ public class HistoryStatsBar extends JPanel {
 
                 SwingUtilities.invokeLater(() -> updateLabels(data));
             } catch (Exception e) {
-                LogManager.getInstance().printError("[!] 刷新统计失败: " + e.getMessage());
+                LogManager.getInstance().printError(I18nManager.tr("log.stats.refresh.failed", e.getMessage()));
             }
         }).start();
     }

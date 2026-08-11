@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import javax.swing.table.DefaultTableModel;
@@ -11,12 +12,27 @@ import java.util.List;
  */
 public class FieldDefinitionTableModel extends DefaultTableModel {
 
-    private static final String[] COLUMN_NAMES = {"类型", "表达式", "描述", "持久化到全局", "启用"};
+    private static final String[] COLUMN_KEYS = {
+        "field.col.type", "field.col.expression", "field.col.description",
+        "field.col.persist", "field.col.enabled"
+    };
 
     private final List<FieldDefinition> fields = new ArrayList<>();
 
     public FieldDefinitionTableModel() {
-        super(COLUMN_NAMES, 0);
+        super(new Object[COLUMN_KEYS.length], 0);
+    }
+
+    @Override
+    public String getColumnName(int column) {
+        return I18nManager.tr(COLUMN_KEYS[column]);
+    }
+
+    /**
+     * 语言切换后刷新列名
+     */
+    public void refreshColumnNames() {
+        fireTableStructureChanged();
     }
 
     public void setData(List<FieldDefinition> fields) {

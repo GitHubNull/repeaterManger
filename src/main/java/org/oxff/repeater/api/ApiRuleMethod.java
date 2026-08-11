@@ -1,5 +1,7 @@
 package org.oxff.repeater.api;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -7,19 +9,19 @@ import java.util.List;
  * API提取规则方法枚举
  */
 public enum ApiRuleMethod {
-    REGEX("正则匹配"),
-    SUBSTR("子串截取"),
-    JSON_PATH("JSON路径"),
-    XPATH("XPath");
+    REGEX("api.rule.method.regex"),
+    SUBSTR("api.rule.method.substring"),
+    JSON_PATH("api.rule.method.jsonPath"),
+    XPATH("api.rule.method.xpath");
 
-    private final String displayName;
+    private final String displayNameKey;
 
-    ApiRuleMethod(String displayName) {
-        this.displayName = displayName;
+    ApiRuleMethod(String displayNameKey) {
+        this.displayNameKey = displayNameKey;
     }
 
     public String getDisplayName() {
-        return displayName;
+        return I18nManager.tr(displayNameKey);
     }
 
     /**

@@ -1,22 +1,24 @@
 package org.oxff.repeater.api;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 /**
  * API提取规则来源枚举
  */
 public enum ApiRuleSource {
-    URL_PATH("URL路径"),
-    URL_QUERY("URL参数"),
-    HEADER("请求头"),
-    BODY("请求体");
+    URL_PATH("api.rule.source.urlPath"),
+    URL_QUERY("api.rule.source.urlParam"),
+    HEADER("api.rule.source.header"),
+    BODY("api.rule.source.body");
 
-    private final String displayName;
+    private final String displayNameKey;
 
-    ApiRuleSource(String displayName) {
-        this.displayName = displayName;
+    ApiRuleSource(String displayNameKey) {
+        this.displayNameKey = displayNameKey;
     }
 
     public String getDisplayName() {
-        return displayName;
+        return I18nManager.tr(displayNameKey);
     }
 
     /**

@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui.history;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
@@ -41,7 +43,7 @@ public class AdvancedSearchDialog extends JDialog {
      * @param tableRowSorter   表格排序器（用于应用过滤器）
      */
     public AdvancedSearchDialog(Component parentComponent, TableRowSorter<DefaultTableModel> tableRowSorter) {
-        super((Frame) SwingUtilities.getWindowAncestor(parentComponent), "高级搜索", true);
+        super((Frame) SwingUtilities.getWindowAncestor(parentComponent), I18nManager.tr("advanced.search.title"), true);
         this.parentComponent = parentComponent;
         this.tableRowSorter = tableRowSorter;
         initUI();
@@ -75,11 +77,11 @@ public class AdvancedSearchDialog extends JDialog {
         // 方法过滤器
         c.gridx = 0;
         c.gridy = 0;
-        formPanel.add(new JLabel("方法:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.method")), c);
 
         c.gridx = 1;
         c.weightx = 1.0;
-        String[] methods = {"所有方法", "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"};
+        String[] methods = {I18nManager.tr("advanced.search.allMethods"), "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"};
         methodCombo = new JComboBox<>(methods);
         formPanel.add(methodCombo, c);
 
@@ -87,16 +89,16 @@ public class AdvancedSearchDialog extends JDialog {
         c.gridx = 0;
         c.gridy = 1;
         c.weightx = 0;
-        formPanel.add(new JLabel("协议:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.protocol")), c);
 
         c.gridx = 1;
-        protocolCombo = new JComboBox<>(new String[]{"所有协议", "http", "https"});
+        protocolCombo = new JComboBox<>(new String[]{I18nManager.tr("advanced.search.allProtocols"), "http", "https"});
         formPanel.add(protocolCombo, c);
 
         // 域名过滤器
         c.gridx = 0;
         c.gridy = 2;
-        formPanel.add(new JLabel("域名包含:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.domainContains")), c);
 
         c.gridx = 1;
         hostField = new JTextField(20);
@@ -105,7 +107,7 @@ public class AdvancedSearchDialog extends JDialog {
         // 路径过滤器
         c.gridx = 0;
         c.gridy = 3;
-        formPanel.add(new JLabel("路径包含:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.pathContains")), c);
 
         c.gridx = 1;
         pathField = new JTextField(20);
@@ -114,7 +116,7 @@ public class AdvancedSearchDialog extends JDialog {
         // 查询参数过滤器
         c.gridx = 0;
         c.gridy = 4;
-        formPanel.add(new JLabel("参数包含:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.paramContains")), c);
 
         c.gridx = 1;
         queryField = new JTextField(20);
@@ -123,37 +125,37 @@ public class AdvancedSearchDialog extends JDialog {
         // 状态码过滤器
         c.gridx = 0;
         c.gridy = 5;
-        formPanel.add(new JLabel("状态码:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.statusCode")), c);
 
         c.gridx = 1;
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         minStatusField = new JTextField(4);
         maxStatusField = new JTextField(4);
-        statusPanel.add(new JLabel("从:"));
+        statusPanel.add(new JLabel(I18nManager.tr("advanced.search.from")));
         statusPanel.add(minStatusField);
-        statusPanel.add(new JLabel("到:"));
+        statusPanel.add(new JLabel(I18nManager.tr("advanced.search.to")));
         statusPanel.add(maxStatusField);
         formPanel.add(statusPanel, c);
 
         // 响应长度过滤器
         c.gridx = 0;
         c.gridy = 6;
-        formPanel.add(new JLabel("响应长度:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.responseLength")), c);
 
         c.gridx = 1;
         JPanel lengthPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         minLengthField = new JTextField(6);
         maxLengthField = new JTextField(6);
-        lengthPanel.add(new JLabel("从:"));
+        lengthPanel.add(new JLabel(I18nManager.tr("advanced.search.from")));
         lengthPanel.add(minLengthField);
-        lengthPanel.add(new JLabel("到:"));
+        lengthPanel.add(new JLabel(I18nManager.tr("advanced.search.to")));
         lengthPanel.add(maxLengthField);
         formPanel.add(lengthPanel, c);
 
         // 备注过滤器
         c.gridx = 0;
         c.gridy = 7;
-        formPanel.add(new JLabel("备注包含:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.commentContains")), c);
 
         c.gridx = 1;
         commentField = new JTextField(20);
@@ -162,10 +164,10 @@ public class AdvancedSearchDialog extends JDialog {
         // 越权测试过滤器
         c.gridx = 0;
         c.gridy = 8;
-        formPanel.add(new JLabel("越权测试:"), c);
+        formPanel.add(new JLabel(I18nManager.tr("advanced.search.privilegeTest")), c);
 
         c.gridx = 1;
-        privilegeTestCombo = new JComboBox<>(new String[]{"全部", "是", "否"});
+        privilegeTestCombo = new JComboBox<>(new String[]{I18nManager.tr("advanced.search.all"), I18nManager.tr("advanced.search.yes"), I18nManager.tr("advanced.search.no")});
         formPanel.add(privilegeTestCombo, c);
 
         return formPanel;
@@ -176,8 +178,8 @@ public class AdvancedSearchDialog extends JDialog {
      */
     private JPanel createButtonPanel() {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton searchButton = new JButton("搜索");
-        JButton cancelButton = new JButton("取消");
+        JButton searchButton = new JButton(I18nManager.tr("advanced.search.search"));
+        JButton cancelButton = new JButton(I18nManager.tr("common.cancel"));
 
         searchButton.addActionListener(e -> {
             applyAdvancedFilter();
@@ -208,13 +210,13 @@ public class AdvancedSearchDialog extends JDialog {
 
         List<RowFilter<DefaultTableModel, Object>> filters = new ArrayList<>();
 
-        // 方法过滤
-        if (method != null && !"所有方法".equals(method)) {
+        // 方法过滤（索引0=所有方法，跳过）
+        if (methodCombo.getSelectedIndex() > 0 && method != null) {
             filters.add(RowFilter.regexFilter("^" + method + "$", 3));
         }
 
-        // 协议过滤
-        if (protocol != null && !"所有协议".equals(protocol)) {
+        // 协议过滤（索引0=所有协议，跳过）
+        if (protocolCombo.getSelectedIndex() > 0 && protocol != null) {
             filters.add(RowFilter.regexFilter("^" + protocol + "$", 4));
         }
 
@@ -251,7 +253,7 @@ public class AdvancedSearchDialog extends JDialog {
                     }
                 });
             } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(parentComponent, "状态码必须是数字", "输入错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(parentComponent, I18nManager.tr("advanced.search.status.invalid"), I18nManager.tr("advanced.search.input.error"), JOptionPane.ERROR_MESSAGE);
             }
         }
 
@@ -273,7 +275,7 @@ public class AdvancedSearchDialog extends JDialog {
                     }
                 });
             } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(parentComponent, "响应长度必须是数字", "输入错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(parentComponent, I18nManager.tr("advanced.search.length.invalid"), I18nManager.tr("advanced.search.input.error"), JOptionPane.ERROR_MESSAGE);
             }
         }
 
@@ -282,10 +284,13 @@ public class AdvancedSearchDialog extends JDialog {
             filters.add(RowFilter.regexFilter("(?i)" + comment, 14));
         }
 
-        // 越权测试过滤
-        String privilegeTest = (String) privilegeTestCombo.getSelectedItem();
-        if (privilegeTest != null && !"全部".equals(privilegeTest)) {
-            filters.add(RowFilter.regexFilter("^" + Pattern.quote(privilegeTest) + "$", 13));
+        // 越权测试过滤（索引0=全部跳过；1=是，2=否，过滤值与表格显示内容一致）
+        int privIndex = privilegeTestCombo.getSelectedIndex();
+        if (privIndex > 0) {
+            String privValue = privIndex == 1
+                ? I18nManager.tr("history.panel.yes")
+                : I18nManager.tr("history.panel.no");
+            filters.add(RowFilter.regexFilter("^" + Pattern.quote(privValue) + "$", 13));
         }
 
         // 应用过滤器

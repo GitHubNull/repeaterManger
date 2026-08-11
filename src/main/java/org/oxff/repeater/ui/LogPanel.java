@@ -1,6 +1,7 @@
 package org.oxff.repeater.ui;
 
 import org.oxff.repeater.config.SessionDirectory;
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogEntry;
 import org.oxff.repeater.logging.LogLevel;
 
@@ -55,6 +56,10 @@ public class LogPanel extends JPanel {
     private final JComboBox<String> maxEntriesCombo;
     private final JButton exportButton;
     private final JToggleButton pauseButton;
+
+    // 需要在语言切换时刷新的静态标签
+    private JLabel levelLabel;
+    private JLabel entriesLabel;
 
     // 日志缓冲
     private final LinkedList<LogEntry> entryBuffer = new LinkedList<>();
@@ -122,7 +127,7 @@ public class LogPanel extends JPanel {
                                                           boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value == null) {
-                    setText("ALL");
+                    setText(I18nManager.tr("log.panel.all"));
                 } else if (value instanceof LogLevel) {
                     setText(((LogLevel) value).name());
                 }
@@ -131,9 +136,9 @@ public class LogPanel extends JPanel {
         });
         levelFilterCombo.addActionListener(e -> onLevelFilterChanged());
 
-        keywordModeButton = new JToggleButton("关键字");
+        keywordModeButton = new JToggleButton(I18nManager.tr("log.panel.keyword"));
         keywordModeButton.setSelected(true);
-        regexModeButton = new JToggleButton("正则");
+        regexModeButton = new JToggleButton(I18nManager.tr("log.panel.regex"));
         ButtonGroup searchModeGroup = new ButtonGroup();
         searchModeGroup.add(keywordModeButton);
         searchModeGroup.add(regexModeButton);
@@ -141,27 +146,28 @@ public class LogPanel extends JPanel {
         regexModeButton.addActionListener(e -> { isRegexMode = true; performSearch(); });
 
         searchField = new JTextField(15);
-        searchField.setToolTipText("输入关键字或正则表达式搜索日志");
+        searchField.setToolTipText(I18nManager.tr("log.panel.search.tooltip"));
         caseSensitiveCheckbox = new JCheckBox("Aa", false);
-        caseSensitiveCheckbox.setToolTipText("区分大小写");
+        caseSensitiveCheckbox.setToolTipText(I18nManager.tr("log.panel.caseSensitive"));
         caseSensitiveCheckbox.addActionListener(e -> performSearch());
 
         prevMatchButton = new JButton("▲");
-        prevMatchButton.setToolTipText("上一个匹配");
+        prevMatchButton.setToolTipText(I18nManager.tr("log.panel.prevMatch"));
         prevMatchButton.addActionListener(e -> navigateMatch(-1));
 
         nextMatchButton = new JButton("▼");
-        nextMatchButton.setToolTipText("下一个匹配");
+        nextMatchButton.setToolTipText(I18nManager.tr("log.panel.nextMatch"));
         nextMatchButton.addActionListener(e -> navigateMatch(1));
 
         matchCountLabel = new JLabel("0/0");
         matchCountLabel.setPreferredSize(new Dimension(60, 20));
 
         clearSearchButton = new JButton("✕");
-        clearSearchButton.setToolTipText("清除搜索");
+        clearSearchButton.setToolTipText(I18nManager.tr("log.panel.clearSearch"));
         clearSearchButton.addActionListener(e -> clearSearch());
 
-        mainToolbar.add(new JLabel("级别:"));
+        levelLabel = new JLabel(I18nManager.tr("log.panel.level"));
+        mainToolbar.add(levelLabel);
         mainToolbar.add(levelFilterCombo);
         mainToolbar.add(keywordModeButton);
         mainToolbar.add(regexModeButton);
@@ -175,30 +181,31 @@ public class LogPanel extends JPanel {
         // 第二行 - 辅助工具栏
         JPanel auxToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
 
-        clearButton = new JButton("清除");
-        clearButton.setToolTipText("清除所有日志");
+        clearButton = new JButton(I18nManager.tr("log.panel.clear"));
+        clearButton.setToolTipText(I18nManager.tr("log.panel.clear.tooltip"));
         clearButton.addActionListener(e -> clearLog());
 
-        autoScrollCheckBox = new JCheckBox("自动滚动", true);
+        autoScrollCheckBox = new JCheckBox(I18nManager.tr("log.panel.autoScroll"), true);
 
         maxEntriesCombo = new JComboBox<>(new String[]{"128", "256", "512", "1024"});
-        maxEntriesCombo.setToolTipText("最大显示条目数");
+        maxEntriesCombo.setToolTipText(I18nManager.tr("log.panel.maxEntries.tooltip"));
         maxEntriesCombo.addActionListener(e -> {
             maxEntries = Integer.parseInt((String) maxEntriesCombo.getSelectedItem());
             trimEntries();
         });
 
-        exportButton = new JButton("导出");
-        exportButton.setToolTipText("导出日志到文件");
+        exportButton = new JButton(I18nManager.tr("log.panel.export"));
+        exportButton.setToolTipText(I18nManager.tr("log.panel.export.tooltip"));
         exportButton.addActionListener(e -> exportLog());
 
-        pauseButton = new JToggleButton("暂停");
-        pauseButton.setToolTipText("暂停/恢复日志接收");
+        pauseButton = new JToggleButton(I18nManager.tr("log.panel.pause"));
+        pauseButton.setToolTipText(I18nManager.tr("log.panel.pause.tooltip"));
         pauseButton.addActionListener(e -> paused = pauseButton.isSelected());
 
         auxToolbar.add(clearButton);
         auxToolbar.add(autoScrollCheckBox);
-        auxToolbar.add(new JLabel("条目数:"));
+        entriesLabel = new JLabel(I18nManager.tr("log.panel.entries"));
+        auxToolbar.add(entriesLabel);
         auxToolbar.add(maxEntriesCombo);
         auxToolbar.add(exportButton);
         auxToolbar.add(pauseButton);
@@ -235,6 +242,36 @@ public class LogPanel extends JPanel {
             searchDebounceTimer.stop();
             performSearch();
         });
+
+        // 注册语言变更监听
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+    }
+
+    /**
+     * 语言变更时刷新文本
+     */
+    private void refreshTexts() {
+        levelLabel.setText(I18nManager.tr("log.panel.level"));
+        keywordModeButton.setText(I18nManager.tr("log.panel.keyword"));
+        regexModeButton.setText(I18nManager.tr("log.panel.regex"));
+        searchField.setToolTipText(I18nManager.tr("log.panel.search.tooltip"));
+        caseSensitiveCheckbox.setToolTipText(I18nManager.tr("log.panel.caseSensitive"));
+        prevMatchButton.setToolTipText(I18nManager.tr("log.panel.prevMatch"));
+        nextMatchButton.setToolTipText(I18nManager.tr("log.panel.nextMatch"));
+        clearSearchButton.setToolTipText(I18nManager.tr("log.panel.clearSearch"));
+        clearButton.setText(I18nManager.tr("log.panel.clear"));
+        clearButton.setToolTipText(I18nManager.tr("log.panel.clear.tooltip"));
+        autoScrollCheckBox.setText(I18nManager.tr("log.panel.autoScroll"));
+        entriesLabel.setText(I18nManager.tr("log.panel.entries"));
+        maxEntriesCombo.setToolTipText(I18nManager.tr("log.panel.maxEntries.tooltip"));
+        exportButton.setText(I18nManager.tr("log.panel.export"));
+        exportButton.setToolTipText(I18nManager.tr("log.panel.export.tooltip"));
+        pauseButton.setText(I18nManager.tr("log.panel.pause"));
+        pauseButton.setToolTipText(I18nManager.tr("log.panel.pause.tooltip"));
+        // 强制级别下拉框重绘以刷新 "ALL" 渲染文本
+        levelFilterCombo.repaint();
+        revalidate();
+        repaint();
     }
 
     /**
@@ -589,7 +626,7 @@ public class LogPanel extends JPanel {
      */
     private void exportLog() {
         File selectedFile = org.oxff.repeater.utils.FileChooserHelper.showSaveDialog(
-            org.oxff.repeater.utils.FileChooserHelper.OP_LOG_EXPORT, "导出日志", this,
+            org.oxff.repeater.utils.FileChooserHelper.OP_LOG_EXPORT, I18nManager.tr("log.panel.export.dialog"), this,
             new File("repeater_manager_log_" + SessionDirectory.generateTimestamp() + ".txt"));
 
         if (selectedFile != null) {
@@ -600,12 +637,12 @@ public class LogPanel extends JPanel {
                     bw.newLine();
                 }
                 JOptionPane.showMessageDialog(this,
-                    "日志已导出到: " + selectedFile.getAbsolutePath(),
-                    "导出成功", JOptionPane.INFORMATION_MESSAGE);
+                    I18nManager.tr("log.panel.export.success", selectedFile.getAbsolutePath()),
+                    I18nManager.tr("log.panel.export.success.title"), JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(this,
-                    "导出失败: " + e.getMessage(),
-                    "导出错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("log.panel.export.failed", e.getMessage()),
+                    I18nManager.tr("log.panel.export.failed.title"), JOptionPane.ERROR_MESSAGE);
             }
         }
     }

@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.FieldDefinition;
 import org.oxff.repeater.privilege.model.Scheme;
@@ -54,14 +55,14 @@ public class SchemeEditDialog extends JDialog {
 
         // 名称
         gbc.gridx = 0; gbc.gridy = 0;
-        formPanel.add(new JLabel("名称:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("scheme.dialog.name")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         nameField = new JTextField(20);
         formPanel.add(nameField, gbc);
 
         // 描述
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        formPanel.add(new JLabel("描述:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("scheme.dialog.description")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         descriptionArea = new JTextArea(2, 20);
         descriptionArea.setLineWrap(true);
@@ -71,16 +72,16 @@ public class SchemeEditDialog extends JDialog {
 
         // 启用
         gbc.gridx = 0; gbc.gridy = 2;
-        formPanel.add(new JLabel("启用:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("scheme.dialog.enabled")), gbc);
         gbc.gridx = 1;
-        enabledCheckbox = new JCheckBox("启用此方案", true);
+        enabledCheckbox = new JCheckBox(I18nManager.tr("scheme.dialog.enable"), true);
         formPanel.add(enabledCheckbox, gbc);
 
         // 持久化到全局
         gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
-        formPanel.add(new JLabel("全局存储:"), gbc);
+        formPanel.add(new JLabel(I18nManager.tr("scheme.dialog.global")), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
-        persistToGlobalCheckbox = new JCheckBox("持久化到全局（方便后续项目复用）", true);
+        persistToGlobalCheckbox = new JCheckBox(I18nManager.tr("scheme.dialog.persistGlobal"), true);
         formPanel.add(persistToGlobalCheckbox, gbc);
 
         mainPanel.add(formPanel, BorderLayout.NORTH);
@@ -127,10 +128,10 @@ public class SchemeEditDialog extends JDialog {
         // 中间按钮面板
         JPanel shuttleButtonPanel = new JPanel();
         shuttleButtonPanel.setLayout(new BoxLayout(shuttleButtonPanel, BoxLayout.Y_AXIS));
-        JButton addBtn = new JButton("添加 >>");
-        JButton addAllBtn = new JButton("全部添加 >>");
-        JButton removeBtn = new JButton("<< 移除");
-        JButton removeAllBtn = new JButton("<< 全部移除");
+        JButton addBtn = new JButton(I18nManager.tr("scheme.dialog.add"));
+        JButton addAllBtn = new JButton(I18nManager.tr("scheme.dialog.addAll"));
+        JButton removeBtn = new JButton(I18nManager.tr("scheme.dialog.remove"));
+        JButton removeAllBtn = new JButton(I18nManager.tr("scheme.dialog.removeAll"));
 
         addBtn.addActionListener(e -> moveSelected(availableTable, availableModel, selectedModel));
         addAllBtn.addActionListener(e -> moveAll(availableModel, selectedModel));
@@ -149,10 +150,10 @@ public class SchemeEditDialog extends JDialog {
         // 穿梭框整体布局 - 使用 GridBagLayout 实现左右等比例伸缩 + 按钮居中
         JPanel shuttlePanel = new JPanel(new GridBagLayout());
         JPanel availablePanel = new JPanel(new BorderLayout());
-        availablePanel.add(new JLabel("可用字段定义"), BorderLayout.NORTH);
+        availablePanel.add(new JLabel(I18nManager.tr("scheme.dialog.available")), BorderLayout.NORTH);
         availablePanel.add(availableScroll, BorderLayout.CENTER);
         JPanel selectedPanel = new JPanel(new BorderLayout());
-        selectedPanel.add(new JLabel("已选字段定义"), BorderLayout.NORTH);
+        selectedPanel.add(new JLabel(I18nManager.tr("scheme.dialog.selected")), BorderLayout.NORTH);
         selectedPanel.add(selectedScroll, BorderLayout.CENTER);
 
         GridBagConstraints sgbc = new GridBagConstraints();
@@ -181,11 +182,13 @@ public class SchemeEditDialog extends JDialog {
 
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okBtn = new JButton("确定");
-        JButton cancelBtn = new JButton("取消");
+        JButton okBtn = new JButton(I18nManager.tr("common.ok"));
+        JButton cancelBtn = new JButton(I18nManager.tr("common.cancel"));
         okBtn.addActionListener(e -> {
             if (nameField.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(this, "名称不能为空", "提示", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        I18nManager.tr("scheme.dialog.name.empty"),
+                        I18nManager.tr("common.hint"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             confirmed = true;
@@ -281,7 +284,8 @@ public class SchemeEditDialog extends JDialog {
     // ==================== 内部表格模型 ====================
 
     private abstract static class FieldTableModel extends AbstractTableModel {
-        private static final String[] COLUMN_NAMES = {"类型", "表达式", "描述"};
+        private static final String[] COLUMN_KEYS = {
+                "scheme.dialog.col.type", "scheme.dialog.col.expression", "scheme.dialog.col.description"};
 
         protected List<FieldDefinition> fields;
 
@@ -293,10 +297,10 @@ public class SchemeEditDialog extends JDialog {
         public int getRowCount() { return fields.size(); }
 
         @Override
-        public int getColumnCount() { return COLUMN_NAMES.length; }
+        public int getColumnCount() { return COLUMN_KEYS.length; }
 
         @Override
-        public String getColumnName(int column) { return COLUMN_NAMES[column]; }
+        public String getColumnName(int column) { return I18nManager.tr(COLUMN_KEYS[column]); }
 
         @Override
         public Object getValueAt(int rowIndex, int columnIndex) {

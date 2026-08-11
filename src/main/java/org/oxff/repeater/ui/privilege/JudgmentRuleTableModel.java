@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.JudgmentRuleManager;
 import org.oxff.repeater.privilege.model.JudgmentRule;
 
@@ -12,7 +13,10 @@ import java.util.List;
  */
 public class JudgmentRuleTableModel extends AbstractTableModel {
 
-    private static final String[] COLUMN_NAMES = {"活跃", "名称", "条件数", "条件摘要", "启用", "持久化"};
+    private static final String[] COLUMN_KEYS = {
+        "judgment.col.active", "judgment.col.name", "judgment.col.condCount",
+        "judgment.col.condSummary", "judgment.col.enabled", "judgment.col.persist"
+    };
 
     private List<JudgmentRule> rules = new ArrayList<>();
 
@@ -35,12 +39,19 @@ public class JudgmentRuleTableModel extends AbstractTableModel {
 
     @Override
     public int getColumnCount() {
-        return COLUMN_NAMES.length;
+        return COLUMN_KEYS.length;
     }
 
     @Override
     public String getColumnName(int column) {
-        return COLUMN_NAMES[column];
+        return I18nManager.tr(COLUMN_KEYS[column]);
+    }
+
+    /**
+     * 语言切换后刷新列名
+     */
+    public void refreshColumnNames() {
+        fireTableStructureChanged();
     }
 
     @Override

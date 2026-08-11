@@ -1,5 +1,6 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.model.JudgmentRule;
 import org.oxff.repeater.privilege.model.RuleCondition;
 import org.oxff.repeater.privilege.model.RuleMethod;
@@ -59,7 +60,7 @@ public class JudgmentRuleEditDialog extends JDialog {
 
         // 名称
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("名称:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.name")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         nameField = new JTextField(30);
         mainPanel.add(nameField, gbc);
@@ -68,7 +69,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 条件列表标签
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 4;
-        mainPanel.add(new JLabel("判决条件（支持 AND/OR 组合，NOT 取反）:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.conditions")), gbc);
         gbc.gridwidth = 1;
 
         row++;
@@ -87,7 +88,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 添加条件按钮
         JPanel addButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton addConditionButton = new JButton("+ 添加条件");
+        JButton addConditionButton = new JButton(I18nManager.tr("judgment.dialog.addCondition"));
         addConditionButton.addActionListener(e -> addConditionRow(null));
         addButtonPanel.add(addConditionButton);
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 4;
@@ -97,7 +98,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 启用
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("启用:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.enabled")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         enabledCheckbox = new JCheckBox();
         enabledCheckbox.setSelected(true);
@@ -107,42 +108,44 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 持久化（跨会话保留）
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("持久化:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.persist")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         globalCheckbox = new JCheckBox();
         globalCheckbox.setSelected(true); // 默认持久化
-        globalCheckbox.setToolTipText("勾选后规则跨会话保留，重启插件后自动恢复；不勾选则为临时规则，仅当前会话有效");
+        globalCheckbox.setToolTipText(I18nManager.tr("judgment.dialog.persist.tooltip"));
         mainPanel.add(globalCheckbox, gbc);
         gbc.gridwidth = 1;
 
         row++;
         // 越权颜色 + 安全颜色
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("越权颜色:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.escalatedColor")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         successColor = Color.RED;
         successColorButton = new JButton("  ");
         successColorButton.setBackground(successColor);
         successColorButton.setOpaque(true);
         successColorButton.setBorderPainted(false);
-        successColorButton.addActionListener(e -> chooseColor(successColorButton, "越权标记颜色", true));
+        successColorButton.addActionListener(e ->
+                chooseColor(successColorButton, I18nManager.tr("judgment.dialog.escalatedColor.title"), true));
         mainPanel.add(successColorButton, gbc);
 
         gbc.gridx = 2; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("安全颜色:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.safeColor")), gbc);
         gbc.gridx = 3; gbc.gridy = row; gbc.weightx = 1;
         failureColor = new Color(144, 238, 144);
         failureColorButton = new JButton("  ");
         failureColorButton.setBackground(failureColor);
         failureColorButton.setOpaque(true);
         failureColorButton.setBorderPainted(false);
-        failureColorButton.addActionListener(e -> chooseColor(failureColorButton, "安全标记颜色", false));
+        failureColorButton.addActionListener(e ->
+                chooseColor(failureColorButton, I18nManager.tr("judgment.dialog.safeColor.title"), false));
         mainPanel.add(failureColorButton, gbc);
 
         row++;
         // 越权备注
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("越权备注:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.escalatedComment")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         successNoteField = new JTextField(30);
         mainPanel.add(successNoteField, gbc);
@@ -151,7 +154,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 安全备注
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        mainPanel.add(new JLabel("安全备注:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.safeComment")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         failureNoteField = new JTextField(30);
         mainPanel.add(failureNoteField, gbc);
@@ -160,7 +163,7 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 备注
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.anchor = GridBagConstraints.NORTHWEST;
-        mainPanel.add(new JLabel("备注:"), gbc);
+        mainPanel.add(new JLabel(I18nManager.tr("judgment.dialog.remark")), gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1; gbc.gridwidth = 3;
         gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 0.2;
         remarkArea = new JTextArea(3, 30);
@@ -171,8 +174,8 @@ public class JudgmentRuleEditDialog extends JDialog {
         row++;
         // 按钮
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton okButton = new JButton("确定");
-        JButton cancelButton = new JButton("取消");
+        JButton okButton = new JButton(I18nManager.tr("common.ok"));
+        JButton cancelButton = new JButton(I18nManager.tr("common.cancel"));
         okButton.addActionListener(e -> onOk());
         cancelButton.addActionListener(e -> {
             confirmed = false;
@@ -215,7 +218,7 @@ public class JudgmentRuleEditDialog extends JDialog {
             }
         });
         operatorCombo.setPrototypeDisplayValue(RuleCondition.LogicalOperator.AND);
-        operatorCombo.setToolTipText("选择此条件与前一条件的逻辑关系：AND(且) 或 OR(或)");
+        operatorCombo.setToolTipText(I18nManager.tr("judgment.dialog.operator.tooltip"));
 
         // 首行不显示 AND/OR 连接符：用 CardLayout 容器在 operator 与空白占位间切换，
         // 容器固定为 operatorCombo 的尺寸，保证隐藏后列宽不抖动。
@@ -229,8 +232,8 @@ public class JudgmentRuleEditDialog extends JDialog {
         opCardPanel.add(opBlank, ConditionRow.CARD_BLANK);
 
         // NOT 复选框
-        JCheckBox negateCheckbox = new JCheckBox("非");
-        negateCheckbox.setToolTipText("勾选后取反当前条件的匹配结果");
+        JCheckBox negateCheckbox = new JCheckBox(I18nManager.tr("judgment.dialog.not"));
+        negateCheckbox.setToolTipText(I18nManager.tr("judgment.dialog.not.tooltip"));
 
         // 目标
         JComboBox<RuleTarget> targetCombo = new JComboBox<>(RuleTarget.values());
@@ -279,16 +282,16 @@ public class JudgmentRuleEditDialog extends JDialog {
 
         // 上移/下移按钮
         JButton moveUpButton = new JButton("▲");
-        moveUpButton.setToolTipText("上移此条件");
+        moveUpButton.setToolTipText(I18nManager.tr("judgment.dialog.moveUp"));
         moveUpButton.setMargin(new Insets(0, 0, 0, 0));
 
         JButton moveDownButton = new JButton("▼");
-        moveDownButton.setToolTipText("下移此条件");
+        moveDownButton.setToolTipText(I18nManager.tr("judgment.dialog.moveDown"));
         moveDownButton.setMargin(new Insets(0, 0, 0, 0));
 
         // 删除按钮
         JButton deleteButton = new JButton("✕");
-        deleteButton.setToolTipText("删除此条件");
+        deleteButton.setToolTipText(I18nManager.tr("judgment.dialog.delete"));
         deleteButton.setMargin(new Insets(0, 0, 0, 0));
 
         // === GridBagLayout 布局：固定列宽度自适应，表达式列自动填充 ===
@@ -333,7 +336,9 @@ public class JudgmentRuleEditDialog extends JDialog {
 
         deleteButton.addActionListener(e -> {
             if (conditionRows.size() <= 1) {
-                JOptionPane.showMessageDialog(this, "至少需要保留一条条件", "提示", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        I18nManager.tr("judgment.dialog.keepOne"),
+                        I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
             removeConditionRow(row);
@@ -519,7 +524,9 @@ public class JudgmentRuleEditDialog extends JDialog {
     private void onOk() {
         // 校验：至少一条条件
         if (conditionRows.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "至少需要一条判决条件", "验证错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    I18nManager.tr("judgment.dialog.minCondition"),
+                    I18nManager.tr("judgment.dialog.validation.error"), JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -528,8 +535,9 @@ public class JudgmentRuleEditDialog extends JDialog {
             ConditionRow row = conditionRows.get(i);
             String expr = row.expressionField.getText().trim();
             if (expr.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "第 " + (i + 1) + " 条条件的表达式不能为空",
-                        "验证错误", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        I18nManager.tr("judgment.dialog.expr.empty", i + 1),
+                        I18nManager.tr("judgment.dialog.validation.error"), JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -539,13 +547,15 @@ public class JudgmentRuleEditDialog extends JDialog {
                 try {
                     double val = Double.parseDouble(expr);
                     if (val < 0.0 || val > 1.0) {
-                        JOptionPane.showMessageDialog(this, "相似度条件表达式必须在 0.0~1.0 范围内",
-                                "验证错误", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(this,
+                                I18nManager.tr("judgment.dialog.similarity.range"),
+                                I18nManager.tr("judgment.dialog.validation.error"), JOptionPane.ERROR_MESSAGE);
                         return;
                     }
                 } catch (NumberFormatException e) {
-                    JOptionPane.showMessageDialog(this, "相似度条件表达式必须为数值（如 0.90）",
-                            "验证错误", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this,
+                            I18nManager.tr("judgment.dialog.similarity.numeric"),
+                            I18nManager.tr("judgment.dialog.validation.error"), JOptionPane.ERROR_MESSAGE);
                     return;
                 }
             }

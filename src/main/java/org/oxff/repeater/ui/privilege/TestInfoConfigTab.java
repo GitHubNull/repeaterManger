@@ -1,9 +1,11 @@
 package org.oxff.repeater.ui.privilege;
 
+import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.privilege.SessionManager;
 import org.oxff.repeater.privilege.model.TestInfoConfig;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
@@ -26,6 +28,23 @@ public class TestInfoConfigTab extends JPanel {
     private JTextField reportTitleField;
     private JTextField reportSubtitleField;
 
+    private JPanel infoPanel;
+    private JTextArea infoArea;
+    private JPanel formPanel;
+    private JLabel targetNameLabel;
+    private JLabel targetEntryLabel;
+    private JLabel timeRangeLabel;
+    private JLabel testerLabel;
+    private JLabel reportTitleLabel;
+    private JLabel reportSubtitleLabel;
+    private JLabel screenshotsLabel;
+    private JButton pickTimeRangeBtn;
+    private JButton addScreenshotBtn;
+    private JButton removeScreenshotBtn;
+    private JButton previewScreenshotBtn;
+    private JButton saveBtn;
+    private JButton clearBtn;
+
     /** 保存防抖标志，防止快速双击触发并发保存 */
     private volatile boolean saving = false;
 
@@ -34,21 +53,18 @@ public class TestInfoConfigTab extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // ========== 说明面板 ==========
-        JPanel infoPanel = new JPanel(new BorderLayout());
-        infoPanel.setBorder(BorderFactory.createTitledBorder("说明"));
-        JTextArea infoArea = new JTextArea(2, 50);
+        infoPanel = new JPanel(new BorderLayout());
+        infoPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("testInfo.note")));
+        infoArea = new JTextArea(2, 50);
         infoArea.setEditable(false);
         infoArea.setLineWrap(true);
-        infoArea.setText(
-            "配置测试目标的可选信息。所有字段均为选填，仅当填写后导出报告时才会在报告中展示。\n"
-          + "截图文件支持常见图片格式（PNG、JPG、GIF、BMP），将随报告一同导出。"
-        );
+        infoArea.setText(I18nManager.tr("testInfo.info.text"));
         infoPanel.add(infoArea, BorderLayout.CENTER);
         add(infoPanel, BorderLayout.NORTH);
 
         // ========== 表单面板 ==========
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        formPanel.setBorder(BorderFactory.createTitledBorder("测试信息"));
+        formPanel = new JPanel(new GridBagLayout());
+        formPanel.setBorder(BorderFactory.createTitledBorder(I18nManager.tr("testInfo.title")));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 8, 5, 8);
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -58,30 +74,33 @@ public class TestInfoConfigTab extends JPanel {
 
         // 目标名称
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("目标名称:"), gbc);
+        targetNameLabel = new JLabel(I18nManager.tr("testInfo.targetName"));
+        formPanel.add(targetNameLabel, gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         targetNameField = new JTextField(40);
-        targetNameField.setToolTipText("测试目标的标识名称，如：XX电商平台用户系统");
+        targetNameField.setToolTipText(I18nManager.tr("testInfo.targetName.tooltip"));
         formPanel.add(targetNameField, gbc);
 
         // 目标入口
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("目标入口:"), gbc);
+        targetEntryLabel = new JLabel(I18nManager.tr("testInfo.targetEntry"));
+        formPanel.add(targetEntryLabel, gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         targetEntryField = new JTextField(40);
-        targetEntryField.setToolTipText("目标入口地址，如 URL 地址、APP 下载链接等");
+        targetEntryField.setToolTipText(I18nManager.tr("testInfo.targetEntry.tooltip"));
         formPanel.add(targetEntryField, gbc);
 
         // 测试时间段
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("测试时间段:"), gbc);
+        timeRangeLabel = new JLabel(I18nManager.tr("testInfo.timeRange"));
+        formPanel.add(timeRangeLabel, gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         testTimeRangeField = new JTextField(40);
         testTimeRangeField.setEditable(false);
-        testTimeRangeField.setToolTipText("测试执行的时间范围，点击右侧按钮选择");
-        JButton pickTimeRangeBtn = new JButton("选择时间");
+        testTimeRangeField.setToolTipText(I18nManager.tr("testInfo.timeRange.tooltip"));
+        pickTimeRangeBtn = new JButton(I18nManager.tr("testInfo.chooseTime"));
         pickTimeRangeBtn.addActionListener(e -> {
             String result = DateTimeRangePickerDialog.showDialog(this, testTimeRangeField.getText());
             if (result != null) {
@@ -96,29 +115,31 @@ public class TestInfoConfigTab extends JPanel {
         // 测试人员
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("测试人员:"), gbc);
+        testerLabel = new JLabel(I18nManager.tr("testInfo.tester"));
+        formPanel.add(testerLabel, gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         testPersonnelField = new JTextField(40);
-        testPersonnelField.setToolTipText("参与测试的人员信息，如：张三、李四");
+        testPersonnelField.setToolTipText(I18nManager.tr("testInfo.tester.tooltip"));
         formPanel.add(testPersonnelField, gbc);
 
         // 报告标题（带复选框切换默认/自定义）
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("报告标题:"), gbc);
+        reportTitleLabel = new JLabel(I18nManager.tr("testInfo.reportTitle"));
+        formPanel.add(reportTitleLabel, gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        useDefaultTitleCheckBox = new JCheckBox("使用默认标题", true);
-        useDefaultTitleCheckBox.setToolTipText("取消勾选后可输入自定义报告标题");
+        useDefaultTitleCheckBox = new JCheckBox(I18nManager.tr("testInfo.defaultTitle"), true);
+        useDefaultTitleCheckBox.setToolTipText(I18nManager.tr("testInfo.defaultTitle.tooltip"));
         reportTitleField = new JTextField(40);
-        reportTitleField.setText("越权测试报告");
-        reportTitleField.setToolTipText("自定义报告标题（取消「使用默认标题」后可编辑）");
+        reportTitleField.setText(I18nManager.tr("testInfo.defaultReportTitle"));
+        reportTitleField.setToolTipText(I18nManager.tr("testInfo.reportTitle.tooltip"));
         reportTitleField.setEnabled(false);
         useDefaultTitleCheckBox.addActionListener(e -> {
             boolean useDefault = useDefaultTitleCheckBox.isSelected();
             reportTitleField.setEnabled(!useDefault);
             if (useDefault) {
-                reportTitleField.setText("越权测试报告");
+                reportTitleField.setText(I18nManager.tr("testInfo.defaultReportTitle"));
             }
         });
         titlePanel.add(useDefaultTitleCheckBox);
@@ -128,16 +149,18 @@ public class TestInfoConfigTab extends JPanel {
         // 报告副标题
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-        formPanel.add(new JLabel("报告副标题:"), gbc);
+        reportSubtitleLabel = new JLabel(I18nManager.tr("testInfo.reportSubtitle"));
+        formPanel.add(reportSubtitleLabel, gbc);
         gbc.gridx = 1; gbc.gridy = row; gbc.weightx = 1;
         reportSubtitleField = new JTextField(40);
-        reportSubtitleField.setToolTipText("可选副标题，报告中将显示在主标题下方");
+        reportSubtitleField.setToolTipText(I18nManager.tr("testInfo.reportSubtitle.tooltip"));
         formPanel.add(reportSubtitleField, gbc);
 
         // 测试目标截图
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0; gbc.gridwidth = 2;
-        formPanel.add(new JLabel("测试目标截图:"), gbc);
+        screenshotsLabel = new JLabel(I18nManager.tr("testInfo.screenshots"));
+        formPanel.add(screenshotsLabel, gbc);
         gbc.gridwidth = 1;
 
         row++;
@@ -154,9 +177,9 @@ public class TestInfoConfigTab extends JPanel {
         row++;
         gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2; gbc.weighty = 0;
         JPanel screenshotBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        JButton addScreenshotBtn = new JButton("添加截图");
-        JButton removeScreenshotBtn = new JButton("删除选中");
-        JButton previewScreenshotBtn = new JButton("预览");
+        addScreenshotBtn = new JButton(I18nManager.tr("testInfo.addScreenshot"));
+        removeScreenshotBtn = new JButton(I18nManager.tr("testInfo.removeSelected"));
+        previewScreenshotBtn = new JButton(I18nManager.tr("testInfo.preview"));
         addScreenshotBtn.addActionListener(e -> addScreenshot());
         removeScreenshotBtn.addActionListener(e -> removeScreenshot());
         previewScreenshotBtn.addActionListener(e -> previewScreenshot());
@@ -169,16 +192,52 @@ public class TestInfoConfigTab extends JPanel {
 
         // ========== 按钮面板 ==========
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton saveBtn = new JButton("保存配置");
-        JButton clearBtn = new JButton("清空配置");
+        saveBtn = new JButton(I18nManager.tr("testInfo.save"));
+        clearBtn = new JButton(I18nManager.tr("testInfo.clear"));
         saveBtn.addActionListener(e -> saveConfig());
         clearBtn.addActionListener(e -> clearConfig());
         buttonPanel.add(saveBtn);
         buttonPanel.add(clearBtn);
         add(buttonPanel, BorderLayout.SOUTH);
 
+        I18nManager.getInstance().addLocaleChangeListener(this::refreshTexts);
+
         // 初始加载
         loadConfig();
+    }
+
+    /**
+     * 语言切换时刷新文本
+     */
+    private void refreshTexts() {
+        ((TitledBorder) infoPanel.getBorder()).setTitle(I18nManager.tr("testInfo.note"));
+        infoArea.setText(I18nManager.tr("testInfo.info.text"));
+        ((TitledBorder) formPanel.getBorder()).setTitle(I18nManager.tr("testInfo.title"));
+        targetNameLabel.setText(I18nManager.tr("testInfo.targetName"));
+        targetNameField.setToolTipText(I18nManager.tr("testInfo.targetName.tooltip"));
+        targetEntryLabel.setText(I18nManager.tr("testInfo.targetEntry"));
+        targetEntryField.setToolTipText(I18nManager.tr("testInfo.targetEntry.tooltip"));
+        timeRangeLabel.setText(I18nManager.tr("testInfo.timeRange"));
+        testTimeRangeField.setToolTipText(I18nManager.tr("testInfo.timeRange.tooltip"));
+        pickTimeRangeBtn.setText(I18nManager.tr("testInfo.chooseTime"));
+        testerLabel.setText(I18nManager.tr("testInfo.tester"));
+        testPersonnelField.setToolTipText(I18nManager.tr("testInfo.tester.tooltip"));
+        reportTitleLabel.setText(I18nManager.tr("testInfo.reportTitle"));
+        useDefaultTitleCheckBox.setText(I18nManager.tr("testInfo.defaultTitle"));
+        useDefaultTitleCheckBox.setToolTipText(I18nManager.tr("testInfo.defaultTitle.tooltip"));
+        reportTitleField.setToolTipText(I18nManager.tr("testInfo.reportTitle.tooltip"));
+        if (useDefaultTitleCheckBox.isSelected()) {
+            reportTitleField.setText(I18nManager.tr("testInfo.defaultReportTitle"));
+        }
+        reportSubtitleLabel.setText(I18nManager.tr("testInfo.reportSubtitle"));
+        reportSubtitleField.setToolTipText(I18nManager.tr("testInfo.reportSubtitle.tooltip"));
+        screenshotsLabel.setText(I18nManager.tr("testInfo.screenshots"));
+        addScreenshotBtn.setText(I18nManager.tr("testInfo.addScreenshot"));
+        removeScreenshotBtn.setText(I18nManager.tr("testInfo.removeSelected"));
+        previewScreenshotBtn.setText(I18nManager.tr("testInfo.preview"));
+        saveBtn.setText(I18nManager.tr("testInfo.save"));
+        clearBtn.setText(I18nManager.tr("testInfo.clear"));
+        repaint();
     }
 
     /**
@@ -197,7 +256,7 @@ public class TestInfoConfigTab extends JPanel {
         // 报告标题
         useDefaultTitleCheckBox.setSelected(config.isUseDefaultTitle());
         if (config.isUseDefaultTitle()) {
-            reportTitleField.setText("越权测试报告");
+            reportTitleField.setText(I18nManager.tr("testInfo.defaultReportTitle"));
             reportTitleField.setEnabled(false);
         } else {
             reportTitleField.setText(config.getReportTitle());
@@ -250,21 +309,23 @@ public class TestInfoConfigTab extends JPanel {
 
         // 警告不存在的文件
         if (!missingFiles.isEmpty()) {
-            StringBuilder sb = new StringBuilder("以下截图文件不存在，保存后报告中将无法显示这些截图：\n\n");
+            StringBuilder sb = new StringBuilder(I18nManager.tr("testInfo.missingFiles"));
             for (String path : missingFiles) {
                 sb.append("  • ").append(path).append("\n");
             }
-            sb.append("\n是否仍然继续保存？");
+            sb.append(I18nManager.tr("testInfo.missingFiles.continue"));
             int choice = JOptionPane.showConfirmDialog(this, sb.toString(),
-                    "文件不存在警告", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    I18nManager.tr("testInfo.missingFiles.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (choice != JOptionPane.YES_OPTION) return;
         }
 
         boolean success = SessionManager.getInstance().saveTestInfoConfig(config);
         if (success) {
-            JOptionPane.showMessageDialog(this, "配置保存成功", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.save.success"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
         } else {
-            JOptionPane.showMessageDialog(this, "配置保存失败", "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.save.failed"),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -273,7 +334,8 @@ public class TestInfoConfigTab extends JPanel {
      */
     private void clearConfig() {
         int confirm = JOptionPane.showConfirmDialog(this,
-                "确认清空所有测试信息配置？", "清空确认", JOptionPane.YES_NO_OPTION);
+                I18nManager.tr("testInfo.clear.confirm"),
+                I18nManager.tr("testInfo.clear.title"), JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
 
         SessionManager.getInstance().deleteTestInfoConfig();
@@ -282,11 +344,12 @@ public class TestInfoConfigTab extends JPanel {
         testTimeRangeField.setText("");
         testPersonnelField.setText("");
         useDefaultTitleCheckBox.setSelected(true);
-        reportTitleField.setText("越权测试报告");
+        reportTitleField.setText(I18nManager.tr("testInfo.defaultReportTitle"));
         reportTitleField.setEnabled(false);
         reportSubtitleField.setText("");
         screenshotListModel.clear();
-        JOptionPane.showMessageDialog(this, "配置已清空", "提示", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.cleared"),
+                I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
@@ -296,8 +359,8 @@ public class TestInfoConfigTab extends JPanel {
         JFileChooser chooser = new JFileChooser();
         chooser.setMultiSelectionEnabled(true);
         chooser.setFileFilter(new FileNameExtensionFilter(
-                "图片文件 (*.png, *.jpg, *.jpeg, *.gif, *.bmp)", "png", "jpg", "jpeg", "gif", "bmp"));
-        chooser.setDialogTitle("选择测试目标截图");
+                I18nManager.tr("testInfo.image.filter"), "png", "jpg", "jpeg", "gif", "bmp"));
+        chooser.setDialogTitle(I18nManager.tr("testInfo.screenshot.dialog"));
 
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File[] files = chooser.getSelectedFiles();
@@ -317,7 +380,8 @@ public class TestInfoConfigTab extends JPanel {
     private void removeScreenshot() {
         int index = screenshotList.getSelectedIndex();
         if (index < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个截图", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.screenshot.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         screenshotListModel.remove(index);
@@ -329,13 +393,15 @@ public class TestInfoConfigTab extends JPanel {
     private void previewScreenshot() {
         int index = screenshotList.getSelectedIndex();
         if (index < 0) {
-            JOptionPane.showMessageDialog(this, "请先选择一个截图", "提示", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.screenshot.select.first"),
+                    I18nManager.tr("common.hint"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         String path = screenshotListModel.get(index);
         File file = new File(path);
         if (!file.exists()) {
-            JOptionPane.showMessageDialog(this, "截图文件不存在: " + path, "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.screenshot.notExist", path),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -360,10 +426,10 @@ public class TestInfoConfigTab extends JPanel {
             scrollPane.setPreferredSize(new Dimension(maxW + 20, maxH + 20));
 
             JOptionPane.showMessageDialog(this, scrollPane,
-                    "截图预览 - " + file.getName(), JOptionPane.PLAIN_MESSAGE);
+                    I18nManager.tr("testInfo.screenshot.preview", file.getName()), JOptionPane.PLAIN_MESSAGE);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "无法加载截图: " + e.getMessage(),
-                    "错误", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, I18nManager.tr("testInfo.screenshot.load.failed", e.getMessage()),
+                    I18nManager.tr("common.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 }

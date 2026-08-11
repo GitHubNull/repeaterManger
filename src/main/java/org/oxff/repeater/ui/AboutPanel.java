@@ -1,5 +1,7 @@
 package org.oxff.repeater.ui;
 
+import org.oxff.repeater.i18n.I18nManager;
+
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import java.awt.*;
@@ -58,12 +60,12 @@ public class AboutPanel extends JPanel {
     private String loadTemplate(String resourcePath) {
         try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
             if (is == null) {
-                return "<html><body><p>无法加载关于页面模板。</p></body></html>";
+                return I18nManager.tr("about.template.missing");
             }
             byte[] bytes = is.readAllBytes();
             return new String(bytes, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            return "<html><body><p>加载关于页面模板失败: " + e.getMessage() + "</p></body></html>";
+            return I18nManager.tr("about.template.failed", e.getMessage());
         }
     }
 
@@ -73,13 +75,13 @@ public class AboutPanel extends JPanel {
                 Desktop.getDesktop().browse(new URI(url));
             } else {
                 JOptionPane.showMessageDialog(this,
-                        "无法自动打开浏览器，请手动访问:\n" + url,
-                        "打开链接", JOptionPane.INFORMATION_MESSAGE);
+                        I18nManager.tr("about.browser.failed") + url,
+                        I18nManager.tr("about.open.link"), JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (IOException | URISyntaxException e) {
             JOptionPane.showMessageDialog(this,
-                    "打开链接失败: " + e.getMessage() + "\n请手动访问:\n" + url,
-                    "错误", JOptionPane.ERROR_MESSAGE);
+                    I18nManager.tr("about.open.failed") + " " + e.getMessage() + "\n" + url,
+                    I18nManager.tr("about.error"), JOptionPane.ERROR_MESSAGE);
         }
     }
 }

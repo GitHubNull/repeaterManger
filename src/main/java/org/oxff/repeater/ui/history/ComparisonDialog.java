@@ -1,6 +1,7 @@
 package org.oxff.repeater.ui.history;
 
 import org.oxff.repeater.http.RequestResponseRecord;
+import org.oxff.repeater.i18n.I18nManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -25,6 +26,7 @@ public class ComparisonDialog extends JDialog {
     private boolean isHexMode = false;
     private boolean isFourPaneMode = false;
     private boolean isVerticalSubLayout = true; // true=上下布局, false=左右布局
+    private boolean isMaximized = false; // 最大化状态（与显示文本解耦）
 
     private JToggleButton stringModeBtn;
     private JToggleButton hexModeBtn;
@@ -49,7 +51,7 @@ public class ComparisonDialog extends JDialog {
     private double responseSimilarity;
 
     public ComparisonDialog(Component parent, RequestResponseRecord originalRecord, RequestResponseRecord sessionRecord) {
-        super((Frame) SwingUtilities.getWindowAncestor(parent), "报文比对", false);
+        super((Frame) SwingUtilities.getWindowAncestor(parent), I18nManager.tr("comparison.title"), false);
         this.originalRecord = originalRecord;
         this.sessionRecord = sessionRecord;
 
@@ -113,8 +115,8 @@ public class ComparisonDialog extends JDialog {
                 originalRecord.getResponseData(), sessionRecord.getResponseData());
 
             dualTabPane = new JTabbedPane();
-            dualTabPane.addTab("请求报文比对", reqComparison);
-            dualTabPane.addTab("响应报文比对", resComparison);
+            dualTabPane.addTab(I18nManager.tr("comparison.request"), reqComparison);
+            dualTabPane.addTab(I18nManager.tr("comparison.response"), resComparison);
             centerPanel.add(dualTabPane, BorderLayout.CENTER);
         }
 
@@ -186,16 +188,16 @@ public class ComparisonDialog extends JDialog {
 
         if (isVerticalSubLayout) {
             // 上下布局: 上=原始行，下=会话行
-            topLeft = createTitledDiffPanePanel("原始请求", origReqPane);
-            topRight = createTitledDiffPanePanel("原始响应", origResPane);
-            bottomLeft = createTitledDiffPanePanel("会话请求", sessReqPane);
-            bottomRight = createTitledDiffPanePanel("会话响应", sessResPane);
+            topLeft = createTitledDiffPanePanel(I18nManager.tr("comparison.original.request"), origReqPane);
+            topRight = createTitledDiffPanePanel(I18nManager.tr("comparison.original.response"), origResPane);
+            bottomLeft = createTitledDiffPanePanel(I18nManager.tr("comparison.session.request"), sessReqPane);
+            bottomRight = createTitledDiffPanePanel(I18nManager.tr("comparison.session.response"), sessResPane);
         } else {
             // 左右布局: 上=请求对比行，下=响应对比行
-            topLeft = createTitledDiffPanePanel("原始请求", origReqPane);
-            topRight = createTitledDiffPanePanel("会话请求", sessReqPane);
-            bottomLeft = createTitledDiffPanePanel("原始响应", origResPane);
-            bottomRight = createTitledDiffPanePanel("会话响应", sessResPane);
+            topLeft = createTitledDiffPanePanel(I18nManager.tr("comparison.original.request"), origReqPane);
+            topRight = createTitledDiffPanePanel(I18nManager.tr("comparison.session.request"), sessReqPane);
+            bottomLeft = createTitledDiffPanePanel(I18nManager.tr("comparison.original.response"), origResPane);
+            bottomRight = createTitledDiffPanePanel(I18nManager.tr("comparison.session.response"), sessResPane);
         }
 
         // 上半行: 水平分割
@@ -281,21 +283,21 @@ public class ComparisonDialog extends JDialog {
 
         // 第一行：会话信息
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
-        row1.add(new JLabel("原始请求 [ID=" + originalRecord.getId() + "]"));
+        row1.add(new JLabel(I18nManager.tr("comparison.original.prefix") + " [ID=" + originalRecord.getId() + "]"));
         row1.add(new JLabel("  |  "));
-        row1.add(new JLabel("用户会话 [" + (sessionRecord.getUserSessionName() != null ? sessionRecord.getUserSessionName() : "未知") + "]"));
+        row1.add(new JLabel(I18nManager.tr("comparison.session.prefix") + " [" + (sessionRecord.getUserSessionName() != null ? sessionRecord.getUserSessionName() : I18nManager.tr("comparison.unknown")) + "]"));
         row1.add(new JLabel("  |  "));
-        JLabel reqSimLabel = new JLabel(String.format("请求相似度: %.2f%%", requestSimilarity * 100));
+        JLabel reqSimLabel = new JLabel(I18nManager.tr("comparison.similarity.request", String.format("%.2f", requestSimilarity * 100)));
         reqSimLabel.setFont(reqSimLabel.getFont().deriveFont(Font.BOLD));
         row1.add(reqSimLabel);
         row1.add(new JLabel("  |  "));
-        JLabel resSimLabel = new JLabel(String.format("响应相似度: %.2f%%", responseSimilarity * 100));
+        JLabel resSimLabel = new JLabel(I18nManager.tr("comparison.similarity.response", String.format("%.2f", responseSimilarity * 100)));
         resSimLabel.setFont(resSimLabel.getFont().deriveFont(Font.BOLD));
         row1.add(resSimLabel);
 
         if (sessionRecord.getJudgment() != null) {
             row1.add(new JLabel("  |  "));
-            JLabel judgmentLabel = new JLabel("判决: " + org.oxff.repeater.privilege.model.JudgmentResult.toDisplayName(sessionRecord.getJudgment()));
+            JLabel judgmentLabel = new JLabel(I18nManager.tr("comparison.judgment") + " " + org.oxff.repeater.privilege.model.JudgmentResult.toDisplayName(sessionRecord.getJudgment()));
             judgmentLabel.setForeground(getJudgmentColor(sessionRecord.getJudgment()));
             judgmentLabel.setFont(judgmentLabel.getFont().deriveFont(Font.BOLD, 14f));
             row1.add(judgmentLabel);
@@ -304,9 +306,9 @@ public class ComparisonDialog extends JDialog {
         // 第二行：模式按钮 + 差异导航 + 最大化
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
 
-        stringModeBtn = new JToggleButton("字符串模式");
+        stringModeBtn = new JToggleButton(I18nManager.tr("comparison.mode.string"));
         stringModeBtn.setSelected(true);
-        hexModeBtn = new JToggleButton("Hex模式");
+        hexModeBtn = new JToggleButton(I18nManager.tr("comparison.mode.hex"));
         ButtonGroup modeGroup = new ButtonGroup();
         modeGroup.add(stringModeBtn);
         modeGroup.add(hexModeBtn);
@@ -326,7 +328,7 @@ public class ComparisonDialog extends JDialog {
             }
         });
 
-        fourPaneToggleBtn = new JToggleButton("四面板模式");
+        fourPaneToggleBtn = new JToggleButton(I18nManager.tr("comparison.mode.quad"));
         fourPaneToggleBtn.addActionListener(e -> {
             isFourPaneMode = fourPaneToggleBtn.isSelected();
             verticalLayoutBtn.setEnabled(isFourPaneMode);
@@ -336,14 +338,14 @@ public class ComparisonDialog extends JDialog {
         });
 
         // 四面板子布局选择
-        verticalLayoutBtn = new JToggleButton("上下布局");
+        verticalLayoutBtn = new JToggleButton(I18nManager.tr("comparison.layout.vertical"));
         verticalLayoutBtn.setSelected(true);
         verticalLayoutBtn.setEnabled(false);
-        verticalLayoutBtn.setToolTipText("上=原始报文，下=会话报文，左=请求，右=响应");
+        verticalLayoutBtn.setToolTipText(I18nManager.tr("comparison.layout.vertical.tooltip"));
 
-        horizontalLayoutBtn = new JToggleButton("左右布局");
+        horizontalLayoutBtn = new JToggleButton(I18nManager.tr("comparison.layout.horizontal"));
         horizontalLayoutBtn.setEnabled(false);
-        horizontalLayoutBtn.setToolTipText("上=请求报文对比，下=响应报文对比，左=原始，右=会话");
+        horizontalLayoutBtn.setToolTipText(I18nManager.tr("comparison.layout.horizontal.tooltip"));
 
         ButtonGroup subLayoutGroup = new ButtonGroup();
         subLayoutGroup.add(verticalLayoutBtn);
@@ -361,8 +363,8 @@ public class ComparisonDialog extends JDialog {
         });
 
         // 差异导航
-        prevDiffBtn = new JButton("◀ 上一个差异");
-        prevDiffBtn.setToolTipText("跳转到上一个差异区域");
+        prevDiffBtn = new JButton(I18nManager.tr("comparison.prev.diff"));
+        prevDiffBtn.setToolTipText(I18nManager.tr("comparison.prev.diff.tooltip"));
         prevDiffBtn.addActionListener(e -> {
             if (diffNavigator != null) {
                 diffNavigator.prevDiff();
@@ -370,8 +372,8 @@ public class ComparisonDialog extends JDialog {
             }
         });
 
-        nextDiffBtn = new JButton("下一个差异 ▶");
-        nextDiffBtn.setToolTipText("跳转到下一个差异区域");
+        nextDiffBtn = new JButton(I18nManager.tr("comparison.next.diff"));
+        nextDiffBtn.setToolTipText(I18nManager.tr("comparison.next.diff.tooltip"));
         nextDiffBtn.addActionListener(e -> {
             if (diffNavigator != null) {
                 diffNavigator.nextDiff();
@@ -379,24 +381,26 @@ public class ComparisonDialog extends JDialog {
             }
         });
 
-        diffCountLabel = new JLabel("差异 0/0");
+        diffCountLabel = new JLabel(I18nManager.tr("comparison.diff.zero"));
         diffCountLabel.setFont(diffCountLabel.getFont().deriveFont(Font.BOLD));
 
-        JButton searchBtn = new JButton("🔍 搜索");
-        searchBtn.setToolTipText("在当前面板中搜索 (Ctrl+F)");
+        JButton searchBtn = new JButton(I18nManager.tr("comparison.search"));
+        searchBtn.setToolTipText(I18nManager.tr("comparison.search.tooltip"));
         searchBtn.addActionListener(e -> toggleSearchForActivePane());
 
-        maximizeBtn = new JButton("最大化");
+        maximizeBtn = new JButton(I18nManager.tr("comparison.maximize"));
         maximizeBtn.addActionListener(e -> {
             Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-            if (maximizeBtn.getText().equals("最大化")) {
+            if (!isMaximized) {
                 setLocation(0, 0);
                 setSize(screenSize.width, screenSize.height);
-                maximizeBtn.setText("还原");
+                maximizeBtn.setText(I18nManager.tr("comparison.restore"));
+                isMaximized = true;
             } else {
                 setSize((int)(screenSize.width * 0.9), (int)(screenSize.height * 0.9));
                 setLocationRelativeTo(null);
-                maximizeBtn.setText("最大化");
+                maximizeBtn.setText(I18nManager.tr("comparison.maximize"));
+                isMaximized = false;
             }
         });
 
@@ -426,7 +430,7 @@ public class ComparisonDialog extends JDialog {
         if (diffNavigator != null) {
             diffCountLabel.setText(diffNavigator.getStatusText());
         } else {
-            diffCountLabel.setText("差异 0/0");
+            diffCountLabel.setText(I18nManager.tr("comparison.diff.zero"));
         }
     }
 
@@ -435,12 +439,12 @@ public class ComparisonDialog extends JDialog {
     private JPanel createBottomPanel() {
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 
-        JLabel shortcutHint = new JLabel("Ctrl+F: 搜索");
+        JLabel shortcutHint = new JLabel(I18nManager.tr("comparison.search.hint"));
         shortcutHint.setForeground(Color.GRAY);
         bottomPanel.add(shortcutHint);
         bottomPanel.add(Box.createHorizontalStrut(20));
 
-        JButton closeBtn = new JButton("关闭");
+        JButton closeBtn = new JButton(I18nManager.tr("comparison.close"));
         closeBtn.addActionListener(e -> dispose());
         bottomPanel.add(closeBtn);
         return bottomPanel;
