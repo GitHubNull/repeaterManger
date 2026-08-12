@@ -18,8 +18,20 @@ public class PopMenu implements ContextMenuItemsProvider {
     public List<Component> provideMenuItems(ContextMenuEvent event) {
         List<Component> menuItems = new ArrayList<>();
 
-        // 检查是否有请求被选中
+        // 检查是否有请求被选中（列表/表格场景）
         List<HttpRequestResponse> selectedResponses = event.selectedRequestResponses();
+
+        // 报文查看器（请求/响应编辑器）右键场景回退：
+        // 当焦点在 MESSAGE_EDITOR_REQUEST/RESPONSE 或 MESSAGE_VIEWER_REQUEST/RESPONSE 时，
+        // selectedRequestResponses() 返回空列表，需通过 messageEditorRequestResponse() 获取当前显示的报文
+        if (selectedResponses == null || selectedResponses.isEmpty()) {
+            var editorRR = event.messageEditorRequestResponse();
+            if (editorRR.isPresent() && editorRR.get().requestResponse() != null
+                    && editorRR.get().requestResponse().request() != null) {
+                selectedResponses = List.of(editorRR.get().requestResponse());
+            }
+        }
+
         if (selectedResponses != null && !selectedResponses.isEmpty()) {
             // 过滤掉无效的请求（null 或 request 为 null）
             List<HttpRequestResponse> validResponses = selectedResponses.stream()
