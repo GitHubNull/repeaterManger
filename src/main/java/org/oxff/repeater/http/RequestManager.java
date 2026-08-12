@@ -231,11 +231,20 @@ public class RequestManager {
                             callback.onSuccess(proxyResponse, startTime, System.currentTimeMillis(),
                                     System.currentTimeMillis() - startTime);
                         }
+                    } else if (callback != null) {
+                        // 代理已处理但返回空响应：统一通知失败（tryProxySend 已记录DB历史），
+                        // 避免回调缺失导致UI等待光标无法恢复、历史表格不更新
+                        callback.onFailure("代理请求返回空响应", startTime, System.currentTimeMillis(),
+                                System.currentTimeMillis() - startTime);
                     }
                     return;
                 }
 
                 // 直接发送路径
+                // 注意：callback != null 时，doSendAndProcess 的所有失败分支（未收到响应/HTTP/2回退失败/
+                // Burp错误响应/空响应）均已通过 onFailure 通知一次，此处只处理成功通知；
+                // 若对 null 返回再补发 onFailure，会造成重复回调（单次点击弹出两个错误对话框、
+                // 重放历史表格出现两条重复记录）
                 byte[] response = doSendAndProcess(requestBytes, service, requestInfo, requestId,
                         useHttp2, timeoutSeconds, startTime, callback);
 
@@ -247,9 +256,6 @@ public class RequestManager {
                         callback.onSuccess(response, startTime, System.currentTimeMillis(),
                                 System.currentTimeMillis() - startTime);
                     }
-                } else if (callback != null) {
-                    callback.onFailure("收到空响应", startTime, System.currentTimeMillis(),
-                            System.currentTimeMillis() - startTime);
                 }
             } catch (Exception e) {
                 LogManager.getInstance().printError("[!] 发送请求时发生异常: " + e.getMessage());
