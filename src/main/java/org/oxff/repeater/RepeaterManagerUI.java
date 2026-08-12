@@ -192,6 +192,10 @@ public class RepeaterManagerUI {
         editorPanel.add(messageEditorToolBar, BorderLayout.NORTH);
         editorPanel.add(editorSplitPane, BorderLayout.CENTER);
         editorPanel.add(statusPanel, BorderLayout.SOUTH);
+        
+        // 设置编辑器面板最小宽度，确保分割线可以向右拖动
+        // 避免重放后右组件首选宽度增大导致分割线被"锁死"在左侧
+        editorPanel.setMinimumSize(new Dimension(300, 0));
 
         // 创建左侧上下分割面板（请求列表 + 历史记录）
         leftSplitPane = new JSplitPane(
@@ -208,8 +212,14 @@ public class RepeaterManagerUI {
             leftSplitPane,
             editorPanel
         );
-        mainSplitPane.setResizeWeight(0.3);
+        // 设置 resizeWeight 为 0，确保窗口大小变化时额外空间分配给右组件（编辑器区域），
+        // 避免左组件（请求列表+历史记录）被过度压缩导致分割线拖动范围受限
+        mainSplitPane.setResizeWeight(0.0);
         mainSplitPane.setDividerLocation(350);
+        
+        // 设置左组件最小宽度，确保分割线可以拖到更左的位置
+        // 避免重放后右组件首选宽度增大导致分割线被"挤"到右侧
+        leftSplitPane.setMinimumSize(new Dimension(200, 0));
 
         // 创建配置面板
         configPanel = new ConfigPanel();

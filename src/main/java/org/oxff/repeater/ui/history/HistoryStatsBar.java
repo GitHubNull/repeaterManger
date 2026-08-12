@@ -95,7 +95,11 @@ public class HistoryStatsBar extends JPanel {
 
         setLayout(new BorderLayout());
         setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, COLOR_TOP_BORDER));
-        setPreferredSize(new Dimension(Integer.MAX_VALUE, HEIGHT_COLLAPSED));
+        // 注意：禁止使用 Integer.MAX_VALUE 作为首选宽度。
+        // 本组件位于 mainSplitPane 左组件的 SOUTH 区域，BorderLayout 会自动将其横向拉伸填满父容器，
+        // 无需声明超大首选宽度。Integer.MAX_VALUE 会导致 JSplitPane 布局计算发生整数溢出
+        // （left 组件首选宽度变为负数），造成主分割线无法拖动。
+        setPreferredSize(new Dimension(0, HEIGHT_COLLAPSED));
         setMaximumSize(new Dimension(Integer.MAX_VALUE, HEIGHT_EXPANDED));
 
         // 初始化收缩视图标签
@@ -392,13 +396,14 @@ public class HistoryStatsBar extends JPanel {
             double eased = 1.0 - Math.pow(1.0 - progress, 3);
             int newHeight = (int) (fromHeight + (toHeight - fromHeight) * eased);
 
-            setPreferredSize(new Dimension(Integer.MAX_VALUE, newHeight));
+            // 与构造函数保持一致：宽度由父布局拉伸，避免 Integer.MAX_VALUE 引发 JSplitPane 布局溢出
+            setPreferredSize(new Dimension(0, newHeight));
             revalidate();
             repaint();
 
             if (currentStep[0] >= steps) {
                 ((Timer) e.getSource()).stop();
-                setPreferredSize(new Dimension(Integer.MAX_VALUE, toHeight));
+                setPreferredSize(new Dimension(0, toHeight));
                 revalidate();
             }
         });
