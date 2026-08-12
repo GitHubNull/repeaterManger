@@ -97,6 +97,9 @@ public class RequestLoader {
 
                 if (requestResponse.response() != null) {
                     saveOriginalResponseAsBaseline(dbId, requestResponse);
+                    // 同步缓存响应数据到 RequestListPanel，供搜索使用
+                    byte[] responseBytes = requestResponse.response().toByteArray().getBytes();
+                    requestListPanel.setResponseData(dbId, responseBytes);
                 }
 
                 requestPanel.setRequest(request);
@@ -272,6 +275,14 @@ public class RequestLoader {
                         }
 
                         saveOriginalResponseAsBaseline(dbId, rr);
+
+                        // 同步缓存响应数据到 RequestListPanel，供搜索使用
+                        if (rr.response() != null) {
+                            byte[] responseBytes = rr.response().toByteArray().getBytes();
+                            final int finalDbIdForResp = dbId;
+                            SwingUtilities.invokeLater(() ->
+                                requestListPanel.setResponseData(finalDbIdForResp, responseBytes));
+                        }
 
                         dispatchHandler.getRequestHistoryMap().put(dbId, new ArrayList<>());
 

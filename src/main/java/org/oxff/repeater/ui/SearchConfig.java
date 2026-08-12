@@ -18,9 +18,11 @@ public record SearchConfig(
      * 搜索范围枚举
      */
     public enum SearchScope {
-        URL,    // 搜索 URL 列 (domain + path + query)
-        HEADER, // 搜索请求头
-        BODY    // 搜索请求体
+        URL,             // 搜索 URL 列 (domain + path + query)
+        HEADER,          // 搜索请求头
+        BODY,            // 搜索请求体
+        RESPONSE_HEADER, // 搜索响应头
+        RESPONSE_BODY    // 搜索响应体
     }
 
     /**

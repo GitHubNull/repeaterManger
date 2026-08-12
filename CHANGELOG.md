@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.44.0] - 2026-08-12
+
+### Added
+- 请求列表高级搜索新增响应报文搜索范围：支持在响应头（`RESPONSE_HEADER`）与响应体（`RESPONSE_BODY`）中搜索，搜索范围复选框按"请求报文/响应报文"分组展示
+- 请求加载与代理转发路径同步缓存原始响应数据到请求列表面板（`responseDataMap`，新增 `setResponseData`/`getResponseData` 接口），为响应搜索提供数据来源
+- i18n 新增搜索范围分组文案 `request.list.scope.request` / `request.list.scope.response`（请求报文/响应报文）
+
+### Changed
+- 简单搜索简化：移除匹配模式（关键词/正则）与大小写敏感选项，固定为关键词匹配、不区分大小写
+- 移除请求列表搜索栏的判决结果过滤下拉框（`judgmentFilterCombo` 及 `createJudgmentFilter()` 组合过滤逻辑），搜索过滤由 `RequestSearchFilter` 独立承担
+- 版本号同步至 2.44.0（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.43.2] - 2026-08-12
 
 ### Fixed
