@@ -2,14 +2,17 @@ package org.oxff.repeater.ui.editor;
 
 import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
+import org.oxff.repeater.ui.comparer.ComparerPanel;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.ui.editor.HttpRequestEditor;
 import burp.api.montoya.http.message.requests.HttpRequest;
 
 import javax.swing.*;
+import javax.swing.plaf.LayerUI;
 import java.awt.*;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseEvent;
 
 /**
  * 基于Burp原生编辑器的请求面板（使用Montoya SDK HttpRequestEditor）
@@ -29,6 +32,9 @@ public class BurpRequestPanel extends JPanel {
     // 回调函数
     private Runnable onNewRequest;
     private Runnable onClear;
+
+    // 报文比较面板引用
+    private ComparerPanel comparerPanel;
 
     /**
      * 创建请求面板
@@ -81,7 +87,7 @@ public class BurpRequestPanel extends JPanel {
 
         // 添加到面板
         add(controlPanel, BorderLayout.NORTH);
-        add(requestEditor.uiComponent(), BorderLayout.CENTER);
+        add(wrapWithContextMenu(requestEditor.uiComponent()), BorderLayout.CENTER);
 
         // 添加快捷键支持
         registerKeyboardShortcuts();
@@ -267,6 +273,53 @@ public class BurpRequestPanel extends JPanel {
      */
     public int getTimeout() {
         return (Integer) timeoutSpinner.getValue();
+    }
+
+    /**
+     * 用 JLayer 包装编辑器组件，拦截编辑器子树内的右键事件
+     * （Swing 鼠标事件只会分发给最深层子组件，外层容器加 MouseListener
+     *   无法捕获编辑区内部的右键，因此必须通过 JLayer 在事件分发前拦截）
+     */
+    private JLayer<Component> wrapWithContextMenu(Component editorComponent) {
+        LayerUI<Component> layerUI = new LayerUI<Component>() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected void processMouseEvent(MouseEvent e, JLayer<? extends Component> l) {
+                if (e.isPopupTrigger() && comparerPanel != null) {
+                    // 消费事件，避免与Burp编辑器自带右键菜单叠加显示
+                    e.consume();
+                    showSendToComparerPopup(e);
+                }
+            }
+        };
+        JLayer<Component> layer = new JLayer<>(editorComponent, layerUI);
+        // 订阅鼠标事件，使 LayerUI 能收到编辑器子树内的鼠标事件
+        layer.setLayerEventMask(AWTEvent.MOUSE_EVENT_MASK);
+        return layer;
+    }
+
+    /**
+     * 显示"发送到报文比较"右键菜单
+     */
+    private void showSendToComparerPopup(MouseEvent e) {
+        JPopupMenu popupMenu = new JPopupMenu();
+        JMenuItem sendToComparerItem = new JMenuItem(I18nManager.tr("editor.sendToComparer"));
+        sendToComparerItem.addActionListener(ev -> {
+            byte[] requestData = getRequest();
+            if (requestData != null && requestData.length > 0) {
+                comparerPanel.addItem(requestData, "请求编辑器");
+            }
+        });
+        popupMenu.add(sendToComparerItem);
+        popupMenu.show(e.getComponent(), e.getX(), e.getY());
+    }
+
+    /**
+     * 设置报文比较面板引用
+     */
+    public void setComparerPanel(ComparerPanel comparerPanel) {
+        this.comparerPanel = comparerPanel;
     }
 
     /**

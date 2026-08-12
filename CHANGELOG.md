@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.45.0] - 2026-08-12
+
+### Added
+- 新增报文比较标签页（ComparerPanel）：三层可拖拽分割布局（JSplitPane），支持双列表选择报文、内嵌 DiffPane 差异对比、Text/Hex 模式切换、Sync views 同步滚动
+- 报文比较面板支持单词/字节两种比较模式（SwitchButton 切换），复用 DiffEngine.computeLineDiff/computeByteDiff
+- 报文比较面板支持五种相似度算法选择：自动检测、Levenshtein、Jaccard n-gram、JSON Tree Diff、XML Tree Diff
+- 报文比较面板支持全屏模式：通过 JDialog 承载面板内容，关闭后返回原标签页不丢失状态
+- 请求编辑器（BurpRequestPanel）右键菜单新增"发送到报文比较"，通过 JLayer 拦截编辑器子树内右键事件
+- 响应编辑器（BurpResponsePanel）右键菜单新增"发送到报文比较"，实现同上
+- 历史记录表右键菜单新增"发送到报文比较"子菜单（发送请求报文/发送响应报文）
+- 基准报文表（请求列表）右键菜单新增"发送到报文比较"子菜单（发送请求报文/发送响应报文），智能禁用无数据项
+- 新增国际化键值：tab.comparer、comparer.* 系列、history.menu.sendToComparer.*、request.menu.sendToComparer.*、editor.sendToComparer
+
+### Changed
+- 移除 EditorToolBar 中的相似度计算按钮（功能迁移至 ComparerPanel）
+- RepeaterManagerUI 标签页顺序调整：请求管理(0) → 报文比较(1) → 权限测试(2) → ...，refreshTabTitles 同步更新
+
+### Removed
+- 删除 SimilarityCalculatorDialog.java（功能被 ComparerPanel 完全替代）
+
 ## [2.44.2] - 2026-08-12
 
 ### Changed

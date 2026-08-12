@@ -11,6 +11,7 @@ import org.oxff.repeater.http.HttpRequestHelper;
 import org.oxff.repeater.ui.editor.BurpRequestPanel;
 import org.oxff.repeater.ui.editor.BurpResponsePanel;
 import org.oxff.repeater.ui.history.HistoryPanel;
+import org.oxff.repeater.ui.comparer.ComparerPanel;
 import org.oxff.repeater.ui.RequestListPanel;
 import org.oxff.repeater.ui.config.ConfigPanel;
 import org.oxff.repeater.ui.DataPanel;
@@ -58,6 +59,7 @@ public class RepeaterManagerUI {
     private final LogPanel logPanel;                  // 日志面板
     private final StatusPanel statusPanel;            // 底部状态栏
     private final PrivilegeTestPanel privilegeTestPanel; // 权限测试配置面板
+    private final ComparerPanel comparerPanel;           // 报文比较面板
 
     // 布局管理器
     private final LayoutManager layoutManager;
@@ -108,6 +110,15 @@ public class RepeaterManagerUI {
 
         // 创建历史记录面板（右下）
         historyPanel = new HistoryPanel();
+
+        // 创建报文比较面板
+        comparerPanel = new ComparerPanel();
+
+        // 将 comparerPanel 注入到各面板
+        historyPanel.setComparerPanel(comparerPanel);
+        requestPanel.setComparerPanel(comparerPanel);
+        responsePanel.setComparerPanel(comparerPanel);
+        requestListPanel.setComparerPanel(comparerPanel);
 
         // 创建状态栏（底部）
         statusPanel = new StatusPanel();
@@ -259,6 +270,7 @@ public class RepeaterManagerUI {
         // 创建选项卡面板
         tabbedPane = new JTabbedPane();
         tabbedPane.addTab(I18nManager.tr("tab.request"), mainSplitPane);
+        tabbedPane.addTab(I18nManager.tr("tab.comparer"), comparerPanel);
         tabbedPane.addTab(I18nManager.tr("tab.privilege"), privilegeTestPanel);
         tabbedPane.addTab(I18nManager.tr("tab.data"), dataPanel);
         tabbedPane.addTab(I18nManager.tr("tab.config"), configPanel);
@@ -296,16 +308,17 @@ public class RepeaterManagerUI {
      * 语言变更时刷新主选项卡标题
      */
     private void refreshTabTitles() {
-        if (tabbedPane == null || tabbedPane.getTabCount() < 7) {
+        if (tabbedPane == null || tabbedPane.getTabCount() < 8) {
             return;
         }
         tabbedPane.setTitleAt(0, I18nManager.tr("tab.request"));
-        tabbedPane.setTitleAt(1, I18nManager.tr("tab.privilege"));
-        tabbedPane.setTitleAt(2, I18nManager.tr("tab.data"));
-        tabbedPane.setTitleAt(3, I18nManager.tr("tab.config"));
-        tabbedPane.setTitleAt(4, I18nManager.tr("tab.log"));
-        tabbedPane.setTitleAt(5, I18nManager.tr("tab.tutorial"));
-        tabbedPane.setTitleAt(6, I18nManager.tr("tab.about"));
+        tabbedPane.setTitleAt(1, I18nManager.tr("tab.comparer"));
+        tabbedPane.setTitleAt(2, I18nManager.tr("tab.privilege"));
+        tabbedPane.setTitleAt(3, I18nManager.tr("tab.data"));
+        tabbedPane.setTitleAt(4, I18nManager.tr("tab.config"));
+        tabbedPane.setTitleAt(5, I18nManager.tr("tab.log"));
+        tabbedPane.setTitleAt(6, I18nManager.tr("tab.tutorial"));
+        tabbedPane.setTitleAt(7, I18nManager.tr("tab.about"));
         tabbedPane.revalidate();
         tabbedPane.repaint();
     }

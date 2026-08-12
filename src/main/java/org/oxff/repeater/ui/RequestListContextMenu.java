@@ -3,6 +3,7 @@ package org.oxff.repeater.ui;
 import org.oxff.repeater.i18n.I18nManager;
 import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.RequestDAO;
+import org.oxff.repeater.ui.comparer.ComparerPanel;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -19,13 +20,26 @@ public class RequestListContextMenu {
     private final Map<Integer, Color> requestColors;
     private final Map<Integer, String> requestComments;
     private final DefaultTableModel requestTableModel;
+    private final Map<Integer, byte[]> requestDataMap;
+    private final Map<Integer, byte[]> responseDataMap;
+    private ComparerPanel comparerPanel;
 
     public RequestListContextMenu(JTable requestTable, DefaultTableModel requestTableModel,
-                                   Map<Integer, Color> requestColors, Map<Integer, String> requestComments) {
+                                   Map<Integer, Color> requestColors, Map<Integer, String> requestComments,
+                                   Map<Integer, byte[]> requestDataMap, Map<Integer, byte[]> responseDataMap) {
         this.requestTable = requestTable;
         this.requestTableModel = requestTableModel;
         this.requestColors = requestColors;
         this.requestComments = requestComments;
+        this.requestDataMap = requestDataMap;
+        this.responseDataMap = responseDataMap;
+    }
+
+    /**
+     * 设置报文比较面板引用
+     */
+    public void setComparerPanel(ComparerPanel comparerPanel) {
+        this.comparerPanel = comparerPanel;
     }
 
     /**
@@ -65,9 +79,42 @@ public class RequestListContextMenu {
         JMenuItem deleteItem = new JMenuItem(deleteText);
         deleteItem.addActionListener(e -> deleteSelectedRequests());
 
+        // 发送到报文比较（仅单选时可用，细分请求/响应报文）
+        JMenu sendToComparerMenu = null;
+        if (selectedCount == 1 && comparerPanel != null) {
+            int selRow = requestTable.getSelectedRow();
+            if (selRow >= 0) {
+                int modelRow = requestTable.convertRowIndexToModel(selRow);
+                if (modelRow >= 0 && modelRow < requestTableModel.getRowCount()) {
+                    int requestId = (int) requestTableModel.getValueAt(modelRow, 0);
+                    byte[] requestData = requestDataMap.get(requestId);
+                    byte[] responseData = responseDataMap.get(requestId);
+
+                    sendToComparerMenu = new JMenu(I18nManager.tr("request.menu.sendToComparer"));
+
+                    JMenuItem sendRequestItem = new JMenuItem(I18nManager.tr("request.menu.sendToComparer.request"));
+                    sendRequestItem.setEnabled(requestData != null && requestData.length > 0);
+                    sendRequestItem.addActionListener(e ->
+                        comparerPanel.addItem(requestData, "基准报文-请求"));
+
+                    JMenuItem sendResponseItem = new JMenuItem(I18nManager.tr("request.menu.sendToComparer.response"));
+                    sendResponseItem.setEnabled(responseData != null && responseData.length > 0);
+                    sendResponseItem.addActionListener(e ->
+                        comparerPanel.addItem(responseData, "基准报文-响应"));
+
+                    sendToComparerMenu.add(sendRequestItem);
+                    sendToComparerMenu.add(sendResponseItem);
+                }
+            }
+        }
+
         popupMenu.add(colorMenu);
         popupMenu.add(commentItem);
         popupMenu.addSeparator();
+        if (sendToComparerMenu != null) {
+            popupMenu.add(sendToComparerMenu);
+            popupMenu.addSeparator();
+        }
         popupMenu.add(columnControlItem);
         popupMenu.addSeparator();
         popupMenu.add(deleteItem);

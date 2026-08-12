@@ -6,6 +6,7 @@ import org.oxff.repeater.logging.LogManager;
 import org.oxff.repeater.db.RequestDAO;
 import org.oxff.repeater.db.history.HistoryUpdateDAO;
 import org.oxff.repeater.api.MontoyaApiHolder;
+import org.oxff.repeater.ui.comparer.ComparerPanel;
 import burp.api.montoya.MontoyaApi;
 
 import javax.swing.*;
@@ -66,6 +67,9 @@ public class RequestListPanel extends JPanel {
     private final Map<Integer, Color> requestColors = new HashMap<>();
     private final Map<Integer, String> requestComments = new HashMap<>();
     private final Map<Integer, String> requestJudgmentMap = new ConcurrentHashMap<>();
+
+    // 右键菜单工厂（需注入报文比较面板引用）
+    private RequestListContextMenu contextMenuFactory;
 
     // 回调函数
     private RequestSelectedCallback requestSelectedCallback;
@@ -149,7 +153,7 @@ public class RequestListPanel extends JPanel {
         setupColumnWidths();
 
         // 注册右键菜单（每次右键时动态创建以反映当前选中数量）
-        RequestListContextMenu contextMenuFactory = new RequestListContextMenu(requestTable, tableModel, requestColors, requestComments);
+        contextMenuFactory = new RequestListContextMenu(requestTable, tableModel, requestColors, requestComments, requestDataMap, responseDataMap);
         requestTable.setComponentPopupMenu(new JPopupMenu() {
             private static final long serialVersionUID = 1L;
             @Override
@@ -492,6 +496,15 @@ public class RequestListPanel extends JPanel {
      */
     public void setRequestSelectedCallback(RequestSelectedCallback callback) {
         this.requestSelectedCallback = callback;
+    }
+
+    /**
+     * 设置报文比较面板引用（转发给右键菜单工厂，供"发送到报文比较"使用）
+     */
+    public void setComparerPanel(ComparerPanel comparerPanel) {
+        if (contextMenuFactory != null) {
+            contextMenuFactory.setComparerPanel(comparerPanel);
+        }
     }
 
     /**

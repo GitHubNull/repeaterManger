@@ -7,6 +7,7 @@ import org.oxff.repeater.db.history.HistoryUpdateDAO;
 import org.oxff.repeater.db.history.HistoryWriteDAO;
 import org.oxff.repeater.http.RequestResponseRecord;
 import org.oxff.repeater.privilege.model.JudgmentResult;
+import org.oxff.repeater.ui.comparer.ComparerPanel;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -38,6 +39,7 @@ public class HistoryPanel extends JPanel {
     private HistoryContextMenu contextMenu;
     private RequestDispatchHandler dispatchHandler;
     private HistoryStatsBar statsBar;
+    private ComparerPanel comparerPanel;
 
     // 需要在语言切换时刷新的组件
     private JLabel searchLabel;
@@ -529,6 +531,20 @@ public class HistoryPanel extends JPanel {
      */
     public RequestDispatchHandler getDispatchHandler() {
         return dispatchHandler;
+    }
+
+    /**
+     * 设置报文比较面板引用
+     */
+    public void setComparerPanel(ComparerPanel comparerPanel) {
+        this.comparerPanel = comparerPanel;
+    }
+
+    /**
+     * 获取报文比较面板引用
+     */
+    public ComparerPanel getComparerPanel() {
+        return comparerPanel;
     }
 
     /**

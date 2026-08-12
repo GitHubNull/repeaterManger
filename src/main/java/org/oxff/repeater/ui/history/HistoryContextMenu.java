@@ -119,6 +119,38 @@ public class HistoryContextMenu {
             }
         }
 
+        // 发送到报文比较（仅单选时可用）
+        JMenu sendToComparerMenu = null;
+        if (selectedCount == 1 && historyPanel.getComparerPanel() != null) {
+            int selRow = historyTable.getSelectedRow();
+            if (selRow >= 0) {
+                int modelRow = historyTable.convertRowIndexToModel(selRow);
+                if (modelRow >= 0 && modelRow < historyRecords.size()) {
+                    RequestResponseRecord record = historyRecords.get(modelRow);
+                    sendToComparerMenu = new JMenu(I18nManager.tr("history.menu.sendToComparer"));
+
+                    JMenuItem sendRequestItem = new JMenuItem(I18nManager.tr("history.menu.sendToComparer.request"));
+                    sendRequestItem.addActionListener(e -> {
+                        byte[] requestData = record.getRequestData();
+                        if (requestData != null && requestData.length > 0) {
+                            historyPanel.getComparerPanel().addItem(requestData, "历史记录-请求");
+                        }
+                    });
+
+                    JMenuItem sendResponseItem = new JMenuItem(I18nManager.tr("history.menu.sendToComparer.response"));
+                    sendResponseItem.addActionListener(e -> {
+                        byte[] responseData = record.getResponseData();
+                        if (responseData != null && responseData.length > 0) {
+                            historyPanel.getComparerPanel().addItem(responseData, "历史记录-响应");
+                        }
+                    });
+
+                    sendToComparerMenu.add(sendRequestItem);
+                    sendToComparerMenu.add(sendResponseItem);
+                }
+            }
+        }
+
         JMenuItem clearItem = new JMenuItem(I18nManager.tr("history.menu.clearAll"));
         clearItem.addActionListener(e -> historyPanel.clearHistoryWithConfirm());
 
@@ -134,7 +166,10 @@ public class HistoryContextMenu {
         if (comparisonItem != null) {
             popupMenu.add(comparisonItem);
         }
-        if (sendToPrivilegeTestItem != null || comparisonItem != null) {
+        if (sendToComparerMenu != null) {
+            popupMenu.add(sendToComparerMenu);
+        }
+        if (sendToPrivilegeTestItem != null || comparisonItem != null || sendToComparerMenu != null) {
             popupMenu.addSeparator();
         }
         popupMenu.add(columnControlItem);

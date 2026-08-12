@@ -36,8 +36,6 @@ public class EditorToolBar {
     private JComboBox<String> layoutComboBox;
     // 布局标签
     private JLabel layoutLabel;
-    // 相似度计算按钮
-    private JButton similarityCalcBtn;
     // 清空报文按钮
     private JButton clearAllBtn;
 
@@ -179,7 +177,7 @@ public class EditorToolBar {
 
     /**
      * 构建报文显示编辑工具栏（编辑区顶部）
-     * 包含：相似度计算、布局选择
+     * 包含：布局选择
      */
     public JPanel buildMessageEditorToolBar() {
         JPanel toolBar = new JPanel(new BorderLayout());
@@ -187,17 +185,6 @@ public class EditorToolBar {
             BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Separator.foreground")),
             BorderFactory.createEmptyBorder(5, 10, 5, 10)
         ));
-
-        // 左侧：相似度计算
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
-        similarityCalcBtn = new JButton(I18nManager.tr("toolbar.similarity"));
-        similarityCalcBtn.setToolTipText(I18nManager.tr("toolbar.similarity.tooltip"));
-        similarityCalcBtn.addActionListener(e -> {
-            SimilarityCalculatorDialog dialog = new SimilarityCalculatorDialog(
-                (Frame) SwingUtilities.getWindowAncestor(mainPanel));
-            dialog.setVisible(true);
-        });
-        leftPanel.add(similarityCalcBtn);
 
         // 右侧：布局选择（按索引判断逻辑，显示文本从资源读取，与逻辑解耦）
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 2));
@@ -226,7 +213,6 @@ public class EditorToolBar {
         rightPanel.add(layoutLabel);
         rightPanel.add(layoutComboBox);
 
-        toolBar.add(leftPanel, BorderLayout.WEST);
         toolBar.add(rightPanel, BorderLayout.EAST);
 
         return toolBar;
@@ -284,10 +270,6 @@ public class EditorToolBar {
         }
 
         // 编辑区工具栏
-        if (similarityCalcBtn != null) {
-            similarityCalcBtn.setText(I18nManager.tr("toolbar.similarity"));
-            similarityCalcBtn.setToolTipText(I18nManager.tr("toolbar.similarity.tooltip"));
-        }
         if (layoutLabel != null) {
             layoutLabel.setText(I18nManager.tr("toolbar.layout.label"));
         }
