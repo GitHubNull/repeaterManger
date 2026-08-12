@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.44.2] - 2026-08-12
+
+### Changed
+- 全局工具栏新增[清空报文]按钮（位于[自动GC]与[中文]之间），通过回调触发请求列表的清空确认流程，原请求列表搜索栏中的[清空报文]按钮移除
+- 请求列表搜索栏[列显示控制]按钮重命名为[显示/隐藏列]，并移至高级搜索按钮旁，与搜索操作视觉分组一致
+- 版本号同步至 2.44.2（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.44.0] - 2026-08-12
 
 ### Added

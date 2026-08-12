@@ -38,6 +38,24 @@ public class EditorToolBar {
     private JLabel layoutLabel;
     // 相似度计算按钮
     private JButton similarityCalcBtn;
+    // 清空报文按钮
+    private JButton clearAllBtn;
+
+    /**
+     * 清空操作回调接口
+     */
+    public interface ClearAllCallback {
+        void onClearAll();
+    }
+
+    private ClearAllCallback clearAllCallback;
+
+    /**
+     * 设置清空操作回调
+     */
+    public void setClearAllCallback(ClearAllCallback callback) {
+        this.clearAllCallback = callback;
+    }
 
     public EditorToolBar(RequestDispatchHandler dispatchHandler,
                          LayoutManager layoutManager, JPanel mainPanel) {
@@ -127,6 +145,17 @@ public class EditorToolBar {
 
         gcOnLabel.setToolTipText(I18nManager.tr("toolbar.gc.tooltip"));
         globalToolBar.add(gcOnLabel);
+        globalToolBar.add(new JSeparator(SwingConstants.VERTICAL));
+
+        // 清空报文按钮
+        clearAllBtn = new JButton(I18nManager.tr("request.list.clearAll"));
+        clearAllBtn.setToolTipText(I18nManager.tr("request.list.clearAll.tooltip"));
+        clearAllBtn.addActionListener(e -> {
+            if (clearAllCallback != null) {
+                clearAllCallback.onClearAll();
+            }
+        });
+        globalToolBar.add(clearAllBtn);
         globalToolBar.add(new JSeparator(SwingConstants.VERTICAL));
 
         // 语言切换：左侧中文、右侧English，开关选中=英文
@@ -247,6 +276,12 @@ public class EditorToolBar {
         languageZhLabel.setToolTipText(langTooltip);
         languageToggleButton.setToolTipText(langTooltip);
         languageEnLabel.setToolTipText(langTooltip);
+
+        // 清空报文按钮
+        if (clearAllBtn != null) {
+            clearAllBtn.setText(I18nManager.tr("request.list.clearAll"));
+            clearAllBtn.setToolTipText(I18nManager.tr("request.list.clearAll.tooltip"));
+        }
 
         // 编辑区工具栏
         if (similarityCalcBtn != null) {

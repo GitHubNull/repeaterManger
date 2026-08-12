@@ -302,14 +302,8 @@ public class RequestListPanel extends JPanel {
         });
         simpleSearchPanel.add(clearBtn);
         simpleSearchPanel.add(advancedToggleBtn);
-        // 高级搜索与右侧[清空+列显示控制]组之间留出明显间隔，避免视觉混淆
-        simpleSearchPanel.add(Box.createHorizontalStrut(24));
-        // 清空按钮 - 位于高级搜索和列显示控制之间
-        JButton clearAllBtn = new JButton(I18nManager.tr("request.list.clearAll"));
-        clearAllBtn.setToolTipText(I18nManager.tr("request.list.clearAll.tooltip"));
-        clearAllBtn.addActionListener(e -> clearAllWithConfirm());
-        simpleSearchPanel.add(clearAllBtn);
-        JButton columnControlBtn = new JButton(I18nManager.tr("request.menu.columnControl"));
+        // 列显示控制按钮 - 位于高级搜索按钮旁边
+        JButton columnControlBtn = new JButton(I18nManager.tr("request.menu.columnControl.toggle"));
         columnControlBtn.addActionListener(e -> {
             RequestColumnControlDialog dialog = new RequestColumnControlDialog(requestTable, requestTable, tableModel);
             dialog.setVisible(true);
@@ -617,8 +611,9 @@ public class RequestListPanel extends JPanel {
 
     /**
      * 清空所有请求（带确认对话框）
+     * 供全局工具栏的清空报文按钮调用
      */
-    private void clearAllWithConfirm() {
+    public void clearAllWithConfirm() {
         LogManager.getInstance().printOutput("[*] 清空按钮被点击，准备弹出确认对话框...");
 
         Component dialogParent = resolveDialogParent();

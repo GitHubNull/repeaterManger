@@ -151,6 +151,9 @@ public class RepeaterManagerUI {
         // 创建编辑区工具栏（必须在模式变更监听器之前初始化，因为监听器引用其组件）
         editorToolBar = new EditorToolBar(dispatchHandler, layoutManager, mainPanel);
 
+        // 设置清空报文按钮回调：触发 RequestListPanel 的清空确认对话框
+        editorToolBar.setClearAllCallback(() -> requestListPanel.clearAllWithConfirm());
+
         // 构建全局工具栏（插件顶部）
         JPanel globalToolBar = editorToolBar.buildGlobalToolBar();
 
