@@ -502,70 +502,12 @@ public class RepeaterManagerUI {
                 historyPanel.addHistoryRecord(record);
             }
         } else {
-            // 数据库和内存中均无历史记录，尝试从 requests 表加载原始响应基线
-            // 越权测试场景下，saveOriginalResponseAsBaseline 将原始响应保存到了 requests 表，
-            // 但未创建 history 记录，导致点击请求时响应区域为空白
-            try {
-                RequestDAO requestDAO = new RequestDAO();
-                byte[] baselineResponse = requestDAO.getOriginalResponseData(requestId);
-                int baselineStatusCode = requestDAO.getOriginalResponseStatusCode(requestId);
-
-                if (baselineResponse != null && baselineResponse.length > 0) {
-                    // 从 requestDataMap 获取请求数据，构造一条基线历史记录
-                    byte[] requestData = requestListPanel.getRequestData(requestId);
-                    if (requestData != null) {
-                        RequestResponseRecord baselineRecord = new RequestResponseRecord();
-                        baselineRecord.setId(-1); // 临时记录，无数据库ID
-                        baselineRecord.setRequestId(requestId);
-                        baselineRecord.setRequestData(requestData);
-                        baselineRecord.setResponseData(baselineResponse);
-                        baselineRecord.setStatusCode(baselineStatusCode);
-                        baselineRecord.setResponseLength(baselineResponse.length);
-                        baselineRecord.setResponseTime(0);
-                        baselineRecord.setUserSessionName(I18nManager.tr("baseline.tag"));
-                        baselineRecord.setComment(I18nManager.tr("baseline.comment"));
-                        baselineRecord.setTimestamp(new java.util.Date());
-
-                        // 尝试从请求字节数组解析HTTP元数据
-                        HttpService savedService = dispatchHandler.getSavedHttpService(requestId);
-                        if (savedService != null) {
-                            try {
-                                HttpRequest reqInfo = HttpRequest.httpRequest(savedService, ByteArray.byteArray(requestData));
-                                java.net.URL parsedUrl = new java.net.URL(reqInfo.url());
-                                baselineRecord.setMethod(reqInfo.method());
-                                baselineRecord.setProtocol(parsedUrl.getProtocol());
-                                baselineRecord.setDomain(HttpRequestHelper.resolveDomainWithPort(parsedUrl, savedService));
-                                baselineRecord.setPath(parsedUrl.getPath());
-                                baselineRecord.setQueryParameters(parsedUrl.getQuery() != null ? parsedUrl.getQuery() : "");
-                            } catch (Exception e) {
-                                baselineRecord.setMethod("UNKNOWN");
-                                baselineRecord.setProtocol(savedService.secure() ? "https" : "http");
-                                baselineRecord.setDomain(HttpRequestHelper.resolveDomainFromService(savedService));
-                                baselineRecord.setPath("/");
-                            }
-                        }
-
-                        historyPanel.addHistoryRecord(baselineRecord);
-                        dispatchHandler.getRequestHistoryMap().put(requestId, new ArrayList<>(List.of(baselineRecord)));
-
-                        // 显示原始响应基线到响应面板
-                        responsePanel.setResponse(baselineResponse);
-                        dispatchHandler.updateStatusFromRecord(baselineRecord);
-
-                        if (!silent) {
-                            LogManager.getInstance().printOutput(
-                                I18nManager.tr("log.history.baseline.loaded", requestId, baselineResponse.length));
-                        }
-                    }
-                } else if (!silent) {
-                    LogManager.getInstance().printOutput(
-                        I18nManager.tr("log.history.none", requestId));
-                }
-            } catch (Exception e) {
-                if (!silent) {
-                    LogManager.getInstance().printOutput(
-                        I18nManager.tr("log.history.none", requestId));
-                }
+            // 数据库和内存中均无历史记录：属于正常情况（新发送的基准报文尚未重放）。
+            // 基线响应已由 loadBaselineOrLatestResponse() 显示到响应面板，
+            // 重放历史表格应保持为空，不插入伪造的基线记录。
+            if (!silent) {
+                LogManager.getInstance().printOutput(
+                    I18nManager.tr("log.history.none", requestId));
             }
         }
 
