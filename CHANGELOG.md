@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.43.2] - 2026-08-12
+
+### Fixed
+- 无历史记录时不再伪造基线记录：数据库和内存中均无历史记录时，移除从 requests 表加载原始响应构造临时基线历史记录的逻辑，重放历史表格保持为空（基线响应已由 `loadBaselineOrLatestResponse()` 显示到响应面板）
+- 报文查看器右键菜单回退：`selectedRequestResponses()` 返回空列表（焦点位于请求/响应编辑器的报文查看器场景）时，通过 `messageEditorRequestResponse()` 获取当前显示的报文，恢复右键菜单功能
+- 代理空响应回调补全：代理已处理但返回空响应时统一通过 `onFailure` 通知失败（此前回调缺失导致等待光标无法恢复、历史表格不更新）；同时移除直接发送路径中重复的失败回调，避免重复错误弹窗与重复历史记录
+
+### Changed
+- 版本号同步至 2.43.2（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.43.1] - 2026-08-11
 
 ### Changed
