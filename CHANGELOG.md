@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.45.1] - 2026-08-13
+
+### Added
+- 报文比较面板结果区新增差异导航：上一个/下一个差异按钮与差异计数状态标签（如"差异 3/15"），复用 DiffNavigator 实现左右 DiffPane 差异区域同步跳转
+
+### Fixed
+- 报文比较面板 Text/Hex 切换按钮此前仅改变按钮状态不生效：现按侧生效，hex 模式下调用 DiffPane.renderPlainText 显示该侧报文的原始 hex dump，另一侧不受影响
+- 清空比较结果后差异导航状态归零，避免残留旧导航数据
+
+### Changed
+- 版本号同步至 2.45.1（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.45.0] - 2026-08-12
 
 ### Added

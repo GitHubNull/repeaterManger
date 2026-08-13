@@ -98,6 +98,9 @@ public class ComparerPanel extends JPanel {
     private DiffPane diffPane1;
     private DiffPane diffPane2;
     private JCheckBox syncViewsCheckbox;
+    private JButton prevDiffBtn;
+    private JButton nextDiffBtn;
+    private JLabel diffCountLabel;
     private JSplitPane resultSplitPane;
     private JPanel resultPanel;
     private DiffNavigator diffNavigator;
@@ -336,20 +339,42 @@ public class ComparerPanel extends JPanel {
         resultSplitPane.setDividerLocation(0.5);
         panel.add(resultSplitPane, BorderLayout.CENTER);
 
-        // 底部：Key 图例 + Sync views
+        // 底部：Key 图例 + 差异导航 + Sync views
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
         bottomPanel.add(new JLabel("Key:"));
         bottomPanel.add(createKeyLabel(I18nManager.tr("comparer.result.key.modified"), new Color(255, 250, 230)));
         bottomPanel.add(createKeyLabel(I18nManager.tr("comparer.result.key.deleted"), new Color(255, 220, 220)));
         bottomPanel.add(createKeyLabel(I18nManager.tr("comparer.result.key.added"), new Color(220, 255, 220)));
+
+        // 差异导航（上一个/下一个差异）
+        bottomPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        prevDiffBtn = new JButton(I18nManager.tr("comparison.prev.diff"));
+        prevDiffBtn.setToolTipText(I18nManager.tr("comparison.prev.diff.tooltip"));
+        prevDiffBtn.addActionListener(e -> {
+            if (diffNavigator != null) {
+                diffNavigator.prevDiff();
+                updateDiffNavigatorStatus();
+            }
+        });
+        nextDiffBtn = new JButton(I18nManager.tr("comparison.next.diff"));
+        nextDiffBtn.setToolTipText(I18nManager.tr("comparison.next.diff.tooltip"));
+        nextDiffBtn.addActionListener(e -> {
+            if (diffNavigator != null) {
+                diffNavigator.nextDiff();
+                updateDiffNavigatorStatus();
+            }
+        });
+        diffCountLabel = new JLabel(I18nManager.tr("comparison.diff.zero"));
+        diffCountLabel.setFont(diffCountLabel.getFont().deriveFont(Font.BOLD));
+        bottomPanel.add(prevDiffBtn);
+        bottomPanel.add(diffCountLabel);
+        bottomPanel.add(nextDiffBtn);
+
         bottomPanel.add(Box.createHorizontalGlue());
         syncViewsCheckbox = new JCheckBox(I18nManager.tr("comparer.result.syncViews"));
         syncViewsCheckbox.setSelected(true);
         bottomPanel.add(syncViewsCheckbox);
         panel.add(bottomPanel, BorderLayout.SOUTH);
-
-        // 初始化导航器
-        diffNavigator = new DiffNavigator(diffPane1, diffPane2);
 
         return panel;
     }
@@ -437,26 +462,29 @@ public class ComparerPanel extends JPanel {
         ComparerItem item1 = items.get(row1);
         ComparerItem item2 = items.get(row2);
 
-        // 更新标题
-        int diffCount = 0;
+        // 按全局比较模式计算差异数据
+        List<DiffLine> diffLines = null;
+        List<DiffSegment> diffSegments = null;
         if (compareMode == MODE_WORDS) {
             String text1 = bytesToString(item1.data);
             String text2 = bytesToString(item2.data);
-            List<DiffLine> diffLines = DiffEngine.computeLineDiff(text1, text2);
-            diffCount = countDifferences(diffLines);
+            diffLines = DiffEngine.computeLineDiff(text1, text2);
+        } else {
+            diffSegments = DiffEngine.computeByteDiff(item1.data, item2.data);
+        }
 
-            diffPane1.renderDiffLines(diffLines, true);
-            diffPane2.renderDiffLines(diffLines, false);
+        // 左右两侧独立渲染（text/hex 切换各自生效）
+        renderPane(diffPane1, item1, diffLines, diffSegments, true, isHexMode1);
+        renderPane(diffPane2, item2, diffLines, diffSegments, false, isHexMode2);
 
+        // 更新标题（差异统计基于全局比较模式）
+        int diffCount = (compareMode == MODE_WORDS)
+            ? countDifferences(diffLines)
+            : countByteDifferences(diffSegments);
+        if (compareMode == MODE_WORDS) {
             resultTitleLabel.setText(I18nManager.tr("comparer.result.title",
                 item1.index, item2.index, diffCount));
         } else {
-            List<DiffSegment> diffSegments = DiffEngine.computeByteDiff(item1.data, item2.data);
-            diffCount = countByteDifferences(diffSegments);
-
-            diffPane1.renderHexDiffSegments(diffSegments, true);
-            diffPane2.renderHexDiffSegments(diffSegments, false);
-
             resultTitleLabel.setText(I18nManager.tr("comparer.result.title.bytes",
                 item1.index, item2.index, diffCount));
         }
@@ -471,11 +499,46 @@ public class ComparerPanel extends JPanel {
         resultTitleLabel.setText(resultTitleLabel.getText() + "  |  " +
             I18nManager.tr("comparer.similarity", simText));
 
-        // 重建导航器
+        // 重建导航器并刷新导航状态
         diffNavigator = new DiffNavigator(diffPane1, diffPane2);
+        updateDiffNavigatorStatus();
 
         // 同步滚动
         setupSyncScroll();
+    }
+
+    /**
+     * 渲染单侧结果面板
+     * hex 模式下显示该侧报文的原始 hex 视图；否则按全局比较模式渲染差异
+     *
+     * @param pane         目标 DiffPane
+     * @param item         该侧对应的报文项
+     * @param diffLines    行级差异（单词模式）
+     * @param diffSegments 字节级差异（字节模式）
+     * @param isLeftSide   是否为左侧面板
+     * @param isHexMode    是否 hex 视图
+     */
+    private void renderPane(DiffPane pane, ComparerItem item,
+                            List<DiffLine> diffLines, List<DiffSegment> diffSegments,
+                            boolean isLeftSide, boolean isHexMode) {
+        if (isHexMode) {
+            pane.renderPlainText(item.data, true);
+        } else if (compareMode == MODE_WORDS) {
+            pane.renderDiffLines(diffLines, isLeftSide);
+        } else {
+            pane.renderHexDiffSegments(diffSegments, isLeftSide);
+        }
+    }
+
+    /**
+     * 更新差异导航状态显示
+     */
+    private void updateDiffNavigatorStatus() {
+        if (diffNavigator != null) {
+            diffCountLabel.setText(diffNavigator.getStatusText());
+        } else {
+            diffCountLabel.setText(I18nManager.tr("comparison.diff.zero"));
+        }
     }
 
     private void refreshComparison() {
@@ -492,6 +555,8 @@ public class ComparerPanel extends JPanel {
         lengthLabel2.setText(" ");
         diffPane1.renderPlainText(new byte[0], false);
         diffPane2.renderPlainText(new byte[0], false);
+        diffNavigator = null;
+        updateDiffNavigatorStatus();
     }
 
     private double computeSimilarity(byte[] data1, byte[] data2) {
@@ -663,6 +728,11 @@ public class ComparerPanel extends JPanel {
         textModeBtn2.setText(I18nManager.tr("comparer.result.text"));
         hexModeBtn2.setText(I18nManager.tr("comparer.result.hex"));
         syncViewsCheckbox.setText(I18nManager.tr("comparer.result.syncViews"));
+        prevDiffBtn.setText(I18nManager.tr("comparison.prev.diff"));
+        prevDiffBtn.setToolTipText(I18nManager.tr("comparison.prev.diff.tooltip"));
+        nextDiffBtn.setText(I18nManager.tr("comparison.next.diff"));
+        nextDiffBtn.setToolTipText(I18nManager.tr("comparison.next.diff.tooltip"));
+        updateDiffNavigatorStatus();
 
         // 刷新算法下拉框
         int selectedIdx = algorithmCombo.getSelectedIndex();
