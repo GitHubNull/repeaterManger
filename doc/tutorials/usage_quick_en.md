@@ -12,7 +12,7 @@
 4. Select the downloaded JAR file → Click `Next`
 5. You'll see **"Repeater Manager 插件加载成功"** confirming successful installation
 
-> On first load, a session directory is automatically created under `~/.burp/` with database files and logs.
+> On first load, a session directory is automatically created under `~/.burp/` with database files and logs. Global rules and configuration are stored in 5 YAML files under `~/.burp/repeater_manager/` (api_extraction_rules / judgment_rules / dedup_configs / field_definitions / schemes), shared across sessions.
 
 ---
 
@@ -22,6 +22,8 @@ Right-click on any HTTP request in Burp Suite (Proxy/Intruder/Scanner, etc.):
 
 - Select **"Send to Repeater Manager"**
 - Switch to the **"Repeater Manager"** tab at the top to see the request added to the list
+
+**Interface Overview**: The main interface contains 8 top-level tabs — Request Management / Message Comparison (Comparer) / Privilege Testing (Privilege) / Data Management (Data) / Configuration / Logging / Tutorials (Tutorial) / About. The Privilege tab has 6 sub-tabs (session config/judgment rules/request scope/dedup config/test info config/report export), and the Configuration tab has 4 sub-tabs (storage/logging/proxy debug/API rules). Use the **language switcher** at the top-right to toggle between Chinese and English (zh_CN / en_US) — changes take effect instantly and are persisted.
 
 ---
 
@@ -131,7 +133,7 @@ Navigate to the **"Configuration"** tab:
 
 ## 12. Import and Export Data
 
-Navigate to **"Configuration"** → **"Data Import/Export"** tab:
+Navigate to the **"Data"** (Data Management) tab:
 
 - **ERM Archive**: Plugin-specific format with optional AES-256 encryption, suitable for backups and team sharing
 - **Postman Collection**: Export as v2.1 format for collaboration with other tools
@@ -157,7 +159,7 @@ The plugin can automatically extract API paths from non-standard requests for ea
 
 Configure dedup strategies to avoid duplicate privilege testing of the same API:
 
-- Navigate to **"Configuration"** → **"Privilege Testing"** → **"Dedup Config"** tab to add dedup rules
+- Navigate to the **"Privilege"** tab → **"Dedup Config"** sub-tab to add dedup rules
 - 6 dedup strategies: PATH (URL path) / API (extracted path) / JSON_BODY_FIELD / XML_BODY_FIELD / FORM_FIELD / URL_PARAM
 - 3 keep policies: FIRST / LAST / MIDDLE
 - Priority-chain matching — the first enabled config that successfully extracts a dedup key takes effect
@@ -168,7 +170,7 @@ Configure dedup strategies to avoid duplicate privilege testing of the same API:
 
 Automated privilege escalation vulnerability detection:
 
-1. Navigate to the **"Configuration"** panel and configure:
+1. Navigate to the **"Privilege"** (Privilege Testing) tab and configure:
    - **Fields**: Configure where authentication fields are in the request (HEADER / JSON_BODY / XML_BODY / FORM_FIELD / MULTIPART_FIELD / URL_PARAM, 6 types total)
    - **Schemes**: Create a named group of field locations (e.g., "Bearer Auth" with Authorization Header only), associate schemes with user sessions
    - **User Sessions**: Add auth field values for users with different privilege levels; one-click **"Add Anonymous User"** (all field values empty, simulating unauthenticated state)

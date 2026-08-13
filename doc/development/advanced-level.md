@@ -22,26 +22,53 @@
 ```java
 // RepeaterManagerExtension.java
 public class RepeaterManagerExtension implements BurpExtension {
+    private final LogManager logManager = LogManager.getInstance();
+
     @Override
     public void initialize(MontoyaApi api) {
-        // 1. 保存 API 引用
+        // 1. 保存 API 引用并设置插件名
         MontoyaApiHolder.setApi(api);
-        
-        // 2. 初始化日志系统
-        LogManager.getInstance().initialize(api);
-        
-        // 3. 初始化数据库（异步）
-        DatabaseManager.getInstance().initialize();
-        
-        // 4. 注册 Suite Tab
-        api.userInterface().registerSuiteTab("Repeater Manager", new RepeaterManagerUI(api));
-        
-        // 5. 注册右键菜单
-        api.userInterface().registerContextMenuItemsProvider(new PopMenu(api));
-        
-        // 6. 启动后台服务
-        AutoSaveService.getInstance().start();
-        GarbageCollectorService.getInstance().start();
+        api.extension().setName("repeaterManger");
+
+        // 2. 阶段1：初始化日志管理器（仅 BurpConsoleHandler）
+        logManager.initialize(api);
+
+        // 3. 阶段2：加载早期配置（日志级别、UI、控制台、代理，不含文件 Handler）
+        loadLogConfigEarly();
+
+        // 4. 阶段3：初始化数据库（创建会话目录 + SQLite，写入示例数据并检查状态）
+        if (DatabaseManager.getInstance().initialize()) {
+            DatabaseManager.getInstance().testDatabaseWithSampleData();
+            DatabaseManager.getInstance().checkDatabaseStatus();
+        }
+
+        // 5. 阶段4：加载晚期配置（文件日志 Handler → 会话目录 logs/）
+        loadLogConfigLate();
+
+        // 6. 阶段4.5~4.7：加载全局规则（API 提取 / 字段定义 / 方案 / 判决规则 / 去重配置）
+        GlobalRuleManager.getInstance().loadRules();
+        GlobalFieldDefinitionManager.getInstance().loadFields();
+        SessionManager.getInstance().loadGlobalSchemes();
+        GlobalJudgmentRuleManager.getInstance().loadRules();
+        DedupConfigManager.getInstance().loadGlobalConfigs();
+
+        // 7. 阶段4.8：初始化国际化（必须在创建任何 UI 之前，否则语言切换不生效）
+        I18nManager.getInstance().initialize();
+
+        // 8. 创建 UI（8 个顶级选项卡），注入请求调度器并注册 Suite Tab
+        RepeaterManagerUI repeaterUI = new RepeaterManagerUI(api);
+        UIRequestDispatcher.getInstance().setRepeaterUI(repeaterUI);
+        api.userInterface().registerSuiteTab("Repeater Manager", repeaterUI.getUiComponent());
+
+        // 9. 注册上下文菜单（PopMenu 为无参构造）
+        api.userInterface().registerContextMenuItemsProvider(new PopMenu());
+
+        // 10. 注册卸载监听器（UI 资源 → 数据库连接池 → 日志系统，按序关闭）
+        api.extension().registerUnloadingHandler(() -> {
+            repeaterUI.close();
+            DatabaseManager.getInstance().closeConnections();
+            logManager.shutdown();
+        });
     }
 }
 ```
@@ -112,10 +139,11 @@ AutoTestEngine
   │    │    ├── 非空值 → 替换为会话中的值
   │    │    └── 空值（匿名用户）→ 移除字段（Header删除/JSON移除属性/URL移除参数）
   │    ├── ReplayEngine 重放请求（SyncHttpSender 同步发送，带重试）
-  │    └── JudgmentEngine 三方判决
+  │    └── JudgmentEngine 三层判决
   │         ├── 层1：基准响应无效？→ ERROR
+  │         ├── 层1.5：空 Body 感知（基线/测试 body 为空且活跃规则组无 body 依赖条件 → 空 Body 专门判决）
   │         ├── 层2：活跃规则组评估（AND/OR 混合逻辑，条件组合命中 → ESCALATED）
-  │         └── 层3：兜底链：默认相似度规则组（SIMILARITY > 0.90）→ 全局阈值判决（默认 0.70）→ 状态码/体长联合判决
+  │         └── 层3：兜底链：活跃规则组自身最小阈值 → 默认相似度规则组（SIMILARITY > 0.90）→ 全局阈值相似度判决（默认 0.70，含状态码差异语义）→ 状态码/体长联合判决
   └── 3. 去重检查（ApiDedupEngine）
 ```
 
@@ -126,7 +154,7 @@ AutoTestEngine
 | `AutoTestEngine` | 自动化测试编排 | `processProxyRequest()` |
 | `FieldReplacementEngine` | 字段值替换/移除 | `replaceFields()`, `removeField()` |
 | `ReplayEngine` | 请求重放调度 | `replay()` |
-| `JudgmentEngine` | 三方分层判决 | `judge()` |
+| `JudgmentEngine` | 三层分层判决 | `judge()` |
 | `SessionManager` | 会话生命周期管理 | `createSession()`, `deleteSession()` |
 | `JudgmentRuleManager` | 规则组 CRUD + 活跃状态管理 | `setActiveRuleGroup()` |
 | `DedupConfigManager` | 去重配置优先级链式管理 | `matchDedupConfig()` |
@@ -138,7 +166,7 @@ AutoTestEngine
 - **单活跃规则集**：全局同时只有一个规则组处于活跃状态
 - **条件运算符**：AND / OR / NOT（取反复选框）；schema v19 起 `judgment_rule_conditions` 表持久化 `operator` 列（默认 AND）
 - **求值顺序**：按 `sort_order` 从左到右；编辑对话框首行不显示连接符（固定按 AND 参与组合）
-- **兜底链**：活跃规则组未命中时依次尝试——① 默认相似度规则组（`SIMILARITY > 0.90`）作为安全网；② 全局阈值相似度判决（默认 0.70，含状态码差异语义）；③ 活跃规则组含低相似度拒绝条件时优先使用其自身最小阈值，防止默认规则组用更低阈值覆盖判决意图
+- **兜底链**：活跃规则组未命中时依次尝试——① 若活跃规则组含 `SIMILARITY GREATER_THAN` 条件且实际相似度低于其阈值，用活跃规则组自身最小阈值进行默认判决（防止默认规则组用更低阈值覆盖判决意图）；② 默认相似度规则组（`SIMILARITY > 0.90`）作为安全网；③ 全局阈值相似度判决（默认 0.70，含状态码差异语义：基准 2xx vs 测试 401/403 时区分"未登录被拒=安全"与"疑似字段未配置=待确认"）；④ 相似度无法计算时回退状态码/体长联合判决
 
 ### 2.5 匿名用户语义
 
@@ -297,16 +325,24 @@ ComparisonDialog (比对对话框)
 
 ### 6.4 SnakeYAML 使用
 
-```java
-// 读取
-Yaml yaml = new Yaml();
-List<ApiExtractionRule> rules = yaml.loadAs(
-    new FileInputStream(file),
-    new TypeReference<List<ApiExtractionRule>>() {}.getType()
-);
+各 YAML IO 工具类（如 `ApiRuleYamlIO`、`JudgmentRuleYamlIO`）统一采用"根 Map + version 字段"结构：
 
-// 写入
-yaml.dump(rules, new FileWriter(file));
+```java
+// 读取：load 为 Map 后按键取值（无 TypeReference 泛型反序列化）
+Yaml yaml = new Yaml();
+Map<String, Object> root = yaml.load(yamlContent);
+List<Map<String, Object>> ruleMaps = (List<Map<String, Object>>) root.get("rules");
+
+// 写入：BLOCK 风格 + pretty + 允许 Unicode，首字段写入版本号
+DumperOptions options = new DumperOptions();
+options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+options.setPrettyFlow(true);
+options.setAllowUnicode(true);
+Yaml yaml = new Yaml(options);
+Map<String, Object> root = new LinkedHashMap<>();
+root.put("version", YAML_VERSION);
+root.put("rules", ruleList);
+yaml.dump(root, new FileWriter(file));
 ```
 
 ---

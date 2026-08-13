@@ -91,9 +91,10 @@ mvn clean package
 repeaterManger/
 ├── oversteplab/                  # Git 子模块：越权测试靶场
 ├── src/main/java/org/oxff/repeater/
-│   ├── api/                      # API 提取子系统
+│   ├── api/                      # API 提取子系统（规则模型/提取引擎/全局 YAML）
 │   ├── config/                   # 配置管理（数据库/会话）
-│   ├── controller/               # 右键菜单等控制逻辑
+│   ├── i18n/                     # 国际化子系统（I18nManager：zh_CN/en_US 动态切换）
+│   ├── controller/               # 右键菜单等控制逻辑（PopMenu 无参构造）
 │   ├── db/                       # 数据库访问层（DAO/Pool/Schema）
 │   ├── http/                     # HTTP 请求处理
 │   ├── io/                       # 数据导入导出（ERM/Postman）
@@ -102,19 +103,30 @@ repeaterManger/
 │   ├── privilege/                # 越权测试子系统
 │   │   ├── model/                # 越权测试数据模型
 │   │   ├── dao/                  # 越权测试 DAO
-│   │   └── report/               # 报告生成子系统
+│   │   ├── report/               # 报告生成子系统
+│   │   └── Global*Manager        # 全局管理器（JudgmentRule/FieldDefinition/Scheme，YAML 持久化）
 │   ├── service/                  # 后台服务（自动保存/GC/历史录制）
 │   ├── ui/                       # UI 组件（Swing）
+│   │   ├── comparer/             # 报文比较面板（双列表/单词/字节模式/多算法）
+│   │   ├── config/               # 配置面板（存储/日志/代理调试/API 规则）
 │   │   ├── editor/               # 编辑器组件
-│   │   ├── history/              # 历史面板（含报文比对）
-│   │   ├── config/               # 配置面板
+│   │   ├── history/              # 历史面板（含报文比对入口）
 │   │   ├── layout/               # 布局管理
-│   │   └── privilege/            # 越权测试 UI
+│   │   ├── privilege/            # 越权测试 UI（6 个子标签）
+│   │   ├── viewer/               # HTTP 查看器
+│   │   ├── DataPanel.java        # 数据管理面板（ERM/Postman 导入导出）
+│   │   ├── LogPanel.java         # 日志面板
+│   │   ├── UsageTutorialPanel.java # 内置使用教程面板（CommonMark 渲染，中英文切换）
+│   │   ├── AboutPanel.java       # 关于面板（版本/作者/许可证）
+│   │   └── SwitchButton.java     # 开关按钮组件
 │   ├── utils/                    # 工具类
 │   ├── RepeaterManagerExtension.java  # 插件入口（Montoya BurpExtension）
-│   └── RepeaterManagerUI.java         # 主 UI 控制器
+│   ├── RepeaterManagerUI.java         # 主 UI 控制器（8 个顶级选项卡）
+│   └── UIRequestDispatcher.java      # UI 请求调度器（持有 RepeaterUI 引用）
 ├── src/main/resources/
-│   └── templates/report/         # FreeMarker 报告模板
+│   ├── i18n/                     # 国际化资源（messages_zh_CN / messages_en_US）
+│   ├── templates/about/          # 关于面板 HTML 模板
+│   └── templates/report/         # FreeMarker 报告模板（含测试用例参考）
 ├── doc/                          # 项目文档
 │   ├── tutorials/                # 使用教程
 │   ├── development/              # 开发文档

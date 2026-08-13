@@ -1,6 +1,6 @@
 # Repeater Manager Burp Suite 插件 — 完整数据流分析
 
-> 版本：v2.41.0 | 生成日期：2026-08-10
+> 版本：v2.45.1 | 生成日期：2026-08-13
 
 本文档详细分析了 Repeater Manager 插件在不同业务操作中的完整数据流向，涵盖 MVC 架构、连接池、异步处理、Pool 去重、Montoya SDK 集成等技术原理，并使用 Mermaid 图表展示数据流。
 

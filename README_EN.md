@@ -18,7 +18,7 @@
 
 Repeater Manager is an advanced HTTP request replay management plugin designed for Burp Suite Professional. Compared to the native Repeater, it provides more powerful features, including request categorization, automatic response history recording and comparison, SQLite local persistence, content deduplication storage, multi-condition advanced search, API rule extraction, automated privilege escalation testing, multiple format import/export (ERM encrypted archives / Postman Collection), and scheduled auto-save mechanism. This plugin is particularly suitable for security testers and penetration testing experts, effectively improving the efficiency and organization of HTTP/HTTPS request testing.
 
-> **Current Version**: v2.41.0 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
+> **Current Version**: v2.45.1 | **Requirements**: Burp Suite Professional 2024+ (Montoya Extension API) + Java 17+
 
 ## Core Features
 
@@ -50,12 +50,25 @@ Repeater Manager is an advanced HTTP request replay management plugin designed f
 | Report Generation | Export privilege test results as PDF/HTML/Markdown reports with embedded request/response details, cURL/Postman code snippets, user info screenshots, image lightbox carousel, and privilege test case references |
 | Batch Operations | Multi-select support in history panel; batch replay, batch privilege testing, batch delete |
 | Clear Messages | One-click clearing of all baseline requests and replay history in request list panel, with linked database cleanup |
+| Internationalization | Real-time zh_CN / en_US interface switching with persisted language preference and runtime dynamic updates |
+| Comparer Panel | Dedicated Comparer tab, a Burp Comparer-like dual-list message comparison tool with words/bytes modes and multiple similarity algorithms |
+| Built-in Tutorials | Built-in tutorial tab rendering quick start / detailed tutorials via CommonMark, with language switching linked to the global locale |
+| About Panel | Displays project version, author, license, and GitHub link |
 
 ## Feature Architecture
 
 ```
 Repeater Manager
 ├── Plugin Integration (Montoya SDK)
+├── UI Organization (8 top-level tabs)
+│   ├── Request Management (request list + edit/replay + history)
+│   ├── Message Comparison (dedicated Comparer panel)
+│   ├── Privilege Testing (session/judgment/scope/dedup/test info/report export)
+│   ├── Data Management (ERM / Postman import-export)
+│   ├── Configuration (storage/logging/proxy debug/API rules)
+│   ├── Logging
+│   ├── Tutorials (language switching, CommonMark rendering)
+│   └── About
 ├── Request Management
 │   ├── Request List (search/filter/color marking/comments)
 │   ├── Request Editing (syntax highlighting)
@@ -71,6 +84,16 @@ Repeater Manager
 │   │   ├── Diff navigation with synchronized scrolling
 │   │   └── Collapsible search bar
 │   └── Advanced Search (multi-condition filtering)
+├── Comparer Panel
+│   ├── Dual-list message collection and selection
+│   ├── Words/Bytes comparison modes
+│   ├── AUTO/LEVENSHTEIN/JACCARD/JSON/XML similarity algorithms
+│   ├── Text/Hex display switching with synchronized scrolling
+│   └── Diff navigation and fullscreen mode
+├── Internationalization (I18nManager)
+│   ├── Chinese (zh_CN) / English (en_US) resource bundles
+│   ├── Runtime dynamic switching with persistence
+│   └── Listener mechanism refreshing the whole UI
 ├── API Extraction Engine
 │   ├── Sources: URL_PATH / URL_QUERY / HEADER / BODY
 │   ├── Methods: REGEX / SUBSTR / JSON_PATH / XPATH
@@ -80,7 +103,7 @@ Repeater Manager
 │   ├── Multi-user Session Management
 │   ├── User Info Management (UserInfo: role/username/anonymous flag/privilege proof screenshots)
 │   ├── Scheme Management (scheme-field-session 3-tier architecture)
-│   ├── Field Configuration (Header/Cookie/Body/URL Param)
+│   ├── Field Configuration (Header/JSON Body/XML Body/Form Field/Multipart Field/URL Param)
 │   ├── Automated Field Replacement Engine
 │   ├── Judgment Rule Group Configuration (single active rule set + AND/OR mixed-logic multi-condition)
 │   ├── Judgment Rule Cross-session Persistence (global YAML, auto-restore on startup)
@@ -134,7 +157,7 @@ Repeater Manager
 5. Select the downloaded JAR file in `Extension file`
 6. Click `Next` to complete installation
 
-> After the first load, the plugin automatically creates a session directory under `~/.burp/` (named with a timestamp), containing the database file, body data directory, and log directory. Global API extraction rules are stored in `~/.burp/repeater_manager/api_extraction_rules.yaml`.
+> After the first load, the plugin automatically creates a session directory under `~/.burp/` (named with a timestamp), containing the database file, body data directory, and log directory. Global rules and configuration are stored in 5 YAML files under `~/.burp/repeater_manager/`: `api_extraction_rules.yaml` (API extraction rules), `judgment_rules.yaml` (judgment rules), `dedup_configs.yaml` (dedup configurations), `field_definitions.yaml` (field definitions), and `schemes.yaml` (schemes), shared across sessions.
 
 ## Quick Start
 
@@ -153,16 +176,26 @@ Repeater Manager
 3. Use right-click menu or auto-trigger to extract standardized API paths from irregular requests
 4. View and manage extraction results in the request list
 
-### Privilege Testing
+### Interface & Layout
 
-1. Configure user sessions (with credentials/tokens) and fields in the configuration panel
-2. Set up judgment rules (how to detect successful privilege escalation)
-3. Define request scope (which URLs to test)
-4. Enable auto-testing: the plugin intercepts scope-matched proxy traffic, auto-replaces tokens and replays
-5. View results in the Privilege Test panel
+- The main interface contains 8 top-level tabs: Request Management / Message Comparison / Privilege Testing / Data Management / Configuration / Logging / Tutorials / About
+- Switch **layout modes** (left-right / top-bottom / request-only / response-only) to suit different work scenarios
+- Customize the displayed columns of the request list via **column control**
+- Switch between Chinese and English interfaces in real time via **language switching** (preference auto-persisted)
+
+### Data Management
+
+- All data is automatically saved to SQLite database and survives restarts
+- Adjust storage mode, log level, and auto-save interval via the **configuration panel**
+- Import/export data using **ERM archives** or **Postman Collections**
+
+### Advanced Features
+
+- **API Rule Extraction**: Configure extraction rules to automatically extract standardized API paths from irregular requests
+- **Privilege Testing**: Configure multi-user sessions and judgment rules to automatically detect horizontal/vertical privilege escalation vulnerabilities
 
 For detailed usage instructions, please refer to:
-- [Quick Start Tutorial](doc/usage_quick_en.md)
+- [Quick Start Tutorial](doc/tutorials/usage_quick_en.md)
 
 ## Technical Architecture
 
@@ -205,8 +238,10 @@ src/main/java/
     │   ├── ApiRuleSource.java          # Enum: URL_PATH/URL_QUERY/HEADER/BODY
     │   └── ApiRuleMethod.java          # Enum: REGEX/SUBSTR/JSON_PATH/XPATH
     ├── config/
-    │   ├── DatabaseConfig.java         # Database config (storage mode/logging/proxy)
+    │   ├── DatabaseConfig.java         # Database config (storage mode/logging/proxy/language preference)
     │   └── SessionDirectory.java       # Session directory management
+    ├── i18n/
+    │   └── I18nManager.java            # Internationalization manager (zh_CN/en_US bundles, dynamic switching & persistence)
     ├── controller/
     │   └── PopMenu.java               # Context menu (ContextMenuItemsProvider)
     ├── db/
@@ -260,63 +295,75 @@ src/main/java/
     ├── privilege/                      # Privilege escalation testing subsystem
     │   ├── AutoTestEngine.java         # Automated testing engine (intercept → replay → judge)
     │   ├── ReplayEngine.java           # Request replay engine
-    │   ├── JudgmentEngine.java         # Response judgment engine
-    │   ├── FieldReplacementEngine.java # Field replacement engine
-    │   ├── LevenshteinCalculator.java  # String similarity calculation
-    │   ├── SessionManager.java         # User session manager
-    │   ├── JudgmentRuleManager.java    # Judgment rule manager
+    │   ├── JudgmentEngine.java         # Response judgment engine (3-layer + empty body awareness)
+    │   ├── FieldReplacementEngine.java # Field replacement engine (empty-value removal semantics + XXE protection)
+    │   ├── SessionManager.java         # User session manager (with UserInfo/TestInfoConfig cache)
+    │   ├── JudgmentRuleManager.java    # Judgment rule manager (single active rule group)
+    │   ├── GlobalJudgmentRuleManager.java # Judgment rule global YAML persistence & restore
+    │   ├── GlobalSchemeManager.java    # Global scheme manager (YAML persistence)
+    │   ├── GlobalFieldDefinitionManager.java # Global field definition manager (YAML persistence)
     │   ├── ScopeManager.java           # Request scope manager
-    │   ├── JudgmentRuleYamlIO.java     # Judgment rule YAML serialization
-    │   ├── GlobalSchemeManager.java # Global scheme manager
-    │   ├── DedupConfigManager.java     # Dedup config manager
-    │   ├── ApiDedupEngine.java         # API dedup engine
+    │   ├── DedupConfigManager.java     # Dedup config manager (global YAML + session memory)
+    │   ├── ApiDedupEngine.java         # API dedup engine (6 strategies × 3 keep policies)
     │   ├── FetchRequestParser.java     # Chrome fetch format parser
-    │   ├── SimilarityEngine.java       # Similarity engine
+    │   ├── SimilarityEngine.java       # Content-aware similarity engine (JSON/XML/HTML/TEXT/BINARY routing)
+    │   ├── JsonSimilarityCalculator.java / XmlSimilarityCalculator.java / JaccardSimilarityCalculator.java / LevenshteinCalculator.java # Similarity algorithm implementations
+    │   ├── ContentTypeDetector.java    # Response content type detection
     │   ├── SyncHttpSender.java         # Sync HTTP sender (with retry)
+    │   ├── ScreenshotEncoder.java      # Report screenshot read/scale/base64 encoding
+    │   ├── SessionParserEngine.java / SessionParser.java # Clipboard session parsing
+    │   ├── JudgmentRuleYamlIO.java / FieldDefinitionYamlIO.java / UserSessionYamlIO.java / SchemeYamlIO.java / DedupConfigYamlIO.java # YAML serialization
     │   ├── model/                      # Privilege test models
     │   │   ├── UserSession.java        # User session (credentials/tokens)
     │   │   ├── JudgmentRule.java       # Judgment rule
-    │   │   ├── JudgmentResult.java     # Test result
-    │   │   ├── FieldDefinition.java      # Field definition
-    │   │   ├── FieldType.java   # Enum: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
+    │   │   ├── JudgmentResult.java     # Test result (PENDING/ESCALATED/NOT_ESCALATED/ERROR)
+    │   │   ├── FieldDefinition.java    # Field definition
+    │   │   ├── FieldType.java          # Enum: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
     │   │   ├── RuleTarget.java         # Enum: STATUS_CODE/RESPONSE_HEADER/RESPONSE_BODY/RESPONSE_TIME/SIMILARITY
-    │   │   ├── RuleMethod.java         # Enum: REGEX/CONTAINS/NOT_CONTAINS/EQUALS/NOT_EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/LENGTH_DIFF
-    │   │   ├── RuleCondition.java      # Rule condition model (AND/OR/NOT operators)
-    │   │   ├── Scheme.java        # Scheme model
-    │   │   └── ScopeEntry.java         # Scope configuration
-    │   └── dao/
-    │       ├── SessionDAO.java         # User session CRUD
-    │       ├── JudgmentRuleDAO.java    # Judgment rule CRUD
-    │       └── ScopeDAO.java           # Scope CRUD
-    │   ├── report/                      # Report generation subsystem
-    │   │   ├── ReportGenerator.java     # Abstract report generator base
-    │   │   ├── PdfReportGenerator.java  # PDF report (Apache PDFBox)
-    │   │   ├── HtmlReportGenerator.java # HTML report (FreeMarker)
-    │   │   ├── MarkdownReportGenerator.java # Markdown report (FreeMarker)
-    │   │   ├── ReportExporter.java      # Report export dispatcher
-    │   │   ├── ReportData.java          # Report data model
-    │   │   ├── ReportContainerWriter.java # Report container serialization
-    │   │   ├── ReportContainerReader.java # Report container deserialization
-    │   │   ├── BodyRenderer.java        # Body content renderer
-    │   │   ├── BinaryContentRenderer.java # Binary content renderer (hex/base64/image)
-    │   │   ├── CurlBuilder.java         # cURL command builder
-    │   │   ├── PostmanSnippetBuilder.java # Postman code snippet builder
-    │   │   └── FreeMarkerConfig.java    # FreeMarker configuration
-    │   ├── UserSessionYamlIO.java       # User session YAML import/export
-    │   ├── FieldDefinitionYamlIO.java     # Field YAML import/export
-    │   └── GlobalFieldDefinitionManager.java # Global field manager
+    │   │   ├── RuleMethod.java         # Enum: REGEX/CONTAINS/EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/NOT_CONTAINS/NOT_EQUALS/LENGTH_DIFF
+    │   │   ├── RuleCondition.java      # Rule condition model (target + method + expression + AND/OR operators + negate)
+    │   │   ├── Scheme.java             # Scheme model
+    │   │   ├── ScopeEntry.java         # Scope configuration
+    │   │   ├── DedupStrategy.java      # Enum: PATH/API/JSON_BODY_FIELD/XML_BODY_FIELD/FORM_FIELD/URL_PARAM
+    │   │   └── DedupKeepPolicy.java    # Enum: FIRST/LAST/MIDDLE
+    │   ├── dao/
+    │   │   ├── SessionDAO.java         # User session CRUD
+    │   │   ├── JudgmentRuleDAO.java    # Judgment rule CRUD
+    │   │   ├── UserInfoDAO.java        # User info CRUD (role/username/anonymous flag/screenshots)
+    │   │   ├── TestInfoConfigDAO.java  # Test info config CRUD
+    │   │   └── ScopeDAO.java           # Scope CRUD
+    │   └── report/                      # Report generation subsystem
+    │       ├── ReportGenerator.java     # Abstract report generator base (Template Method pattern)
+    │       ├── PdfReportGenerator.java  # PDF report (Apache PDFBox)
+    │       ├── HtmlReportGenerator.java # HTML report (FreeMarker)
+    │       ├── MarkdownReportGenerator.java # Markdown report (FreeMarker)
+    │       ├── ReportExporter.java      # Report export dispatcher (PDF/HTML/Markdown/ERMR)
+    │       ├── ReportData.java          # Report data model
+    │       ├── ReportContainerWriter.java # Report container serialization
+    │       ├── ReportContainerReader.java # Report container deserialization
+    │       ├── BodyRenderer.java        # Body content renderer
+    │       ├── BinaryContentRenderer.java # Binary content renderer (hex/base64/image)
+    │       ├── CurlBuilder.java         # cURL command builder
+    │       ├── PostmanSnippetBuilder.java # Postman code snippet builder
+    │       └── FreeMarkerConfig.java    # FreeMarker configuration
     ├── service/
     │   ├── AutoSaveService.java        # Auto-save service
     │   ├── GarbageCollectorService.java # Garbage collection service (Pool zero-ref cleanup)
     │   └── HistoryRecordingService.java # History recording service (async queue)
     ├── ui/
     │   ├── MainUI.java                 # Main UI
-    │   ├── RequestListPanel.java       # Request list panel (search/filter/color)
+    │   ├── RequestListPanel.java       # Request list panel (search/filter/color/clear messages)
     │   ├── RequestPanel.java           # Request detail panel
     │   ├── RequestPanelSender.java     # Request send handler (Montoya API)
     │   ├── ResponsePanel.java          # Response panel
+    │   ├── DataPanel.java              # Data management panel (ERM/Postman import-export)
     │   ├── LogPanel.java               # Log panel
     │   ├── StatusPanel.java            # Bottom status bar
+    │   ├── UsageTutorialPanel.java     # Usage tutorial panel (CommonMark rendering, zh/en switching)
+    │   ├── AboutPanel.java             # About panel (version/author/license)
+    │   ├── SwitchButton.java           # Switch button component
+    │   ├── comparer/
+    │   │   └── ComparerPanel.java      # Message comparison panel (dual list, words/bytes modes, multi-algorithm)
     │   ├── editor/
     │   │   ├── BurpRequestPanel.java   # Montoya HttpRequestEditor wrapper
     │   │   ├── BurpResponsePanel.java  # Montoya HttpResponseEditor wrapper
@@ -349,18 +396,33 @@ src/main/java/
     │   │   └── SynchronizedScrollPanel.java # Synchronized scrolling for side-by-side comparison
     │   ├── layout/
     │   │   └── LayoutManager.java      # Layout manager
-    │   └── privilege/                  # Privilege test UI
-    │       ├── PrivilegeTestPanel.java # Privilege test main panel
+    │   └── privilege/                  # Privilege test UI (6 sub-tabs)
+    │       ├── PrivilegeTestPanel.java # Privilege test main panel (session/judgment/scope/dedup/test info/report export)
     │       ├── SessionConfigTab.java   # User session config tab
+    │       ├── UserSessionTab.java     # User session list tab
     │       ├── JudgmentRuleConfigTab.java # Judgment rule config tab
     │       ├── ScopeConfigTab.java     # Scope config tab
+    │       ├── DedupConfigTab.java     # Dedup config tab
+    │       ├── TestInfoConfigTab.java  # Test info config tab
+    │       ├── ReplayConfigTab.java    # Replay config tab
+    │       ├── FieldDefinitionTab.java # Field definition tab
+    │       ├── SchemeTab.java          # Scheme management tab
     │       ├── UserSessionTableModel.java
     │       ├── JudgmentRuleTableModel.java
     │       ├── FieldDefinitionTableModel.java
+    │       ├── SchemeTableModel.java   # Scheme table model
     │       ├── UserSessionEditDialog.java
     │       ├── JudgmentRuleEditDialog.java
     │       ├── FieldDefinitionEditDialog.java
-    │       └── FieldValueCellRenderer.java # Field value cell renderer
+    │       ├── DedupConfigEditDialog.java # Dedup config edit dialog
+    │       ├── SchemeEditDialog.java   # Scheme edit dialog
+    │       ├── SelectSchemeDialog.java # Scheme selection dialog (anonymous user smart matching)
+    │       ├── UserInfoDetailDialog.java # User info detail dialog (role/screenshots)
+    │       ├── DateTimeRangePickerDialog.java # Test time range picker dialog
+    │       ├── ParseSessionFromClipboardDialog.java # Clipboard session parsing dialog
+    │       ├── ParseSessionWorker.java # Session parsing background worker
+    │       ├── FieldValueCellRenderer.java # Field value cell renderer
+    │       └── ConditionRow.java       # Rule condition row component (AND/OR mixed logic)
     ├── RequestDispatchHandler.java     # Central request dispatch handler
     └── utils/
         ├── TextLineNumber.java         # Text line number utility
@@ -394,8 +456,8 @@ mvn clean package
 ```
 
 Build artifacts:
-- Development version: `target/repeater-manager-2.41.0.jar`
-- Timestamped release version: `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar`
+- Development version: `target/repeater-manager-2.45.1.jar`
+- Timestamped release version: `target/releases/repeater-manager-2.45.1-YYYYMMDD-HHMMSS.jar`
 
 ## Use Cases
 
@@ -424,7 +486,10 @@ Build artifacts:
 ├── repeater_manager_config.properties     # Plugin configuration file
 ├── repeater_manager/
 │   ├── api_extraction_rules.yaml          # Global API extraction rules (cross-session shared)
-│   └── judgment_rules.yaml                # Global judgment rules (cross-session persistence)
+│   ├── judgment_rules.yaml                # Global judgment rules (cross-session persistence)
+│   ├── dedup_configs.yaml                 # Global dedup configurations (cross-session shared)
+│   ├── field_definitions.yaml             # Global field definitions (cross-session shared)
+│   └── schemes.yaml                       # Global schemes (cross-session shared)
 └── session_20240101_120000/               # Session directory (timestamp-named)
     ├── repeater_manager.sqlite3           # SQLite database file
     ├── blobs/                             # External body data directory

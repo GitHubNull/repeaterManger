@@ -6,7 +6,7 @@
 
 **Repeater Manager** 是一个 Burp Suite Professional 扩展插件，提供增强的 HTTP 请求重放管理、API 规则提取和自动化越权测试功能。项目使用 Java 17 编写，基于 Montoya SDK（`burp.api.montoya.*`），采用 MVC 架构。
 
-- **版本**: 2.41.0
+- **版本**: 2.45.1
 - **Java 版本**: 17（source/target 兼容）
 - **构建工具**: Maven
 - **许可证**: Apache License 2.0
@@ -75,6 +75,30 @@
 | 判决规则全局持久化 | `org/oxff/repeater/privilege/GlobalJudgmentRuleManager.java` | 跨会话判决规则 YAML 持久化与恢复 |
 | 截图编码 | `org/oxff/repeater/privilege/ScreenshotEncoder.java` | 报告截图读取/缩放/base64 编码 |
 | 文件选择器 | `org/oxff/repeater/utils/FileChooserHelper.java` | 统一文件选择器工具 |
+| 国际化 | `org/oxff/repeater/i18n/I18nManager.java` | 单例，zh_CN/en_US 双资源包，动态切换与持久化（键 `ui.language`），监听器机制联动刷新全部 UI |
+| 报文比较面板 | `org/oxff/repeater/ui/comparer/ComparerPanel.java` | 独立 Comparer 标签页（双列表收集、words/bytes 模式、5 种相似度算法、hex/text 切换、差异导航、全屏） |
+| 数据管理面板 | `org/oxff/repeater/ui/DataPanel.java` | 数据管理标签页（ERM/Postman 导入导出） |
+| 使用教程面板 | `org/oxff/repeater/ui/UsageTutorialPanel.java` | CommonMark 渲染 doc/tutorials/*.md，中英文与全局语言联动切换 |
+| 关于面板 | `org/oxff/repeater/ui/AboutPanel.java` | 版本/作者/许可证展示（HTML 模板渲染） |
+
+## 插件初始化流程
+
+`RepeaterManagerExtension.initialize(MontoyaApi)` 按以下阶段初始化（异常不阻断后续阶段）：
+
+1. 保存 `MontoyaApi` 到 `MontoyaApiHolder`，设置插件名称
+2. **阶段1**：初始化日志管理器（仅 BurpConsoleHandler）
+3. **阶段2**：加载早期配置（日志级别、UI/控制台开关、代理配置，不含文件 Handler）
+4. **阶段3**：初始化数据库（创建会话目录 + SQLite + Schema 迁移 + 示例数据测试）
+5. **阶段4**：加载晚期配置（文件日志 Handler → 会话目录 logs/）
+6. **阶段4.5**：加载全局 API 提取规则（`GlobalRuleManager.loadRules()`）
+7. **阶段4.6**：加载全局字段定义（`GlobalFieldDefinitionManager.loadFields()` + `SessionManager.loadGlobalFieldDefinitions()`）
+8. **阶段4.6.1**：加载全局方案（`SessionManager.loadGlobalSchemes()`）
+9. **阶段4.6.2**：加载全局判决规则（`GlobalJudgmentRuleManager.loadRules()` + `JudgmentRuleManager.loadGlobalRules()`）
+10. **阶段4.7**：加载全局去重配置（`DedupConfigManager.loadGlobalConfigs()`）
+11. **阶段4.8**：初始化国际化（`I18nManager.initialize()`，必须在创建任何 UI 之前）
+12. 创建 `RepeaterManagerUI`（8 个顶级选项卡），注入 `UIRequestDispatcher`，注册 Suite 选项卡
+13. 注册上下文菜单（`new PopMenu()`，无参构造）
+14. 注册卸载监听器：关闭 UI 资源 → 关闭数据库连接池 → 最后关闭日志系统
 
 ## 关键设计决策
 
@@ -202,9 +226,15 @@
 ### 全局 字段管理
 
 `GlobalFieldDefinitionManager` 单例管理跨会话共享的 字段配置：
-1. 字段通过 `FieldDefinitionYamlIO` 序列化到 YAML 文件
-2. 支持 4 种位置类型：HEADER、COOKIE、BODY、URL_PARAM
+1. 字段通过 `FieldDefinitionYamlIO` 序列化到 YAML 文件（`~/.burp/repeater_manager/field_definitions.yaml`）
+2. 支持 6 种位置类型：HEADER、JSON_BODY、XML_BODY、FORM_FIELD、MULTIPART_FIELD、URL_PARAM
 3. 全局 字段可用于所有用户会话的自动填充
+
+### 全局方案管理
+
+`GlobalSchemeManager` 单例管理跨会话共享的方案配置：
+1. 方案通过 `SchemeYamlIO` 序列化到 YAML 文件（`~/.burp/repeater_manager/schemes.yaml`）
+2. 全局方案（persist_to_global）可在所有会话中直接关联到用户会话
 
 ## 构建命令
 
@@ -213,8 +243,8 @@ mvn clean package
 ```
 
 构建产物：
-- `target/repeater-manager-2.41.0.jar` — 开发版本
-- `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
+- `target/repeater-manager-2.45.1.jar` — 开发版本
+- `target/releases/repeater-manager-2.45.1-YYYYMMDD-HHMMSS.jar` — 带时间戳发布版本
 
 ## 数据库 Schema
 
@@ -246,6 +276,7 @@ judgment_rule_conditions (id, group_id, target, method, expression, negate, oper
 scopes (id, pattern, ...)
 dedup_configs (全局 YAML: ~/.burp/repeater_manager/dedup_configs.yaml)
 judgment_rules 全局持久化 (全局 YAML: ~/.burp/repeater_manager/judgment_rules.yaml, v2.37.0)
+schemes 全局持久化 (全局 YAML: ~/.burp/repeater_manager/schemes.yaml)
 
 -- GC 队列
 gc_queue (id, pool_type, hash, enqueued_at)
@@ -271,8 +302,8 @@ schema_meta (key, value)
 
 - **语言**: Java 17（可使用 Lambda、文本块、密封类、记录类等特性）
 - **API**: 使用 `burp.api.montoya.*` Montoya SDK，不使用旧的 `burp.I*` 接口
-- **包结构**: `burp` 包仅含入口点，业务代码在 `org.oxff.repeater` 下
-- **日志**: 使用 `BurpExtender.printOutput()` / `printError()` 或 `LogManager` 方法
+- **包结构**: 全部业务代码在 `org.oxff.repeater` 包下，入口类 `RepeaterManagerExtension` 直接实现 `BurpExtension`（Montoya SDK 不要求特定包名，`burp` 包已删除）
+- **日志**: 使用 `LogManager` 方法（`info()` / `success()` / `warn()` / `error()` / `printOutput()` / `printError()`）
 - **数据库访问**: 通过 DAO 类（RequestDAO / HistoryDAO / ApiExtractionRuleDAO），使用 `try-with-resources` 管理连接
 - **UI 线程**: Swing UI 操作必须在 EDT 中执行（`SwingUtilities.invokeLater`）
 - **单例模式**: DatabaseManager / LogManager / HistoryRecordingService / ProxyConfig / GlobalRuleManager 等使用单例
@@ -283,12 +314,12 @@ schema_meta (key, value)
 
 ## 注意事项
 
-1. **不要修改 `burp` 包路径**：Burp Suite 要求入口类在 `burp` 包下
+1. **插件入口**: 入口类为 `org.oxff.repeater.RepeaterManagerExtension`（实现 `BurpExtension`），不要新建 `burp` 包或 `BurpExtender` 类
 2. **SQLite 限制**：SQLite 不支持真正的并发写入，写操作需串行化
 3. **内存管理**：Body 数据可能很大，使用 Pool 去重和文件外置减少内存占用
 4. **Burp API 兼容性**：使用 Montoya SDK（`burp.api.montoya.*`），不要混用旧 API
 5. **HTTPS 协议保留**：发送请求时需通过 `HttpService` 保留 HTTPS 协议信息
-6. **错误过滤**：`BurpExtender.shouldFilterError()` 过滤 IntelliJ 相关的无害 ClassNotFoundException
+6. **错误过滤**：`LogManager.shouldFilterError()` 过滤 IntelliJ 相关的无害 ClassNotFoundException
 7. **GC 依赖**：删除请求后需触发 GC 清理关联的 Pool 数据
 8. **YAML 文件**：全局 API 规则和判断规则使用 SnakeYAML 序列化，注意 YAML 格式正确性
 9. **Schema 迁移**：数据库结构变更需通过 SchemaMigrator 进行版本化迁移
@@ -297,10 +328,10 @@ schema_meta (key, value)
 
 项目使用 GitHub Actions（`.github/workflows/release.yml`）：
 
-- **触发条件**: 推送 `v*` 格式标签（如 `v2.41.0`）或手动触发
+- **触发条件**: 推送 `v*` 格式标签（如 `v2.45.1`）或手动触发
 - **构建**: JDK 17 + Maven
 - **发布**: 自动创建 GitHub Release，附带构建的 JAR 文件
-- **预发布**: 标签包含 `-` 后缀（如 `v2.41.0-beta`）时标记为预发布
+- **预发布**: 标签包含 `-` 后缀（如 `v2.45.1-beta`）时标记为预发布
 
 ## 开发文档
 

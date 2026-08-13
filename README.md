@@ -18,7 +18,7 @@
 
 Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请求重放管理插件。相比原生 Repeater，它提供了更强大的功能，包括请求的分类管理、响应历史自动记录与比对、SQLite 本地持久化、内容去重存储、多条件高级搜索、API 规则提取、自动化越权测试、多种格式导入导出（ERM 加密存档 / Postman Collection）以及定时自动保存防丢机制。本插件特别适合安全测试人员和渗透测试专家使用，可有效提高 HTTP/HTTPS 请求测试的效率和组织性。
 
-> **当前版本**: v2.41.0 | **最低要求**: Burp Suite Professional 2024+ (Montoya 扩展 API) + Java 17+
+> **当前版本**: v2.45.1 | **最低要求**: Burp Suite Professional 2024+ (Montoya 扩展 API) + Java 17+
 
 ## 核心功能
 
@@ -50,12 +50,25 @@ Repeater Manager 是一个为 Burp Suite Professional 设计的高级 HTTP 请�
 | 报告生成 | 支持将越权测试结果导出为 PDF/HTML/Markdown 格式的正式报告，内嵌请求/响应详情、cURL/Postman 代码片段、用户信息截图、图片灯箱轮播与越权测试用例参考 |
 | 批量操作 | 历史面板多选支持，提供批量重放、批量越权测试、批量删除功能 |
 | 清空报文 | 请求列表面板一键清空所有基准报文与重放历史，联动清理数据库记录 |
+| 国际化 | 中英文界面实时切换（zh_CN / en_US），语言偏好持久化，运行时动态生效 |
+| 报文比较面板 | 独立 Comparer 标签页，类似 Burp Comparer 的双列表报文比较工具，支持单词/字节模式与多种相似度算法 |
+| 内置使用教程 | 内置教程标签页，CommonMark 渲染快速入门/详细教程，支持中英文与全局语言联动切换 |
+| 关于面板 | 展示项目版本、作者、许可证与 GitHub 链接 |
 
 ## 功能架构
 
 ```
 Repeater Manager
 ├── 插件集成（Montoya SDK）
+├── 界面组织（8 个顶级选项卡）
+│   ├── 请求管理（请求列表 + 编辑重放 + 历史记录）
+│   ├── 报文比较（Comparer 独立面板）
+│   ├── 越权测试（会话/判决/范围/去重/测试信息/报告导出）
+│   ├── 数据管理（ERM / Postman 导入导出）
+│   ├── 配置（存储/日志/代理调试/API 规则）
+│   ├── 日志
+│   ├── 使用教程（中英文切换，CommonMark 渲染）
+│   └── 关于
 ├── 请求管理
 │   ├── 请求列表（搜索/过滤/颜色标记/备注）
 │   ├── 请求编辑（语法高亮）
@@ -67,11 +80,21 @@ Repeater Manager
 │   ├── 成功请求记录
 │   ├── 失败请求记录
 │   ├── 历史回放
-│   ├── 报文比对（新增）
+│   ├── 报文比对（历史面板右键入口）
 │   │   ├── 字符串/字节级差异对比
 │   │   ├── 差异导航与同步滚动
 │   │   └── 可折叠搜索栏
 │   └── 高级搜索（多条件复合筛选）
+├── 报文比较面板（Comparer）
+│   ├── 双列表报文收集与选择
+│   ├── 单词/字节两种比较模式
+│   ├── 自动/莱文斯坦/雅卡尔/JSON/XML 相似度算法
+│   ├── 文本/Hex 显示切换与同步滚动
+│   └── 差异导航与全屏模式
+├── 国际化（I18nManager）
+│   ├── 中文（zh_CN）/ 英文（en_US）资源包
+│   ├── 运行时动态切换与持久化
+│   └── 监听器机制联动刷新全部 UI
 ├── API 提取引擎
 │   ├── 提取源：URL_PATH / URL_QUERY / HEADER / BODY
 │   ├── 提取方法：REGEX / SUBSTR / JSON_PATH / XPATH
@@ -135,7 +158,7 @@ Repeater Manager
 5. 在 `Extension file` 中选择下载的 JAR 文件
 6. 点击 `Next` 完成安装
 
-> 首次加载后，插件会自动在 `~/.burp/` 目录下创建会话目录（以时间戳命名），内含数据库文件、Body 数据目录和日志目录。全局 API 提取规则存储在 `~/.burp/repeater_manager/api_extraction_rules.yaml`。
+> 首次加载后，插件会自动在 `~/.burp/` 目录下创建会话目录（以时间戳命名），内含数据库文件、Body 数据目录和日志目录。全局规则与配置存储在 `~/.burp/repeater_manager/` 下的 5 个 YAML 文件中：`api_extraction_rules.yaml`（API 提取规则）、`judgment_rules.yaml`（判决规则）、`dedup_configs.yaml`（去重配置）、`field_definitions.yaml`（字段定义）、`schemes.yaml`（方案），跨会话共享。
 
 ## 快速开始
 
@@ -150,8 +173,10 @@ Repeater Manager
 
 ### 界面与布局
 
+- 主界面包含 8 个顶级选项卡：请求管理 / 报文比较 / 越权测试 / 数据管理 / 配置 / 日志 / 使用教程 / 关于
 - 切换 **布局模式**（左右/上下/仅请求/仅响应）以适应不同工作场景
 - 通过 **列控制** 自定义请求列表显示的字段
+- 通过 **语言切换** 实时切换中英文界面（偏好自动持久化）
 
 ### 数据管理
 
@@ -223,8 +248,10 @@ src/main/java/
     │   ├── ApiRuleSource.java          # 枚举: URL_PATH/URL_QUERY/HEADER/BODY
     │   └── ApiRuleMethod.java          # 枚举: REGEX/SUBSTR/JSON_PATH/XPATH
     ├── config/
-    │   ├── DatabaseConfig.java         # 数据库配置（存储模式/日志/代理）
+    │   ├── DatabaseConfig.java         # 数据库配置（存储模式/日志/代理/语言偏好）
     │   └── SessionDirectory.java       # 会话目录管理
+    ├── i18n/
+    │   └── I18nManager.java            # 国际化管理器（zh_CN/en_US 资源包、动态切换与持久化）
     ├── controller/
     │   └── PopMenu.java               # 右键菜单（ContextMenuItemsProvider）
     ├── db/
@@ -278,65 +305,75 @@ src/main/java/
     ├── privilege/                      # 越权测试子系统
     │   ├── AutoTestEngine.java         # 自动化测试引擎（拦截代理 → 重放 → 判断）
     │   ├── ReplayEngine.java           # 请求重放引擎
-    │   ├── JudgmentEngine.java         # 响应判断引擎
-    │   ├── FieldReplacementEngine.java # 字段替换引擎
-    │   ├── LevenshteinCalculator.java  # 字符串相似度计算
-    │   ├── SessionManager.java         # 用户会话管理器
-    │   ├── JudgmentRuleManager.java    # 判断规则管理器
+    │   ├── JudgmentEngine.java         # 响应判断引擎（三层判决 + 空 Body 感知）
+    │   ├── FieldReplacementEngine.java # 字段替换引擎（空值移除语义 + XXE 防护）
+    │   ├── SessionManager.java         # 用户会话管理器（含 UserInfo/TestInfoConfig 缓存）
+    │   ├── JudgmentRuleManager.java    # 判断规则管理器（单活跃规则组模式）
+    │   ├── GlobalJudgmentRuleManager.java # 判决规则全局 YAML 持久化与恢复
+    │   ├── GlobalSchemeManager.java    # 全局方案管理器（YAML 持久化）
+    │   ├── GlobalFieldDefinitionManager.java # 全局字段管理器（YAML 持久化）
     │   ├── ScopeManager.java           # 请求范围管理器
-    │   ├── JudgmentRuleYamlIO.java     # 判断规则 YAML 序列化
-    │   ├── GlobalSchemeManager.java # 全局方案管理器
-    │   ├── DedupConfigManager.java     # 去重配置管理器
-    │   ├── ApiDedupEngine.java         # API 去重引擎
+    │   ├── DedupConfigManager.java     # 去重配置管理器（全局 YAML + 会话内存）
+    │   ├── ApiDedupEngine.java         # API 去重引擎（6 策略 × 3 保留策略）
     │   ├── FetchRequestParser.java     # Chrome fetch 格式解析器
-    │   ├── SimilarityEngine.java       # 相似度引擎
+    │   ├── SimilarityEngine.java       # 内容感知相似度引擎（JSON/XML/HTML/TEXT/BINARY 路由）
+    │   ├── JsonSimilarityCalculator.java / XmlSimilarityCalculator.java / JaccardSimilarityCalculator.java / LevenshteinCalculator.java # 相似度算法实现
+    │   ├── ContentTypeDetector.java    # 响应内容类型检测
     │   ├── SyncHttpSender.java         # 同步 HTTP 发送器（带重试）
+    │   ├── ScreenshotEncoder.java      # 报告截图读取/缩放/base64 编码
+    │   ├── SessionParserEngine.java / SessionParser.java # 剪贴板会话解析
+    │   ├── JudgmentRuleYamlIO.java / FieldDefinitionYamlIO.java / UserSessionYamlIO.java / SchemeYamlIO.java / DedupConfigYamlIO.java # YAML 序列化
     │   ├── model/                      # 越权测试模型
     │   │   ├── UserSession.java        # 用户会话（凭证/Token）
-    │   │   ├── JudgmentRule.java       # 判断规则
-    │   │   ├── JudgmentResult.java     # 测试结果
-    │   │   ├── FieldDefinition.java   # 字段定义
-    │   │   ├── FieldType.java         # 枚举: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
-    │   │   ├── RuleTarget.java         # 枚举: STATUS_CODE/RESPONSE_HEADER/RESPONSE_BODY/RESPONSE_TIME
-    │   │   ├── RuleMethod.java         # 枚举: REGEX/CONTAINS/NOT_CONTAINS/EQUALS/NOT_EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/LENGTH_DIFF
-    │   │   ├── RuleCondition.java      # 规则条件模型 (AND/OR/NOT 运算符)
-    │   │   ├── Scheme.java            # 方案模型
-    │   │   └── ScopeEntry.java         # 范围配置
-    │   └── dao/
-    │       ├── SessionDAO.java         # 用户会话 CRUD
-    │       ├── JudgmentRuleDAO.java    # 判断规则 CRUD
-    │       ├── UserInfoDAO.java        # 用户信息 CRUD（角色/截图）
-    │       ├── TestInfoConfigDAO.java  # 测试信息配置 CRUD
-    │       └── ScopeDAO.java           # 范围 CRUD
-    │   ├── report/                      # 报告生成子系统
-    │   │   ├── ReportGenerator.java     # 报告生成器抽象基类
-    │   │   ├── PdfReportGenerator.java  # PDF 报告生成 (Apache PDFBox)
-    │   │   ├── HtmlReportGenerator.java # HTML 报告生成 (FreeMarker)
-    │   │   ├── MarkdownReportGenerator.java # Markdown 报告生成 (FreeMarker)
-    │   │   ├── ReportExporter.java      # 报告导出调度
-    │   │   ├── ReportData.java          # 报告数据模型
-    │   │   ├── ReportContainerWriter.java # 报告容器序列化
-    │   │   ├── ReportContainerReader.java # 报告容器反序列化
-    │   │   ├── BodyRenderer.java        # Body 渲染器
-    │   │   ├── BinaryContentRenderer.java # 二进制内容渲染 (hex/base64/图片)
-    │   │   ├── CurlBuilder.java         # cURL 命令构建
-    │   │   ├── PostmanSnippetBuilder.java # Postman 代码片段构建
-    │   │   └── FreeMarkerConfig.java    # FreeMarker 配置
-    │   ├── UserSessionYamlIO.java       # 用户会话 YAML 导入导出
-    │   ├── FieldDefinitionYamlIO.java  # 字段 YAML 导入导出
-    │   └── GlobalFieldDefinitionManager.java # 全局字段管理器
+    │   │   ├── JudgmentRule.java       # 判断规则组
+    │   │   ├── JudgmentResult.java     # 测试结果（PENDING/ESCALATED/NOT_ESCALATED/ERROR）
+    │   │   ├── FieldDefinition.java    # 字段定义
+    │   │   ├── FieldType.java          # 枚举: HEADER/JSON_BODY/XML_BODY/FORM_FIELD/MULTIPART_FIELD/URL_PARAM
+    │   │   ├── RuleTarget.java         # 枚举: STATUS_CODE/RESPONSE_HEADER/RESPONSE_BODY/RESPONSE_TIME/SIMILARITY
+    │   │   ├── RuleMethod.java         # 枚举: REGEX/CONTAINS/EQUALS/GREATER_THAN/LESS_THAN/NUMERIC_EQUALS/NOT_CONTAINS/NOT_EQUALS/LENGTH_DIFF
+    │   │   ├── RuleCondition.java      # 规则条件模型（target + method + expression + AND/OR 逻辑运算符 + negate）
+    │   │   ├── Scheme.java             # 方案模型
+    │   │   ├── ScopeEntry.java         # 范围配置
+    │   │   ├── DedupStrategy.java      # 枚举: PATH/API/JSON_BODY_FIELD/XML_BODY_FIELD/FORM_FIELD/URL_PARAM
+    │   │   └── DedupKeepPolicy.java    # 枚举: FIRST/LAST/MIDDLE
+    │   ├── dao/
+    │   │   ├── SessionDAO.java         # 用户会话 CRUD
+    │   │   ├── JudgmentRuleDAO.java    # 判断规则 CRUD
+    │   │   ├── UserInfoDAO.java        # 用户信息 CRUD（角色/用户名/匿名标记/截图）
+    │   │   ├── TestInfoConfigDAO.java  # 测试信息配置 CRUD
+    │   │   └── ScopeDAO.java           # 范围 CRUD
+    │   └── report/                      # 报告生成子系统
+    │       ├── ReportGenerator.java     # 报告生成器抽象基类（Template Method 模式）
+    │       ├── PdfReportGenerator.java  # PDF 报告生成 (Apache PDFBox)
+    │       ├── HtmlReportGenerator.java # HTML 报告生成 (FreeMarker)
+    │       ├── MarkdownReportGenerator.java # Markdown 报告生成 (FreeMarker)
+    │       ├── ReportExporter.java      # 报告导出调度（PDF/HTML/Markdown/ERMR）
+    │       ├── ReportData.java          # 报告数据模型
+    │       ├── ReportContainerWriter.java # 报告容器序列化
+    │       ├── ReportContainerReader.java # 报告容器反序列化
+    │       ├── BodyRenderer.java        # Body 渲染器
+    │       ├── BinaryContentRenderer.java # 二进制内容渲染 (hex/base64/图片)
+    │       ├── CurlBuilder.java         # cURL 命令构建
+    │       ├── PostmanSnippetBuilder.java # Postman 代码片段构建
+    │       └── FreeMarkerConfig.java    # FreeMarker 配置
     ├── service/
     │   ├── AutoSaveService.java        # 自动保存服务
     │   ├── GarbageCollectorService.java # 垃圾回收服务（Pool 零引用清理）
     │   └── HistoryRecordingService.java # 历史记录录制服务（异步队列）
     ├── ui/
     │   ├── MainUI.java                 # 主 UI 界面
-    │   ├── RequestListPanel.java       # 请求列表面板（搜索/过滤/颜色）
+    │   ├── RequestListPanel.java       # 请求列表面板（搜索/过滤/颜色/清空报文）
     │   ├── RequestPanel.java           # 请求详情面板
     │   ├── RequestPanelSender.java     # 请求发送处理器（Montoya API）
     │   ├── ResponsePanel.java          # 响应面板
+    │   ├── DataPanel.java              # 数据管理面板（ERM/Postman 导入导出）
     │   ├── LogPanel.java               # 日志面板
     │   ├── StatusPanel.java            # 底部状态栏
+    │   ├── UsageTutorialPanel.java     # 使用教程面板（CommonMark 渲染，中英文切换）
+    │   ├── AboutPanel.java             # 关于面板（版本/作者/许可证）
+    │   ├── SwitchButton.java           # 开关按钮组件
+    │   ├── comparer/
+    │   │   └── ComparerPanel.java      # 报文比较面板（双列表、单词/字节模式、多算法）
     │   ├── editor/
     │   │   ├── BurpRequestPanel.java   # Montoya HttpRequestEditor 封装
     │   │   ├── BurpResponsePanel.java  # Montoya HttpResponseEditor 封装
@@ -369,18 +406,33 @@ src/main/java/
     │   │   └── SynchronizedScrollPanel.java # 同步滚动面板（并排对比联动）
     │   ├── layout/
     │   │   └── LayoutManager.java      # 布局管理器
-    │   └── privilege/                  # 越权测试 UI
-    │       ├── PrivilegeTestPanel.java # 越权测试主面板
+    │   └── privilege/                  # 越权测试 UI（6 个子标签）
+    │       ├── PrivilegeTestPanel.java # 越权测试主面板（会话/判决/范围/去重/测试信息/报告导出）
     │       ├── SessionConfigTab.java   # 用户会话配置标签页
+    │       ├── UserSessionTab.java     # 用户会话列表标签页
     │       ├── JudgmentRuleConfigTab.java # 判断规则配置标签页
     │       ├── ScopeConfigTab.java     # 范围配置标签页
+    │       ├── DedupConfigTab.java     # 去重配置标签页
+    │       ├── TestInfoConfigTab.java  # 测试信息配置标签页
+    │       ├── ReplayConfigTab.java    # 重放配置标签页
+    │       ├── FieldDefinitionTab.java # 字段定义标签页
+    │       ├── SchemeTab.java          # 方案管理标签页
     │       ├── UserSessionTableModel.java
     │       ├── JudgmentRuleTableModel.java
     │       ├── FieldDefinitionTableModel.java
+    │       ├── SchemeTableModel.java   # 方案表格模型
     │       ├── UserSessionEditDialog.java
     │       ├── JudgmentRuleEditDialog.java
     │       ├── FieldDefinitionEditDialog.java
-    │       └── FieldValueCellRenderer.java # 字段值单元格渲染器
+    │       ├── DedupConfigEditDialog.java # 去重配置编辑对话框
+    │       ├── SchemeEditDialog.java   # 方案编辑对话框
+    │       ├── SelectSchemeDialog.java # 方案选择对话框（匿名用户智能匹配）
+    │       ├── UserInfoDetailDialog.java # 用户信息详情对话框（角色/截图）
+    │       ├── DateTimeRangePickerDialog.java # 测试时间段选择对话框
+    │       ├── ParseSessionFromClipboardDialog.java # 剪贴板会话解析对话框
+    │       ├── ParseSessionWorker.java # 会话解析后台 Worker
+    │       ├── FieldValueCellRenderer.java # 字段值单元格渲染器
+    │       └── ConditionRow.java       # 规则条件行组件（AND/OR 混合逻辑）
     ├── RequestDispatchHandler.java     # 统一请求调度处理器
     └── utils/
         ├── TextLineNumber.java         # 文本行号工具
@@ -414,8 +466,8 @@ mvn clean package
 ```
 
 构建产物：
-- 开发版本: `target/repeater-manager-2.41.0.jar`
-- 带时间戳发布版本: `target/releases/repeater-manager-2.41.0-YYYYMMDD-HHMMSS.jar`
+- 开发版本: `target/repeater-manager-2.45.1.jar`
+- 带时间戳发布版本: `target/releases/repeater-manager-2.45.1-YYYYMMDD-HHMMSS.jar`
 
 ## 使用场景
 
@@ -445,7 +497,10 @@ mvn clean package
 ├── repeater_manager_config.properties     # 插件配置文件
 ├── repeater_manager/
 │   ├── api_extraction_rules.yaml          # 全局 API 提取规则（跨会话共享）
-│   └── judgment_rules.yaml                # 全局判决规则（跨会话持久化）
+│   ├── judgment_rules.yaml                # 全局判决规则（跨会话持久化）
+│   ├── dedup_configs.yaml                 # 全局去重配置（跨会话共享）
+│   ├── field_definitions.yaml             # 全局字段定义（跨会话共享）
+│   └── schemes.yaml                       # 全局方案（跨会话共享）
 └── session_20240101_120000/               # 会话目录（时间戳命名）
     ├── repeater_manager.sqlite3           # SQLite 数据库文件
     ├── blobs/                             # 外置 Body 数据目录

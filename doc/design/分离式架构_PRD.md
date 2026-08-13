@@ -3,7 +3,7 @@
 > 版本: v3.0
 > 日期: 2026-08-10
 > 状态: 已更新
-> 基于: Repeater Manager v2.41.0 实际功能
+> 基于: Repeater Manager v2.45.1 实际功能
 
 ---
 

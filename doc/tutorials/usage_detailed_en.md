@@ -42,7 +42,7 @@ This document provides detailed instructions for all features of Repeater Manage
 6. Click `Next` to complete installation
 7. You'll see **"Repeater Manager 插件加载成功"** in the Burp Suite output panel, confirming successful installation
 
-> On first load, the plugin automatically creates a session directory (named with a timestamp) under `~/.burp/`, containing the database file, body data directory, and logs directory. Global API extraction rules are stored in `~/.burp/repeater_manager/api_extraction_rules.yaml`.
+> On first load, the plugin automatically creates a session directory (named with a timestamp) under `~/.burp/`, containing the database file, body data directory, and logs directory. Global rules and configuration are stored in 5 YAML files under `~/.burp/repeater_manager/`: `api_extraction_rules.yaml` (API extraction rules), `judgment_rules.yaml` (judgment rules), `dedup_configs.yaml` (dedup configurations), `field_definitions.yaml` (field definitions), and `schemes.yaml` (schemes), shared across sessions.
 
 ### 1.3 Uninstallation
 
@@ -56,7 +56,20 @@ Unload the old version and reload the new JAR file. It's recommended to export a
 
 ## 2. Interface Overview
 
-After loading, a **"Repeater Manager"** tab appears at the top of Burp Suite, containing three sub-tabs:
+After loading, a **"Repeater Manager"** tab appears at the top of Burp Suite, containing **8 top-level tabs**:
+
+| Tab | Name | Function |
+|-----|------|----------|
+| Request Management | Request | Main working interface: request list + edit/replay + history |
+| Message Comparison | Comparer | Dedicated comparison tool: dual-list collection, words/bytes modes, multi-algorithm similarity |
+| Privilege Testing | Privilege | Full privilege testing workflow: session/judgment/scope/dedup/test info/report export (6 sub-tabs) |
+| Data Management | Data | ERM / Postman archive import & export |
+| Configuration | Config | Storage/logging/proxy debug/API rules (4 sub-tabs) |
+| Logging | Log | Plugin runtime log viewing and level filtering |
+| Tutorials | Tutorial | Built-in tutorials (this documentation series), zh/en switching |
+| About | About | Plugin version, author, license, and GitHub link |
+
+> **Language switching**: The top-right of the interface provides a Chinese/English (zh_CN / en_US) switcher. All UI refreshes instantly on switch, and the preference is persisted for the next startup.
 
 ### 2.1 Request Management Tab
 
@@ -80,20 +93,55 @@ The main working interface, with the following layout:
 - **Right**: Request editor and response viewer with layout switching
 - **Bottom**: Status bar showing request/response basic information
 
-### 2.2 Configuration Tab
+### 2.2 Message Comparison Tab (Comparer)
 
-Contains multiple sub-tabs:
+A dedicated message comparison tool, similar to Burp's native Comparer:
+
+- **Dual-list collection**: Two lists on the left collect messages (requests or responses) to compare; click "Add" to add the current request/response
+- **Comparison modes**: Words mode and bytes mode for different granularity
+- **Similarity algorithms**: AUTO / LEVENSHTEIN / JACCARD / JSON / XML; auto mode routes by content type intelligently
+- **Diff display**: Text / Hex views with syntax highlighting and synchronized scrolling
+- **Diff navigation**: Prev/next diff navigation with fullscreen mode
+
+### 2.3 Privilege Testing Tab (Privilege)
+
+Contains 6 sub-tabs covering the full privilege testing workflow:
+
+- **Session Config**: User sessions, user info (UserInfo), test info configuration
+- **Judgment Rules**: Judgment rule group configuration, active state, and cross-session persistence
+- **Request Scope**: URL match patterns to test
+- **Dedup Config**: Avoid repeated testing of the same API
+- **Test Info Config**: Metadata such as report title/target/time range/personnel
+- **Report Export**: PDF/HTML/Markdown/ERMR report generation
+
+### 2.4 Data Management Tab (Data)
+
+The import/export center: supports **ERM encrypted archives** (AES-256-CBC + HMAC-SHA256) and **Postman Collection v2.1** import/export, plus smart format detection. See [Chapter 7](#7-data-importexport).
+
+### 2.5 Configuration Tab
+
+Contains 4 sub-tabs:
 
 - **Storage Config**: Database path, storage mode, auto-save parameters
 - **Logging**: Log level, file logging, UI logging, Burp console logging
 - **Proxy Debugging**: HTTP proxy configuration
-- **Data Import/Export**: ERM archive / Postman Collection import/export
 - **API Rule Config**: CRUD operations for global and project rules
-- **Privilege Testing**: Schemes / Field Definitions / User Sessions / Judgment Rule Groups / Request Scope / Replay Config / Dedup Config
 
-### 2.3 Log Tab
+### 2.6 Log Tab
 
 Displays plugin runtime logs with level filtering support.
+
+### 2.7 Tutorial Tab (Tutorial)
+
+Built-in tutorial panel rendering this documentation series (quick start / detailed tutorial) via CommonMark:
+
+- Documents are embedded in the plugin JAR resources, viewable offline
+- Supports **Chinese / English** document switching, linked to the global interface language
+- Supports GFM tables and other extended syntax
+
+### 2.8 About Tab (About)
+
+Displays the plugin version, author information, license, and GitHub project link.
 
 ---
 
@@ -261,7 +309,7 @@ All history records are automatically saved to the SQLite database and survive B
 ERM (Repeater Manager) is the plugin's native archive format, containing the complete database and body data.
 
 **Export**:
-1. Navigate to Configuration → Data Import/Export
+1. Navigate to the **"Data"** (Data Management) tab
 2. Click the **"Export"** button in the ERM Archive row
 3. Choose whether to encrypt (check the "Encrypt" checkbox)
 4. If encrypting, enter a password (AES-256-CBC encryption + HMAC-SHA256 integrity verification)
@@ -335,7 +383,9 @@ Log files are stored in the `logs/` subdirectory of the session directory, suppo
 ├── repeater_manager/
 │   ├── api_extraction_rules.yaml          # Global API extraction rules (cross-session)
 │   ├── judgment_rules.yaml                # Global judgment rules (cross-session persistence, v2.37.0)
-│   └── dedup_configs.yaml                 # Global dedup configs (cross-session)
+│   ├── dedup_configs.yaml                 # Global dedup configs (cross-session)
+│   ├── field_definitions.yaml             # Global field definitions (cross-session)
+│   └── schemes.yaml                       # Global schemes (cross-session)
 └── session_20240101_120000/               # Session directory (timestamp-named)
     ├── repeater_manager.sqlite3           # SQLite database file
     ├── blobs/                             # External body data directory
@@ -392,7 +442,7 @@ The API rule extraction engine can automatically extract standardized API paths 
 | Method | Description | Example |
 |--------|-------------|---------|
 | REGEX | Regular expression matching | `^/api/(.*)$` |
-| SUBSTR | Substring extraction | `start:end` or `start,length` |
+| SUBSTR | Substring extraction, format `START,END` (comma-separated): START is a non-negative start index; END is a positive integer (absolute end position, exclusive), a negative integer (counting from the end), or the keyword `END` (to the end of the string) | `0,10` (first 10 chars), `5,END` (from index 5 to end), `4,-3` (from index 4 to the 3rd char from the end) |
 | JSON_PATH | JSONPath expression | `$.data.api_path` |
 | XPATH | XPath expression | `//api/@path` |
 
@@ -568,7 +618,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 **Feature Overview**: One-click creation of a guest user with all field values empty, used for unauthorized access testing.
 
 **Workflow**:
-1. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
+1. Navigate to the **"Privilege"** tab → **"Session Config"** sub-tab
 2. Click the **"Add Anonymous User"** button
 3. The system performs intelligent scheme matching (v2.31.0):
    - **Priority 1**: Reuse an existing user's scheme (if any user already has a scheme)
@@ -632,7 +682,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 
 **Workflow**:
 1. Copy the target request from Burp Proxy or Chrome DevTools
-2. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
+2. Navigate to the **"Privilege"** tab → **"Session Config"** sub-tab
 3. Click the **"Parse from Clipboard"** button
 4. The plugin auto-detects clipboard format and converts it to raw HTTP
 5. Automatically extracts field values and location information
@@ -656,7 +706,7 @@ Specify URL patterns to test. Only requests matching the scope will be intercept
 | `createdAt` | Creation timestamp |
 
 **Configuration Workflow**:
-1. Navigate to **"Configuration"** → **"Privilege Testing"** → **"User Sessions"** tab
+1. Navigate to the **"Privilege"** tab → **"Session Config"** sub-tab
 2. Select a target user session and open the **User Info Detail Dialog** (`UserInfoDetailDialog`)
 3. Fill in role and username; anonymous users get a UserInfo auto-created with `isAnonymous=true`
 4. Click **"Upload Screenshot"** to add privilege proof screenshots (multiple supported, e.g., login success page, profile page)
