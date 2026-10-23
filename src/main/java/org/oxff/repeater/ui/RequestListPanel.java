@@ -177,10 +177,13 @@ public class RequestListPanel extends JPanel {
             if (!e.getValueIsAdjusting() && !batchAddMode) {
                 int selectedRow = requestTable.getSelectedRow();
                 if (selectedRow >= 0) {
-                    int requestId = (int) tableModel.getValueAt(selectedRow, 0);
-                    byte[] requestData = requestDataMap.get(requestId);
-                    if (requestData != null && requestSelectedCallback != null) {
-                        requestSelectedCallback.onRequestSelected(requestId, requestData);
+                    int modelRow = requestTable.convertRowIndexToModel(selectedRow);
+                    if (modelRow >= 0 && modelRow < tableModel.getRowCount()) {
+                        int requestId = (int) tableModel.getValueAt(modelRow, 0);
+                        byte[] requestData = requestDataMap.get(requestId);
+                        if (requestData != null && requestSelectedCallback != null) {
+                            requestSelectedCallback.onRequestSelected(requestId, requestData);
+                        }
                     }
                 }
             }
@@ -197,10 +200,13 @@ public class RequestListPanel extends JPanel {
                 // 仅当点击的是当前已选中的行时才手动触发回调
                 // （点击未选中行时 ListSelectionListener 会自动处理）
                 if (row == requestTable.getSelectedRow()) {
-                    int requestId = (int) tableModel.getValueAt(row, 0);
-                    byte[] requestData = requestDataMap.get(requestId);
-                    if (requestData != null && requestSelectedCallback != null) {
-                        requestSelectedCallback.onRequestSelected(requestId, requestData);
+                    int modelRow = requestTable.convertRowIndexToModel(row);
+                    if (modelRow >= 0 && modelRow < tableModel.getRowCount()) {
+                        int requestId = (int) tableModel.getValueAt(modelRow, 0);
+                        byte[] requestData = requestDataMap.get(requestId);
+                        if (requestData != null && requestSelectedCallback != null) {
+                            requestSelectedCallback.onRequestSelected(requestId, requestData);
+                        }
                     }
                 }
             }
@@ -768,7 +774,10 @@ public class RequestListPanel extends JPanel {
     public int getSelectedRequestId() {
         int selectedRow = requestTable.getSelectedRow();
         if (selectedRow >= 0) {
-            return (int) tableModel.getValueAt(selectedRow, 0);
+            int modelRow = requestTable.convertRowIndexToModel(selectedRow);
+            if (modelRow >= 0 && modelRow < tableModel.getRowCount()) {
+                return (int) tableModel.getValueAt(modelRow, 0);
+            }
         }
         return -1;
     }
@@ -808,10 +817,13 @@ public class RequestListPanel extends JPanel {
             // 批量添加结束后，如果有选中行则触发一次回调
             int selectedRow = requestTable.getSelectedRow();
             if (selectedRow >= 0) {
-                int requestId = (int) tableModel.getValueAt(selectedRow, 0);
-                byte[] requestData = requestDataMap.get(requestId);
-                if (requestData != null && requestSelectedCallback != null) {
-                    requestSelectedCallback.onRequestSelected(requestId, requestData);
+                int modelRow = requestTable.convertRowIndexToModel(selectedRow);
+                if (modelRow >= 0 && modelRow < tableModel.getRowCount()) {
+                    int requestId = (int) tableModel.getValueAt(modelRow, 0);
+                    byte[] requestData = requestDataMap.get(requestId);
+                    if (requestData != null && requestSelectedCallback != null) {
+                        requestSelectedCallback.onRequestSelected(requestId, requestData);
+                    }
                 }
             }
         }

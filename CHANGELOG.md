@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.45.2] - 2026-10-23
+
+### Fixed
+- 修复基准报文表搜索过滤后点击行，重放历史联动错位的问题：搜索基于 TableRowSorter+RowFilter 实现，过滤后视图行号与模型行号错位，RequestListPanel 有 4 处（选中监听器、单击已选中行、getSelectedRequestId、退出批量添加模式补发回调）直接用视图行号查 TableModel 取请求 ID，导致无论点击哪条搜索结果，重放历史始终显示第一条基准请求的历史；现统一先 convertRowIndexToModel 转换并校验模型行边界后再取 ID（写法对齐 RequestListContextMenu 既有实现）
+
+### Changed
+- 版本号同步至 2.45.2（pom.xml、`AboutPanel.VERSION`、`ReportData.pluginVersion`）
+
 ## [2.45.1] - 2026-08-13
 
 ### Added
